@@ -1,5 +1,7 @@
 # Phantom-WireGuard
 
+[![Release Workflow](https://github.com/remrearas/phantom-wireguard/actions/workflows/release-workflow.yml/badge.svg)](https://github.com/remrearas/phantom-wireguard/actions/workflows/release-workflow.yml)
+
 ```bash
 ██████╗ ██╗  ██╗ █████╗ ███╗   ██╗████████╗ ██████╗ ███╗   ███╗
 ██╔══██╗██║  ██║██╔══██╗████╗  ██║╚══██╔══╝██╔═══██╗████╗ ████║
