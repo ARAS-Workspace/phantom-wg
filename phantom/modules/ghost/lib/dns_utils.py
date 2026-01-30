@@ -52,7 +52,7 @@ def get_server_ip(run_command_func: Callable, logger) -> str:
     """
     try:
         for service in IP_CHECK_SERVICES:
-            result = run_command_func(["curl", "-s", service])
+            result = run_command_func(["curl", "--ipv4", "-s", service])
             if result["success"] and result["stdout"]:
                 ip = result["stdout"].strip()
                 if is_valid_ip(ip):

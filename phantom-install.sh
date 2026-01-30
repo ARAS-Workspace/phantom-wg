@@ -287,7 +287,7 @@ configure_wireguard() {
         # Standard IP detection via external services
         SERVER_IP=""
         for service in "${IP_CHECK_SERVICES[@]}"; do
-            SERVER_IP=$(curl -s --connect-timeout 5 "$service" 2>/dev/null | tr -d '\n\r ' || echo "")
+            SERVER_IP=$(curl --ipv4 -s --connect-timeout 5 "$service" 2>/dev/null | tr -d '\n\r ' || echo "")
             if [[ $SERVER_IP =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
                 log "Server IP detected: $SERVER_IP (via $service)" "$GREEN"
                 break
