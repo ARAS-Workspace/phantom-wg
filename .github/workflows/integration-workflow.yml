@@ -6,6 +6,9 @@ on:
       - main
     paths-ignore:
       - 'tools/**'
+      - 'recordings/**'
+      - 'blog/**'
+      - 'assets/**'
       - '.github/**'
       - '.gitignore'
       - '**.md'
