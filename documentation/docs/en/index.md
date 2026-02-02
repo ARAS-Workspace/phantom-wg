@@ -8,7 +8,7 @@ extra_css:
   - assets/stylesheets/animated-ascii-art.css
 
 ---
-# Phantom-WireGuard
+# Phantom-WG
 
 <div class="ascii-demo-container">
   <pre id="phantom-ascii-pulse" class="ascii-art" data-effect="pulse"></pre>
@@ -16,14 +16,14 @@ extra_css:
 
 **Your Server. Your Network. Your Privacy.**
 
-Phantom-WireGuard is a modular tool for setting up and managing WireGuard VPN
+Phantom-WG is a modular tool for setting up and managing WireGuard VPN
 infrastructure on your own server. Beyond basic VPN management, it provides
 censorship-resistant connections, multi-layer encryption, and advanced privacy scenarios.
 
 
 :fontawesome-solid-globe: **[https://www.phantom.tc](https://www.phantom.tc)**
 
-:fontawesome-brands-github: **[Github](https://github.com/ARAS-Workspace/phantom-wireguard)**
+:fontawesome-brands-github: **[Github](https://github.com/ARAS-Workspace/phantom-wg)**
 
 
 ## Quick Start
@@ -51,7 +51,7 @@ curl -sSL https://install.phantom.tc | bash
 
 <div class="asciinema-player-container">
     <div class="asciinema-player-header">
-        <h3>Phantom WireGuard</h3>
+        <h3>Phantom-WG</h3>
         <span class="asciinema-player-info">Terminal Recording</span>
     </div>
     <div class="asciinema-player-wrapper">
@@ -72,7 +72,7 @@ curl -sSL https://install.phantom.tc | bash
 
 After the installation is complete, you can create a client using the interactive CLI:
 ```bash
-phantom-wireguard
+phantom-wg
 ```
 
 **CLI Navigation:**
@@ -86,7 +86,7 @@ phantom-wireguard
 
 <div class="asciinema-player-container">
     <div class="asciinema-player-header">
-        <h3>Phantom WireGuard</h3>
+        <h3>Phantom-WG</h3>
         <span class="asciinema-player-info">Terminal Recording</span>
     </div>
     <div class="asciinema-player-wrapper">
@@ -141,7 +141,7 @@ curl -4 ifconfig.io
 
 <div class="asciinema-player-container">
     <div class="asciinema-player-header">
-        <h3>Phantom WireGuard</h3>
+        <h3>Phantom-WG</h3>
         <span class="asciinema-player-info">Terminal Recording</span>
     </div>
     <div class="asciinema-player-wrapper">
@@ -235,7 +235,7 @@ phantom-api multihop enable_multihop exit_name="vpn-exit"
 
 | Method              | Command                         | Description                      |
 |---------------------|---------------------------------|----------------------------------|
-| **Interactive CLI** | `phantom-wireguard`             | Rich TUI-based user interface    |
+| **Interactive CLI** | `phantom-wg`                    | Rich TUI-based user interface    |
 | **API**             | `phantom-api <module> <action>` | Programmatic access, JSON output |
 | **Ghost Export**    | `phantom-casper <client>`       | Ghost Mode client configuration  |
 
@@ -256,9 +256,9 @@ WireGuard® is a registered trademark of Jason A. Donenfeld.
 
 Copyright (c) 2025 Riza Emre ARAS <r.emrearas@proton.me>
 
-This software is licensed under the AGPL-3.0 license. See [LICENSE](https://raw.githubusercontent.com/ARAS-Workspace/phantom-wireguard/refs/heads/main/LICENSE) for details.
+This software is licensed under the AGPL-3.0 license. See [LICENSE](https://raw.githubusercontent.com/ARAS-Workspace/phantom-wg/refs/heads/main/LICENSE) for details.
 
-For third-party licenses, see [THIRD_PARTY_LICENSES](https://raw.githubusercontent.com/ARAS-Workspace/phantom-wireguard/refs/heads/main/THIRD_PARTY_LICENSES).
+For third-party licenses, see [THIRD_PARTY_LICENSES](https://raw.githubusercontent.com/ARAS-Workspace/phantom-wg/refs/heads/main/THIRD_PARTY_LICENSES).
 
 ---
 
@@ -277,7 +277,7 @@ This project would not be possible without the following open source projects:
 
 ## Support
 
-Phantom-WireGuard is an open-source project. If you'd like to support the project:
+Phantom-WG is an open-source project. If you'd like to support the project:
 
 **Monero (XMR):**
 ```

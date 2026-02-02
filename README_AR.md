@@ -1,12 +1,12 @@
 <!--
-Phantom-WireGuard
+Phantom-WG
 Copyright (C) 2025 Rıza Emre ARAS <r.emrearas@proton.me>
 SPDX-License-Identifier: AGPL-3.0-or-later
 -->
 
-# Phantom-WireGuard
+# Phantom-WG
 
-[![Release Workflow](https://github.com/ARAS-Workspace/phantom-wireguard/actions/workflows/release-workflow.yml/badge.svg)](https://github.com/ARAS-Workspace/phantom-wireguard/actions/workflows/release-workflow.yml)
+[![Release Workflow](https://github.com/ARAS-Workspace/phantom-wg/actions/workflows/release-workflow.yml/badge.svg)](https://github.com/ARAS-Workspace/phantom-wg/actions/workflows/release-workflow.yml)
 
 ```bash
 ██████╗ ██╗  ██╗ █████╗ ███╗   ██╗████████╗ ██████╗ ███╗   ███╗
@@ -19,7 +19,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 
 **خادمك. شبكتك. خصوصيتك.**
 
-Phantom-WireGuard هي أداة معيارية لإعداد وإدارة بنية WireGuard VPN التحتية
+Phantom-WG هي أداة معيارية لإعداد وإدارة بنية WireGuard VPN التحتية
 على خادمك الخاص. إلى جانب إدارة VPN الأساسية، توفر اتصالات مقاومة للرقابة،
 تشفيرًا متعدد الطبقات، وسيناريوهات خصوصية متقدمة.
 
@@ -61,15 +61,15 @@ curl -sSL https://install.phantom.tc | bash
 
 ```
 ========================================
-   PHANTOM-WIREGUARD INSTALLED!
+   PHANTOM-WG INSTALLED!
 ========================================
 
 Commands:
-  phantom-wireguard - Interactive UI
+  phantom-wg - Interactive UI
   phantom-api       - API access
 
 Quick Start:
-  1. Run: phantom-wireguard
+  1. Run: phantom-wg
   2. Select 'Core Management'
   3. Add your first client
 
@@ -158,7 +158,7 @@ phantom-api multihop enable_multihop exit_name="vpn-exit"
 
 | الطريقة             | الأمر                           | الوصف                                  |
 |---------------------|---------------------------------|----------------------------------------|
-| **CLI التفاعلي**    | `phantom-wireguard`             | واجهة مستخدم غنية قائمة على TUI        |
+| **CLI التفاعلي**    | `phantom-wg`                    | واجهة مستخدم غنية قائمة على TUI        |
 | **API**             | `phantom-api <module> <action>` | وصول برمجي، خرج بصيغة JSON             |
 | **Ghost Export**    | `phantom-casper <client>`       | إعدادات عميل Ghost Mode                |
 
@@ -208,7 +208,7 @@ Copyright (c) 2025 Rıza Emre ARAS <r.emrearas@proton.me>
 
 ## الدعم
 
-Phantom-WireGuard مشروع مفتوح المصدر. إذا كنت ترغب في دعم المشروع:
+Phantom-WG مشروع مفتوح المصدر. إذا كنت ترغب في دعم المشروع:
 
 **Monero (XMR):**
 ```

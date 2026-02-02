@@ -14,5 +14,5 @@ monero:
   qr_image: "assets/images/xmr_qr.png"
 ---
 
-Phantom-WireGuard sizin gizliliğinizi korumaya yardımcı oluyorsa, projenin geliştirilmesine destek olabilirsiniz.
-Yalnızca sizin katkılarınız ile Phantom-WireGuard açık kaynak ve gizlilik odaklı kalmaya devam edebilir. 
+Phantom-WG sizin gizliliğinizi korumaya yardımcı oluyorsa, projenin geliştirilmesine destek olabilirsiniz.
+Yalnızca sizin katkılarınız ile Phantom-WG açık kaynak ve gizlilik odaklı kalmaya devam edebilir. 

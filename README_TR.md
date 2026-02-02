@@ -1,6 +1,6 @@
-# Phantom-WireGuard
+# Phantom-WG
 
-[![Release Workflow](https://github.com/ARAS-Workspace/phantom-wireguard/actions/workflows/release-workflow.yml/badge.svg)](https://github.com/ARAS-Workspace/phantom-wireguard/actions/workflows/release-workflow.yml)
+[![Release Workflow](https://github.com/ARAS-Workspace/phantom-wg/actions/workflows/release-workflow.yml/badge.svg)](https://github.com/ARAS-Workspace/phantom-wg/actions/workflows/release-workflow.yml)
 
 ```bash
 ██████╗ ██╗  ██╗ █████╗ ███╗   ██╗████████╗ ██████╗ ███╗   ███╗
@@ -13,7 +13,7 @@
 
 **Kendi Sunucun. Kendi Ağın. Kendi Gizliliğin.**
 
-Phantom-WireGuard, kendi sunucunuzda WireGuard VPN altyapısı kurmanızı ve yönetmenizi sağlayan
+Phantom-WG, kendi sunucunuzda WireGuard VPN altyapısı kurmanızı ve yönetmenizi sağlayan
 modüler bir araçtır. Temel VPN yönetiminin ötesinde; sansüre dayanıklı bağlantılar, çok katmanlı
 şifreleme ve gelişmiş gizlilik senaryoları sunar.
 
@@ -55,15 +55,15 @@ Kurulum başarıyla tamamlandığında aşağıdaki çıktıyı göreceksiniz:
 
 ```
 ========================================
-   PHANTOM-WIREGUARD INSTALLED!
+   PHANTOM-WG INSTALLED!
 ========================================
 
 Commands:
-  phantom-wireguard - Interactive UI
+  phantom-wg - Interactive UI
   phantom-api       - API access
 
 Quick Start:
-  1. Run: phantom-wireguard
+  1. Run: phantom-wg
   2. Select 'Core Management'
   3. Add your first client
 
@@ -153,7 +153,7 @@ phantom-api multihop enable_multihop exit_name="vpn-exit"
 
 | Yöntem             | Komut                         | Açıklama                            |
 |--------------------|-------------------------------|-------------------------------------|
-| **İnteraktif CLI** | `phantom-wireguard`           | Rich TUI tabanlı kullanıcı arayüzü  |
+| **İnteraktif CLI** | `phantom-wg`                  | Rich TUI tabanlı kullanıcı arayüzü  |
 | **API**            | `phantom-api <modül> <eylem>` | Programatik erişim, JSON çıktı      |
 | **Ghost Export**   | `phantom-casper <istemci>`    | Ghost Mode istemci yapılandırması   |
 
@@ -203,7 +203,7 @@ Bu proje, aşağıdaki açık kaynak projeler olmadan mümkün olamazdı:
 
 ## Destek
 
-Phantom-WireGuard açık kaynak bir projedir. Projeyi desteklemek isterseniz:
+Phantom-WG açık kaynak bir projedir. Projeyi desteklemek isterseniz:
 
 **Monero (XMR):**
 ```

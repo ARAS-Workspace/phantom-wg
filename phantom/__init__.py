@@ -6,7 +6,7 @@
 ██║     ██║  ██║██║  ██║██║ ╚████║   ██║   ╚██████╔╝██║ ╚═╝ ██║
 ╚═╝     ╚═╝  ╚═╝╚═╝  ╚═╝╚═╝  ╚═══╝   ╚═╝    ╚═════╝ ╚═╝     ╚═╝
 
-TR: Phantom-WireGuard Ana Paketi
+TR: Phantom-WG Ana Paketi
     ============================
     
     Basit ve güçlü WireGuard VPN yönetim sistemi.
@@ -18,7 +18,7 @@ TR: Phantom-WireGuard Ana Paketi
         - modules/: Plugin tabanlı özellik modülleri
         - scripts/: Sistem yardımcı scriptleri
 
-EN: Phantom-WireGuard Main Package
+EN: Phantom-WG Main Package
     ==============================
     
     Simple and powerful WireGuard VPN management system.

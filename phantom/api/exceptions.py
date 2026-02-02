@@ -6,10 +6,10 @@
 ██║     ██║  ██║██║  ██║██║ ╚████║   ██║   ╚██████╔╝██║ ╚═╝ ██║
 ╚═╝     ╚═╝  ╚═╝╚═╝  ╚═╝╚═╝  ╚═══╝   ╚═╝    ╚═════╝ ╚═╝     ╚═╝
 
-TR: Phantom-WireGuard API için Özel İstisnalar
+TR: Phantom-WG API için Özel İstisnalar
     ==========================================
     
-    Bu modül, Phantom-WireGuard sisteminde kullanılan tüm özel hata sınıflarını
+    Bu modül, Phantom-WG sisteminde kullanılan tüm özel hata sınıflarını
     tanımlar. Hiyerarşik bir yapı kullanarak, hatalar kategorilere ayrılmıştır:
     
     - Yapılandırma Hataları: Sistem konfigürasyonu ile ilgili hatalar
@@ -28,10 +28,10 @@ TR: Phantom-WireGuard API için Özel İstisnalar
         - İsteğe bağlı ek veri (data) taşıyabilir
         - Standart API yanıt formatına dönüştürülebilir
 
-EN: Custom Exceptions for Phantom-WireGuard API
+EN: Custom Exceptions for Phantom-WG API
     ===========================================
     
-    This module defines all custom exception classes used in the Phantom-WireGuard
+    This module defines all custom exception classes used in the Phantom-WG
     system. Using a hierarchical structure, errors are categorized into:
     
     - Configuration Errors: System configuration related errors
@@ -89,10 +89,10 @@ from typing import Optional, Dict, Any
 
 
 class PhantomException(Exception):
-    """Base Exception Class for All Phantom-WireGuard Errors.
+    """Base Exception Class for All Phantom-WG Errors.
 
     This class serves as the base exception for all custom errors in the
-    Phantom-WireGuard system. All other exception classes inherit from this.
+    Phantom-WG system. All other exception classes inherit from this.
 
     It provides standardized error handling and defines common attributes
     and methods for all errors. Each derived class should specify its own

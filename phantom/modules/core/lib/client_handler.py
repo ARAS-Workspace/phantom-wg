@@ -248,9 +248,9 @@ class ClientHandler:
             raise ServiceOperationError(
                 "Unable to add the client. This could be due to:\n"
                 "• WireGuard service not running - check with 'systemctl status wg-quick@wg_main'\n"
-                "• Database access issues - ensure /opt/phantom-wireguard/data/ is writable\n"
+                "• Database access issues - ensure /opt/phantom-wg/data/ is writable\n"
                 "• Network configuration problems - verify subnet has available IPs\n"
-                "For details, check the logs at /opt/phantom-wireguard/logs/"
+                "For details, check the logs at /opt/phantom-wg/logs/"
             )
 
     def remove_existing_client(self, client_name: str) -> ClientRemoveResult:
@@ -444,7 +444,7 @@ class ClientHandler:
                 "Unable to retrieve client list. This might indicate:\n"
                 "• Database connection issues\n"
                 "• Corrupted client data\n"
-                "• Permission problems accessing /opt/phantom-wireguard/data/\n"
+                "• Permission problems accessing /opt/phantom-wg/data/\n"
                 "Try restarting the Phantom service or check database integrity."
             )
 

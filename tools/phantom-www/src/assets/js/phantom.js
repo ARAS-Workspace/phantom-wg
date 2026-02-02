@@ -1,5 +1,5 @@
 /**
- * Phantom WireGuard JavaScript
+ * Phantom-WG JavaScript
  * Main application logic for the Phantom landing page
  */
 

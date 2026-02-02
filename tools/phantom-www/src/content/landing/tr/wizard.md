@@ -6,7 +6,7 @@ features:
   - Kripto Ödemeler
   - Anında Kurulum
 mainnet:
-  url: https://github.com/ARAS-Workspace/phantom-wireguard/blob/main/tools/phantom-deployment-wizard/PRIVACY_TR.md
+  url: https://github.com/ARAS-Workspace/phantom-wg/blob/main/tools/phantom-deployment-wizard/PRIVACY_TR.md
   label: Gizlilik Politikası
   icon: globe
 onion:

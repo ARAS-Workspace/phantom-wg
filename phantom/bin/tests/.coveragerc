@@ -1,9 +1,9 @@
 [run]
-source = /opt/phantom-wireguard/phantom
+source = /opt/phantom-wg/phantom
 
 omit =
-    /opt/phantom-wireguard/phantom/bin/*
-    /opt/phantom-wireguard/phantom/cli/*
-    /opt/phantom-wireguard/phantom/scripts/*
-    /opt/phantom-wireguard/phantom/run_tests_coverage.py
+    /opt/phantom-wg/phantom/bin/*
+    /opt/phantom-wg/phantom/cli/*
+    /opt/phantom-wg/phantom/scripts/*
+    /opt/phantom-wg/phantom/run_tests_coverage.py
     */tests/**

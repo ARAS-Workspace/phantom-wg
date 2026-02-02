@@ -6,7 +6,7 @@
 ██║     ██║  ██║██║  ██║██║ ╚████║   ██║   ╚██████╔╝██║ ╚═╝ ██║
 ╚═╝     ╚═╝  ╚═╝╚═╝  ╚═╝╚═╝  ╚═══╝   ╚═╝    ╚═════╝ ╚═╝     ╚═╝
 
-TR: Phantom-WireGuard Core Modülü
+TR: Phantom-WG Core Modülü
     ==========================================
     
     WireGuard VPN yönetiminin ana orkestrasyon katmanı. Bu modül, 7 işlevsel
@@ -18,7 +18,7 @@ TR: Phantom-WireGuard Core Modülü
         3. Yapılandırma: get_tweak_settings, update_tweak_setting
         4. Ağ Yönetimi: get_subnet_info, validate_subnet_change, change_subnet
 
-EN: Phantom-WireGuard Core Module
+EN: Phantom-WG Core Module
     ==========================================
     
     Main orchestration layer for WireGuard VPN management. This module coordinates

@@ -6,7 +6,7 @@
 ██║     ██║  ██║██║  ██║██║ ╚████║   ██║   ╚██████╔╝██║ ╚═╝ ██║
 ╚═╝     ╚═╝  ╚═╝╚═╝  ╚═╝╚═╝  ╚═══╝   ╚═╝    ╚═════╝ ╚═╝     ╚═╝
 
-TR: Phantom-WireGuard DNS Yönetim Modülü
+TR: Phantom-WG DNS Yönetim Modülü
     ==========================================
     
     Sistem genelindeki DNS yapılandırmasını yöneten ve test eden modül. Tüm WireGuard
@@ -40,7 +40,7 @@ TR: Phantom-WireGuard DNS Yönetim Modülü
         - GetDNSServersResult: Sunucu bilgileri
         Tüm modeller BaseModel'den inherit eder ve to_dict() ile API uyumluluğu sağlar.
 
-EN: Phantom-WireGuard DNS Management Module
+EN: Phantom-WG DNS Management Module
     ==========================================
     
     Module that manages and tests system-wide DNS configuration. Provides centralized
@@ -139,7 +139,7 @@ class DnsModule(BaseModule):
         (8.8.8.8) and Cloudflare DNS (1.1.1.1).
 
         Args:
-            install_dir: Installation directory path (default: /opt/phantom-wireguard)
+            install_dir: Installation directory path (default: /opt/phantom-wg)
         """
         super().__init__(install_dir)
 

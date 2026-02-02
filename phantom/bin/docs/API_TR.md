@@ -1,4 +1,4 @@
-# Phantom-WireGuard API Dokümantasyonu
+# Phantom-WG API Dokümantasyonu
 
 ```bash
 ██████╗ ██╗  ██╗ █████╗ ███╗   ██╗████████╗ ██████╗ ███╗   ███╗
@@ -32,7 +32,7 @@ WireGuard® is a registered trademark of Jason A. Donenfeld.
 
 ## Genel Bakış
 
-Phantom-WireGuard, kendi sunucu ortamınızda WireGuard tabanlı VPN altyapısı kurmanıza ve                                                                                                                                                                                             
+Phantom-WG, kendi sunucu ortamınızda WireGuard tabanlı VPN altyapısı kurmanıza ve                                                                                                                                                                                             
 yönetmenize olanak sağlayan modüler bir araçtır. Temel VPN yönetiminin ötesinde; istemci                                                                                                                                                                                             
 yapılandırmalarıyla senkronize DNS yönetimi, wstunnel ile WireGuard trafiğini maskeleyerek                                                                                                                                                                                           
 sansüre dayanıklı bağlantı kurma ve trafiği harici WireGuard uç noktaları üzerinden                                                                                                                                                                                                  
@@ -106,7 +106,7 @@ graph LR
 
 Sisteme iki farklı erişim yöntemiyle ulaşılabilir:
 
-- **CLI** — `phantom-wireguard` komutuyla başlatılan Rich TUI tabanlı interaktif arayüz.
+- **CLI** — `phantom-wg` komutuyla başlatılan Rich TUI tabanlı interaktif arayüz.
   Her modül için adım adım yönlendirmeli menüler, renk kodlu durum göstergeleri ve
   sayfalanmış listeler sunar. Teknik bilgiye ihtiyaç duymadan sunucuyu yönetmek isteyen
   kullanıcılar için tasarlanmıştır. Bu dokümantasyondaki CLI önizleme kayıtları ilgili
@@ -169,7 +169,7 @@ Hata yanıtları:
 
 ## Core Modülü
 
-Core modülü, Phantom-WireGuard'ın temel yapı taşıdır. WireGuard sunucusunun yaşam döngüsü
+Core modülü, Phantom-WG'nin temel yapı taşıdır. WireGuard sunucusunun yaşam döngüsü
 (istemci ekleme/kaldırma, yapılandırma dışa aktarma, servis yönetimi, güvenlik duvarı
 denetimi, subnet değişikliği ve gelişmiş davranış ayarları) bu modül üzerinden yönetilir.
 
@@ -428,9 +428,9 @@ phantom-api core server_status
       "active_connections": 0
     },
     "system": {
-      "install_dir": "/opt/phantom-wireguard",
-      "config_dir": "/opt/phantom-wireguard/config",
-      "data_dir": "/opt/phantom-wireguard/data",
+      "install_dir": "/opt/phantom-wg",
+      "config_dir": "/opt/phantom-wg/config",
+      "data_dir": "/opt/phantom-wg/data",
       "firewall": {
         "status": "active"
       },
@@ -1077,7 +1077,7 @@ phantom-casper demo-casper
 **Örnek Çıktı:**
 ```
 ================================================================================
-PHANTOM WIREGUARD - GHOST MODE İSTEMCİ YAPILANDIRMASI
+PHANTOM-WG - GHOST MODE İSTEMCİ YAPILANDIRMASI
 ================================================================================
 
 İstemci: demo-casper
@@ -1325,12 +1325,12 @@ phantom-api multihop get_session_log lines=100
 
 ## Factory Reset
 
-Phantom-WireGuard'ı ilk kurulum durumuna geri döndürmek için bağımsız factory reset
+Phantom-WG'yi ilk kurulum durumuna geri döndürmek için bağımsız factory reset
 betiği kullanılır. Bu işlem API üzerinden değil, doğrudan sunucuda çalıştırılan bir
 betikle gerçekleştirilir:
 
 ```bash
-/opt/phantom-wireguard/phantom/factory-reset.sh
+/opt/phantom-wg/phantom/factory-reset.sh
 ```
 
 Bu betik sırasıyla şu işlemleri gerçekleştirir:
@@ -1448,7 +1448,7 @@ fi
 
 ## Sürüm Bilgisi
 
-Bu dokümantasyon Phantom-WireGuard API **core-v1** sürümünü kapsar.
+Bu dokümantasyon Phantom-WG API **core-v1** sürümünü kapsar.
 
 > **Not:** Dokümantasyondaki CLI önizleme kayıtlarında görünen sunucu bilgileri, IP
 > adresleri ve istemci verileri, yalnızca bu içeriklerin oluşturulması amacıyla geçici

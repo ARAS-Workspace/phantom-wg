@@ -265,7 +265,7 @@ def deployment_process_step_fragment():
             st.markdown("---")
             if st.session_state.ip_check_complete:
                 # IP check passed - enable Next button
-                st.success(":tada: Server is ready! Cloud-init will automatically install Phantom WireGuard.")
+                st.success(":tada: Server is ready! Cloud-init will automatically install Phantom-WG.")
                 if st.button("Continue to Summary :arrow_right:", use_container_width=True, type="primary", key="complete_next_btn"):
                     # Clear check states for potential future use
                     st.session_state.check_initiated = False

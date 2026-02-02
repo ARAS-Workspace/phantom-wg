@@ -6,10 +6,10 @@
 ██║     ██║  ██║██║  ██║██║ ╚████║   ██║   ╚██████╔╝██║ ╚═╝ ██║
 ╚═╝     ╚═╝  ╚═╝╚═╝  ╚═╝╚═╝  ╚═══╝   ╚═╝    ╚═════╝ ╚═╝     ╚═╝
 
-TR: Phantom-WireGuard API için Girdi (Input) Doğrulayıcıları (Validators)
+TR: Phantom-WG API için Girdi (Input) Doğrulayıcıları (Validators)
     ==============================================
     
-    Bu modül, Phantom-WireGuard sistemindeki tüm API girdilerinin
+    Bu modül, Phantom-WG sistemindeki tüm API girdilerinin
     doğrulanması için kapsamlı bir doğrulama katmanı sağlar. Güvenlik
     ve veri bütünlüğünü korumak için kritik bir bileşendir.
     
@@ -27,11 +27,11 @@ TR: Phantom-WireGuard API için Girdi (Input) Doğrulayıcıları (Validators)
         3. Güvenlik Öncelikli: Potansiyel güvenlik tehditlerini önle
         4. Tutarlılık: Tüm API'de aynı doğrulama kurallarını uygula
 
-EN: Input Validators for Phantom-WireGuard API
+EN: Input Validators for Phantom-WG API
     ==========================================
     
     This module provides a comprehensive validation layer for all API
-    inputs in the Phantom-WireGuard system. It's a critical component
+    inputs in the Phantom-WG system. It's a critical component
     for maintaining security and data integrity.
     
     Main Validator Categories:

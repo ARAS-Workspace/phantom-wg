@@ -6,10 +6,10 @@
 ██║     ██║  ██║██║  ██║██║ ╚████║   ██║   ╚██████╔╝██║ ╚═╝ ██║
 ╚═╝     ╚═╝  ╚═╝╚═╝  ╚═╝╚═╝  ╚═══╝   ╚═╝    ╚═════╝ ╚═╝     ╚═╝
 
-TR: Phantom-WireGuard Ana API Motoru
+TR: Phantom-WG Ana API Motoru
     ====================================
     
-    Bu modül, Phantom-WireGuard için merkezi API motoru olarak hizmet verir ve şunları sağlar:
+    Bu modül, Phantom-WG için merkezi API motoru olarak hizmet verir ve şunları sağlar:
     
     - Modüllerin olduğu dizininden (../modules) dinamik modül keşfi ve yükleme
     - Tüm modül eylemleri için birleşik API arayüzü
@@ -28,10 +28,10 @@ TR: Phantom-WireGuard Ana API Motoru
         ve BaseModule'den miras alan bir sınıf içeren geçerli bir module.py dosyası varsa
         yüklendiği eklenti tabanlı bir mimari kullanır.
 
-EN: Phantom-WireGuard Main API Engine
+EN: Phantom-WG Main API Engine
     =================================
 
-    This module serves as the central API engine for Phantom-WireGuard, providing:
+    This module serves as the central API engine for Phantom-WG, providing:
 
     - Dynamic module discovery and loading from the modules directory
     - Unified API interface for all module actions
@@ -124,9 +124,9 @@ class ModuleProxy:
 
 
 class PhantomAPI:
-    """Main API Entry Point for Phantom-WireGuard.
+    """Main API Entry Point for Phantom-WG.
 
-    This is the central orchestrator class that manages all Phantom-WireGuard
+    This is the central orchestrator class that manages all Phantom-WG
     modules and provides a unified interface for executing module actions.
 
     Key Responsibilities:
@@ -140,7 +140,7 @@ class PhantomAPI:
     making it flexible for different use cases (CLI tools, scripts, etc.).
 
     Attributes:
-        install_dir: Path to the Phantom-WireGuard installation directory
+        install_dir: Path to the Phantom-WG installation directory
         logger: Configured logger instance for API operations
         _modules: Dictionary of loaded module instances keyed by module name
     """
@@ -166,7 +166,7 @@ class PhantomAPI:
 
     # noinspection PyMethodMayBeStatic
     def _detect_install_dir(self) -> Path:
-        """Automatically detect the Phantom-WireGuard installation directory.
+        """Automatically detect the Phantom-WG installation directory.
 
         This method uses a smart detection algorithm that works in both
         development and production environments:
@@ -174,7 +174,7 @@ class PhantomAPI:
         1. Development: Checks if running from source by looking for the
            'phantom' directory relative to this file's location
         2. Production: Checks the standard installation path at
-           /opt/phantom-wireguard
+           /opt/phantom-wg
         3. Fallback: Uses the current working directory if neither of the
            above locations exist
 
@@ -187,8 +187,8 @@ class PhantomAPI:
             return current_file.parent.parent.parent
 
         # Check standard production installation location
-        if Path("/opt/phantom-wireguard").exists():
-            return Path("/opt/phantom-wireguard")
+        if Path("/opt/phantom-wg").exists():
+            return Path("/opt/phantom-wg")
 
         # Fallback to current working directory if nothing else is found
         return Path.cwd()
@@ -570,7 +570,7 @@ class PhantomAPI:
 
         Returns:
             APIResponse: Success response containing:
-                - api_version: Current Phantom-WireGuard version
+                - api_version: Current Phantom-WG version
                 - modules_loaded: Count of successfully loaded modules
                 - modules: List of module names
                 - install_dir: Path to installation directory

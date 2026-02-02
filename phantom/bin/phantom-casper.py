@@ -1,4 +1,4 @@
-#!/opt/phantom-wireguard/.phantom-venv/bin/python3
+#!/opt/phantom-wg/.phantom-venv/bin/python3
 """
 ██████╗ ██╗  ██╗ █████╗ ███╗   ██╗████████╗ ██████╗ ███╗   ███╗
 ██╔══██╗██║  ██║██╔══██╗████╗  ██║╚══██╔══╝██╔═══██╗████╗ ████║

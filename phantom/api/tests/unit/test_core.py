@@ -130,11 +130,11 @@ class TestPhantomAPI:
     @patch('phantom.api.core.PhantomAPI._setup_logger')
     @patch('phantom.api.core.PhantomAPI._load_modules')
     def test_detect_install_dir_production(self, _mock_load, mock_setup, mock_detect):
-        mock_detect.return_value = Path("/opt/phantom-wireguard")
+        mock_detect.return_value = Path("/opt/phantom-wg")
         mock_setup.return_value = Mock(spec=logging.Logger)
 
         api = PhantomAPI()
-        assert api.install_dir == Path("/opt/phantom-wireguard")
+        assert api.install_dir == Path("/opt/phantom-wg")
 
     @patch('phantom.api.core.PhantomAPI._detect_install_dir')
     @patch('phantom.api.core.PhantomAPI._setup_logger')
@@ -534,11 +534,11 @@ class TestPhantomAPI:
     @patch('phantom.api.core.PhantomAPI._setup_logger')
     @patch('phantom.api.core.PhantomAPI._load_modules')
     def test_detect_install_dir_production_path(self, _mock_load_modules, mock_setup, mock_detect):
-        mock_detect.return_value = Path("/opt/phantom-wireguard")
+        mock_detect.return_value = Path("/opt/phantom-wg")
         mock_setup.return_value = Mock(spec=logging.Logger)
 
         api = PhantomAPI()
-        assert api.install_dir == Path("/opt/phantom-wireguard")
+        assert api.install_dir == Path("/opt/phantom-wg")
 
     @patch('pathlib.Path.resolve')
     @patch('pathlib.Path.exists')

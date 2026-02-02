@@ -2,13 +2,13 @@
 Description=Phantom Multihop VPN Interface Restore
 After=network-online.target wg-quick@wg_main.service
 Wants=network-online.target
-ConditionPathExists=/opt/phantom-wireguard/config/phantom.json
+ConditionPathExists=/opt/phantom-wg/config/phantom.json
 
 [Service]
 Type=oneshot
 RemainAfterExit=yes
-ExecStartPre=/bin/bash -c 'jq -e ".multihop.enabled == true" /opt/phantom-wireguard/config/phantom.json || exit 1'
-ExecStart=/opt/phantom-wireguard/.phantom-venv/bin/python3 /opt/phantom-wireguard/phantom/scripts/multihop-interface-restore.py
+ExecStartPre=/bin/bash -c 'jq -e ".multihop.enabled == true" /opt/phantom-wg/config/phantom.json || exit 1'
+ExecStart=/opt/phantom-wg/.phantom-venv/bin/python3 /opt/phantom-wg/phantom/scripts/multihop-interface-restore.py
 ExecStop=/usr/bin/ip link del wg_vpn
 
 # Security hardening
@@ -16,7 +16,7 @@ PrivateTmp=true
 NoNewPrivileges=true
 ProtectSystem=strict
 ProtectHome=true
-ReadWritePaths=/opt/phantom-wireguard /etc/wireguard
+ReadWritePaths=/opt/phantom-wg /etc/wireguard
 CapabilityBoundingSet=CAP_NET_ADMIN CAP_NET_RAW
 
 # Resource limits

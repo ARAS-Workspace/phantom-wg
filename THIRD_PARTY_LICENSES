@@ -8,7 +8,7 @@
 THIRD PARTY LICENSES
 ================================================================================
 
-Phantom-WireGuard
+Phantom-WG
 Copyright (c) 2025 - Rıza Emre ARAS <r.emrearas@proton.me>
 Licensed under AGPL-3.0 - see LICENSE file for details
 
@@ -59,7 +59,7 @@ WireGuard Components:
   https://git.zx2c4.com/wireguard-go/tree/LICENSE
 
 Usage Note:
-Phantom-WireGuard uses WireGuard through CLI tools (wg, wg-quick) only.
+Phantom-WG uses WireGuard through CLI tools (wg, wg-quick) only.
 This constitutes mere aggregation, not derivative work.
 
 ================================================================================
@@ -87,9 +87,9 @@ DOCUMENT INFO
 ================================================================================
 
 Maintained by:  Rıza Emre ARAS <r.emrearas@proton.me>
-Project:        Phantom-WireGuard
+Project:        Phantom-WG
 License:        AGPL-3.0-or-later
-Repository:     https://github.com/ARAS-Workspace/phantom-wireguard
+Repository:     https://github.com/ARAS-Workspace/phantom-wg
 Last Updated:   2026-01-30
 
 ================================================================================

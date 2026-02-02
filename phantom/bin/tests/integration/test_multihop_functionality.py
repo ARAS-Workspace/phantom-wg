@@ -6,7 +6,7 @@
 ██║     ██║  ██║██║  ██║██║ ╚████║   ██║   ╚██████╔╝██║ ╚═╝ ██║
 ╚═╝     ╚═╝  ╚═╝╚═╝  ╚═╝╚═╝  ╚═══╝   ╚═╝    ╚═════╝ ╚═╝     ╚═╝
 
-Multihop Functionality Tests - Comprehensive test suite for Phantom-WireGuard Multihop module
+Multihop Functionality Tests - Comprehensive test suite for Phantom-WG Multihop module
 
 Test Phases:
     Phase 1: Environment Setup (3 tests)

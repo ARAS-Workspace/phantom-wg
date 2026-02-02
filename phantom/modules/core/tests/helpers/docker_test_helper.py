@@ -79,7 +79,7 @@ class WireGuardTestContainer:
 
         Creates temporary directories on host for config file synchronization and sets up
         bidirectional volume mappings between host and container for both WireGuard configs
-        (/etc/wireguard) and Phantom installation directory (/opt/phantom-wireguard).
+        (/etc/wireguard) and Phantom installation directory (/opt/phantom-wg).
 
         Args:
             container_name: Optional custom container name. Defaults to process-specific name.
@@ -96,7 +96,7 @@ class WireGuardTestContainer:
         self.host_config_dir: Optional[str] = None  # Host directory for WireGuard config files
         self.host_phantom_dir: Optional[str] = None  # Host directory for Phantom config files
         self.container_config_dir: str = "/etc/wireguard"  # Container path for WireGuard configs
-        self.container_phantom_dir: str = "/opt/phantom-wireguard"  # Container path for Phantom installation
+        self.container_phantom_dir: str = "/opt/phantom-wg"  # Container path for Phantom installation
 
     def build_image(self, show_output: bool = True) -> None:
         """
@@ -209,9 +209,9 @@ class WireGuardTestContainer:
                     'bind': self.container_config_dir,  # /etc/wireguard
                     'mode': 'rw'
                 },
-                # Phantom installation directory mapping (/opt/phantom-wireguard)
+                # Phantom installation directory mapping (/opt/phantom-wg)
                 self.host_phantom_dir: {
-                    'bind': self.container_phantom_dir,  # /opt/phantom-wireguard
+                    'bind': self.container_phantom_dir,  # /opt/phantom-wg
                     'mode': 'rw'
                 },
                 # System volumes for container functionality
@@ -443,7 +443,7 @@ class WireGuardTestContainer:
         # Create phantom.json configuration file with test-specific settings
         phantom_config = {
             "version": "core-v1",  # Config schema version for compatibility checks
-            "install_dir": "/opt/phantom-wireguard",  # Installation directory path
+            "install_dir": "/opt/phantom-wg",  # Installation directory path
             "wireguard": {  # WireGuard network configuration
                 "interface": "wg_main",  # VPN interface name
                 "port": 51820,  # UDP listen port for WireGuard
@@ -463,18 +463,18 @@ class WireGuardTestContainer:
         phantom_json_content = json.dumps(phantom_config, indent=2)
 
         # Write phantom.json to container
-        self.exec_command('> /opt/phantom-wireguard/config/phantom.json')
+        self.exec_command('> /opt/phantom-wg/config/phantom.json')
 
         # Write JSON content line by line (required due to shell interpretation of special chars)
         for line in phantom_json_content.split('\n'):
             # Escape double quotes to prevent shell from interpreting them as string delimiters
             # Escape dollar signs to prevent shell variable expansion (e.g., $var would try to expand)
             escaped_line = line.replace('"', '\\"').replace('$', '\\$')
-            write_cmd = f'echo "{escaped_line}" >> /opt/phantom-wireguard/config/phantom.json'
+            write_cmd = f'echo "{escaped_line}" >> /opt/phantom-wg/config/phantom.json'
             self.exec_command(write_cmd)
 
         # Set proper permissions
-        self.exec_command("chmod 644 /opt/phantom-wireguard/config/phantom.json")
+        self.exec_command("chmod 644 /opt/phantom-wg/config/phantom.json")
 
         # Also write to host phantom dir for test access
         try:

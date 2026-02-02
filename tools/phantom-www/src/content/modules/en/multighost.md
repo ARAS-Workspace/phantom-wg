@@ -13,7 +13,7 @@ In this scenario, your connection is masked as HTTPS traffic while your traffic 
 VPN server, creating a double layer. By combining the strengths of both modules, this approach provides an
 ideal solution for use cases requiring maximum privacy and censorship resistance.
 
-The connection to the **Phantom-WireGuard** server is concealed by the Ghost module and appears as standard
+The connection to the **Phantom-WG** server is concealed by the Ghost module and appears as standard
 HTTPS traffic. Once the traffic reaches the server, it is routed to an external VPN server via the Multihop
 module. This way, you bypass DPI systems while achieving a high level of anonymity through the double VPN layer.
 
@@ -23,9 +23,9 @@ Both modules operate independently and can be disabled at any time.
 
 With MultiGhost, your traffic follows this path:
 
-- **Normal Flow**: Clients → Phantom-WireGuard → Internet
-- **Ghost Flow**: Clients → HTTPS/WebSocket (Port 443) → Phantom-WireGuard → Internet
-- **MultiGhost Flow**: Clients → HTTPS/WebSocket (Port 443) → Phantom-WireGuard → VPN Exit → Internet
+- **Normal Flow**: Clients → Phantom-WG → Internet
+- **Ghost Flow**: Clients → HTTPS/WebSocket (Port 443) → Phantom-WG → Internet
+- **MultiGhost Flow**: Clients → HTTPS/WebSocket (Port 443) → Phantom-WG → VPN Exit → Internet
 
 This layered structure both bypasses DPI systems and makes traffic analysis harder. Your connection appears
 as HTTPS while your real destination and IP address remain hidden behind the double VPN layer.
@@ -42,7 +42,7 @@ as HTTPS while your real destination and IP address remain hidden behind the dou
 
 - **Independent Modules**: Ghost and Multihop can be managed separately
 - **Flexible Usage**: Enable or disable each module at any time
-- **Automatic Orchestration**: Phantom-WireGuard ensures modules operate independently yet harmoniously
+- **Automatic Orchestration**: Phantom-WG ensures modules operate independently yet harmoniously
 
 ## Quick Start
 

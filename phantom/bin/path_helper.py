@@ -6,7 +6,7 @@
 ██║     ██║  ██║██║  ██║██║ ╚████║   ██║   ╚██████╔╝██║ ╚═╝ ██║
 ╚═╝     ╚═╝  ╚═╝╚═╝  ╚═╝╚═╝  ╚═══╝   ╚═╝    ╚═════╝ ╚═╝     ╚═╝
 
-TR: Phantom-WireGuard Giriş Noktaları için Path Kurulum Yardımcısı
+TR: Phantom-WG Giriş Noktaları için Path Kurulum Yardımcısı
     ===========================================================
     
     Bu modül, phantom modülü henüz Python path'inde olmadığında oluşan
@@ -19,14 +19,14 @@ TR: Phantom-WireGuard Giriş Noktaları için Path Kurulum Yardımcısı
     
     Ortam Tespiti:
         - Geliştirme: Proje kök dizinini sys.path'e ekler
-        - Üretim: /opt/phantom-wireguard dizinini sys.path'e ekler
+        - Üretim: /opt/phantom-wg dizinini sys.path'e ekler
     
     Kullanım:
         from path_helper import setup_phantom_path
         setup_phantom_path()
         from phantom.api.core import PhantomAPI  # Artık çalışır
 
-EN: Path Setup Helper for Phantom-WireGuard Entry Points
+EN: Path Setup Helper for Phantom-WG Entry Points
     ==================================================
     
     This module is placed in the bin directory to avoid import issues
@@ -39,7 +39,7 @@ EN: Path Setup Helper for Phantom-WireGuard Entry Points
     
     Environment Detection:
         - Development: Adds project root directory to sys.path
-        - Production: Adds /opt/phantom-wireguard to sys.path
+        - Production: Adds /opt/phantom-wg to sys.path
     
     Usage:
         from path_helper import setup_phantom_path
@@ -67,7 +67,7 @@ def setup_phantom_path():
             1. Mevcut dosyanın konumunu belirle (phantom/bin/ içinde olmalı)
             2. Geliştirme ortamı kontrolü: üst dizinde 'phantom' klasörü var mı?
             3. Varsa geliştirme ortamı, proje kökünü path'e ekle
-            4. Yoksa üretim ortamı, /opt/phantom-wireguard'ı path'e ekle
+            4. Yoksa üretim ortamı, /opt/phantom-wg'ı path'e ekle
     
     EN: Setup Python path for phantom module imports.
     
@@ -79,7 +79,7 @@ def setup_phantom_path():
             1. Determine current file location (should be in phantom/bin/)
             2. Check for development: is there a 'phantom' folder in parent?
             3. If yes, development environment, add project root to path
-            4. If no, production environment, add /opt/phantom-wireguard to path
+            4. If no, production environment, add /opt/phantom-wg to path
     """
     # Get the path to the current file (should be in phantom/bin/)
     current_file = Path(__file__).resolve()
@@ -93,6 +93,6 @@ def setup_phantom_path():
         sys.path.insert(0, str(potential_dev_root))
     else:
         # Production: Add installation directory to path
-        install_dir = Path("/opt/phantom-wireguard")
+        install_dir = Path("/opt/phantom-wg")
         if install_dir.exists():
             sys.path.insert(0, str(install_dir))

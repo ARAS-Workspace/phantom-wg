@@ -1,6 +1,6 @@
-# Phantom-WireGuard
+# Phantom-WG
 
-[![Release Workflow](https://github.com/ARAS-Workspace/phantom-wireguard/actions/workflows/release-workflow.yml/badge.svg)](https://github.com/ARAS-Workspace/phantom-wireguard/actions/workflows/release-workflow.yml)
+[![Release Workflow](https://github.com/ARAS-Workspace/phantom-wg/actions/workflows/release-workflow.yml/badge.svg)](https://github.com/ARAS-Workspace/phantom-wg/actions/workflows/release-workflow.yml)
 
 ```bash
 ██████╗ ██╗  ██╗ █████╗ ███╗   ██╗████████╗ ██████╗ ███╗   ███╗
@@ -13,7 +13,7 @@
 
 **Your Server. Your Network. Your Privacy.**
 
-Phantom-WireGuard is a modular tool for setting up and managing WireGuard VPN
+Phantom-WG is a modular tool for setting up and managing WireGuard VPN
 infrastructure on your own server. Beyond basic VPN management, it provides
 censorship-resistant connections, multi-layer encryption, and advanced privacy scenarios.
 
@@ -55,15 +55,15 @@ Upon successful installation, you will see the following output:
 
 ```
 ========================================
-   PHANTOM-WIREGUARD INSTALLED!
+   PHANTOM-WG INSTALLED!
 ========================================
 
 Commands:
-  phantom-wireguard - Interactive UI
+  phantom-wg - Interactive UI
   phantom-api       - API access
 
 Quick Start:
-  1. Run: phantom-wireguard
+  1. Run: phantom-wg
   2. Select 'Core Management'
   3. Add your first client
 
@@ -152,7 +152,7 @@ phantom-api multihop enable_multihop exit_name="vpn-exit"
 
 | Method              | Command                         | Description                      |
 |---------------------|---------------------------------|----------------------------------|
-| **Interactive CLI** | `phantom-wireguard`             | Rich TUI-based user interface    |
+| **Interactive CLI** | `phantom-wg`                    | Rich TUI-based user interface    |
 | **API**             | `phantom-api <module> <action>` | Programmatic access, JSON output |
 | **Ghost Export**    | `phantom-casper <client>`       | Ghost Mode client configuration  |
 
@@ -203,7 +203,7 @@ This project would not be possible without the following open source projects:
 
 ## Support
 
-Phantom-WireGuard is an open-source project. If you'd like to support the project:
+Phantom-WG is an open-source project. If you'd like to support the project:
 
 **Monero (XMR):**
 ```

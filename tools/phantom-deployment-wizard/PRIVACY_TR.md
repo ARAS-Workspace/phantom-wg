@@ -14,11 +14,11 @@ Copyright (c) 2025 Rıza Emre ARAS <r.emrearas@proton.me>
 
 ## Genel Bakış
 
-Phantom Deployment Wizard, Phantom WireGuard ön yüklü bir VPS sunucu oluşturmanıza yardımcı olan açık kaynaklı ve kendi sunucunuzda barındırılabilen bir dağıtım aracıdır. Bu bildirim, aracın hangi verileri işlediğini, bu verilerin nasıl aktarıldığını ve hangi üçüncü taraf hizmetlerin kullanıldığını açıklamaktadır.
+Phantom Deployment Wizard, Phantom-WG ön yüklü bir VPS sunucu oluşturmanıza yardımcı olan açık kaynaklı ve kendi sunucunuzda barındırılabilen bir dağıtım aracıdır. Bu bildirim, aracın hangi verileri işlediğini, bu verilerin nasıl aktarıldığını ve hangi üçüncü taraf hizmetlerin kullanıldığını açıklamaktadır.
 
 ## Üçüncü Taraf Sorumluluk Reddi
 
-**Phantom WireGuard'ın SporeStack ile herhangi bir ortaklığı, iş birliği veya ticari ilişkisi bulunmamaktadır.** SporeStack, bağımsız bir üçüncü taraf VPS barındırma sağlayıcısıdır. Bu araç, SporeStack API'si ile yalnızca kolay entegre edilebilir, gizlilik odaklı bir API sunması ve kişisel kimlik doğrulaması gerektirmeden kripto para ile ödeme kabul etmesi nedeniyle entegre edilmiştir. SporeStack'in kendi gizlilik ve kabul edilebilir kullanım politikaları, hizmetleri için bağımsız olarak geçerlidir.
+**Phantom-WG'nin SporeStack ile herhangi bir ortaklığı, iş birliği veya ticari ilişkisi bulunmamaktadır.** SporeStack, bağımsız bir üçüncü taraf VPS barındırma sağlayıcısıdır. Bu araç, SporeStack API'si ile yalnızca kolay entegre edilebilir, gizlilik odaklı bir API sunması ve kişisel kimlik doğrulaması gerektirmeden kripto para ile ödeme kabul etmesi nedeniyle entegre edilmiştir. SporeStack'in kendi gizlilik ve kabul edilebilir kullanım politikaları, hizmetleri için bağımsız olarak geçerlidir.
 
 SporeStack politikaları için: [sporestack.com](https://sporestack.com/)
 
@@ -81,7 +81,7 @@ Bu araç aşağıdaki hizmetlere giden bağlantılar kurar:
 - **Ne zaman:** Yalnızca araç Tor modunda çalıştığında (`TOR_MODE=1`)
 
 ### 3. Phantom Kurulum Betiği (`install.phantom.tc`) — Yalnızca Sunucu Tarafı
-- **Amaç:** Dağıtılan sunucuya Phantom WireGuard kurar
+- **Amaç:** Dağıtılan sunucuya Phantom-WG kurar
 - **Protokol:** HTTPS
 - **Önemli:** Bu bağlantı, sihirbaz uygulaması tarafından **değil**, cloud-init aracılığıyla **dağıtılan sunucunuz tarafından** kurulur
 
@@ -121,13 +121,13 @@ Dağıtım, sunucunuzun ilk açılışında çalışan bir cloud-init betiği i�
 
 1. Sistem paketlerini günceller
 2. `curl` paketini kurar
-3. `install.phantom.tc` adresinden Phantom WireGuard kurulum betiğini indirir ve çalıştırır
+3. `install.phantom.tc` adresinden Phantom-WG kurulum betiğini indirir ve çalıştırır
 
 Cloud-init betiği, dağıtımdan önce sihirbaz içinde görüntülenebilir ve incelenebilir ("View Cloud Init Script" bölümünden). Vultr dağıtımlarında betik iletim öncesinde base64 ile kodlanır; DigitalOcean için düz metin olarak gönderilir. Her iki durumda da içerik aynıdır.
 
 ## Açık Kaynak ve Şeffaflık
 
-Phantom WireGuard açık kaynaklı bir projedir. Bu dağıtım sihirbazı, CI/CD pipeline'ı ve tüm altyapı yapılandırmaları dahil olmak üzere kod tabanının tamamı GitHub üzerinde herkese açık ve denetlenebilir durumdadır.
+Phantom-WG açık kaynaklı bir projedir. Bu dağıtım sihirbazı, CI/CD pipeline'ı ve tüm altyapı yapılandırmaları dahil olmak üzere kod tabanının tamamı GitHub üzerinde herkese açık ve denetlenebilir durumdadır.
 
 Sihirbazın üretim dağıtımı (Tor gizli servisi), doğrudan repository üzerinden bir GitHub Actions workflow'u (`.github/workflows/phantom-wizard-hidden-deployment-workflow.yml`) aracılığıyla yönetilmektedir. Bu şu anlama gelir:
 

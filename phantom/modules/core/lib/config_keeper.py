@@ -133,7 +133,7 @@ class ConfigKeeper:
             self.logger.error("Failed to retrieve tweak settings")
             raise ServiceOperationError(
                 "Unable to retrieve tweak settings. Please check:\n"
-                "• Configuration file exists at /opt/phantom-wireguard/config/phantom.json\n"
+                "• Configuration file exists at /opt/phantom-wg/config/phantom.json\n"
                 "• File permissions allow reading\n"
                 "• JSON format is valid\n\n"
                 "You can reset configuration with 'phantom-api reset factory_reset'"
@@ -202,7 +202,7 @@ class ConfigKeeper:
                 "• Disk space is full\n"
                 "• JSON structure is corrupted\n"
                 "• Concurrent modification by another process\n\n"
-                "Try again or check file permissions at /opt/phantom-wireguard/config/"
+                "Try again or check file permissions at /opt/phantom-wg/config/"
             )
 
     def apply_tweak_modification(self, setting_name: str, value: bool) -> Dict[str, Any]:

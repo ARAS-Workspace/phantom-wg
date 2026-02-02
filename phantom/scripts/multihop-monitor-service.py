@@ -1,4 +1,4 @@
-#!/opt/phantom-wireguard/.phantom-venv/bin/python3
+#!/opt/phantom-wg/.phantom-venv/bin/python3
 """
 ██████╗ ██╗  ██╗ █████╗ ███╗   ██╗████████╗ ██████╗ ███╗   ███╗
 ██╔══██╗██║  ██║██╔══██╗████╗  ██║╚══██╔══╝██╔═══██╗████╗ ████║
@@ -71,7 +71,7 @@ from datetime import datetime
 class MultihopMonitorService:
     def __init__(self):
         self.running = True
-        self.install_dir = Path("/opt/phantom-wireguard")
+        self.install_dir = Path("/opt/phantom-wg")
         self.config_file = self.install_dir / "config" / "phantom.json"
         self.session_log_path = self.install_dir / "logs" / "multihop-session-current.log"
 

@@ -17,7 +17,7 @@ extra_css:
 
 ## Genel Bakış
 
-Phantom-WireGuard, kendi sunucu ortamınızda WireGuard tabanlı VPN altyapısı kurmanıza ve                                                                                                                                                                                             
+Phantom-WG, kendi sunucu ortamınızda WireGuard tabanlı VPN altyapısı kurmanıza ve                                                                                                                                                                                             
 yönetmenize olanak sağlayan modüler bir araçtır. Temel VPN yönetiminin ötesinde; istemci                                                                                                                                                                                             
 yapılandırmalarıyla senkronize DNS yönetimi, wstunnel ile WireGuard trafiğini maskeleyerek                                                                                                                                                                                           
 sansüre dayanıklı bağlantı kurma ve trafiği harici WireGuard uç noktaları üzerinden                                                                                                                                                                                                  
@@ -91,7 +91,7 @@ graph LR
 
 Sisteme iki farklı erişim yöntemiyle ulaşılabilir:
 
-- **CLI** — `phantom-wireguard` komutuyla başlatılan Rich TUI tabanlı interaktif arayüz.
+- **CLI** — `phantom-wg` komutuyla başlatılan Rich TUI tabanlı interaktif arayüz.
   Her modül için adım adım yönlendirmeli menüler, renk kodlu durum göstergeleri ve
   sayfalanmış listeler sunar. Teknik bilgiye ihtiyaç duymadan sunucuyu yönetmek isteyen
   kullanıcılar için tasarlanmıştır. Bu dokümantasyondaki CLI önizleme kayıtları ilgili
@@ -154,7 +154,7 @@ Hata yanıtları:
 
 ## Core Modülü
 
-Core modülü, Phantom-WireGuard'ın temel yapı taşıdır. WireGuard sunucusunun yaşam döngüsü
+Core modülü, Phantom-WG'nin temel yapı taşıdır. WireGuard sunucusunun yaşam döngüsü
 (istemci ekleme/kaldırma, yapılandırma dışa aktarma, servis yönetimi, güvenlik duvarı
 denetimi, subnet değişikliği ve gelişmiş davranış ayarları) bu modül üzerinden yönetilir.
 
@@ -162,7 +162,7 @@ denetimi, subnet değişikliği ve gelişmiş davranış ayarları) bu modül ü
 
 <div class="asciinema-player-container">
     <div class="asciinema-player-header">
-        <h3>Phantom WireGuard</h3>
+        <h3>Phantom-WG</h3>
         <span class="asciinema-player-info">CLI Önizleme</span>
     </div>
     <div class="asciinema-player-wrapper">
@@ -213,7 +213,7 @@ phantom-api core add_client client_name="john-laptop"
 
 <div class="asciinema-player-container">
     <div class="asciinema-player-header">
-        <h3>Phantom WireGuard</h3>
+        <h3>Phantom-WG</h3>
         <span class="asciinema-player-info">CLI Önizleme</span>
     </div>
     <div class="asciinema-player-wrapper">
@@ -260,7 +260,7 @@ phantom-api core remove_client client_name="john-laptop"
 
 <div class="asciinema-player-container">
     <div class="asciinema-player-header">
-        <h3>Phantom WireGuard</h3>
+        <h3>Phantom-WG</h3>
         <span class="asciinema-player-info">CLI Önizleme</span>
     </div>
     <div class="asciinema-player-wrapper">
@@ -332,7 +332,7 @@ phantom-api core list_clients search="john"
 
 <div class="asciinema-player-container">
     <div class="asciinema-player-header">
-        <h3>Phantom WireGuard</h3>
+        <h3>Phantom-WG</h3>
         <span class="asciinema-player-info">CLI Önizleme</span>
     </div>
     <div class="asciinema-player-wrapper">
@@ -402,7 +402,7 @@ oluşturma CLI arayüzünde mevcuttur.
 
 <div class="asciinema-player-container">
     <div class="asciinema-player-header">
-        <h3>Phantom WireGuard</h3>
+        <h3>Phantom-WG</h3>
         <span class="asciinema-player-info">CLI Önizleme</span>
     </div>
     <div class="asciinema-player-wrapper">
@@ -467,9 +467,9 @@ phantom-api core server_status
       "active_connections": 0
     },
     "system": {
-      "install_dir": "/opt/phantom-wireguard",
-      "config_dir": "/opt/phantom-wireguard/config",
-      "data_dir": "/opt/phantom-wireguard/data",
+      "install_dir": "/opt/phantom-wg",
+      "config_dir": "/opt/phantom-wg/config",
+      "data_dir": "/opt/phantom-wg/data",
       "firewall": {
         "status": "active"
       },
@@ -489,7 +489,7 @@ phantom-api core server_status
 
 <div class="asciinema-player-container">
     <div class="asciinema-player-header">
-        <h3>Phantom WireGuard</h3>
+        <h3>Phantom-WG</h3>
         <span class="asciinema-player-info">CLI Önizleme</span>
     </div>
     <div class="asciinema-player-wrapper">
@@ -521,7 +521,7 @@ phantom-api core service_logs lines=100
 
 <div class="asciinema-player-container">
     <div class="asciinema-player-header">
-        <h3>Phantom WireGuard</h3>
+        <h3>Phantom-WG</h3>
         <span class="asciinema-player-info">CLI Önizleme</span>
     </div>
     <div class="asciinema-player-wrapper">
@@ -555,7 +555,7 @@ phantom-api core latest_clients count=10
 
 <div class="asciinema-player-container">
     <div class="asciinema-player-header">
-        <h3>Phantom WireGuard</h3>
+        <h3>Phantom-WG</h3>
         <span class="asciinema-player-info">CLI Önizleme</span>
     </div>
     <div class="asciinema-player-wrapper">
@@ -593,7 +593,7 @@ phantom-api core restart_service
 
 <div class="asciinema-player-container">
     <div class="asciinema-player-header">
-        <h3>Phantom WireGuard</h3>
+        <h3>Phantom-WG</h3>
         <span class="asciinema-player-info">CLI Önizleme</span>
     </div>
     <div class="asciinema-player-wrapper">
@@ -656,7 +656,7 @@ phantom-api core get_firewall_status
 
 <div class="asciinema-player-container">
     <div class="asciinema-player-header">
-        <h3>Phantom WireGuard</h3>
+        <h3>Phantom-WG</h3>
         <span class="asciinema-player-info">CLI Önizleme</span>
     </div>
     <div class="asciinema-player-wrapper">
@@ -708,7 +708,7 @@ phantom-api core update_tweak_setting setting_name="restart_service_after_client
 
 <div class="asciinema-player-container">
     <div class="asciinema-player-header">
-        <h3>Phantom WireGuard</h3>
+        <h3>Phantom-WG</h3>
         <span class="asciinema-player-info">CLI Önizleme</span>
     </div>
     <div class="asciinema-player-wrapper">
@@ -871,7 +871,7 @@ phantom-api core change_subnet new_subnet="192.168.100.0/24" confirm=true
 
 <div class="asciinema-player-container">
     <div class="asciinema-player-header">
-        <h3>Phantom WireGuard</h3>
+        <h3>Phantom-WG</h3>
         <span class="asciinema-player-info">CLI Önizleme</span>
     </div>
     <div class="asciinema-player-wrapper">
@@ -1076,7 +1076,7 @@ phantom-api dns get_dns_servers
 
 <div class="asciinema-player-container">
     <div class="asciinema-player-header">
-        <h3>Phantom WireGuard</h3>
+        <h3>Phantom-WG</h3>
         <span class="asciinema-player-info">CLI Önizleme</span>
     </div>
     <div class="asciinema-player-wrapper">
@@ -1202,7 +1202,7 @@ phantom-casper demo-casper
 **Örnek Çıktı:**
 ```
 ================================================================================
-PHANTOM WIREGUARD - GHOST MODE İSTEMCİ YAPILANDIRMASI
+PHANTOM-WG - GHOST MODE İSTEMCİ YAPILANDIRMASI
 ================================================================================
 
 İstemci: demo-casper
@@ -1292,7 +1292,7 @@ herhangi bir VPN sağlayıcısıyla uyumludur.
 
 <div class="asciinema-player-container">
     <div class="asciinema-player-header">
-        <h3>Phantom WireGuard</h3>
+        <h3>Phantom-WG</h3>
         <span class="asciinema-player-info">CLI Önizleme</span>
     </div>
     <div class="asciinema-player-wrapper">
@@ -1461,12 +1461,12 @@ phantom-api multihop get_session_log lines=100
 
 ## Factory Reset
 
-Phantom-WireGuard'ı ilk kurulum durumuna geri döndürmek için bağımsız factory reset
+Phantom-WG'yi ilk kurulum durumuna geri döndürmek için bağımsız factory reset
 betiği kullanılır. Bu işlem API üzerinden değil, doğrudan sunucuda çalıştırılan bir
 betikle gerçekleştirilir:
 
 ```bash
-/opt/phantom-wireguard/phantom/factory-reset.sh
+/opt/phantom-wg/phantom/factory-reset.sh
 ```
 
 Bu betik sırasıyla şu işlemleri gerçekleştirir:
@@ -1584,7 +1584,7 @@ fi
 
 ## Sürüm Bilgisi
 
-Bu dokümantasyon Phantom-WireGuard API **core-v1** sürümünü kapsar.
+Bu dokümantasyon Phantom-WG API **core-v1** sürümünü kapsar.
 
 > **Not:** Dokümantasyondaki CLI önizleme kayıtlarında görünen sunucu bilgileri, IP
 > adresleri ve istemci verileri, yalnızca bu içeriklerin oluşturulması amacıyla geçici

@@ -1,4 +1,4 @@
-#!/opt/phantom-wireguard/.phantom-venv/bin/python3
+#!/opt/phantom-wg/.phantom-venv/bin/python3
 """
 ██████╗ ██╗  ██╗ █████╗ ███╗   ██╗████████╗ ██████╗ ███╗   ███╗
 ██╔══██╗██║  ██║██╔══██╗████╗  ██║╚══██╔══╝██╔═══██╗████╗ ████║
@@ -7,10 +7,10 @@
 ██║     ██║  ██║██║  ██║██║ ╚████║   ██║   ╚██████╔╝██║ ╚═╝ ██║
 ╚═╝     ╚═╝  ╚═╝╚═╝  ╚═╝╚═╝  ╚═══╝   ╚═╝    ╚═════╝ ╚═╝     ╚═╝
 
-TR: Phantom-WireGuard API Komut Satırı Arayüzü
+TR: Phantom-WG API Komut Satırı Arayüzü
     ========================================
     
-    Bu script, Phantom-WireGuard API'sine komut satırından erişim sağlar.
+    Bu script, Phantom-WG API'sine komut satırından erişim sağlar.
     Tüm modül eylemlerini CLI üzerinden çalıştırmanıza olanak tanır.
     
     Kullanım:
@@ -32,10 +32,10 @@ TR: Phantom-WireGuard API Komut Satırı Arayüzü
         Tüm yanıtlar JSON formatında döndürülür ve başarı durumu,
         veri ve metadata bilgilerini içerir.
 
-EN: Phantom-WireGuard API Command-Line Interface
+EN: Phantom-WG API Command-Line Interface
     ==========================================
     
-    This script provides command-line access to the Phantom-WireGuard API.
+    This script provides command-line access to the Phantom-WG API.
     It allows you to execute all module actions through the CLI.
     
     Usage:
@@ -84,9 +84,9 @@ def print_help():
     """
     help_text = dedent("""
         ╔═══════════════════════════════════════════════════════════════════════╗
-        ║                    PHANTOM-WIREGUARD API INTERFACE                    ║
+        ║                    PHANTOM-WG API INTERFACE                           ║
         ╠═══════════════════════════════════════════════════════════════════════╣
-        ║  A command-line API interface for Phantom-WireGuard VPN management    ║
+        ║  A command-line API interface for Phantom-WG VPN management           ║
         ╚═══════════════════════════════════════════════════════════════════════╝
         
         USAGE:
@@ -153,7 +153,7 @@ def print_help():
             • Use confirm=true for destructive operations
             • Ghost Mode requires domain with A record pointing to server
         
-        For complete documentation: /opt/phantom-wireguard/phantom/bin/docs/
+        For complete documentation: /opt/phantom-wg/phantom/bin/docs/
         Copyright (c) 2025 Rıza Emre ARAS <r.emrearas@proton.me> - Licensed under MIT License
         WireGuard® is a registered trademark of Jason A. Donenfeld.
     """)

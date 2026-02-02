@@ -14,11 +14,11 @@ Copyright (c) 2025 Rıza Emre ARAS <r.emrearas@proton.me>
 
 ## Overview
 
-`install.phantom.tc` is a Cloudflare Worker that serves the Phantom-WireGuard bootstrap install script. It is maintained entirely from the [phantom-wireguard](https://github.com/ARAS-Workspace/phantom-wireguard) GitHub repository and deployed automatically via GitHub Actions (`.github/workflows/deploy-phantom-install.yml`).
+`install.phantom.tc` is a Cloudflare Worker that serves the Phantom-WG bootstrap install script. It is maintained entirely from the [phantom-wg](https://github.com/ARAS-Workspace/phantom-wg) GitHub repository and deployed automatically via GitHub Actions (`.github/workflows/deploy-phantom-install.yml`).
 
 ## Source Code & Deployment
 
-- **Source:** [`tools/phantom-install/`](https://github.com/ARAS-Workspace/phantom-wireguard/tree/main/tools/phantom-install)
+- **Source:** [`tools/phantom-install/`](https://github.com/ARAS-Workspace/phantom-wg/tree/main/tools/phantom-install)
 - **Deployment:** GitHub Actions workflow, triggered on pushes to `main` that modify the `tools/phantom-install/**` path
 - **Runtime:** Cloudflare Workers (stateless, no persistent storage)
 
@@ -47,7 +47,7 @@ As a Cloudflare Worker, this service runs on Cloudflare's global network. Cloudf
 
 ## Open Source & Transparency
 
-The entire source code of this Worker, its deployment workflow, and its configuration are publicly available in the [phantom-wireguard](https://github.com/ARAS-Workspace/phantom-wireguard) repository. Every deployment is triggered from the public repository — there is no separate, private codebase.
+The entire source code of this Worker, its deployment workflow, and its configuration are publicly available in the [phantom-wg](https://github.com/ARAS-Workspace/phantom-wg) repository. Every deployment is triggered from the public repository — there is no separate, private codebase.
 
 ## Changes to This Notice
 

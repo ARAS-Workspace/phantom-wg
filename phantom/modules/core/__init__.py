@@ -6,7 +6,7 @@
 ██║     ██║  ██║██║  ██║██║ ╚████║   ██║   ╚██████╔╝██║ ╚═╝ ██║
 ╚═╝     ╚═╝  ╚═╝╚═╝  ╚═╝╚═╝  ╚═══╝   ╚═╝    ╚═════╝ ╚═╝     ╚═╝
 
-TR: Phantom-WireGuard Core Modülü
+TR: Phantom-WG Core Modülü
     =============================
     
     Sistemin kalbi olan bu modül, WireGuard VPN'in tüm temel işlevlerini yönetir.
@@ -31,7 +31,7 @@ TR: Phantom-WireGuard Core Modülü
         - Servis sağlık monitörü
         - Tweak ayarları ile davranış kontrolü
 
-EN: Phantom-WireGuard Core Module
+EN: Phantom-WG Core Module
     =============================
     
     The heart of the system, this module manages all core WireGuard VPN functionality.

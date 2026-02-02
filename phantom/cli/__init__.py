@@ -6,13 +6,13 @@
 ██║     ██║  ██║██║  ██║██║ ╚████║   ██║   ╚██████╔╝██║ ╚═╝ ██║
 ╚═╝     ╚═╝  ╚═╝╚═╝  ╚═╝╚═╝  ╚═══╝   ╚═╝    ╚═════╝ ╚═╝     ╚═╝
 
-TR: Phantom-WireGuard CLI Paketi
+TR: Phantom-WG CLI Paketi
     ============================
     
     Rich TUI (Terminal User Interface) ile etkileşimli kullanıcı arayüzü sağlar.
     API fonksiyonlarını kullanıcı dostu menüler ve formlar ile sunar.
 
-EN: Phantom-WireGuard CLI Package
+EN: Phantom-WG CLI Package
     ============================
     
     Provides interactive user interface with Rich TUI (Terminal User Interface).

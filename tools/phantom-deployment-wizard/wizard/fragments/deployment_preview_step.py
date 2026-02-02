@@ -46,7 +46,7 @@ def deployment_preview_step_fragment():
     total_cost = phantom_amount
 
     # Server summary
-    st.markdown("#### Phantom WireGuard Server")
+    st.markdown("#### Phantom-WG Server")
 
     phantom_flavor = phantom_server.get('flavor', {})
     phantom_size = phantom_flavor.get('name') or phantom_flavor.get('slug', 'N/A') if isinstance(phantom_flavor,

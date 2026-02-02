@@ -1,4 +1,4 @@
-#!/opt/phantom-wireguard/.phantom-venv/bin/python3
+#!/opt/phantom-wg/.phantom-venv/bin/python3
 """
 ██████╗ ██╗  ██╗ █████╗ ███╗   ██╗████████╗ ██████╗ ███╗   ███╗
 ██╔══██╗██║  ██║██╔══██╗████╗  ██║╚══██╔══╝██╔═══██╗████╗ ████║
@@ -7,17 +7,17 @@
 ██║     ██║  ██║██║  ██║██║ ╚████║   ██║   ╚██████╔╝██║ ╚═╝ ██║
 ╚═╝     ╚═╝  ╚═╝╚═╝  ╚═╝╚═╝  ╚═══╝   ╚═╝    ╚═════╝ ╚═╝     ╚═╝
 
-TR: Phantom-WireGuard Etkileşimli CLI Arayüzü
+TR: Phantom-WG Etkileşimli CLI Arayüzü
     ======================================
     
-    Bu script, Phantom-WireGuard için zengin, etkileşimli bir terminal
+    Bu script, Phantom-WG için zengin, etkileşimli bir terminal
     kullanıcı arayüzü sağlar.
 
-EN: Phantom-WireGuard Interactive CLI Interface
+EN: Phantom-WG Interactive CLI Interface
     =====================================
     
     This script provides a rich, interactive terminal user interface
-    for Phantom-WireGuard.
+    for Phantom-WG.
 
 Copyright (c) 2025 Rıza Emre ARAS <r.emrearas@proton.me>
 Licensed under AGPL-3.0 - see LICENSE file for details

@@ -6,7 +6,7 @@
 ██║     ██║  ██║██║  ██║██║ ╚████║   ██║   ╚██████╔╝██║ ╚═╝ ██║
 ╚═╝     ╚═╝  ╚═╝╚═╝  ╚═╝╚═╝  ╚═══╝   ╚═╝    ╚═════╝ ╚═╝     ╚═╝
 
-DNS Functionality Tests - Comprehensive test suite for Phantom-WireGuard DNS module
+DNS Functionality Tests - Comprehensive test suite for Phantom-WG DNS module
 
 Test Phases:
     Phase 1: Environment Setup

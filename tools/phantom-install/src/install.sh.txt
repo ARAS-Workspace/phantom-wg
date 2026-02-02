@@ -1,5 +1,5 @@
 #!/bin/bash
-# Phantom-WireGuard Bootstrap Installer
+# Phantom-WG Bootstrap Installer
 # Usage: curl -sSL https://install.phantom.tc | bash
 #
 # Copyright (c) 2025 Rıza Emre ARAS
@@ -10,7 +10,7 @@ set -euo pipefail
 # =============================================================================
 # CONFIGURATION - Update this URL for each release
 # =============================================================================
-LATEST_RELEASE_URL="https://github.com/ARAS-Workspace/phantom-wireguard/releases/download/core-v1.0.1/phantom-wireguard-core-v1.0.1.zip"
+LATEST_RELEASE_URL="https://github.com/ARAS-Workspace/phantom-wg/releases/download/core-v1.0.1/phantom-wg-core-v1.0.1.zip"
 # =============================================================================
 
 # Supported OS versions
@@ -53,7 +53,7 @@ print_header() {
     echo "██║     ██║  ██║██║  ██║██║ ╚████║   ██║   ╚██████╔╝██║ ╚═╝ ██║"
     echo "╚═╝     ╚═╝  ╚═╝╚═╝  ╚═╝╚═╝  ╚═══╝   ╚═╝    ╚═════╝ ╚═╝     ╚═╝"
     echo -e "${NC}"
-    echo -e "${CYAN}Phantom-WireGuard Bootstrap Installer${NC}"
+    echo -e "${CYAN}Phantom-WG Bootstrap Installer${NC}"
     echo ""
 }
 
@@ -134,8 +134,8 @@ download_release() {
     log "Creating installation directory: $INSTALL_DIR" "$YELLOW"
     mkdir -p "$INSTALL_DIR"
 
-    log "Downloading Phantom-WireGuard from: $LATEST_RELEASE_URL" "$YELLOW"
-    local archive_path="$INSTALL_DIR/phantom-wireguard.zip"
+    log "Downloading Phantom-WG from: $LATEST_RELEASE_URL" "$YELLOW"
+    local archive_path="$INSTALL_DIR/phantom-wg.zip"
 
     curl -L --progress-bar "$LATEST_RELEASE_URL" -o "$archive_path" || error_exit "Failed to download release archive"
 

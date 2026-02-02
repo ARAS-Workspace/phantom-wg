@@ -6,7 +6,7 @@
 ██║     ██║  ██║██║  ██║██║ ╚████║   ██║   ╚██████╔╝██║ ╚═╝ ██║
 ╚═╝     ╚═╝  ╚═╝╚═╝  ╚═╝╚═╝  ╚═══╝   ╚═╝    ╚═════╝ ╚═╝     ╚═╝
 
-Phantom-WireGuard Module Base Class
+Phantom-WG Module Base Class
 
 Copyright (c) 2025 Rıza Emre ARAS <r.emrearas@proton.me>
 Licensed under AGPL-3.0 - see LICENSE file for details
@@ -32,9 +32,9 @@ class BaseModule(ABC):
         module metadata.
 
         Args:
-            install_dir: Installation directory path (default: /opt/phantom-wireguard)
+            install_dir: Installation directory path (default: /opt/phantom-wg)
         """
-        self.install_dir = install_dir or Path("/opt/phantom-wireguard")
+        self.install_dir = install_dir or Path("/opt/phantom-wg")
         self.config_dir = self.install_dir / "config"
         self.data_dir = self.install_dir / "data"
         self.logs_dir = self.install_dir / "logs"

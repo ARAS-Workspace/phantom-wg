@@ -81,7 +81,7 @@ class TestModuleDocker:
                 path_str = str(path_self)
 
                 # Redirect operations for container paths only
-                if any(prefix in path_str for prefix in ['/opt/phantom-wireguard', '/etc/', '/opt/wstunnel']):
+                if any(prefix in path_str for prefix in ['/opt/phantom-wg', '/etc/', '/opt/wstunnel']):
                     request = {
                         'path': path_str,
                         'method': name,
@@ -187,7 +187,7 @@ class TestModuleDocker:
 
         def wrapped_open(file, mode='r', *args, **kwargs):
             file_str = str(file)
-            if any(prefix in file_str for prefix in ['/opt/phantom-wireguard', '/etc/', '/opt/wstunnel']):
+            if any(prefix in file_str for prefix in ['/opt/phantom-wg', '/etc/', '/opt/wstunnel']):
                 return DockerFileProxy(file_str, mode)
             return original_open(file, mode, *args, **kwargs)
 
@@ -203,7 +203,7 @@ class TestModuleDocker:
 
         def wrapped_rmtree(path):
             path_str = str(path)
-            if any(prefix in path_str for prefix in ['/opt/phantom-wireguard', '/opt/wstunnel']):
+            if any(prefix in path_str for prefix in ['/opt/phantom-wg', '/opt/wstunnel']):
                 # Execute rm -rf in docker container
                 docker_executor(["rm", "-rf", path_str])
             else:
@@ -332,9 +332,9 @@ class TestModuleDocker:
         assert not service_check["success"], "wstunnel service file should be removed"
         wstunnel_dir_check = docker_executor(["test", "-d", "/opt/wstunnel"])
         assert not wstunnel_dir_check["success"], "wstunnel directory should be removed"
-        state_file_check = docker_executor(["test", "-f", "/opt/phantom-wireguard/config/ghost-state.json"])
+        state_file_check = docker_executor(["test", "-f", "/opt/phantom-wg/config/ghost-state.json"])
         if state_file_check["returncode"] == 0:
-            cat_result = docker_executor(["cat", "/opt/phantom-wireguard/config/ghost-state.json"])
+            cat_result = docker_executor(["cat", "/opt/phantom-wg/config/ghost-state.json"])
             if cat_result["success"] and cat_result["stdout"]:
                 import json
                 try:

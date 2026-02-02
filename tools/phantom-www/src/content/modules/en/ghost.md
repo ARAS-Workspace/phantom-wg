@@ -10,7 +10,7 @@ order: 3
 
 The Ghost module disguises your WireGuard traffic as standard **HTTPS web traffic**, helping you bypass DPI
 systems and firewall blocks. It achieves this using the [**wstunnel**](https://github.com/erebe/wstunnel)
-service under the hood. **Phantom-WireGuard** automatically handles wstunnel service configuration, SSL
+service under the hood. **Phantom-WG** automatically handles wstunnel service configuration, SSL
 certificate management, firewall rules, and systemd services. Simply provide a domain with its A record
 pointed to your server — the system takes care of the entire technical process.
 

@@ -52,8 +52,8 @@ class TestModuleDocker:
 
         docker_executor('systemctl daemon-reload')
 
-        docker_executor('mkdir -p /opt/phantom-wireguard/exit_configs')
-        docker_executor('mkdir -p /opt/phantom-wireguard/data/vpn_configs')
+        docker_executor('mkdir -p /opt/phantom-wg/exit_configs')
+        docker_executor('mkdir -p /opt/phantom-wg/data/vpn_configs')
 
         docker_executor('mkdir -p /etc/iproute2')
         docker_executor("sh -c 'echo \"100 multihop\" >> /etc/iproute2/rt_tables'")
@@ -193,7 +193,7 @@ class TestModuleDocker:
             def wrapper(path_self, *args, **kwargs):
                 path_str = str(path_self)
 
-                if any(prefix in path_str for prefix in ['/opt/phantom-wireguard', '/etc/']):
+                if any(prefix in path_str for prefix in ['/opt/phantom-wg', '/etc/']):
                     request = {
                         'path': path_str,
                         'method': name,
@@ -304,7 +304,7 @@ class TestModuleDocker:
 
         def wrapped_open(file, mode='r', *args, **kwargs):
             file_str = str(file)
-            if any(prefix in file_str for prefix in ['/opt/phantom-wireguard', '/etc/']):
+            if any(prefix in file_str for prefix in ['/opt/phantom-wg', '/etc/']):
                 return DockerFileProxy(file_str, mode)
             return original_open(file, mode, *args, **kwargs)
 
@@ -741,8 +741,8 @@ class TestModuleDocker:
         assert 'test-exit' in result['message']
 
         # Verify config files are actually removed
-        config_file_check = docker_executor(f'ls /opt/phantom-wireguard/exit_configs/test-exit.conf 2>&1')
+        config_file_check = docker_executor(f'ls /opt/phantom-wg/exit_configs/test-exit.conf 2>&1')
         assert 'No such file' in config_file_check['stdout'] or config_file_check['success'] is False
 
-        metadata_file_check = docker_executor(f'ls /opt/phantom-wireguard/exit_configs/test-exit.json 2>&1')
+        metadata_file_check = docker_executor(f'ls /opt/phantom-wg/exit_configs/test-exit.json 2>&1')
         assert 'No such file' in metadata_file_check['stdout'] or metadata_file_check['success'] is False

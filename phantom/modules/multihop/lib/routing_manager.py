@@ -49,7 +49,7 @@ class RoutingManager:
             networkd_dir.mkdir(parents=True, exist_ok=True)
 
             network_config = dedent(f"""
-                # Phantom-WireGuard Multihop Routing Policy
+                # Phantom-WG Multihop Routing Policy
                 # Auto-generated - Do not edit manually
                 [Match]
                 Name={vpn_interface}

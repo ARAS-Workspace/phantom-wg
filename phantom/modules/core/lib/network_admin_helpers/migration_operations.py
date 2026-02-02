@@ -299,7 +299,7 @@ class _MigrationOperations:
             raise ServiceOperationError(
                 "Unable to create backup before subnet change. "
                 "Please ensure:\n"
-                "• Sufficient disk space in /opt/phantom-wireguard/backups/\n"
+                "• Sufficient disk space in /opt/phantom-wg/backups/\n"
                 "• Write permissions for the backup directory\n"
                 "• No disk quota restrictions\n"
                 "Cannot proceed without a backup for safety reasons."
@@ -436,7 +436,7 @@ class _MigrationOperations:
                 "The system may be in an inconsistent state.\n\n"
                 "Immediate actions required:\n"
                 "• Stop the WireGuard service: 'systemctl stop wg-quick@wg_main'\n"
-                f"• Manually restore from backup at: {backup_data.get('backup_path', '/opt/phantom-wireguard/backups/')}\n"
+                f"• Manually restore from backup at: {backup_data.get('backup_path', '/opt/phantom-wg/backups/')}\n"
                 "• Check the backup metadata file for original configuration\n"
                 "• Restart the service after manual restoration\n"
             )
@@ -451,7 +451,7 @@ class _MigrationOperations:
                 "• Verify WireGuard is properly installed\n"
                 "• Check if the file exists: 'ls -la /etc/wireguard/'\n"
                 "• Ensure the service has been initialized at least once\n"
-                "Run 'phantom-wireguard' to initialize if this is a fresh installation."
+                "Run 'phantom-wg' to initialize if this is a fresh installation."
             )
 
         # Retrieve current subnet information

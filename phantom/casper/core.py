@@ -81,7 +81,7 @@ class CasperService:
         connection with graceful fallback if the API is not available.
         """
         # Setup configuration paths
-        self.config_dir = Path("/opt/phantom-wireguard/config")
+        self.config_dir = Path("/opt/phantom-wg/config")
         self.ghost_state_file = self.config_dir / "ghost-state.json"
 
         # Initialize API
@@ -128,7 +128,7 @@ class CasperService:
 
         # Output formatted result
         print("=" * 80)
-        print("PHANTOM WIREGUARD - GHOST MODE CLIENT CONFIGURATION")
+        print("PHANTOM-WG - GHOST MODE CLIENT CONFIGURATION")
         print("=" * 80)
         print(f"\nClient: {username}")
         print(f"Server: {ghost_info['domain']}")

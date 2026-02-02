@@ -1,4 +1,4 @@
-#!/opt/phantom-wireguard/.phantom-venv/bin/python3
+#!/opt/phantom-wg/.phantom-venv/bin/python3
 """
 ██████╗ ██╗  ██╗ █████╗ ███╗   ██╗████████╗ ██████╗ ███╗   ███╗
 ██╔══██╗██║  ██║██╔══██╗████╗  ██║╚══██╔══╝██╔═══██╗████╗ ████║
@@ -7,7 +7,7 @@
 ██║     ██║  ██║██║  ██║██║ ╚████║   ██║   ╚██████╔╝██║ ╚═╝ ██║
 ╚═╝     ╚═╝  ╚═╝╚═╝  ╚═╝╚═╝  ╚═══╝   ╚═╝    ╚═════╝ ╚═╝     ╚═╝
 
-Simple Test Runner for Phantom WireGuard
+Simple Test Runner for Phantom-WG
 
 Copyright (c) 2025 Rıza Emre ARAS <r.emrearas@proton.me>
 Licensed under AGPL-3.0 - see LICENSE file for details
@@ -32,8 +32,8 @@ logger = logging.getLogger(__name__)
 def run_tests_with_coverage():
     """Run tests with coverage and generate reports"""
 
-    # Fixed paths for /opt/phantom-wireguard environment
-    tests_dir = Path("/opt/phantom-wireguard/phantom/bin/tests")
+    # Fixed paths for /opt/phantom-wg environment
+    tests_dir = Path("/opt/phantom-wg/phantom/bin/tests")
     integration_dir = tests_dir / "integration"
     reports_dir = tests_dir / "reports"
     html_test_reports_dir = reports_dir / "html_test_reports"
@@ -52,7 +52,7 @@ def run_tests_with_coverage():
     env['COVERAGE_FILE'] = str(tests_dir / '.coverage')
 
     # Check if integration tests exist
-    python_path = "/opt/phantom-wireguard/.phantom-venv/bin/python"
+    python_path = "/opt/phantom-wg/.phantom-venv/bin/python"
 
     if integration_dir.exists():
         logger.info("Running integration tests with coverage collection")

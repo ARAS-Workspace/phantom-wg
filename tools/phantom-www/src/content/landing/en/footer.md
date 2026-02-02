@@ -2,7 +2,7 @@
 section: footer
 links:
   - text: Github
-    url: https://github.com/ARAS-Workspace/phantom-wireguard
+    url: https://github.com/ARAS-Workspace/phantom-wg
   - text: Documentation
     url: https://docs.phantom.tc
   - text: Support Phantom

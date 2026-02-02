@@ -6,7 +6,7 @@
 ██║     ██║  ██║██║  ██║██║ ╚████║   ██║   ╚██████╔╝██║ ╚═╝ ██║
 ╚═╝     ╚═╝  ╚═╝╚═╝  ╚═╝╚═╝  ╚═══╝   ╚═╝    ╚═════╝ ╚═╝     ╚═╝
 
-Core Functionality Tests - Comprehensive test suite for Phantom-WireGuard Core module
+Core Functionality Tests - Comprehensive test suite for Phantom-WG Core module
 
 Test Phases:
     Phase 1: Environment Setup

@@ -6,10 +6,10 @@
 ██║     ██║  ██║██║  ██║██║ ╚████║   ██║   ╚██████╔╝██║ ╚═╝ ██║
 ╚═╝     ╚═╝  ╚═╝╚═╝  ╚═╝╚═╝  ╚═══╝   ╚═╝    ╚═════╝ ╚═╝     ╚═╝
 
-TR: Default Constants - Phantom WireGuard için merkezi varsayılan değerler
+TR: Default Constants - Phantom-WG için merkezi varsayılan değerler
     ========================================================================
 
-    Bu modül, Phantom WireGuard uygulaması genelinde kullanılan tüm varsayılan
+    Bu modül, Phantom-WG uygulaması genelinde kullanılan tüm varsayılan
     yapılandırma değerlerini içerir. Bu sabitler, yapılandırma dosyaları veya
     kullanıcı ayarları tarafından geçersiz kılınabilecek fabrika varsayılanlarını
     temsil eder.
@@ -29,11 +29,11 @@ TR: Default Constants - Phantom WireGuard için merkezi varsayılan değerler
         import edilmemektedir. Migration süreci tamamlandığında, bu sabitler
         ilgili modüllerdeki yerel tanımların yerini alacaktır.
 
-EN: Default Constants - Centralized default values for Phantom WireGuard
+EN: Default Constants - Centralized default values for Phantom-WG
     ====================================================================
 
     This module contains all default configuration values used across the
-    Phantom WireGuard application. These constants represent factory defaults
+    Phantom-WG application. These constants represent factory defaults
     that can be overridden by configuration files or user settings.
 
     Contents:

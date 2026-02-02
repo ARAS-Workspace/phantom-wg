@@ -6,4 +6,4 @@ packages:
 
 runcmd:
   - curl -sSL https://install.phantom.tc | bash 2>&1 | tee /var/log/phantom-install.log
-  - echo "Phantom WireGuard installation completed at $(date)" >> /var/log/phantom-install.log
+  - echo "Phantom-WG installation completed at $(date)" >> /var/log/phantom-install.log

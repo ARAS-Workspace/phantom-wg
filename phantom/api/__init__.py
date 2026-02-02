@@ -6,10 +6,10 @@
 ██║     ██║  ██║██║  ██║██║ ╚████║   ██║   ╚██████╔╝██║ ╚═╝ ██║
 ╚═╝     ╚═╝  ╚═╝╚═╝  ╚═╝╚═╝  ╚═══╝   ╚═╝    ╚═════╝ ╚═╝     ╚═╝
 
-TR: Phantom-WireGuard API Paketi
+TR: Phantom-WG API Paketi
     ============================
     
-    Bu paket, Phantom-WireGuard sisteminin tüm API işlevselliğini sağlar.
+    Bu paket, Phantom-WG sisteminin tüm API işlevselliğini sağlar.
     Modüler bir yapıda tasarlanmış olup, yanıt formatları, hata yönetimi
     ve girdi doğrulama katmanlarını içerir.
     
@@ -32,10 +32,10 @@ TR: Phantom-WireGuard API Paketi
         from phantom.api import ClientValidator, NetworkValidator
         from phantom.api import ClientExistsError, ValidationError
 
-EN: Phantom-WireGuard API Package
+EN: Phantom-WG API Package
     ============================
     
-    This package provides all API functionality for the Phantom-WireGuard
+    This package provides all API functionality for the Phantom-WG
     system. Designed with a modular architecture, it includes response
     formats, error management, and input validation layers.
     

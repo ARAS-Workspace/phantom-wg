@@ -6,7 +6,7 @@
 ██║     ██║  ██║██║  ██║██║ ╚████║   ██║   ╚██████╔╝██║ ╚═╝ ██║
 ╚═╝     ╚═╝  ╚═╝╚═╝  ╚═╝╚═╝  ╚═══╝   ╚═╝    ╚═════╝ ╚═╝     ╚═╝
 
-TR: Phantom-WireGuard Multihop Modülü
+TR: Phantom-WG Multihop Modülü
     =================================
     
     Harici VPN sağlayıcılar üzerinden çoklu atlama (multihop) yönlendirmesi
@@ -15,10 +15,10 @@ TR: Phantom-WireGuard Multihop Modülü
     korur.
     
     Kullanıcı Akışı:
-        Client → Phantom WireGuard → Exit Node (VPN Provider) → Internet
+        Client → Phantom-WG → Exit Node (VPN Provider) → Internet
         
         - Client: WireGuard istemcisi (telefon, laptop, vb.)
-        - Phantom WireGuard: Multihop yönlendirme yapan ana sunucu
+        - Phantom-WG: Multihop yönlendirme yapan ana sunucu
         - Exit Node: Harici VPN sağlayıcı (Mullvad, IVPN, vb.)
         - Internet: Son hedef
     
@@ -29,7 +29,7 @@ TR: Phantom-WireGuard Multihop Modülü
         - VPN bağlantı durumu testleri
         - Oturum günlüğü ve gerçek zamanlı izleme
 
-EN: Phantom-WireGuard Multihop Module
+EN: Phantom-WG Multihop Module
     =================================
     
     Module providing multihop routing through external VPN providers.
@@ -37,10 +37,10 @@ EN: Phantom-WireGuard Multihop Module
     while maintaining WireGuard peer-to-peer access.
     
     User Flow:
-        Client → Phantom WireGuard → Exit Node (VPN Provider) → Internet
+        Client → Phantom-WG → Exit Node (VPN Provider) → Internet
         
         - Client: WireGuard client (phone, laptop, etc.)
-        - Phantom WireGuard: Main server performing multihop routing
+        - Phantom-WG: Main server performing multihop routing
         - Exit Node: External VPN provider (Mullvad, IVPN, etc.)
         - Internet: Final destination
     

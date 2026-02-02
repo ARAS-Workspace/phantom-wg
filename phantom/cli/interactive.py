@@ -1,4 +1,4 @@
-#!/opt/phantom-wireguard/.phantom-venv/bin/python3
+#!/opt/phantom-wg/.phantom-venv/bin/python3
 # noinspection DuplicatedCode
 """
 ██████╗ ██╗  ██╗ █████╗ ███╗   ██╗████████╗ ██████╗ ███╗   ███╗
@@ -8,7 +8,7 @@
 ██║     ██║  ██║██║  ██║██║ ╚████║   ██║   ╚██████╔╝██║ ╚═╝ ██║
 ╚═╝     ╚═╝  ╚═╝╚═╝  ╚═╝╚═╝  ╚═══╝   ╚═╝    ╚═════╝ ╚═╝     ╚═╝
 
-TR: Phantom-WireGuard Etkileşimli CLI
+TR: Phantom-WG Etkileşimli CLI
     =================================
     
     API fonksiyonlarını kullanıcı dostu menüler üzerinden sunan ana CLI arayüzü.
@@ -20,7 +20,7 @@ TR: Phantom-WireGuard Etkileşimli CLI
         3. Handler modüle özel UI gösterir
         4. API çağrıları yapılır ve sonuçlar gösterilir
 
-EN: Phantom-WireGuard Interactive CLI
+EN: Phantom-WG Interactive CLI
     =================================
     
     Main CLI interface that presents API functions through user-friendly menus.
@@ -173,7 +173,7 @@ class InteractiveUI:
 
             # Header
             self.console.print(Panel(
-                "[bold cyan]Phantom-WireGuard Control Center[/bold cyan]\n"
+                "[bold cyan]Phantom-WG Control Center[/bold cyan]\n"
                 "[dim]VPN Management System[/dim]",
                 box=box.DOUBLE,
                 border_style="cyan"
@@ -215,7 +215,7 @@ class InteractiveUI:
         else:
             # Fallback to simple display
             self.clear_screen()
-            self.print("🚀 Phantom-WireGuard Interactive Console", style="bold")
+            self.print("🚀 Phantom-WG Interactive Console", style="bold")
             self.print("=" * 50)
 
             modules_response = self.api.list_modules()
@@ -1658,11 +1658,11 @@ class InteractiveUI:
             self.ui.show_header()
         else:
             self.print_panel(
-                "Welcome to Phantom-WireGuard API Console\n"
+                "Welcome to Phantom-WG API Console\n"
                 f"Version {__version__}\n\n"
                 "This is an interactive interface for managing your WireGuard VPN.\n\n"
                 "© 2025 Rıza Emre ARAS - Project Phantom - All Rights Reserved",
-                title="🌐 Phantom-WireGuard",
+                title="🌐 Phantom-WG",
                 style="cyan"
             )
 
@@ -1701,7 +1701,7 @@ class InteractiveUI:
 def main():
     """Main entry point for interactive CLI"""
     parser = argparse.ArgumentParser(
-        description="Phantom-WireGuard Interactive Console"
+        description="Phantom-WG Interactive Console"
     )
     parser.add_argument(
         "--api-only",

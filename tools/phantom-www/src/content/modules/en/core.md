@@ -3,16 +3,16 @@ id: core
 label: Core
 mini_desc: Cockpit
 title: Core Module
-subtitle: Phantom-WireGuard Cockpit
+subtitle: Phantom-WG Cockpit
 icon: rocket
 order: 1
 ---
 <!--suppress HtmlUnknownTarget -->
 <div class="module-hero-image">
-  <img src="/assets/images/ghost-cockpit.jpg" alt="Phantom-WireGuard Cockpit" />
+  <img src="/assets/images/ghost-cockpit.jpg" alt="Phantom-WG Cockpit" />
 </div>
 
-The Core module is the heart of **Phantom-WireGuard** and provides fundamental WireGuard server management
+The Core module is the heart of **Phantom-WG** and provides fundamental WireGuard server management
 operations. It consolidates essential functions such as client creation, configuration generation, firewall
 management, service monitoring, and health tracking under a single interface.
 
@@ -30,7 +30,7 @@ management, service monitoring, and health tracking under a single interface.
 
 Your Core traffic follows this path:
 
-- **Core Flow**: Clients → Phantom-WireGuard (Port 51820) → Internet
+- **Core Flow**: Clients → Phantom-WG (Port 51820) → Internet
 
 ## Quick Start
 

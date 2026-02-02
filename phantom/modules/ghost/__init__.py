@@ -6,7 +6,7 @@
 ██║     ██║  ██║██║  ██║██║ ╚████║   ██║   ╚██████╔╝██║ ╚═╝ ██║
 ╚═╝     ╚═╝  ╚═╝╚═╝  ╚═╝╚═╝  ╚═══╝   ╚═╝    ╚═════╝ ╚═╝     ╚═╝
 
-TR: Phantom-WireGuard Ghost Mode Modülü
+TR: Phantom-WG Ghost Mode Modülü
     ===================================
     
     Sansüre dayanıklı WireGuard bağlantıları sağlayan modül. Bu modül,
@@ -20,7 +20,7 @@ TR: Phantom-WireGuard Ghost Mode Modülü
         - Güvenlik duvarı kuralları yönetimi
         - Otomatik yeniden bağlanma ve dayanıklılık
 
-EN: Phantom-WireGuard Ghost Mode Module
+EN: Phantom-WG Ghost Mode Module
     ===================================
     
     Module providing censorship-resistant WireGuard connections. This module

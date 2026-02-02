@@ -3,16 +3,16 @@ id: core
 label: Core
 mini_desc: Cockpit
 title: Core Modülü
-subtitle: Phantom-WireGuard Cockpit
+subtitle: Phantom-WG Cockpit
 icon: rocket
 order: 1
 ---
 <!--suppress HtmlUnknownTarget -->
 <div class="module-hero-image">
-  <img src="/assets/images/ghost-cockpit.jpg" alt="Phantom-WireGuard Cockpit" />
+  <img src="/assets/images/ghost-cockpit.jpg" alt="Phantom-WG Cockpit" />
 </div>
 
-Core modülü, **Phantom-WireGuard**'ın kalbidir ve temel WireGuard sunucu yönetim operasyonlarını sağlar.
+Core modülü, **Phantom-WG**'ın kalbidir ve temel WireGuard sunucu yönetim operasyonlarını sağlar.
 İstemci oluşturma, konfigürasyon üretimi, güvenlik duvarı yönetimi, servis izlemesi ve sağlık takibi gibi temel 
 işlevleri tek bir çatı altında toplar.
 
@@ -30,7 +30,7 @@ işlevleri tek bir çatı altında toplar.
 
 Core trafiğiniz şu yolu izler:
 
-- **Core Akışı**: İstemciler → Phantom-WireGuard (Port 51820) → İnternet
+- **Core Akışı**: İstemciler → Phantom-WG (Port 51820) → İnternet
 
 ## Hızlı Başlangıç
 

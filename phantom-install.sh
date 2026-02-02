@@ -10,16 +10,16 @@
 # Third-party licenses - see THIRD_PARTY_LICENSES file for details
 # WireGuard® is a registered trademark of Jason A. Donenfeld.
 #
-# Phantom-WireGuard Installation Script
-# Clean installation for Phantom-WireGuard
+# Phantom-WG Installation Script
+# Clean installation for Phantom-WG
 #
 # Installation Flow:
 #   1. System checks (OS, root privileges)
 #   2. Install system dependencies (WireGuard, Python, UFW)
-#   3. Create directory structure (/opt/phantom-wireguard)
+#   3. Create directory structure (/opt/phantom-wg)
 #   4. Install Python virtual environment (.phantom-venv)
 #   5. WireGuard configuration (keys, firewall)
-#   6. Create global commands (phantom-wireguard, phantom-api)
+#   6. Create global commands (phantom-wg, phantom-api)
 #   7. Install multihop monitor service (systemd service)
 #   8. Install multihop interface service (systemd service)
 #   9. Verify installation and show completion info
@@ -27,7 +27,7 @@
 set -euo pipefail
 
 # Installation directory
-INSTALL_DIR="/opt/phantom-wireguard"
+INSTALL_DIR="/opt/phantom-wg"
 
 # Supported OS versions (add new versions here as they become available)
 SUPPORTED_DEBIAN_VERSIONS=("12" "13")
@@ -387,11 +387,11 @@ EOF
 create_commands() {
     log "Creating global commands..." "$YELLOW"
     
-    # phantom-wireguard command
-    if [[ -f "$INSTALL_DIR/phantom/bin/phantom-wireguard.py" ]]; then
-        ln -sf "$INSTALL_DIR/phantom/bin/phantom-wireguard.py" /usr/local/bin/phantom-wireguard
-        chmod +x "$INSTALL_DIR/phantom/bin/phantom-wireguard.py"
-        log "Command created: phantom-wireguard" "$GREEN"
+    # phantom-wg command
+    if [[ -f "$INSTALL_DIR/phantom/bin/phantom-wg.py" ]]; then
+        ln -sf "$INSTALL_DIR/phantom/bin/phantom-wg.py" /usr/local/bin/phantom-wg
+        chmod +x "$INSTALL_DIR/phantom/bin/phantom-wg.py"
+        log "Command created: phantom-wg" "$GREEN"
     fi
     
     # phantom-api command
@@ -466,15 +466,15 @@ install_multihop_interface_service() {
 show_completion() {
     echo ""
     echo -e "${GREEN}========================================${NC}"
-    echo -e "${GREEN}   PHANTOM-WIREGUARD INSTALLED!${NC}"
+    echo -e "${GREEN}   PHANTOM-WG INSTALLED!${NC}"
     echo -e "${GREEN}========================================${NC}"
     echo ""
     echo -e "${CYAN}Commands:${NC}"
-    echo -e "  ${YELLOW}phantom-wireguard${NC} - Interactive UI"
+    echo -e "  ${YELLOW}phantom-wg${NC} - Interactive UI"
     echo -e "  ${YELLOW}phantom-api${NC} - API access"
     echo ""
     echo -e "${CYAN}Quick Start:${NC}"
-    echo -e "  1. Run: ${YELLOW}phantom-wireguard${NC}"
+    echo -e "  1. Run: ${YELLOW}phantom-wg${NC}"
     echo -e "  2. Select 'Core Management'"
     echo -e "  3. Add your first client"
     echo ""
@@ -490,7 +490,7 @@ show_completion() {
 main() {
     print_header
     
-    log "Starting Phantom-WireGuard installation..." "$BLUE"
+    log "Starting Phantom-WG installation..." "$BLUE"
     echo ""
     
     # Pre-flight checks

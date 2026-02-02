@@ -20,15 +20,15 @@ from .lib.navigation import NavigationManager
 @st.fragment
 def complete_step_fragment():
     """Complete step as fragment - direct implementation"""
-    # Phantom WireGuard Server
+    # Phantom-WG Server
     phantom_server = st.session_state.servers[0]
-    st.markdown("## Phantom WireGuard Server")
+    st.markdown("## Phantom-WG Server")
 
     # Cloud-init Installation Status
     st.markdown("### :rocket: Installation Status")
     server_ipv4 = phantom_server.get('deployment_config', {}).get('ipv4')
 
-    st.info(":white_check_mark: **Cloud-init is automatically installing Phantom WireGuard**")
+    st.info(":white_check_mark: **Cloud-init is automatically installing Phantom-WG**")
     st.markdown("The installation will complete in approximately 5-10 minutes.")
 
     # Monitoring Instructions
@@ -67,10 +67,10 @@ def complete_step_fragment():
         st.info("""
         **Your server has been successfully created!** :white_check_mark:
 
-        If you see `status: done` when checking cloud-init but Phantom WireGuard installation hasn't started,
+        If you see `status: done` when checking cloud-init but Phantom-WG installation hasn't started,
         the user-data script may not have been processed by the provider.
 
-        Don't worry - you can install Phantom WireGuard manually using the commands below.
+        Don't worry - you can install Phantom-WG manually using the commands below.
         """)
 
         if server_ipv4:
@@ -134,7 +134,7 @@ def complete_step_fragment():
         st.session_state.servers = [
             {
                 "type": "phantom",
-                "name": "Phantom WireGuard Server",
+                "name": "Phantom-WG Server",
                 "provider": None,
                 "region": None,
                 "os": None,

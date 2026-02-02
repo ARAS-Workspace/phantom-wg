@@ -11,7 +11,7 @@ order: 3
 Ghost modülü, temel anlamda WireGuard trafiğinizi standart **HTTPS web trafiği** olarak gizleyerek DPI
 sistemlerini ve firewall engellemelerini atlatmanıza yardımcı olur. Bunu yaparken arka planda
 [**wstunnel**](https://github.com/erebe/wstunnel) servisi kullanılır.
-**Phantom-WireGuard**, wstunnel servisinin yapılandırılmasını, SSL sertifikalarının yönetimini, firewall
+**Phantom-WG**, wstunnel servisinin yapılandırılmasını, SSL sertifikalarının yönetimini, firewall
 kurallarını ve systemd servislerini otomatik olarak halleder. Sadece A kaydını sunucunuza yönlendirdiğiniz
 bir domain verin, geri kalan tüm teknik süreci sistem sizin için yönetsin.
 

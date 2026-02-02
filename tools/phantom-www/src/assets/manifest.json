@@ -1,5 +1,5 @@
 {
-  "name": "Phantom-Wireguard",
+  "name": "Phantom-WG",
   "short_name": "Phantom",
   "description": "Self-hosted WireGuard VPN with advanced privacy modes. Fast, secure, and open-source.",
   "start_url": "/",

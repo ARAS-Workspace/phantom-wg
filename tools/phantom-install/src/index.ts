@@ -1,7 +1,7 @@
 // noinspection JSUnusedGlobalSymbols
 
 /**
- * Phantom-WireGuard Bootstrap Installer Worker
+ * Phantom-WG Bootstrap Installer Worker
  *
  * Serves the install.sh script for:
  * curl -sSL https://install.phantom.tc | bash

@@ -6,7 +6,7 @@
 ██║     ██║  ██║██║  ██║██║ ╚████║   ██║   ╚██████╔╝██║ ╚═╝ ██║
 ╚═╝     ╚═╝  ╚═╝╚═╝  ╚═╝╚═╝  ╚═══╝   ╚═╝    ╚═════╝ ╚═╝     ╚═╝
 
-TR: Phantom-WireGuard Multihop Yönlendirme Modülü
+TR: Phantom-WG Multihop Yönlendirme Modülü
     ==========================================
     
     İstemci trafiğini harici VPN sağlayıcılar üzerinden yönlendirirken WireGuard
@@ -53,7 +53,7 @@ TR: Phantom-WireGuard Multihop Yönlendirme Modülü
         - ResetStateResult: Sıfırlama sonuçları
         Tüm modeller BaseModel'den inherit eder ve to_dict() ile API uyumluluğu sağlar.
 
-EN: Phantom-WireGuard Multihop Routing Module
+EN: Phantom-WG Multihop Routing Module
     ==========================================
     
     Advanced routing module that routes client traffic through external VPN
@@ -168,7 +168,7 @@ class MultihopModule(BaseModule):
         Provides functional separation with 7 managers.
 
         Args:
-            install_dir: Installation directory path (default: /opt/phantom-wireguard)
+            install_dir: Installation directory path (default: /opt/phantom-wg)
         """
         super().__init__(install_dir)
         self.exit_configs_dir = self.install_dir / "exit_configs"
@@ -300,7 +300,7 @@ class MultihopModule(BaseModule):
                 "original_path": config_path,
                 "backup_path": backup_path,
                 "config_file": str(exit_config_file),
-                "provider": 'Phantom-WireGuard',
+                "provider": 'Phantom-WG',
                 "optimizations_applied": optimizations,
                 "multihop_enhanced": True
             }
@@ -354,7 +354,7 @@ class MultihopModule(BaseModule):
                 name=config_name,
                 endpoint=endpoint or "Unknown",
                 active=config_name == self.active_exit,
-                provider=metadata.get("provider", "Phantom-WireGuard"),
+                provider=metadata.get("provider", "Phantom-WG"),
                 imported_at=metadata.get("imported_at"),
                 multihop_enhanced=metadata.get("multihop_enhanced", False)
             )

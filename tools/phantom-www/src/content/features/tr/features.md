@@ -40,6 +40,6 @@ MultiGhost senaryosu ile Ghost ve Multihop modüllerini birlikte kullanın. Bağ
 ## Açık Kaynak ve Şeffaflık
 **icon:** code
 
-Phantom-WireGuard tamamen açık kaynak ve modüler mimariye sahip esnek bir sistemdir. Şeffaf yönetim süreçleri,
+Phantom-WG tamamen açık kaynak ve modüler mimariye sahip esnek bir sistemdir. Şeffaf yönetim süreçleri,
 detaylı test senaryoları ve olgun DevOps metodolojileriyle geliştirilir. Kodu denetleyin, güvenlik analizi yapın
 ve kendi altyapınızda veya geliştirme ortamınızda tam kontrol ile çalıştırın.

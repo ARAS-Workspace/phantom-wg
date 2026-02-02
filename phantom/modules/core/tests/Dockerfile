@@ -50,9 +50,9 @@ RUN rm -rf /lib/systemd/system/multi-user.target.wants/* \
     /lib/systemd/system/systemd-update-utmp* \
     && systemctl set-default multi-user.target || true
 
-RUN mkdir -p /etc/wireguard /var/log/wireguard /opt/phantom-wireguard
+RUN mkdir -p /etc/wireguard /var/log/wireguard /opt/phantom-wg
 
 EXPOSE 51820/udp
-WORKDIR /opt/phantom-wireguard
+WORKDIR /opt/phantom-wg
 VOLUME ["/sys/fs/cgroup"]
 ENTRYPOINT ["/lib/systemd/systemd"]

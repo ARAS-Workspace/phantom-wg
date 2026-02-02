@@ -6,10 +6,10 @@
 ██║     ██║  ██║██║  ██║██║ ╚████║   ██║   ╚██████╔╝██║ ╚═╝ ██║
 ╚═╝     ╚═╝  ╚═╝╚═╝  ╚═╝╚═╝  ╚═══╝   ╚═╝    ╚═════╝ ╚═╝     ╚═╝
 
-TR: Phantom-WireGuard için API Yanıt (Response) Standardizasyonu
+TR: Phantom-WG için API Yanıt (Response) Standardizasyonu
     ================================================
 
-    Bu modül, Phantom-WireGuard sistemindeki tüm API yanıtları için
+    Bu modül, Phantom-WG sistemindeki tüm API yanıtları için
     standartlaştırılmış bir yanıt formatı sağlar. Tutarlı hata işleme,
     başarı yanıtları ve meta veri yönetimi sunar.
     
@@ -34,11 +34,11 @@ TR: Phantom-WireGuard için API Yanıt (Response) Standardizasyonu
             }
         }
 
-EN: API Response Standardization for Phantom-WireGuard
+EN: API Response Standardization for Phantom-WG
     ==================================================
 
     This module provides a standardized response format for all API
-    responses in the Phantom-WireGuard system. It ensures consistent
+    responses in the Phantom-WG system. It ensures consistent
     error handling, success responses, and metadata management.
     
     Key Features:
@@ -102,7 +102,7 @@ class APIResponse:
     """Standardized API Response Class.
 
     This class provides a uniform format for all API responses in the
-    Phantom-WireGuard system. It offers a consistent data structure for
+    Phantom-WG system. It offers a consistent data structure for
     both success and error cases.
 
     Using the dataclass decorator provides automatic initialization, repr,
@@ -135,7 +135,7 @@ class APIResponse:
 
         Added information:
             - timestamp: UTC timestamp in ISO 8601 format
-            - version: Phantom-WireGuard API version
+            - version: Phantom-WG API version
         """
         if self.metadata is None:
             self.metadata = {}

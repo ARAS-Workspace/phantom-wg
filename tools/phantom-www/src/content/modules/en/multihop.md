@@ -10,17 +10,17 @@ order: 2
 
 The Multihop module routes your traffic through an external WireGuard server, creating a **double VPN layer**.
 This external server can be either a commercial VPN provider or another server you have set up yourself.
-**Phantom-WireGuard** connects to the external server using the WireGuard client configuration you provide and
+**Phantom-WG** connects to the external server using the WireGuard client configuration you provide and
 routes all traffic through this connection. Simply import the client configuration — the entire routing process
 is managed automatically by the system.
 
 This advanced architecture makes traffic analysis significantly harder, providing high levels of anonymity and
-multiple security layers. **Phantom-WireGuard** manages this process fully automatically, giving you complete
+multiple security layers. **Phantom-WG** manages this process fully automatically, giving you complete
 flexibility and control without depending on any third party or service.
 
-Thanks to the system's flexibility, you can also chain multiple **Phantom-WireGuard** servers together and route
+Thanks to the system's flexibility, you can also chain multiple **Phantom-WG** servers together and route
 your traffic sequentially through them. By importing the WireGuard client configuration from each
-**Phantom-WireGuard** server as the exit server configuration in the previous server's Multihop module, you can
+**Phantom-WG** server as the exit server configuration in the previous server's Multihop module, you can
 build a layered chain structure. Each server connects to the next one as a client and routes traffic through it.
 This approach lets you build a multi-server chain entirely under your own control, creating a reliable
 infrastructure tailored to your use cases without relying on commercial VPN providers.
@@ -29,8 +29,8 @@ infrastructure tailored to your use cases without relying on commercial VPN prov
 
 With Multihop, your traffic follows this path:
 
-- **Normal Flow**: Clients → Phantom-WireGuard → Internet
-- **Multihop Flow**: Clients → Phantom-WireGuard → VPN Exit → Internet
+- **Normal Flow**: Clients → Phantom-WG → Internet
+- **Multihop Flow**: Clients → Phantom-WG → VPN Exit → Internet
 
 This layered approach conceals your real IP address behind a **double VPN layer** and makes tracing your traffic
 significantly harder.

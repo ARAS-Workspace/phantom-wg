@@ -40,19 +40,19 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Install Phantom Wireguard
+      - name: Install Phantom-WG
         run: |
           chmod +x phantom-install.sh
           sudo ./phantom-install.sh
 
-      - name: Verify Phantom Wireguard Installation
+      - name: Verify Phantom-WG Installation
         run: |
-          echo "Verifying Phantom WireGuard installation..."
-          if [ ! -d "/opt/phantom-wireguard" ]; then
+          echo "Verifying Phantom-WG installation..."
+          if [ ! -d "/opt/phantom-wg" ]; then
             echo "Error: Installation directory not found"
             exit 1
           fi
-          if [ ! -f "/opt/phantom-wireguard/.phantom-venv/bin/python" ]; then
+          if [ ! -f "/opt/phantom-wg/.phantom-venv/bin/python" ]; then
             echo "Error: Virtual environment not found"
             exit 1
           fi
@@ -60,7 +60,7 @@ jobs:
 
       - name: Install Python Development Dependencies
         run: |
-          sudo /opt/phantom-wireguard/.phantom-venv/bin/pip install -r requirements-dev.txt
+          sudo /opt/phantom-wg/.phantom-venv/bin/pip install -r requirements-dev.txt
 
       - name: Run Tests with Coverage
         id: test_runner
@@ -79,7 +79,7 @@ jobs:
           echo "SESSION_ID=$SESSION_ID" >> $GITHUB_ENV
           echo "session_id=$SESSION_ID" >> $GITHUB_OUTPUT
 
-          sudo /opt/phantom-wireguard/.phantom-venv/bin/python /opt/phantom-wireguard/phantom/bin/tests/run_tests_coverage.py
+          sudo /opt/phantom-wg/.phantom-venv/bin/python /opt/phantom-wg/phantom/bin/tests/run_tests_coverage.py
 
           TEST_EXIT_CODE=$?
           echo "TEST_EXIT_CODE=$TEST_EXIT_CODE" >> $GITHUB_ENV
@@ -101,7 +101,7 @@ jobs:
           mkdir -p deployment/production-integration
 
           # Copy reports to deployment directory
-          cp -r /opt/phantom-wireguard/phantom/bin/tests/reports/* deployment/production-integration/
+          cp -r /opt/phantom-wg/phantom/bin/tests/reports/* deployment/production-integration/
 
           ls -l deployment/production-integration/
 

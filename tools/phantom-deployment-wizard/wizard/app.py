@@ -8,7 +8,7 @@
 ╚═╝     ╚═╝  ╚═╝╚═╝  ╚═╝╚═╝  ╚═══╝   ╚═╝    ╚═════╝ ╚═╝     ╚═╝
 
 Phantom Deployment Wizard - Streamlit UI
-Modern and privacy-focused deployment portal for Phantom WireGuard servers
+Modern and privacy-focused deployment portal for Phantom-WG servers
 
 Copyright (c) 2025 Rıza Emre ARAS <r.emrearas@proton.me>
 """
@@ -64,7 +64,7 @@ def init_session_state():
         st.session_state.servers = [
             {
                 "type": "phantom",
-                "name": "Phantom WireGuard Server",
+                "name": "Phantom-WG Server",
                 "provider": None,
                 "region": None,
                 "os": None,

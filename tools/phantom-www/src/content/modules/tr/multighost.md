@@ -13,7 +13,7 @@ Bu senaryoda bağlantınız HTTPS trafiği olarak maskelenir ve trafiğiniz hari
 yönlendirilerek çift katman oluşturulur. İki modülün güçlü yönlerini birleştiren bu yaklaşım, maksimum gizlilik
 ve sansür direnci gerektiren kullanımlar için ideal çözüm sunar.
 
-**Phantom-WireGuard** sunucusuna yapılan bağlantı Ghost modülü ile gizlenir ve standart HTTPS trafiği gibi
+**Phantom-WG** sunucusuna yapılan bağlantı Ghost modülü ile gizlenir ve standart HTTPS trafiği gibi
 görünür. Sunucuya ulaştıktan sonra trafiğiniz Multihop modülü ile harici bir VPN sunucusuna yönlendirilir.
 Bu sayede hem DPI sistemlerini atlarsınız hem de çift VPN katmanı ile yüksek düzeyde anonimlik elde edersiniz.
 
@@ -23,9 +23,9 @@ Her iki modül de bağımsız olarak çalışır ve dilediğiniz zaman devre dı
 
 MultiGhost ile trafiğiniz şu yolu izler:
 
-- **Normal Akış**: İstemciler → Phantom-WireGuard → İnternet
-- **Ghost Akışı**: İstemciler → HTTPS/WebSocket (Port 443) → Phantom-WireGuard → İnternet
-- **MultiGhost Akışı**: İstemciler → HTTPS/WebSocket (Port 443) → Phantom-WireGuard → VPN Çıkış → İnternet
+- **Normal Akış**: İstemciler → Phantom-WG → İnternet
+- **Ghost Akışı**: İstemciler → HTTPS/WebSocket (Port 443) → Phantom-WG → İnternet
+- **MultiGhost Akışı**: İstemciler → HTTPS/WebSocket (Port 443) → Phantom-WG → VPN Çıkış → İnternet
 
 Bu katmanlı yapı, hem DPI sistemlerini atlatır hem de trafik analizini zorlaştırır. Bağlantınız HTTPS gibi
 görünürken, gerçek hedefiniz ve IP adresiniz çift VPN katmanı arkasında gizli kalır.
@@ -42,7 +42,7 @@ görünürken, gerçek hedefiniz ve IP adresiniz çift VPN katmanı arkasında g
 
 - **Bağımsız Modüller**: Ghost ve Multihop ayrı ayrı yönetilebilir
 - **Esnek Kullanım**: Her modülü dilediğiniz zaman etkinleştirebilir veya devre dışı bırakabilirsiniz
-- **Otomatik Orkestrasyon**: Phantom-WireGuard modüllerin bağımsız ve uyumlu çalışmasını sağlar
+- **Otomatik Orkestrasyon**: Phantom-WG modüllerin bağımsız ve uyumlu çalışmasını sağlar
 
 ## Hızlı Başlangıç
 

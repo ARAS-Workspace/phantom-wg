@@ -1,4 +1,4 @@
-# Phantom-WireGuard API Documentation
+# Phantom-WG API Documentation
 
 ```bash
 ██████╗ ██╗  ██╗ █████╗ ███╗   ██╗████████╗ ██████╗ ███╗   ███╗
@@ -34,7 +34,7 @@ WireGuard® is a registered trademark of Jason A. Donenfeld.
 
 ## Overview
 
-Phantom-WireGuard is a modular tool that allows you to set up and manage a WireGuard-based
+Phantom-WG is a modular tool that allows you to set up and manage a WireGuard-based
 VPN infrastructure on your own server. Beyond basic VPN management, it offers advanced
 features such as DNS management synchronized with client configurations, censorship-resistant
 connections by masking WireGuard traffic through wstunnel, and traffic routing through
@@ -108,7 +108,7 @@ graph LR
 
 The system can be accessed through two different methods:
 
-- **CLI** — Rich TUI-based interactive interface launched with the `phantom-wireguard` command.
+- **CLI** — Rich TUI-based interactive interface launched with the `phantom-wg` command.
   Provides step-by-step guided menus for each module, color-coded status indicators, and
   paginated lists. Designed for users who want to manage the server without requiring
   technical knowledge. CLI preview recordings in this documentation show the interactive
@@ -171,7 +171,7 @@ Error responses:
 
 ## Core Module
 
-The Core module is the fundamental building block of Phantom-WireGuard. The WireGuard server's
+The Core module is the fundamental building block of Phantom-WG. The WireGuard server's
 lifecycle (client add/remove, configuration export, service management, firewall control,
 subnet changes, and advanced behavior settings) is managed through this module.
 
@@ -430,9 +430,9 @@ phantom-api core server_status
       "active_connections": 0
     },
     "system": {
-      "install_dir": "/opt/phantom-wireguard",
-      "config_dir": "/opt/phantom-wireguard/config",
-      "data_dir": "/opt/phantom-wireguard/data",
+      "install_dir": "/opt/phantom-wg",
+      "config_dir": "/opt/phantom-wg/config",
+      "data_dir": "/opt/phantom-wg/data",
       "firewall": {
         "status": "active"
       },
@@ -1076,7 +1076,7 @@ phantom-casper demo-casper
 **Example Output:**
 ```
 ================================================================================
-PHANTOM WIREGUARD - GHOST MODE CLIENT CONFIGURATION
+PHANTOM-WG - GHOST MODE CLIENT CONFIGURATION
 ================================================================================
 
 Client: demo-casper
@@ -1324,12 +1324,12 @@ phantom-api multihop get_session_log lines=100
 
 ## Factory Reset
 
-A standalone factory reset script is used to restore Phantom-WireGuard to its initial
+A standalone factory reset script is used to restore Phantom-WG to its initial
 installation state. This operation is performed not via the API, but by running a script
 directly on the server:
 
 ```bash
-/opt/phantom-wireguard/phantom/factory-reset.sh
+/opt/phantom-wg/phantom/factory-reset.sh
 ```
 
 This script performs the following operations in sequence:
@@ -1447,7 +1447,7 @@ fi
 
 ## Version Information
 
-This documentation covers Phantom-WireGuard API **core-v1**.
+This documentation covers Phantom-WG API **core-v1**.
 
 > **Note:** Server information, IP addresses, and client data shown in CLI preview
 > recordings in this documentation were generated on a test server that was temporarily

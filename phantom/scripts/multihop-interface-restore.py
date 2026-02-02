@@ -1,4 +1,4 @@
-#!/opt/phantom-wireguard/.phantom-venv/bin/python3
+#!/opt/phantom-wg/.phantom-venv/bin/python3
 """
 ██████╗ ██╗  ██╗ █████╗ ███╗   ██╗████████╗ ██████╗ ███╗   ███╗
 ██╔══██╗██║  ██║██╔══██╗████╗  ██║╚══██╔══╝██╔═══██╗████╗ ████║
@@ -72,8 +72,8 @@ import time
 from pathlib import Path
 
 # Paths
-CONFIG_PATH = Path("/opt/phantom-wireguard/config/phantom.json")
-EXIT_CONFIGS_DIR = Path("/opt/phantom-wireguard/exit_configs")
+CONFIG_PATH = Path("/opt/phantom-wg/config/phantom.json")
+EXIT_CONFIGS_DIR = Path("/opt/phantom-wg/exit_configs")
 RT_TABLES_FILE = Path("/etc/iproute2/rt_tables")
 
 # Constants

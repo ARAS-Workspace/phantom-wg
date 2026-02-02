@@ -7,7 +7,7 @@
 ╚═╝     ╚═╝  ╚═╝╚═╝  ╚═╝╚═╝  ╚═══╝   ╚═╝    ╚═════╝ ╚═╝     ╚═╝
 
 Phantom Deployment Wizard
-Modern and privacy-focused deployment portal for Phantom WireGuard servers via SporeStack
+Modern and privacy-focused deployment portal for Phantom-WG servers via SporeStack
 
 Copyright (c) 2025 Rıza Emre ARAS <r.emrearas@proton.me>
 """

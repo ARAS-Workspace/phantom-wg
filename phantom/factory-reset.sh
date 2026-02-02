@@ -10,11 +10,11 @@
 # Third-party licenses - see THIRD_PARTY_LICENSES file for details
 # WireGuard® is a registered trademark of Jason A. Donenfeld.
 # =============================================================================
-# Phantom-Wireguard Factory Reset Script
+# Phantom-WG Factory Reset Script
 # =============================================================================
 set -e
 
-echo "Phantom-WireGuard Factory Reset (HARD RESET)"
+echo "Phantom-WG Factory Reset (HARD RESET)"
 echo "============================================="
 
 # Logging
@@ -25,7 +25,7 @@ log() {
 # Check if phantom-api is available
 if ! command -v phantom-api &> /dev/null; then
     echo "ERROR: phantom-api command not found!"
-    echo "This script requires Phantom-WireGuard to be installed."
+    echo "This script requires Phantom-WG to be installed."
     exit 1
 fi
 
@@ -54,18 +54,18 @@ echo "Detected SSH port: $SSH_PORT"
 
 # 2. Disable Ghost Mode if active
 echo "Checking Ghost Mode status..."
-ghost_status=$(cd /opt/phantom-wireguard && phantom-api ghost status 2>/dev/null | grep -o '"enabled": [^,]*' | cut -d' ' -f2)
+ghost_status=$(cd /opt/phantom-wg && phantom-api ghost status 2>/dev/null | grep -o '"enabled": [^,]*' | cut -d' ' -f2)
 if [ "$ghost_status" = "true" ]; then
     echo "Disabling Ghost Mode..."
-    cd /opt/phantom-wireguard && phantom-api ghost disable
+    cd /opt/phantom-wg && phantom-api ghost disable
 fi
 
 # 3. Disable Multihop if active
 echo "Checking Multihop status..."
-multihop_status=$(cd /opt/phantom-wireguard && phantom-api multihop status 2>/dev/null | grep -o '"enabled": [^,]*' | cut -d' ' -f2)
+multihop_status=$(cd /opt/phantom-wg && phantom-api multihop status 2>/dev/null | grep -o '"enabled": [^,]*' | cut -d' ' -f2)
 if [ "$multihop_status" = "true" ]; then
     echo "Disabling Multihop..."
-    cd /opt/phantom-wireguard && phantom-api multihop disable_multihop
+    cd /opt/phantom-wg && phantom-api multihop disable_multihop
 fi
 
 # 4. Stop WireGuard service
@@ -84,11 +84,11 @@ killall wstunnel 2>/dev/null || true
 
 # 7. COMPLETE cleanup - HARD DELETE EVERYTHING
 echo "Performing HARD RESET..."
-rm -rf /opt/phantom-wireguard/data/*
-rm -rf /opt/phantom-wireguard/logs/*
-rm -rf /opt/phantom-wireguard/config/*
-rm -rf /opt/phantom-wireguard/backups/*
-rm -rf /opt/phantom-wireguard/exit_configs/*
+rm -rf /opt/phantom-wg/data/*
+rm -rf /opt/phantom-wg/logs/*
+rm -rf /opt/phantom-wg/config/*
+rm -rf /opt/phantom-wg/backups/*
+rm -rf /opt/phantom-wg/exit_configs/*
 
 rm -f /etc/wireguard/wg_*.conf
 rm -rf /etc/letsencrypt/live/*
@@ -101,10 +101,10 @@ rm -f /etc/systemd/system/multihop-monitor.service
 systemctl daemon-reload
 
 # 9. Create fresh directories
-mkdir -p /opt/phantom-wireguard/data
-mkdir -p /opt/phantom-wireguard/logs
-mkdir -p /opt/phantom-wireguard/backups
-mkdir -p /opt/phantom-wireguard/exit_configs
+mkdir -p /opt/phantom-wg/data
+mkdir -p /opt/phantom-wg/logs
+mkdir -p /opt/phantom-wg/backups
+mkdir -p /opt/phantom-wg/exit_configs
 
 # 10. Generate NEW server keys
 echo "Generating new server keys..."
@@ -164,7 +164,7 @@ if [[ ! $SERVER_IP =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
     exit 1
 fi
 
-cat > /opt/phantom-wireguard/config/phantom.json << EOF
+cat > /opt/phantom-wg/config/phantom.json << EOF
 {
   "version": "core-v1",
   "wireguard": {
@@ -202,9 +202,9 @@ systemctl enable wg-quick@$WG_INTERFACE
 systemctl start wg-quick@$WG_INTERFACE
 
 # 15. Set permissions
-chown -R root:root /opt/phantom-wireguard
-chmod 755 /opt/phantom-wireguard
-chmod 700 /opt/phantom-wireguard/data
+chown -R root:root /opt/phantom-wg
+chmod 755 /opt/phantom-wg
+chmod 700 /opt/phantom-wg/data
 
 echo "✓ HARD RESET COMPLETED!"
 echo "System is now in FRESH INSTALL state."
@@ -215,4 +215,4 @@ echo "- All logs deleted"
 echo "- SSH port $SSH_PORT preserved"
 echo ""
 echo "Verifying system status..."
-cd /opt/phantom-wireguard && phantom-api core server_status
+cd /opt/phantom-wg && phantom-api core server_status

@@ -10,16 +10,16 @@ order: 2
 
 Multihop modülü, trafiğinizi harici bir WireGuard sunucusu üzerinden yönlendirerek **çift VPN katmanı** oluşturur.
 Bu harici sunucu, ister ticari bir VPN sağlayıcısı ister kendi kurduğunuz başka bir sunucu olabilir.
-**Phantom-WireGuard**, verdiğiniz WireGuard istemci konfigürasyonunu kullanarak harici sunucuya bağlanır ve kendi
+**Phantom-WG**, verdiğiniz WireGuard istemci konfigürasyonunu kullanarak harici sunucuya bağlanır ve kendi
 üzerindeki tüm trafiği bu bağlantı üzerinden yönlendirir. Sadece istemci konfigürasyonunu içe aktarın, geri kalan
 tüm süreç ve yönlendirme sistem tarafından otomatik olarak yönetilir.
 
 Bu gelişmiş mimari trafiğinizin analiz edilmesini zorlaştırarak yüksek düzeyde anonimlik ve güvenlik katmanları
-sunar. **Phantom-WireGuard**, bu süreci tamamen otomatik olarak yönetir ve herhangi bir üçüncü tarafa veya hizmete
+sunar. **Phantom-WG**, bu süreci tamamen otomatik olarak yönetir ve herhangi bir üçüncü tarafa veya hizmete
 bağlı kalmadan size tam esneklik ve kontrol olanağı sağlar.
 
-Sistemin esnekliği sayesinde, birden fazla **Phantom-WireGuard** sunucunuzu da zincirleyebilir ve trafiğinizi bu
-sunucular üzerinden sırayla aktarabilirsiniz. Kurduğunuz her **Phantom-WireGuard** sunucusundan aldığınız WireGuard
+Sistemin esnekliği sayesinde, birden fazla **Phantom-WG** sunucunuzu da zincirleyebilir ve trafiğinizi bu
+sunucular üzerinden sırayla aktarabilirsiniz. Kurduğunuz her **Phantom-WG** sunucusundan aldığınız WireGuard
 istemci konfigürasyonunu, bir önceki sunucunun Multihop modülünde çıkış sunucusu konfigürasyonu olarak içe aktararak,
 katmanlı bir zincir yapısı oluşturabilirsiniz. Her sunucu, kendinden sonraki sunucuya istemci olarak bağlanır ve
 trafiği o sunucu üzerinden yönlendirir. Bu yaklaşım sayesinde tamamen kendi kontrol ettiğiniz çoklu sunucu zinciri
@@ -30,8 +30,8 @@ oluşturabilirsiniz.
 
 Multihop ile trafiğiniz şu yolu izler:
 
-- **Normal Akış**: İstemciler → Phantom-Wireguard → İnternet
-- **Multihop Akışı**: İstemciler → Phantom-Wireguard → VPN Çıkış → İnternet
+- **Normal Akış**: İstemciler → Phantom-WG → İnternet
+- **Multihop Akışı**: İstemciler → Phantom-WG → VPN Çıkış → İnternet
 
 Bu katmanlı yaklaşım, **çift VPN katmanı** ile gerçek IP adresinizi gizler ve trafiğinizin izini sürmeyi zorlaştırır.
 

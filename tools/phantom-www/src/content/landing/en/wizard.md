@@ -6,7 +6,7 @@ features:
   - Crypto Payments
   - Instant Setup
 mainnet:
-  url: https://github.com/ARAS-Workspace/phantom-wireguard/blob/main/tools/phantom-deployment-wizard/PRIVACY.md
+  url: https://github.com/ARAS-Workspace/phantom-wg/blob/main/tools/phantom-deployment-wizard/PRIVACY.md
   label: Privacy Notice
   icon: globe
 onion:

@@ -35,6 +35,7 @@ phantom/reports/*
 !phantom/reports/.gitkeep
 
 # IDE and editor files
+.idea/
 .claude/
 .playwright-mcp/
 .run/

@@ -1,4 +1,4 @@
-# Phantom-WireGuard Modules 🇺🇸
+# Phantom-WG Modules 🇺🇸
 
 ```bash
 ██████╗ ██╗  ██╗ █████╗ ███╗   ██╗████████╗ ██████╗ ███╗   ███╗
@@ -15,7 +15,7 @@ WireGuard® is a registered trademark of Jason A. Donenfeld.
 
 ## Overview
 
-The Phantom-WireGuard module system implements an architecture where each module provides specialized 
+The Phantom-WG module system implements an architecture where each module provides specialized 
 functionality through a standardized API interface. 
 All modules inherit from `BaseModule` and expose their capabilities via defined action **endpoints**.
 
@@ -24,10 +24,10 @@ All modules inherit from `BaseModule` and expose their capabilities via defined 
 This metaphor helps us understand how the system works by explaining complex technical structures through familiar 
 everyday concepts. 
 Just like masters, journeymen, and apprentices working in harmony in a traditional craft workshop, each component in
-Phantom-WireGuard performs its specialized role and coordinates with others when needed. 
+Phantom-WG performs its specialized role and coordinates with others when needed. 
 This analogy helps us clearly grasp both the independence of modules and their interactions with each other.
 
-Think of Phantom-WireGuard as a **craft workshop**:
+Think of Phantom-WG as a **craft workshop**:
 
 - **Modules = Master Craftsmen:** Each module represents masters specialized in their own field.
 
@@ -61,7 +61,7 @@ Think of Phantom-WireGuard as a **craft workshop**:
 
 #### Step-by-Step Process
 
-1. **User Access:** System administrator connects to the Phantom-WireGuard server via SSH.
+1. **User Access:** System administrator connects to the Phantom-WG server via SSH.
    
 2. **Command Entry:** Runs the command `phantom-api core server_status` in the terminal.
    
@@ -407,7 +407,7 @@ class FirewallConfiguration:
 #### State Management
 
 ##### Database
-**Location:** `/opt/phantom-wireguard/data/clients.db` (TinyDB JSON format)
+**Location:** `/opt/phantom-wg/data/clients.db` (TinyDB JSON format)
 
 **clients table example:**
 ```json
@@ -454,7 +454,7 @@ class FirewallConfiguration:
 ```
 
 ##### Configuration File
-**Location:** `/opt/phantom-wireguard/config/phantom.json`
+**Location:** `/opt/phantom-wg/config/phantom.json`
 
 **Example phantom.json content:**
 ```json
@@ -1092,7 +1092,7 @@ class ResetStateResult:
 ```
 
 ##### VPN Configurations
-**Location:** `/opt/phantom-wireguard/config/vpn_configs/`
+**Location:** `/opt/phantom-wg/config/vpn_configs/`
 
 Each imported VPN configuration is stored in this directory:
 - `mullvad-se-sto.conf`
@@ -1165,7 +1165,7 @@ flowchart TB
 **Architecture:** wstunnel-based WebSocket tunneling system with 6 functional helper modules. Each module contains
 function sets for specific tasks.
 
-- **state_manager:** Manages Ghost mode state in `/opt/phantom-wireguard/config/ghost-state.json` file, performs
+- **state_manager:** Manages Ghost mode state in `/opt/phantom-wg/config/ghost-state.json` file, performs
   init/save/rollback operations.
 - **ssl_utils:** Obtains SSL certificate with Let's Encrypt (certbot standalone), temporarily opens/closes port 80,
   performs certificate cleanup.
@@ -1303,7 +1303,7 @@ class GhostServiceInfo:
 #### State Management
 
 ##### State File
-**Location:** `/opt/phantom-wireguard/config/ghost-state.json`
+**Location:** `/opt/phantom-wg/config/ghost-state.json`
 
 ```json
 {
@@ -1362,4 +1362,4 @@ graph LR
 
 ---
 
-*Phantom-WireGuard - Technical Documentation*
+*Phantom-WG - Technical Documentation*

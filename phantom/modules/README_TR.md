@@ -1,4 +1,4 @@
-# Phantom-WireGuard Modülleri 🇹🇷
+# Phantom-WG Modülleri 🇹🇷
 
 ```bash
 ██████╗ ██╗  ██╗ █████╗ ███╗   ██╗████████╗ ██████╗ ███╗   ███╗
@@ -15,7 +15,7 @@ WireGuard® is a registered trademark of Jason A. Donenfeld.
 
 ## Genel Bakış
 
-Phantom-WireGuard modül sistemi, her modülün standartlaştırılmış bir API arayüzü üzerinden özelleşmiş işlevsellik
+Phantom-WG modül sistemi, her modülün standartlaştırılmış bir API arayüzü üzerinden özelleşmiş işlevsellik
 sağladığı bir mimari uygular. 
 Tüm modüller `BaseModule`'den türetilir ve yeteneklerini tanımlanmış eylem uç noktaları (**endpoint**) aracılığıyla
 sunar.
@@ -24,12 +24,12 @@ sunar.
 
 Bu metafor, karmaşık teknik yapıyı günlük hayattan tanıdık kavramlarla açıklayarak sistemin nasıl çalıştığını daha
 kolay anlamamızı sağlar. 
-Tıpkı geleneksel bir zanaat atölyesinde ustalar, kalfalar ve çırakların uyumlu çalışması gibi, Phantom-WireGuard'da da
+Tıpkı geleneksel bir zanaat atölyesinde ustalar, kalfalar ve çırakların uyumlu çalışması gibi, Phantom-WG'de de
 her bileşen kendi uzmanlık alanında görev yapar ve gerektiğinde diğerleriyle koordineli hareket eder. 
 Bu benzetme sayesinde, modüllerin bağımsızlığını ve aynı zamanda birbirleriyle olan etkileşimlerini daha net
 kavrayabiliriz.
 
-Phantom-WireGuard'ı bir **zanaat atölyesi** olarak düşünebiliriz:
+Phantom-WG'yi bir **zanaat atölyesi** olarak düşünebiliriz:
 
 - **Modüller = Usta Zanaatkarlar:** Her modül kendi alanında uzmanlaşmış ustaları temsil etmektedir.
 
@@ -64,7 +64,7 @@ Phantom-WireGuard'ı bir **zanaat atölyesi** olarak düşünebiliriz:
 
 #### Adım Adım İşleyiş
 
-1. **Kullanıcı Erişimi:** Sistem yöneticisi SSH ile Phantom-WireGuard kurulu sunucuya bağlanır.
+1. **Kullanıcı Erişimi:** Sistem yöneticisi SSH ile Phantom-WG kurulu sunucuya bağlanır.
    
 2. **Komut Girişi:** Terminal'de `phantom-api core server_status` komutunu çalıştırır.
    
@@ -413,7 +413,7 @@ class FirewallConfiguration:
 #### Durum Yönetimi
 
 ##### Veritabanı
-**Konum:** `/opt/phantom-wireguard/data/clients.db` (TinyDB JSON formatı)
+**Konum:** `/opt/phantom-wg/data/clients.db` (TinyDB JSON formatı)
 
 **clients tablosu örneği:**
 ```json
@@ -460,7 +460,7 @@ class FirewallConfiguration:
 ```
 
 ##### Yapılandırma Dosyası
-**Konum:** `/opt/phantom-wireguard/config/phantom.json`
+**Konum:** `/opt/phantom-wg/config/phantom.json`
 
 **Örnek phantom.json içeriği:**
 ```json
@@ -1106,7 +1106,7 @@ class ResetStateResult:
 ```
 
 ##### VPN Yapılandırmaları
-**Konum:** `/opt/phantom-wireguard/config/vpn_configs/`
+**Konum:** `/opt/phantom-wg/config/vpn_configs/`
 
 İçe aktarılan her VPN yapılandırması bu dizinde saklanır:
 - `mullvad-se-sto.conf`
@@ -1179,7 +1179,7 @@ flowchart TB
 **Mimari:** 6 adet fonksiyonel yardımcı modül ile wstunnel tabanlı WebSocket tünelleme sistemi. Her modül spesifik
 görevler için fonksiyon kümeleri içerir.
 
-- **state_manager:** Ghost modu durumunu `/opt/phantom-wireguard/config/ghost-state.json` dosyasında yönetir,
+- **state_manager:** Ghost modu durumunu `/opt/phantom-wg/config/ghost-state.json` dosyasında yönetir,
   init/save/rollback işlemleri yapar.
 - **ssl_utils:** Let's Encrypt ile SSL sertifikası alır (certbot standalone), port 80'i geçici açar/kapatır,
   sertifika temizliği yapar.
@@ -1318,7 +1318,7 @@ class GhostServiceInfo:
 #### Durum Yönetimi
 
 ##### Durum Dosyası
-**Konum:** `/opt/phantom-wireguard/config/ghost-state.json`
+**Konum:** `/opt/phantom-wg/config/ghost-state.json`
 
 ```json
 {
@@ -1377,4 +1377,4 @@ graph LR
 
 ---
 
-*Phantom-WireGuard - Teknik Dokümantasyon*
+*Phantom-WG - Teknik Dokümantasyon*

@@ -1,7 +1,7 @@
 {
   "name": "phantom-install",
   "version": "1.0.0",
-  "description": "Phantom-WireGuard Bootstrap Installer Worker",
+  "description": "Phantom-WG Bootstrap Installer Worker",
   "private": true,
   "scripts": {
     "dev": "dotenv -- wrangler dev",

@@ -6,10 +6,10 @@
 ██║     ██║  ██║██║  ██║██║ ╚████║   ██║   ╚██████╔╝██║ ╚═╝ ██║
 ╚═╝     ╚═╝  ╚═╝╚═╝  ╚═╝╚═╝  ╚═══╝   ╚═╝    ╚═════╝ ╚═╝     ╚═╝
 
-TR: Phantom-WireGuard Modül Sistemi
+TR: Phantom-WG Modül Sistemi
     ================================
     
-    Phantom-WireGuard'ın plugin tabanlı modül mimarisi. Tüm modüller
+    Phantom-WG'nin plugin tabanlı modül mimarisi. Tüm modüller
     BaseModule sınıfından türetilir ve dinamik olarak yüklenir. Her modül
     belirli bir işlevsellik alanına odaklanır ve API üzerinden erişilebilir.
     
@@ -32,10 +32,10 @@ TR: Phantom-WireGuard Modül Sistemi
         - Multihop modülü → Core modülün ağ yapılandırma fonksiyonlarını kullanır
         - Tüm modüller → BaseModule'ün utility metodlarını kullanır
 
-EN: Phantom-WireGuard Module System
+EN: Phantom-WG Module System
     ===============================
     
-    Phantom-WireGuard's plugin-based module architecture. All modules inherit
+    Phantom-WG's plugin-based module architecture. All modules inherit
     from BaseModule class and are dynamically loaded. Each module focuses on
     a specific functionality area and is accessible through the API.
     

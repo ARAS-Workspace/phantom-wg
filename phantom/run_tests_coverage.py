@@ -6,7 +6,7 @@
 ██║     ██║  ██║██║  ██║██║ ╚████║   ██║   ╚██████╔╝██║ ╚═╝ ██║
 ╚═╝     ╚═╝  ╚═╝╚═╝  ╚═╝╚═╝  ╚═══╝   ╚═╝    ╚═════╝ ╚═╝     ╚═╝
 
-Simple Test Runner for Phantom WireGuard
+Simple Test Runner for Phantom-WG
 
 Copyright (c) 2025 Rıza Emre ARAS <r.emrearas@proton.me>
 Licensed under AGPL-3.0 - see LICENSE file for details
@@ -296,7 +296,7 @@ def main(custom_session_id=None):
     test_modules = list(modules.values())
     module_names = list(modules.keys())
 
-    logger.info("Phantom WireGuard Test Suite")
+    logger.info("Phantom-WG Test Suite")
     logger.info(f"Base directory: {project_root}")
     logger.info(f"Session ID: {current_session}")
     logger.info(f"Session directory: {session_dir}")

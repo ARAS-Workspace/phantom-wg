@@ -1,3 +1,3 @@
-# Phantom-WireGuard Landing Page - Robots Configuration
+# Phantom-WG Landing Page - Robots Configuration
 User-agent: *
 Allow: /

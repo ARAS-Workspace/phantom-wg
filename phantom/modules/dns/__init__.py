@@ -6,7 +6,7 @@
 ██║     ██║  ██║██║  ██║██║ ╚████║   ██║   ╚██████╔╝██║ ╚═╝ ██║
 ╚═╝     ╚═╝  ╚═╝╚═╝  ╚═╝╚═╝  ╚═══╝   ╚═╝    ╚═════╝ ╚═╝     ╚═╝
 
-TR: Phantom-WireGuard DNS Modülü
+TR: Phantom-WG DNS Modülü
     ============================
     
     WireGuard VPN için DNS sunucu yönetimi modülü. Bu modül, sistem
@@ -19,7 +19,7 @@ TR: Phantom-WireGuard DNS Modülü
         - Sistem genelinde DNS değişiklikleri
         - Otomatik yapılandırma yenileme
 
-EN: Phantom-WireGuard DNS Module
+EN: Phantom-WG DNS Module
     ============================
     
     DNS server management module for WireGuard VPN. This module manages

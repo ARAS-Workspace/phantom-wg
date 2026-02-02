@@ -6,7 +6,7 @@
 ██║     ██║  ██║██║  ██║██║ ╚████║   ██║   ╚██████╔╝██║ ╚═╝ ██║
 ╚═╝     ╚═╝  ╚═╝╚═╝  ╚═╝╚═╝  ╚═══╝   ╚═╝    ╚═════╝ ╚═╝     ╚═╝
 
-TR: Phantom-WireGuard Ghost Mode Sansür Dayanıklılık Modülü
+TR: Phantom-WG Ghost Mode Sansür Dayanıklılık Modülü
     ==========================================
     
     WireGuard trafiğini WebSocket üzerinden tünelleyerek sansür sistemlerini
@@ -50,7 +50,7 @@ TR: Phantom-WireGuard Ghost Mode Sansür Dayanıklılık Modülü
         Hetzner Community tutorial'dan esinlenilmiştir:
         https://community.hetzner.com/tutorials/obfuscating-wireguard-using-wstunnel
 
-EN: Phantom-WireGuard Ghost Mode Censorship Resistance Module
+EN: Phantom-WG Ghost Mode Censorship Resistance Module
     ==========================================
     
     Advanced module that bypasses censorship systems by tunneling WireGuard traffic
@@ -165,7 +165,7 @@ class GhostModule(BaseModule):
         and state file paths.
 
         Args:
-            install_dir: Installation directory path (default: /opt/phantom-wireguard)
+            install_dir: Installation directory path (default: /opt/phantom-wg)
         """
         super().__init__(install_dir)
         self.state_file = self.config_dir / "ghost-state.json"

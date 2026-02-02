@@ -14,11 +14,11 @@ Copyright (c) 2025 Rıza Emre ARAS <r.emrearas@proton.me>
 
 ## Overview
 
-Phantom Deployment Wizard is an open-source, self-hosted deployment tool that helps you provision a VPS server with Phantom WireGuard pre-installed. This notice explains what data the tool handles, how it flows, and what third-party services are involved.
+Phantom Deployment Wizard is an open-source, self-hosted deployment tool that helps you provision a VPS server with Phantom-WG pre-installed. This notice explains what data the tool handles, how it flows, and what third-party services are involved.
 
 ## Third-Party Disclaimer
 
-**Phantom WireGuard has no affiliation, partnership, or business relationship with SporeStack.** SporeStack is an independent third-party VPS hosting provider. This tool integrates with the SporeStack API solely because it offers a straightforward, privacy-respecting API that accepts cryptocurrency payments without requiring personal identity verification. SporeStack's own privacy and acceptable use policies apply independently to their service.
+**Phantom-WG has no affiliation, partnership, or business relationship with SporeStack.** SporeStack is an independent third-party VPS hosting provider. This tool integrates with the SporeStack API solely because it offers a straightforward, privacy-respecting API that accepts cryptocurrency payments without requiring personal identity verification. SporeStack's own privacy and acceptable use policies apply independently to their service.
 
 For SporeStack's policies, visit: [sporestack.com](https://sporestack.com/)
 
@@ -81,7 +81,7 @@ This tool makes outbound connections to the following services:
 - **When:** Only when the tool runs in Tor mode (`TOR_MODE=1`)
 
 ### 3. Phantom Install Script (`install.phantom.tc`) — Server-Side Only
-- **Purpose:** Installs Phantom WireGuard on the deployed server
+- **Purpose:** Installs Phantom-WG on the deployed server
 - **Protocol:** HTTPS
 - **Important:** This connection is made **by your deployed server** via cloud-init, **not** by the wizard application itself
 
@@ -121,13 +121,13 @@ The deployment includes a cloud-init script that runs on first boot of your serv
 
 1. Updates system packages
 2. Installs `curl`
-3. Downloads and runs the Phantom WireGuard installer from `install.phantom.tc`
+3. Downloads and runs the Phantom-WG installer from `install.phantom.tc`
 
 The cloud-init script is visible and reviewable within the wizard before deployment (under "View Cloud Init Script"). For Vultr deployments, the script is base64-encoded before transmission; for DigitalOcean, it is sent as plaintext. In both cases, the content is identical.
 
 ## Open Source and Transparency
 
-Phantom WireGuard is an open-source project. The entire codebase — including this deployment wizard, its CI/CD pipeline, and all infrastructure configurations — is publicly available and auditable on GitHub.
+Phantom-WG is an open-source project. The entire codebase — including this deployment wizard, its CI/CD pipeline, and all infrastructure configurations — is publicly available and auditable on GitHub.
 
 The wizard's production deployment (Tor hidden service) is managed directly from the repository through a GitHub Actions workflow (`.github/workflows/phantom-wizard-hidden-deployment-workflow.yml`). This means:
 

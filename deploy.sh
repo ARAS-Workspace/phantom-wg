@@ -10,8 +10,8 @@
 # Third-party licenses - see THIRD_PARTY_LICENSES file for details
 # WireGuard® is a registered trademark of Jason A. Donenfeld.
 #
-# Phantom-WireGuard Deployment Script
-# Deploy phantom-wireguard to remote server
+# Phantom-WG Deployment Script
+# Deploy phantom-wg to remote server
 
 set -euo pipefail
 
@@ -195,7 +195,7 @@ deploy_files() {
     
     # Create temporary directory
     TEMP_DIR=$(mktemp -d)
-    TEMP_PACKAGE="$TEMP_DIR/phantom-wireguard.tar.gz"
+    TEMP_PACKAGE="$TEMP_DIR/phantom-wg.tar.gz"
     
     # Required files
     REQUIRED_FILES=("phantom-install.sh" "requirements.txt" "phantom")
@@ -290,7 +290,7 @@ show_completion() {
     echo -e "  SSH: ${YELLOW}ssh -p $SSH_PORT -i $SSH_KEY $SSH_USER@$SERVER_IP${NC}"
     echo ""
     echo -e "${CYAN}Commands:${NC}"
-    echo -e "  Interactive: ${YELLOW}phantom-wireguard${NC}"
+    echo -e "  Interactive: ${YELLOW}phantom-wg${NC}"
     echo -e "  API: ${YELLOW}phantom-api core list_clients${NC}"
     echo ""
 }

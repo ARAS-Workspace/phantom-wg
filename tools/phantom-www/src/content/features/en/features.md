@@ -40,6 +40,6 @@ routed through a double VPN layer, achieving maximum privacy and censorship resi
 ## Open Source and Transparency
 **icon:** code
 
-Phantom-WireGuard is a fully open-source system with a flexible, modular architecture. Developed with transparent
+Phantom-WG is a fully open-source system with a flexible, modular architecture. Developed with transparent
 management processes, detailed test scenarios, and mature DevOps methodologies. Audit the code, perform security
 analysis, and run it with full control on your own infrastructure or development environment.

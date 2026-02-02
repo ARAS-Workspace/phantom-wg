@@ -1,16 +1,16 @@
 [Unit]
-Description=Phantom-WireGuard Multihop Monitor Service
+Description=Phantom-WG Multihop Monitor Service
 After=network.target wg-quick@wg_main.service
 Wants=wg-quick@wg_main.service
-ConditionPathExists=/opt/phantom-wireguard/config/phantom.json
+ConditionPathExists=/opt/phantom-wg/config/phantom.json
 
 [Service]
 Type=simple
 Environment="MULTIHOP_LOG_LEVEL=INFO"
-ExecStartPre=/bin/bash -c 'jq -e ".multihop.enabled == true" /opt/phantom-wireguard/config/phantom.json >/dev/null || exit 1'
-ExecStart=/opt/phantom-wireguard/.phantom-venv/bin/python3 /opt/phantom-wireguard/phantom/scripts/multihop-monitor-service.py
+ExecStartPre=/bin/bash -c 'jq -e ".multihop.enabled == true" /opt/phantom-wg/config/phantom.json >/dev/null || exit 1'
+ExecStart=/opt/phantom-wg/.phantom-venv/bin/python3 /opt/phantom-wg/phantom/scripts/multihop-monitor-service.py
 ExecReload=/bin/kill -HUP $MAINPID
-ExecStopPost=-/bin/rm -f /opt/phantom-wireguard/logs/multihop-session-current.log
+ExecStopPost=-/bin/rm -f /opt/phantom-wg/logs/multihop-session-current.log
 Restart=on-failure
 StandardOutput=journal
 StandardError=journal
@@ -34,7 +34,7 @@ GuessMainPID=yes
 #PrivateTmp=true
 #ProtectSystem=strict
 #ProtectHome=true
-#ReadWritePaths=/opt/phantom-wireguard/logs /opt/phantom-wireguard/config
+#ReadWritePaths=/opt/phantom-wg/logs /opt/phantom-wg/config
 
 # Resource limits
 CPUQuota=10%

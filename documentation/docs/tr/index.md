@@ -8,7 +8,7 @@ extra_css:
   - assets/stylesheets/animated-ascii-art.css
 
 ---
-# Phantom-WireGuard
+# Phantom-WG
 
 <div class="ascii-demo-container">
   <pre id="phantom-ascii-pulse" class="ascii-art" data-effect="pulse"></pre>
@@ -16,14 +16,14 @@ extra_css:
 
 **Kendi Sunucun. Kendi Ağın. Kendi Gizliliğin.**
 
-Phantom-WireGuard, kendi sunucunuzda WireGuard VPN altyapısı kurmanızı ve yönetmenizi sağlayan
+Phantom-WG, kendi sunucunuzda WireGuard VPN altyapısı kurmanızı ve yönetmenizi sağlayan
 modüler bir araçtır. Temel VPN yönetiminin ötesinde; sansüre dayanıklı bağlantılar, çok katmanlı
 şifreleme ve gelişmiş gizlilik senaryoları sunar.
 
 
 :fontawesome-solid-globe: **[https://www.phantom.tc](https://www.phantom.tc)**
 
-:fontawesome-brands-github: **[Github](https://github.com/ARAS-Workspace/phantom-wireguard)**
+:fontawesome-brands-github: **[Github](https://github.com/ARAS-Workspace/phantom-wg)**
 
 
 ## Hızlı Başlangıç
@@ -51,7 +51,7 @@ curl -sSL https://install.phantom.tc | bash
 
 <div class="asciinema-player-container">
     <div class="asciinema-player-header">
-        <h3>Phantom WireGuard</h3>
+        <h3>Phantom-WG</h3>
         <span class="asciinema-player-info">Terminal Kaydı</span>
     </div>
     <div class="asciinema-player-wrapper">
@@ -72,7 +72,7 @@ curl -sSL https://install.phantom.tc | bash
 
 Kurulum tamamlandıktan sonra interaktif CLI ile istemci oluşturabilirsiniz:
 ```bash
-phantom-wireguard
+phantom-wg
 ```
 
 **CLI Navigasyonu:**
@@ -86,7 +86,7 @@ phantom-wireguard
 
 <div class="asciinema-player-container">
     <div class="asciinema-player-header">
-        <h3>Phantom WireGuard</h3>
+        <h3>Phantom-WG</h3>
         <span class="asciinema-player-info">Terminal Kaydı</span>
     </div>
     <div class="asciinema-player-wrapper">
@@ -141,7 +141,7 @@ curl -4 ifconfig.io
 
 <div class="asciinema-player-container">
     <div class="asciinema-player-header">
-        <h3>Phantom WireGuard</h3>
+        <h3>Phantom-WG</h3>
         <span class="asciinema-player-info">Terminal Kaydı</span>
     </div>
     <div class="asciinema-player-wrapper">
@@ -236,7 +236,7 @@ phantom-api multihop enable_multihop exit_name="vpn-exit"
 
 | Yöntem             | Komut                         | Açıklama                            |
 |--------------------|-------------------------------|-------------------------------------|
-| **İnteraktif CLI** | `phantom-wireguard`           | Rich TUI tabanlı kullanıcı arayüzü  |
+| **İnteraktif CLI** | `phantom-wg`                  | Rich TUI tabanlı kullanıcı arayüzü  |
 | **API**            | `phantom-api <modül> <eylem>` | Programatik erişim, JSON çıktı      |
 | **Ghost Export**   | `phantom-casper <istemci>`    | Ghost Mode istemci yapılandırması   |
 
@@ -256,9 +256,9 @@ WireGuard® Jason A. Donenfeld'in tescilli ticari markasıdır.
 
 Copyright (c) 2025 Rıza Emre ARAS <r.emrearas@proton.me>
 
-Bu yazılım AGPL-3.0 lisansı altında lisanslanmıştır. Detaylar için [LICENSE](https://raw.githubusercontent.com/ARAS-Workspace/phantom-wireguard/refs/heads/main/LICENSE) dosyasına bakınız.
+Bu yazılım AGPL-3.0 lisansı altında lisanslanmıştır. Detaylar için [LICENSE](https://raw.githubusercontent.com/ARAS-Workspace/phantom-wg/refs/heads/main/LICENSE) dosyasına bakınız.
 
-Üçüncü taraf lisansları için [THIRD_PARTY_LICENSES](https://raw.githubusercontent.com/ARAS-Workspace/phantom-wireguard/refs/heads/main/THIRD_PARTY_LICENSES) dosyasına bakınız.
+Üçüncü taraf lisansları için [THIRD_PARTY_LICENSES](https://raw.githubusercontent.com/ARAS-Workspace/phantom-wg/refs/heads/main/THIRD_PARTY_LICENSES) dosyasına bakınız.
 
 ---
 
@@ -277,7 +277,7 @@ Bu proje, aşağıdaki açık kaynak projeler olmadan mümkün olamazdı:
 
 ## Destek
 
-Phantom-WireGuard açık kaynak bir projedir. Projeyi desteklemek isterseniz:
+Phantom-WG açık kaynak bir projedir. Projeyi desteklemek isterseniz:
 
 **Monero (XMR):**
 ```

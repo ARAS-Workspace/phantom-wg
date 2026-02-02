@@ -1,5 +1,5 @@
-site_name: Phantom-WireGuard
-site_description: Phantom-WireGuard is a modular tool for setting up and managing WireGuard VPN infrastructure on your own server.
+site_name: Phantom-WG
+site_description: Phantom-WG is a modular tool for setting up and managing WireGuard VPN infrastructure on your own server.
 site_author: Rıza Emre ARAS
 site_url: https://docs.phantom.tc
 #use_directory_urls: false  # This creates .html files instead of directories

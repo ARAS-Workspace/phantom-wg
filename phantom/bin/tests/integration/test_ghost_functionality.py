@@ -6,7 +6,7 @@
 ██║     ██║  ██║██║  ██║██║ ╚████║   ██║   ╚██████╔╝██║ ╚═╝ ██║
 ╚═╝     ╚═╝  ╚═╝╚═╝  ╚═╝╚═╝  ╚═══╝   ╚═╝    ╚═════╝ ╚═╝     ╚═╝
 
-Ghost Functionality Tests - Comprehensive test suite for Phantom-WireGuard Ghost module
+Ghost Functionality Tests - Comprehensive test suite for Phantom-WG Ghost module
 
 Test Phases:
     Phase 1: Environment Setup (3 tests)
@@ -282,7 +282,7 @@ class TestGhostFunctionality:
         assert self.validate_response(response), "Enable should succeed"
 
         # Verify state file
-        state_file = Path("/opt/phantom-wireguard/config/ghost-state.json")
+        state_file = Path("/opt/phantom-wg/config/ghost-state.json")
         assert state_file.exists(), "State file should exist"
 
         # Clean up

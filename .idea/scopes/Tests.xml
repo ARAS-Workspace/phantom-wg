@@ -1,3 +1,0 @@
-<component name="DependencyValidationManager">
-  <scope name="Tests" pattern="file[phantom-wireguard]:tests//*||file[phantom-wireguard]:test//*||file:*test*.py||file:*_test.py||file:test_*.py" />
-</component>

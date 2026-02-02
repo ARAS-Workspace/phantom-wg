@@ -9,9 +9,9 @@
  *
  * Copyright (C) 2025 Rıza Emre ARAS <r.emrearas@proton.me>
  *
- * This file is part of Phantom WireGuard.
+ * This file is part of Phantom-WG.
  *
- * Phantom WireGuard is free software: you can redistribute it and/or modify
+ * Phantom-WG is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Affero General Public License as published by
  * the Free Software Foundation, either version 3 of the License, or
  * (at your option) any later version.

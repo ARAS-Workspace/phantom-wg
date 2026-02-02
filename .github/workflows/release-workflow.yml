@@ -118,16 +118,16 @@ jobs:
         uses: softprops/action-gh-release@v1
         with:
           tag_name: ${{ steps.get_version.outputs.VERSION }}
-          name: Phantom WireGuard ${{ steps.get_version.outputs.VERSION }}
+          name: Phantom-WG ${{ steps.get_version.outputs.VERSION }}
           body: |
-            ## Phantom WireGuard ${{ steps.get_version.outputs.VERSION }}
+            ## Phantom-WG ${{ steps.get_version.outputs.VERSION }}
 
             🇬🇧
 
             ### 📦 Package Contents
 
             This release archive includes:
-            - `phantom/` - Phantom WireGuard Core Package
+            - `phantom/` - Phantom-WG Core Package
             - `requirements.txt` - Python dependencies
             - `phantom-install.sh` - Installation script
 
@@ -149,11 +149,11 @@ jobs:
             ```
 
             Commands:
-              phantom-wireguard - Interactive UI
+              phantom-wg - Interactive UI
               phantom-api - API Access
 
             Quick Start:
-              1. Run: phantom-wireguard
+              1. Run: phantom-wg
               2. Select 'Core Management'
               3. Add your first client
               4. Then export your client configuration via the interactive UI
@@ -161,7 +161,7 @@ jobs:
             API Command Example:
               phantom-api core list_clients
 
-            Python Environment: /opt/phantom-wireguard/.phantom-venv
+            Python Environment: /opt/phantom-wg/.phantom-venv
             ```
 
             ---
@@ -171,7 +171,7 @@ jobs:
             ### 📦 Paket İçeriği
 
             Bu sürüm arşivi şunları içerir:
-            - `phantom/` - Phantom Wireguard Çekirdek Paketi
+            - `phantom/` - Phantom-WG Çekirdek Paketi
             - `requirements.txt` - Python Bağımlılıkları
             - `phantom-install.sh` - Kurulum Betiği
 
@@ -193,11 +193,11 @@ jobs:
             ```
 
             Komutlar:
-              phantom-wireguard - Etkileşimli UI
+              phantom-wg - Etkileşimli UI
               phantom-api - API Erişimi
 
             Hızlı Başlangıç:
-              1. Çalıştır: phantom-wireguard
+              1. Çalıştır: phantom-wg
               2. 'Core Management' seçin
               3. İlk istemcinizi ekleyin
               4. Ardından istemci konfigürasyonunuzu etkileşimli UI üzerinden dışarı aktarın
@@ -205,7 +205,7 @@ jobs:
             API Komut Örneği:
               phantom-api core list_clients
 
-            Python Ortamı: /opt/phantom-wireguard/.phantom-venv
+            Python Ortamı: /opt/phantom-wg/.phantom-venv
             ```
 
           files: |

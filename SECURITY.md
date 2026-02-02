@@ -1,5 +1,5 @@
 <!--
-Phantom-WireGuard
+Phantom-WG
 Copyright (C) 2025 Rıza Emre ARAS <r.emrearas@proton.me>
 SPDX-License-Identifier: AGPL-3.0-or-later
 -->
@@ -12,7 +12,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 
 ### Reporting a Vulnerability or Private Messages
 
-If you discover a security vulnerability in Phantom-WireGuard or have a private request, you can reach me through the channels below. You can use my PGP key for encrypted communication.
+If you discover a security vulnerability in Phantom-WG or have a private request, you can reach me through the channels below. You can use my PGP key for encrypted communication.
 
 ### Contact
 
@@ -91,7 +91,7 @@ This is a voluntary project. I will try to respond as quickly as possible. If th
 ### Scope
 
 This policy covers:
-- Phantom-WireGuard core codebase
+- Phantom-WG core codebase
 - Official installation scripts
 - Configuration files
 
@@ -106,7 +106,7 @@ This policy covers:
 
 ### Güvenlik Açığı Bildirimi veya Özel Mesajlarınız
 
-Phantom-WireGuard'da bir güvenlik açığı keşfettiyseniz veya özel bir talebiniz varsa, aşağıdaki kanallar aracılığıyla benimle iletişime geçebilirsiniz. Şifreli haberleşme için PGP anahtarımı kullanabilirsiniz.
+Phantom-WG'de bir güvenlik açığı keşfettiyseniz veya özel bir talebiniz varsa, aşağıdaki kanallar aracılığıyla benimle iletişime geçebilirsiniz. Şifreli haberleşme için PGP anahtarımı kullanabilirsiniz.
 
 ### İletişim
 
@@ -184,7 +184,7 @@ Bu gönüllü bir projedir. Elimden geldiğince hızlı yanıt vermeye çalışa
 ### Kapsam
 
 Bu politika şunları kapsar:
-- Phantom-WireGuard ana kod tabanı
+- Phantom-WG ana kod tabanı
 - Resmi kurulum betikleri
 - Yapılandırma dosyaları
 

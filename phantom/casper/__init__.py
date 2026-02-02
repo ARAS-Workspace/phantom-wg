@@ -6,7 +6,7 @@
 ██║     ██║  ██║██║  ██║██║ ╚████║   ██║   ╚██████╔╝██║ ╚═╝ ██║
 ╚═╝     ╚═╝  ╚═╝╚═╝  ╚═╝╚═╝  ╚═══╝   ╚═╝    ╚═════╝ ╚═╝     ╚═╝
 
-TR: Phantom-WireGuard Casper - Ghost Mode Configuration Exporter
+TR: Phantom-WG Casper - Ghost Mode Configuration Exporter
     =========================================================================
 
     Casper, Ghost Mode aktifken kullanıcıların WireGuard client
@@ -25,7 +25,7 @@ TR: Phantom-WireGuard Casper - Ghost Mode Configuration Exporter
         # Wstunnel Command (for run client side): [komut]
         [WireGuard konfigürasyonu]
         
-EN: Phantom-WireGuard Casper - Ghost Mode Configuration Exporter
+EN: Phantom-WG Casper - Ghost Mode Configuration Exporter
     ====================================================================
     
     Casper is a simple tool that allows users to view their WireGuard

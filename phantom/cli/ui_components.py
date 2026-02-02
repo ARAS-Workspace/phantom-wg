@@ -1,4 +1,4 @@
-#!/opt/phantom-wireguard/.phantom-venv/bin/python3
+#!/opt/phantom-wg/.phantom-venv/bin/python3
 """
 ██████╗ ██╗  ██╗ █████╗ ███╗   ██╗████████╗ ██████╗ ███╗   ███╗
 ██╔══██╗██║  ██║██╔══██╗████╗  ██║╚══██╔══╝██╔═══██╗████╗ ████║
@@ -7,7 +7,7 @@
 ██║     ██║  ██║██║  ██║██║ ╚████║   ██║   ╚██████╔╝██║ ╚═╝ ██║
 ╚═╝     ╚═╝  ╚═╝╚═╝  ╚═╝╚═╝  ╚═══╝   ╚═╝    ╚═════╝ ╚═╝     ╚═╝
 
-TR: Phantom-WireGuard CLI UI Bileşenleri
+TR: Phantom-WG CLI UI Bileşenleri
     ===================================
     
     Rich framework kullanarak tutarlı ve güzel görünümlü kullanıcı arayüzü
@@ -20,7 +20,7 @@ TR: Phantom-WireGuard CLI UI Bileşenleri
         - Tablo oluşturma: Veri listeleme için
         - Kullanıcı etkileşimi: Input ve onay dialogları
 
-EN: Phantom-WireGuard CLI UI Components
+EN: Phantom-WG CLI UI Components
     =================================
     
     Provides consistent and beautiful user interface components using the
@@ -102,7 +102,7 @@ class UIComponents:
     def show_header(self):
         """Display application header"""
         header = Panel(
-            "[phantom]🌐 Phantom-WireGuard[/phantom] [dim]core-v1[/dim]\n"
+            "[phantom]🌐 Phantom-WG[/phantom] [dim]core-v1[/dim]\n"
             "[subheader]Advanced VPN Management System[/subheader]\n"
             "[dim]© 2025 Rıza Emre ARAS - All Rights Reserved[/dim]",
             box=box.DOUBLE,

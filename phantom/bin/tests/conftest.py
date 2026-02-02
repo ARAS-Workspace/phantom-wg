@@ -14,7 +14,7 @@ import sys
 from pathlib import Path
 import pytest
 
-INSTALL_DIR = Path("/opt/phantom-wireguard")
+INSTALL_DIR = Path("/opt/phantom-wg")
 
 sys.path.insert(0, str(INSTALL_DIR))
 
@@ -44,7 +44,7 @@ def pytest_configure(config):
     if not check_debian():
         pytest.exit("ERROR: This script requires Debian/Ubuntu", returncode=1)
 
-    # Check Phantom-WireGuard installation
+    # Check Phantom-WG installation
     installed, message = check_phantom_installation()
     if not installed:
         pytest.exit(f"ERROR: {message}", returncode=1)

@@ -14,11 +14,11 @@ Copyright (c) 2025 Rıza Emre ARAS <r.emrearas@proton.me>
 
 ## Genel Bakış
 
-`install.phantom.tc`, Phantom-WireGuard bootstrap kurulum betiğini sunan bir Cloudflare Worker'dır. Tamamen [phantom-wireguard](https://github.com/ARAS-Workspace/phantom-wireguard) GitHub reposundan yönetilir ve GitHub Actions (`.github/workflows/deploy-phantom-install.yml`) aracılığıyla otomatik olarak deploy edilir.
+`install.phantom.tc`, Phantom-WG bootstrap kurulum betiğini sunan bir Cloudflare Worker'dır. Tamamen [phantom-wg](https://github.com/ARAS-Workspace/phantom-wg) GitHub reposundan yönetilir ve GitHub Actions (`.github/workflows/deploy-phantom-install.yml`) aracılığıyla otomatik olarak deploy edilir.
 
 ## Kaynak Kod ve Dağıtım
 
-- **Kaynak:** [`tools/phantom-install/`](https://github.com/ARAS-Workspace/phantom-wireguard/tree/main/tools/phantom-install)
+- **Kaynak:** [`tools/phantom-install/`](https://github.com/ARAS-Workspace/phantom-wg/tree/main/tools/phantom-install)
 - **Dağıtım:** GitHub Actions workflow'u, `main` branch'ine yapılan ve `tools/phantom-install/**` yolunu etkileyen push'larda tetiklenir
 - **Çalışma Ortamı:** Cloudflare Workers (stateless, kalıcı depolama yok)
 
@@ -47,7 +47,7 @@ Bir Cloudflare Worker olarak bu servis, Cloudflare'in küresel ağı üzerinde �
 
 ## Açık Kaynak ve Şeffaflık
 
-Bu Worker'ın kaynak kodunun tamamı, dağıtım workflow'u ve yapılandırması [phantom-wireguard](https://github.com/ARAS-Workspace/phantom-wireguard) reposunda herkese açık olarak mevcuttur. Her dağıtım, herkese açık repodan tetiklenir — ayrı, gizli bir kod tabanı bulunmamaktadır.
+Bu Worker'ın kaynak kodunun tamamı, dağıtım workflow'u ve yapılandırması [phantom-wg](https://github.com/ARAS-Workspace/phantom-wg) reposunda herkese açık olarak mevcuttur. Her dağıtım, herkese açık repodan tetiklenir — ayrı, gizli bir kod tabanı bulunmamaktadır.
 
 ## Bu Bildirimde Yapılacak Değişiklikler
 
