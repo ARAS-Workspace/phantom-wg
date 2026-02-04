@@ -8,6 +8,8 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 
 [![Release Workflow](https://github.com/ARAS-Workspace/phantom-wg/actions/workflows/release-workflow.yml/badge.svg)](https://github.com/ARAS-Workspace/phantom-wg/actions/workflows/release-workflow.yml)
 
+> [🇬🇧 English](README.md) | [🇹🇷 Türkçe](README_TR.md) | 🇸🇦 **العربية**
+
 ```bash
 ██████╗ ██╗  ██╗ █████╗ ███╗   ██╗████████╗ ██████╗ ███╗   ███╗
 ██╔══██╗██║  ██║██╔══██╗████╗  ██║╚══██╔══╝██╔═══██╗████╗ ████║
