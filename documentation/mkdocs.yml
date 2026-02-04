@@ -51,6 +51,23 @@ plugins:
           nav_translations:
             Home: Ana Sayfa
             API: API
+            Video Tutorials: Video Rehberler
+            Core: Core
+            Add Client: İstemci Ekle
+            Remove Client: İstemci Kaldır
+            List Clients: İstemcileri Listele
+            Export Config: Yapılandırma Dışa Aktar
+            Server Status: Sunucu Durumu
+            Service Logs: Servis Logları
+            Latest Clients: Son İstemciler
+            Restart Service: Servisi Yeniden Başlat
+            Firewall Status: Güvenlik Duvarı Durumu
+            Tweak Settings: İnce Ayarlar
+            Change Subnet: Subnet Değiştir
+            DNS: DNS
+            Ghost: Ghost
+            Multihop: Multihop
+            Compact: Kompakt
 
 
 markdown_extensions:
@@ -84,6 +101,25 @@ markdown_extensions:
 nav:
   - Home: index.md
   - API: api.md
+  - Video Tutorials:
+    - Core:
+      - Add Client: video-tutorials/core/add-client.md
+      - Remove Client: video-tutorials/core/remove-client.md
+      - List Clients: video-tutorials/core/list-clients.md
+      - Export Config: video-tutorials/core/export-client.md
+      - Server Status: video-tutorials/core/server-status.md
+      - Service Logs: video-tutorials/core/service-logs.md
+      - Latest Clients: video-tutorials/core/recent-clients.md
+      - Restart Service: video-tutorials/core/restart-service.md
+      - Firewall Status: video-tutorials/core/firewall-status.md
+      - Tweak Settings: video-tutorials/core/tweak-settings.md
+      - Change Subnet: video-tutorials/core/change-subnet.md
+    - DNS:
+      - Compact: video-tutorials/dns/compact.md
+    - Ghost:
+      - Compact: video-tutorials/ghost/compact.md
+    - Multihop:
+      - Compact: video-tutorials/multihop/compact.md
 
 extra:
   social:

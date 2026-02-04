@@ -1,6 +1,5 @@
 ---
 extra_javascript:
-  - assets/javascripts/asciinema-player.js
   - assets/javascripts/phantom-ascii.js
   - assets/javascripts/animated-ascii-art.js
 extra_css:
@@ -159,26 +158,6 @@ lifecycle (client add/remove, configuration export, service management, firewall
 subnet changes, and advanced behavior settings) is managed through this module.
 
 ### Add Client
-
-<div class="asciinema-player-container">
-    <div class="asciinema-player-header">
-        <h3>Phantom-WG</h3>
-        <span class="asciinema-player-info">CLI Preview</span>
-    </div>
-    <div class="asciinema-player-wrapper">
-        <div class="asciinema-player" 
-             data-cast-file="recordings/api/add-client"
-             data-cols="120"
-             data-rows="48"
-             data-autoplay="false"
-             data-loop="false"
-             data-speed="1.5"
-             data-theme="solarized-dark"
-             data-font-size="small">
-        </div>
-    </div>
-</div>
-
 ```bash
 phantom-api core add_client client_name="john-laptop"
 ```
@@ -210,33 +189,12 @@ phantom-api core add_client client_name="john-laptop"
 ```
 
 ### Remove Client
-
-<div class="asciinema-player-container">
-    <div class="asciinema-player-header">
-        <h3>Phantom-WG</h3>
-        <span class="asciinema-player-info">CLI Preview</span>
-    </div>
-    <div class="asciinema-player-wrapper">
-        <div class="asciinema-player" 
-             data-cast-file="recordings/api/remove-client"
-             data-cols="120"
-             data-rows="48"
-             data-autoplay="false"
-             data-loop="false"
-             data-speed="1.5"
-             data-theme="solarized-dark"
-             data-font-size="small">
-        </div>
-    </div>
-</div>
-
 ```bash
 phantom-api core remove_client client_name="john-laptop"
 ```
 
 **Parameters:**
 - `client_name` (required): Name of the client to remove
-
 
 **Response:**
 ```json
@@ -257,26 +215,6 @@ phantom-api core remove_client client_name="john-laptop"
 ```
 
 ### List Clients
-
-<div class="asciinema-player-container">
-    <div class="asciinema-player-header">
-        <h3>Phantom-WG</h3>
-        <span class="asciinema-player-info">CLI Preview</span>
-    </div>
-    <div class="asciinema-player-wrapper">
-        <div class="asciinema-player" 
-             data-cast-file="recordings/api/list-clients"
-             data-cols="120"
-             data-rows="48"
-             data-autoplay="false"
-             data-loop="false"
-             data-speed="1.5"
-             data-theme="solarized-dark"
-             data-font-size="small">
-        </div>
-    </div>
-</div>
-
 ```bash
 # List first 10 clients
 phantom-api core list_clients
@@ -292,7 +230,6 @@ phantom-api core list_clients search="john"
 - `page` (optional, default=1): Page number
 - `per_page` (optional, default=10): Items per page
 - `search` (optional): Search term
-
 
 **Response:**
 ```json
@@ -329,26 +266,6 @@ phantom-api core list_clients search="john"
 ```
 
 ### Export Client Configuration
-
-<div class="asciinema-player-container">
-    <div class="asciinema-player-header">
-        <h3>Phantom-WG</h3>
-        <span class="asciinema-player-info">CLI Preview</span>
-    </div>
-    <div class="asciinema-player-wrapper">
-        <div class="asciinema-player" 
-             data-cast-file="recordings/api/export-client"
-             data-cols="120"
-             data-rows="48"
-             data-autoplay="false"
-             data-loop="false"
-             data-speed="1.5"
-             data-theme="solarized-dark"
-             data-font-size="small">
-        </div>
-    </div>
-</div>
-
 ```bash
 # Export client configuration
 phantom-api core export_client client_name="john-laptop"
@@ -356,7 +273,6 @@ phantom-api core export_client client_name="john-laptop"
 
 **Parameters:**
 - `client_name` (required): Client to export
-
 
 **Response:**
 ```json
@@ -400,26 +316,6 @@ phantom-api core export_client client_name="john-laptop"
 QR code generation is available in the CLI interface.
 
 ### Server Status
-
-<div class="asciinema-player-container">
-    <div class="asciinema-player-header">
-        <h3>Phantom-WG</h3>
-        <span class="asciinema-player-info">CLI Preview</span>
-    </div>
-    <div class="asciinema-player-wrapper">
-        <div class="asciinema-player" 
-             data-cast-file="recordings/api/server-status"
-             data-cols="120"
-             data-rows="48"
-             data-autoplay="false"
-             data-loop="false"
-             data-speed="1.5"
-             data-theme="solarized-dark"
-             data-font-size="small">
-        </div>
-    </div>
-</div>
-
 ```bash
 phantom-api core server_status
 ```
@@ -487,26 +383,6 @@ phantom-api core server_status
 ```
 
 ### Service Logs
-
-<div class="asciinema-player-container">
-    <div class="asciinema-player-header">
-        <h3>Phantom-WG</h3>
-        <span class="asciinema-player-info">CLI Preview</span>
-    </div>
-    <div class="asciinema-player-wrapper">
-        <div class="asciinema-player" 
-             data-cast-file="recordings/api/service-logs"
-             data-cols="120"
-             data-rows="48"
-             data-autoplay="false"
-             data-loop="false"
-             data-speed="1.5"
-             data-theme="solarized-dark"
-             data-font-size="small">
-        </div>
-    </div>
-</div>
-
 ```bash
 # Get last 50 lines (default)
 phantom-api core service_logs
@@ -519,26 +395,6 @@ phantom-api core service_logs lines=100
 - `lines` (optional, default=50): Number of log lines
 
 ### Latest Clients
-
-<div class="asciinema-player-container">
-    <div class="asciinema-player-header">
-        <h3>Phantom-WG</h3>
-        <span class="asciinema-player-info">CLI Preview</span>
-    </div>
-    <div class="asciinema-player-wrapper">
-        <div class="asciinema-player" 
-             data-cast-file="recordings/api/recent-clients"
-             data-cols="120"
-             data-rows="48"
-             data-autoplay="false"
-             data-loop="false"
-             data-speed="1.5"
-             data-theme="solarized-dark"
-             data-font-size="small">
-        </div>
-    </div>
-</div>
-
 ```bash
 # Get last 5 clients (default)
 phantom-api core latest_clients
@@ -553,30 +409,9 @@ phantom-api core latest_clients count=10
 ### Restart Service
 
 **Warning:** All connected clients will be temporarily disconnected during restart.
-
-<div class="asciinema-player-container">
-    <div class="asciinema-player-header">
-        <h3>Phantom-WG</h3>
-        <span class="asciinema-player-info">CLI Preview</span>
-    </div>
-    <div class="asciinema-player-wrapper">
-        <div class="asciinema-player" 
-             data-cast-file="recordings/api/restart-service"
-             data-cols="120"
-             data-rows="48"
-             data-autoplay="false"
-             data-loop="false"
-             data-speed="1.5"
-             data-theme="solarized-dark"
-             data-font-size="small">
-        </div>
-    </div>
-</div>
-
 ```bash
 phantom-api core restart_service
 ```
-
 
 **Response:**
 ```json
@@ -592,26 +427,6 @@ phantom-api core restart_service
 ```
 
 ### Firewall Status
-
-<div class="asciinema-player-container">
-    <div class="asciinema-player-header">
-        <h3>Phantom-WG</h3>
-        <span class="asciinema-player-info">CLI Preview</span>
-    </div>
-    <div class="asciinema-player-wrapper">
-        <div class="asciinema-player" 
-             data-cast-file="recordings/api/firewall-status"
-             data-cols="120"
-             data-rows="48"
-             data-autoplay="false"
-             data-loop="false"
-             data-speed="1.5"
-             data-theme="solarized-dark"
-             data-font-size="small">
-        </div>
-    </div>
-</div>
-
 ```bash
 phantom-api core get_firewall_status
 ```
@@ -655,26 +470,6 @@ phantom-api core get_firewall_status
 ```
 
 ### Tweak Settings
-
-<div class="asciinema-player-container">
-    <div class="asciinema-player-header">
-        <h3>Phantom-WG</h3>
-        <span class="asciinema-player-info">CLI Preview</span>
-    </div>
-    <div class="asciinema-player-wrapper">
-        <div class="asciinema-player" 
-             data-cast-file="recordings/api/tweak-settings"
-             data-cols="120"
-             data-rows="48"
-             data-autoplay="false"
-             data-loop="false"
-             data-speed="1.5"
-             data-theme="solarized-dark"
-             data-font-size="small">
-        </div>
-    </div>
-</div>
-
 ```bash
 # Get all tweak settings
 phantom-api core get_tweak_settings
@@ -705,26 +500,6 @@ phantom-api core update_tweak_setting setting_name="restart_service_after_client
 ```
 
 ### Change Default Subnet
-
-<div class="asciinema-player-container">
-    <div class="asciinema-player-header">
-        <h3>Phantom-WG</h3>
-        <span class="asciinema-player-info">CLI Preview</span>
-    </div>
-    <div class="asciinema-player-wrapper">
-        <div class="asciinema-player" 
-             data-cast-file="recordings/api/change-subnet"
-             data-cols="120"
-             data-rows="48"
-             data-autoplay="false"
-             data-loop="false"
-             data-speed="1.5"
-             data-theme="solarized-dark"
-             data-font-size="small">
-        </div>
-    </div>
-</div>
-
 ```bash
 # Get current subnet info
 phantom-api core get_subnet_info
@@ -735,7 +510,6 @@ phantom-api core validate_subnet_change new_subnet="192.168.100.0/24"
 # Change subnet (requires confirmation)
 phantom-api core change_subnet new_subnet="192.168.100.0/24" confirm=true
 ```
-
 
 **Response for get_subnet_info:**
 ```json
@@ -868,26 +642,6 @@ phantom-api core change_subnet new_subnet="192.168.100.0/24" confirm=true
 ---
 
 ## DNS Module
-
-<div class="asciinema-player-container">
-    <div class="asciinema-player-header">
-        <h3>Phantom-WG</h3>
-        <span class="asciinema-player-info">CLI Preview</span>
-    </div>
-    <div class="asciinema-player-wrapper">
-        <div class="asciinema-player" 
-             data-cast-file="recordings/api/dns-compact"
-             data-cols="120"
-             data-rows="48"
-             data-autoplay="false"
-             data-loop="false"
-             data-speed="1.5"
-             data-theme="solarized-dark"
-             data-font-size="small">
-        </div>
-    </div>
-</div>
-
 ### Change DNS Servers
 
 Updates the primary and/or secondary DNS servers that all clients will use.
@@ -904,7 +658,6 @@ phantom-api dns change_dns_servers primary="8.8.8.8"
 **Parameters:**
 - `primary` (optional): Primary DNS server IP
 - `secondary` (optional): Secondary DNS server IP
-
 
 **Response:**
 ```json
@@ -1073,26 +826,6 @@ phantom-api dns get_dns_servers
 ---
 
 ## Ghost Module
-
-<div class="asciinema-player-container">
-    <div class="asciinema-player-header">
-        <h3>Phantom-WG</h3>
-        <span class="asciinema-player-info">CLI Preview</span>
-    </div>
-    <div class="asciinema-player-wrapper">
-        <div class="asciinema-player" 
-             data-cast-file="recordings/api/ghost-compact"
-             data-cols="120"
-             data-rows="48"
-             data-autoplay="false"
-             data-loop="false"
-             data-speed="1.5"
-             data-theme="solarized-dark"
-             data-font-size="small">
-        </div>
-    </div>
-</div>
-
 ### Enable Ghost Mode
 
 ```bash
@@ -1289,26 +1022,6 @@ This architecture ensures that the destination server only sees the IP address o
 external VPN exit point; the real address of the Phantom server or client remains hidden.
 Multihop works by importing standard WireGuard configuration files, making it compatible
 with any VPN provider that supports WireGuard.
-
-<div class="asciinema-player-container">
-    <div class="asciinema-player-header">
-        <h3>Phantom-WG</h3>
-        <span class="asciinema-player-info">CLI Preview</span>
-    </div>
-    <div class="asciinema-player-wrapper">
-        <div class="asciinema-player" 
-             data-cast-file="recordings/api/multihop-compact"
-             data-cols="120"
-             data-rows="48"
-             data-autoplay="false"
-             data-loop="false"
-             data-speed="1.5"
-             data-theme="solarized-dark"
-             data-font-size="small">
-        </div>
-    </div>
-</div>
-
 ### Import VPN Configuration
 
 ```bash
@@ -1331,7 +1044,6 @@ phantom-api multihop enable_multihop exit_name="xeovo-uk"
 
 **Parameters:**
 - `exit_name` (required): Name of the VPN exit point to use
-
 
 **Response:**
 ```json

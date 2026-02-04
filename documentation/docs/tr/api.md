@@ -1,6 +1,5 @@
 ---
 extra_javascript:
-  - assets/javascripts/asciinema-player.js
   - assets/javascripts/phantom-ascii.js
   - assets/javascripts/animated-ascii-art.js
 extra_css:
@@ -160,25 +159,6 @@ denetimi, subnet değişikliği ve gelişmiş davranış ayarları) bu modül ü
 
 ### İstemci Ekle
 
-<div class="asciinema-player-container">
-    <div class="asciinema-player-header">
-        <h3>Phantom-WG</h3>
-        <span class="asciinema-player-info">CLI Önizleme</span>
-    </div>
-    <div class="asciinema-player-wrapper">
-        <div class="asciinema-player" 
-             data-cast-file="recordings/api/add-client"
-             data-cols="120"
-             data-rows="48"
-             data-autoplay="false"
-             data-loop="false"
-             data-speed="1.5"
-             data-theme="solarized-dark"
-             data-font-size="small">
-        </div>
-    </div>
-</div>
-
 ```bash
 phantom-api core add_client client_name="john-laptop"
 ```
@@ -211,32 +191,12 @@ phantom-api core add_client client_name="john-laptop"
 
 ### İstemci Kaldır
 
-<div class="asciinema-player-container">
-    <div class="asciinema-player-header">
-        <h3>Phantom-WG</h3>
-        <span class="asciinema-player-info">CLI Önizleme</span>
-    </div>
-    <div class="asciinema-player-wrapper">
-        <div class="asciinema-player"
-             data-cast-file="recordings/api/remove-client"
-             data-cols="120"
-             data-rows="48"
-             data-autoplay="false"
-             data-loop="false"
-             data-speed="1.5"
-             data-theme="solarized-dark"
-             data-font-size="small">
-        </div>
-    </div>
-</div>
-
 ```bash
 phantom-api core remove_client client_name="john-laptop"
 ```
 
 **Parametreler:**
 - `client_name` (zorunlu): Kaldırılacak istemcinin adı
-
 
 **Yanıt:**
 ```json
@@ -257,25 +217,6 @@ phantom-api core remove_client client_name="john-laptop"
 ```
 
 ### İstemcileri Listele
-
-<div class="asciinema-player-container">
-    <div class="asciinema-player-header">
-        <h3>Phantom-WG</h3>
-        <span class="asciinema-player-info">CLI Önizleme</span>
-    </div>
-    <div class="asciinema-player-wrapper">
-        <div class="asciinema-player" 
-             data-cast-file="recordings/api/list-clients"
-             data-cols="120"
-             data-rows="48"
-             data-autoplay="false"
-             data-loop="false"
-             data-speed="1.5"
-             data-theme="solarized-dark"
-             data-font-size="small">
-        </div>
-    </div>
-</div>
 
 ```bash
 # İlk 10 istemciyi listele
@@ -327,27 +268,7 @@ phantom-api core list_clients search="john"
 }
 ```
 
-
 ### İstemci Yapılandırmasını Dışa Aktar
-
-<div class="asciinema-player-container">
-    <div class="asciinema-player-header">
-        <h3>Phantom-WG</h3>
-        <span class="asciinema-player-info">CLI Önizleme</span>
-    </div>
-    <div class="asciinema-player-wrapper">
-        <div class="asciinema-player" 
-             data-cast-file="recordings/api/export-client"
-             data-cols="120"
-             data-rows="48"
-             data-autoplay="false"
-             data-loop="false"
-             data-speed="1.5"
-             data-theme="solarized-dark"
-             data-font-size="small">
-        </div>
-    </div>
-</div>
 
 ```bash
 # İstemci yapılandırmasını dışa aktar
@@ -399,25 +320,6 @@ phantom-api core export_client client_name="john-laptop"
 oluşturma CLI arayüzünde mevcuttur.
 
 ### Sunucu Durumu
-
-<div class="asciinema-player-container">
-    <div class="asciinema-player-header">
-        <h3>Phantom-WG</h3>
-        <span class="asciinema-player-info">CLI Önizleme</span>
-    </div>
-    <div class="asciinema-player-wrapper">
-        <div class="asciinema-player" 
-             data-cast-file="recordings/api/server-status"
-             data-cols="120"
-             data-rows="48"
-             data-autoplay="false"
-             data-loop="false"
-             data-speed="1.5"
-             data-theme="solarized-dark"
-             data-font-size="small">
-        </div>
-    </div>
-</div>
 
 ```bash
 phantom-api core server_status
@@ -487,25 +389,6 @@ phantom-api core server_status
 
 ### Servis Günlükleri
 
-<div class="asciinema-player-container">
-    <div class="asciinema-player-header">
-        <h3>Phantom-WG</h3>
-        <span class="asciinema-player-info">CLI Önizleme</span>
-    </div>
-    <div class="asciinema-player-wrapper">
-        <div class="asciinema-player" 
-             data-cast-file="recordings/api/service-logs"
-             data-cols="120"
-             data-rows="48"
-             data-autoplay="false"
-             data-loop="false"
-             data-speed="1.5"
-             data-theme="solarized-dark"
-             data-font-size="small">
-        </div>
-    </div>
-</div>
-
 ```bash
 # Son 50 satırı al (varsayılan)
 phantom-api core service_logs
@@ -518,25 +401,6 @@ phantom-api core service_logs lines=100
 - `lines` (opsiyonel, varsayılan=50): Günlük satır sayısı
 
 ### En Son Eklenen İstemciler
-
-<div class="asciinema-player-container">
-    <div class="asciinema-player-header">
-        <h3>Phantom-WG</h3>
-        <span class="asciinema-player-info">CLI Önizleme</span>
-    </div>
-    <div class="asciinema-player-wrapper">
-        <div class="asciinema-player" 
-             data-cast-file="recordings/api/recent-clients"
-             data-cols="120"
-             data-rows="48"
-             data-autoplay="false"
-             data-loop="false"
-             data-speed="1.5"
-             data-theme="solarized-dark"
-             data-font-size="small">
-        </div>
-    </div>
-</div>
 
 ```bash
 # Son 5 istemciyi al (varsayılan)
@@ -552,25 +416,6 @@ phantom-api core latest_clients count=10
 ### Servisi Yeniden Başlat
 
 **Dikkat:** Yeniden başlatma sırasında bağlı tüm istemcilerin bağlantısı geçici olarak kesilir.
-
-<div class="asciinema-player-container">
-    <div class="asciinema-player-header">
-        <h3>Phantom-WG</h3>
-        <span class="asciinema-player-info">CLI Önizleme</span>
-    </div>
-    <div class="asciinema-player-wrapper">
-        <div class="asciinema-player" 
-             data-cast-file="recordings/api/restart-service"
-             data-cols="120"
-             data-rows="48"
-             data-autoplay="false"
-             data-loop="false"
-             data-speed="1.5"
-             data-theme="solarized-dark"
-             data-font-size="small">
-        </div>
-    </div>
-</div>
 
 ```bash
 phantom-api core restart_service
@@ -590,25 +435,6 @@ phantom-api core restart_service
 ```
 
 ### Güvenlik Duvarı Durumu
-
-<div class="asciinema-player-container">
-    <div class="asciinema-player-header">
-        <h3>Phantom-WG</h3>
-        <span class="asciinema-player-info">CLI Önizleme</span>
-    </div>
-    <div class="asciinema-player-wrapper">
-        <div class="asciinema-player" 
-             data-cast-file="recordings/api/firewall-status"
-             data-cols="120"
-             data-rows="48"
-             data-autoplay="false"
-             data-loop="false"
-             data-speed="1.5"
-             data-theme="solarized-dark"
-             data-font-size="small">
-        </div>
-    </div>
-</div>
 
 ```bash
 phantom-api core get_firewall_status
@@ -654,25 +480,6 @@ phantom-api core get_firewall_status
 
 ### Tweak Ayarları
 
-<div class="asciinema-player-container">
-    <div class="asciinema-player-header">
-        <h3>Phantom-WG</h3>
-        <span class="asciinema-player-info">CLI Önizleme</span>
-    </div>
-    <div class="asciinema-player-wrapper">
-        <div class="asciinema-player" 
-             data-cast-file="recordings/api/tweak-settings"
-             data-cols="120"
-             data-rows="48"
-             data-autoplay="false"
-             data-loop="false"
-             data-speed="1.5"
-             data-theme="solarized-dark"
-             data-font-size="small">
-        </div>
-    </div>
-</div>
-
 ```bash
 # Tüm tweak ayarlarını al
 phantom-api core get_tweak_settings
@@ -706,25 +513,6 @@ phantom-api core update_tweak_setting setting_name="restart_service_after_client
 
 ### Varsayılan Subnet'i Değiştir
 
-<div class="asciinema-player-container">
-    <div class="asciinema-player-header">
-        <h3>Phantom-WG</h3>
-        <span class="asciinema-player-info">CLI Önizleme</span>
-    </div>
-    <div class="asciinema-player-wrapper">
-        <div class="asciinema-player" 
-             data-cast-file="recordings/api/change-subnet"
-             data-cols="120"
-             data-rows="48"
-             data-autoplay="false"
-             data-loop="false"
-             data-speed="1.5"
-             data-theme="solarized-dark"
-             data-font-size="small">
-        </div>
-    </div>
-</div>
-
 ```bash
 # Mevcut subnet bilgisini al
 phantom-api core get_subnet_info
@@ -735,7 +523,6 @@ phantom-api core validate_subnet_change new_subnet="192.168.100.0/24"
 # Subnet'i değiştir (onay gerekir)
 phantom-api core change_subnet new_subnet="192.168.100.0/24" confirm=true
 ```
-
 
 **get_subnet_info için yanıt:**
 ```json
@@ -869,25 +656,6 @@ phantom-api core change_subnet new_subnet="192.168.100.0/24" confirm=true
 
 ## DNS Modülü
 
-<div class="asciinema-player-container">
-    <div class="asciinema-player-header">
-        <h3>Phantom-WG</h3>
-        <span class="asciinema-player-info">CLI Önizleme</span>
-    </div>
-    <div class="asciinema-player-wrapper">
-        <div class="asciinema-player" 
-             data-cast-file="recordings/api/dns-compact"
-             data-cols="120"
-             data-rows="48"
-             data-autoplay="false"
-             data-loop="false"
-             data-speed="1.5"
-             data-theme="solarized-dark"
-             data-font-size="small">
-        </div>
-    </div>
-</div>
-
 ### DNS Sunucularını Değiştir
 
 Tüm istemcilerin kullanacağı birincil ve/veya ikincil DNS sunucularını günceller.
@@ -904,7 +672,6 @@ phantom-api dns change_dns_servers primary="8.8.8.8"
 **Parametreler:**
 - `primary` (opsiyonel): Birincil DNS sunucu IP'si
 - `secondary` (opsiyonel): İkincil DNS sunucu IP'si
-
 
 **Yanıt:**
 ```json
@@ -1073,25 +840,6 @@ phantom-api dns get_dns_servers
 ---
 
 ## Ghost Modülü
-
-<div class="asciinema-player-container">
-    <div class="asciinema-player-header">
-        <h3>Phantom-WG</h3>
-        <span class="asciinema-player-info">CLI Önizleme</span>
-    </div>
-    <div class="asciinema-player-wrapper">
-        <div class="asciinema-player" 
-             data-cast-file="recordings/api/ghost-compact"
-             data-cols="120"
-             data-rows="48"
-             data-autoplay="false"
-             data-loop="false"
-             data-speed="1.5"
-             data-theme="solarized-dark"
-             data-font-size="small">
-        </div>
-    </div>
-</div>
 
 ### Ghost Mode'u Etkinleştir
 
@@ -1290,25 +1038,6 @@ Phantom sunucusunun veya istemcinin gerçek adresi gizli kalır. Multihop, stand
 WireGuard yapılandırma dosyalarını içe aktararak çalışır; bu nedenle WireGuard destekleyen
 herhangi bir VPN sağlayıcısıyla uyumludur.
 
-<div class="asciinema-player-container">
-    <div class="asciinema-player-header">
-        <h3>Phantom-WG</h3>
-        <span class="asciinema-player-info">CLI Önizleme</span>
-    </div>
-    <div class="asciinema-player-wrapper">
-        <div class="asciinema-player" 
-             data-cast-file="recordings/api/multihop-compact"
-             data-cols="120"
-             data-rows="48"
-             data-autoplay="false"
-             data-loop="false"
-             data-speed="1.5"
-             data-theme="solarized-dark"
-             data-font-size="small">
-        </div>
-    </div>
-</div>
-
 ### VPN Yapılandırmasını İçe Aktar
 
 ```bash
@@ -1331,7 +1060,6 @@ phantom-api multihop enable_multihop exit_name="xeovo-uk"
 
 **Parametreler:**
 - `exit_name` (zorunlu): Kullanılacak VPN çıkış noktasının adı
-
 
 **Yanıt:**
 ```json

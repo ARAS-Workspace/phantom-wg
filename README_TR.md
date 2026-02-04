@@ -47,6 +47,8 @@ curl -sSL https://install.phantom.tc | bash
 ![Installation](assets/recordings/installation-dark.gif#gh-dark-mode-only)
 ![Installation](assets/recordings/installation-light.gif#gh-light-mode-only)
 
+> 📺 Tüm özelliklerin video anlatımları için https://docs.phantom.tc/tr/video-tutorials/core/add-client/ adresini ziyaret edin.
+
 > `install.phantom.tc` servisi, tamamen bu GitHub reposundan maintain edilen ve GitHub Actions ile deploy edilen bir Cloudflare Worker'dır. Herhangi bir veri toplama, telemetri veya loglama işlemi gerçekleştirmez. Detaylar için [Privacy Notice](tools/phantom-install/PRIVACY_TR.md) dökümanına bakınız.
 
 ### Kurulum Sonrası

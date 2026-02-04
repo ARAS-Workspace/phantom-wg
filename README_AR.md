@@ -53,6 +53,8 @@ curl -sSL https://install.phantom.tc | bash
 ![Installation](assets/recordings/installation-dark.gif#gh-dark-mode-only)
 ![Installation](assets/recordings/installation-light.gif#gh-light-mode-only)
 
+> 📺 للاطلاع على شروحات الفيديو لجميع الميزات، راجع https://docs.phantom.tc/en/video-tutorials/core/add-client/.
+
 > خدمة `install.phantom.tc` هي Cloudflare Worker تتم صيانتها بالكامل من مستودع GitHub هذا ويتم نشرها عبر GitHub Actions. لا تقوم بأي جمع بيانات أو قياس عن بُعد أو تسجيل. للتفاصيل، راجع [Privacy Notice](tools/phantom-install/PRIVACY.md).
 
 ### ما بعد التثبيت
