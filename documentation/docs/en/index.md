@@ -3,9 +3,6 @@ extra_javascript:
   - assets/javascripts/asciinema-player.js
   - assets/javascripts/phantom-ascii.js
   - assets/javascripts/animated-ascii-art.js
-extra_css:
-  - assets/stylesheets/ascii-styles.css
-  - assets/stylesheets/animated-ascii-art.css
 
 ---
 # Phantom-WG

@@ -121,6 +121,13 @@
 
 <!-- LoadJS for lazy loading -->
 <script src="{{ 'assets/vendor/loadjs.min.js' | url }}"></script>
+
+<!-- Page-specific CSS support -->
+{% if page and page.meta and page.meta.extra_css %}
+{% for css in page.meta.extra_css %}
+<link href="{{ css | url }}" rel="stylesheet">
+{% endfor %}
+{% endif %}
 {% endblock %}
 
 {% block scripts %}

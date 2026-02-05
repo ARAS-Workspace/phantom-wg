@@ -46,6 +46,7 @@ const playerRegistry = new Map();
 
 // ─── Initialize Phantom modules namespace ───────────────────────────────────
 window.PhantomModules = window.PhantomModules || {};
+window.PhantomModules._playerRegistry = playerRegistry;
 
 // ─── Theme Detection ────────────────────────────────────────────────────────
 function getCurrentAsciinemaTheme() {

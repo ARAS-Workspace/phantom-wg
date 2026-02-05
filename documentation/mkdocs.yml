@@ -50,8 +50,8 @@ plugins:
           build: true
           nav_translations:
             Home: Ana Sayfa
-            API: API
-            Video Showcase: Video Vitrin
+            API Documentation: API Dokümantasyonu
+            Feature Showcase: Özellik Tanıtımı
             Test Environment: Test Ortamı
             Modules: Modüller
             Core: Çekirdek (Core)
@@ -70,6 +70,26 @@ plugins:
             Ghost: Ghost
             Multihop: Multihop
             Complete Workflow: Tam İş Akışı
+            Overview: Genel Bakış
+            Change DNS Servers: DNS Sunucularını Değiştir
+            Test DNS Servers: DNS Sunucularını Test Et
+            DNS Status: DNS Durumu
+            Get DNS Servers: DNS Sunucularını Al
+            Enable: Etkinleştir
+            Disable: Devre Dışı Bırak
+            Status: Durum
+            Casper Tool: Casper Aracı
+            Import VPN Config: VPN Yapılandırması İçe Aktar
+            Enable Multihop: Multihop Etkinleştir
+            Disable Multihop: Multihop Devre Dışı Bırak
+            List Exits: Çıkış Noktalarını Listele
+            Remove VPN Config: VPN Yapılandırmasını Kaldır
+            Test VPN: VPN Bağlantısını Test Et
+            Reset State: Durumu Sıfırla
+            Session Log: Oturum Günlüğü
+            Factory Reset: Fabrika Sıfırlama
+            Common Operations: Yaygın İşlemler
+            Advanced Usage: Gelişmiş Kullanım
 
 
 markdown_extensions:
@@ -102,28 +122,65 @@ markdown_extensions:
 
 nav:
   - Home: index.md
-  - API: api.md
-  - Video Showcase:
-      - Test Environment: video-showcase/test-environment.md
+  - Feature Showcase:
+      - Test Environment: feature-showcase/test-environment.md
       - Modules:
           - Core:
-              - Add Client: video-showcase/modules/core/add-client.md
-              - Remove Client: video-showcase/modules/core/remove-client.md
-              - List Clients: video-showcase/modules/core/list-clients.md
-              - Export Config: video-showcase/modules/core/export-client.md
-              - Server Status: video-showcase/modules/core/server-status.md
-              - Service Logs: video-showcase/modules/core/service-logs.md
-              - Latest Clients: video-showcase/modules/core/recent-clients.md
-              - Restart Service: video-showcase/modules/core/restart-service.md
-              - Firewall Status: video-showcase/modules/core/firewall-status.md
-              - Tweak Settings: video-showcase/modules/core/tweak-settings.md
-              - Change Subnet: video-showcase/modules/core/change-subnet.md
+              - Add Client: feature-showcase/modules/core/add-client.md
+              - Remove Client: feature-showcase/modules/core/remove-client.md
+              - List Clients: feature-showcase/modules/core/list-clients.md
+              - Export Config: feature-showcase/modules/core/export-client.md
+              - Server Status: feature-showcase/modules/core/server-status.md
+              - Service Logs: feature-showcase/modules/core/service-logs.md
+              - Latest Clients: feature-showcase/modules/core/recent-clients.md
+              - Restart Service: feature-showcase/modules/core/restart-service.md
+              - Firewall Status: feature-showcase/modules/core/firewall-status.md
+              - Tweak Settings: feature-showcase/modules/core/tweak-settings.md
+              - Change Subnet: feature-showcase/modules/core/change-subnet.md
           - DNS:
-              - Complete Workflow: video-showcase/modules/dns/compact.md
+              - Complete Workflow: feature-showcase/modules/dns/compact.md
           - Ghost:
-              - Complete Workflow: video-showcase/modules/ghost/compact.md
+              - Complete Workflow: feature-showcase/modules/ghost/compact.md
           - Multihop:
-              - Complete Workflow: video-showcase/modules/multihop/compact.md
+              - Complete Workflow: feature-showcase/modules/multihop/compact.md
+  - API Documentation:
+      - Overview: api/index.md
+      - Modules:
+          - Core:
+              - Add Client: api/modules/core/add-client.md
+              - Remove Client: api/modules/core/remove-client.md
+              - List Clients: api/modules/core/list-clients.md
+              - Export Config: api/modules/core/export-client.md
+              - Server Status: api/modules/core/server-status.md
+              - Service Logs: api/modules/core/service-logs.md
+              - Latest Clients: api/modules/core/recent-clients.md
+              - Restart Service: api/modules/core/restart-service.md
+              - Firewall Status: api/modules/core/firewall-status.md
+              - Tweak Settings: api/modules/core/tweak-settings.md
+              - Change Subnet: api/modules/core/change-subnet.md
+          - DNS:
+              - Change DNS Servers: api/modules/dns/change-dns-servers.md
+              - Test DNS Servers: api/modules/dns/test-dns-servers.md
+              - DNS Status: api/modules/dns/dns-status.md
+              - Get DNS Servers: api/modules/dns/get-dns-servers.md
+          - Ghost:
+              - Enable: api/modules/ghost/enable.md
+              - Disable: api/modules/ghost/disable.md
+              - Status: api/modules/ghost/status.md
+              - Casper Tool: api/modules/ghost/casper.md
+          - Multihop:
+              - Import VPN Config: api/modules/multihop/import-vpn-config.md
+              - Enable Multihop: api/modules/multihop/enable-multihop.md
+              - Disable Multihop: api/modules/multihop/disable-multihop.md
+              - List Exits: api/modules/multihop/list-exits.md
+              - Remove VPN Config: api/modules/multihop/remove-vpn-config.md
+              - Status: api/modules/multihop/status.md
+              - Test VPN: api/modules/multihop/test-vpn.md
+              - Reset State: api/modules/multihop/reset-state.md
+              - Session Log: api/modules/multihop/get-session-log.md
+      - Factory Reset: api/factory-reset.md
+      - Common Operations: api/common-operations.md
+      - Advanced Usage: api/advanced-usage.md
 
 
 extra:

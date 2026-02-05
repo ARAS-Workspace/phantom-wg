@@ -1,0 +1,42 @@
+/* Asciinema Mode Toggle (CLI / API) */
+.asciinema-mode-toggle {
+  display: inline-flex;
+  background-color: var(--phantom-bg-tertiary, rgba(255,255,255,0.08));
+  border: 1px solid var(--phantom-border, rgba(255,255,255,0.12));
+  border-radius: 6px;
+  padding: 2px;
+  gap: 2px;
+}
+
+.asciinema-mode-toggle .mode-btn {
+  background: transparent;
+  border: none;
+  padding: 4px 14px;
+  font-family: var(--phantom-font-heading, 'Roboto'), sans-serif;
+  font-size: 0.7rem;
+  font-weight: 600;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  color: var(--phantom-text-secondary, rgba(255,255,255,0.5));
+  cursor: pointer;
+  border-radius: 4px;
+  transition: all 0.2s ease;
+  line-height: 1.4;
+}
+
+.asciinema-mode-toggle .mode-btn:hover {
+  color: var(--phantom-text-primary, rgba(255,255,255,0.87));
+}
+
+.asciinema-mode-toggle .mode-btn.active {
+  background-color: var(--phantom-accent, #4a9eff);
+  color: #fff;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.2);
+}
+
+@media (max-width: 768px) {
+  .asciinema-mode-toggle .mode-btn {
+    padding: 3px 10px;
+    font-size: 0.65rem;
+  }
+}

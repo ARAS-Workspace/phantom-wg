@@ -38,7 +38,6 @@
                 onFrame: options.onFrame || null,
                 onStart: options.onStart || null,
                 onStop: options.onStop || null,
-                onError: options.onError || null,
             };
 
             // Animation state
@@ -89,15 +88,12 @@
             this.isPlaying = true;
             this.frame = 0;
 
-            // Call start callback if provided
             if (this.options.onStart) {
                 this.options.onStart();
             }
 
-            // Run first frame immediately
             this.pulseFrame();
 
-            // Set up interval
             this.interval = setInterval(() => {
                 this.pulseFrame();
             }, this.options.animationSpeed);
@@ -113,70 +109,16 @@
             }
 
             this.isPlaying = false;
-            
-            // Reset to original
             this.element.textContent = phantomASCII;
 
-            // Call stop callback if provided
             if (this.options.onStop) {
                 this.options.onStop();
             }
         }
 
-        // Toggle animation
-        toggle() {
-            if (this.isPlaying) {
-                this.stop();
-            } else {
-                this.start();
-            }
-        }
-
-        // Set animation speed
-        setSpeed(speed) {
-            this.options.animationSpeed = speed;
-            
-            // If playing, restart with new speed
-            if (this.isPlaying) {
-                this.stop();
-                this.start();
-            }
-        }
-
-        // Set error state
-        setError(message) {
-            // Stop any running animation
-            this.stop();
-            
-            // Add error class
-            this.element.classList.add('error');
-            
-            // Hide the ASCII art when error occurs
-            this.element.style.display = 'none';
-            
-            // Call error callback if provided
-            if (this.options.onError) {
-                this.options.onError(message);
-            }
-        }
-
-        // Clear error state
-        clearError() {
-            // Remove error class
-            this.element.classList.remove('error');
-            
-            // Show the ASCII art again
-            this.element.style.display = '';
-            
-            // Reset to original ASCII
-            this.element.textContent = phantomASCII;
-        }
-
-        // Destroy instance
+        // Cleanup
         destroy() {
             this.stop();
-            this.clearError();
-            
             this.element = null;
         }
     }
