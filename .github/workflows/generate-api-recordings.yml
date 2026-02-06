@@ -39,10 +39,12 @@ jobs:
 
       - name: Generate API Recordings
         working-directory: documentation/tools/scripts/recording_automations_api
+        env:
+          TERM: xterm-256color
         run: |
           chmod +x automate.sh
           chmod +x api/*.sh
-          sudo ./automate.sh
+          sudo -E ./automate.sh
 
       - name: Upload Recordings Artifact
         uses: actions/upload-artifact@v4
