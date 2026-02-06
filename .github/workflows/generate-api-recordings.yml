@@ -90,9 +90,9 @@ jobs:
           echo "════════════════════════════════════════════════════════════"
           echo ""
 
-          # Run automate.sh inside ttyd (read-only, exit when done)
+          # Run automate.sh inside ttyd (read-only by default, exit when done)
           # phantom-api wrapper is defined in common.sh with unveil effect
-          ttyd --readonly --once -p 7681 sudo -E ./automate.sh
+          ttyd --once -p 7681 sudo -E ./automate.sh
 
       # ─────────────────────────────────────────────────────────────
       # Convert .cast to .gif
