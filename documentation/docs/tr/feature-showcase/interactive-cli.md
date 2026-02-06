@@ -9,7 +9,7 @@ extra_javascript:
     </div>
     <div class="asciinema-player-wrapper">
         <div class="asciinema-player"
-             data-cast-file="recordings/feature-showcase/interactive_cli"
+             data-cast-file="recordings/feature-showcase/cli/interactive_cli"
              data-cols="120"
              data-rows="48"
              data-autoplay="false"

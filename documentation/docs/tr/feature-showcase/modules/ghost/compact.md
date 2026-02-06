@@ -10,7 +10,7 @@ extra_javascript:
     </div>
     <div class="asciinema-player-wrapper">
         <div class="asciinema-player"
-             data-cast-file="recordings/feature-showcase/ghost_compact"
+             data-cast-file="recordings/feature-showcase/manuel/ghost_compact"
              data-cols="120"
              data-rows="48"
              data-autoplay="false"
