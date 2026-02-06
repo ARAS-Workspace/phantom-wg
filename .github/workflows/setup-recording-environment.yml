@@ -11,7 +11,7 @@ on:
 
 env:
   DO_REGION: fra1
-  DO_SIZE: s-2vcpu-4gb
+  DO_SIZE: s-2vcpu-4gb-120gb-intel
   VPC_SUBNET: "10.10.0.0/16"
   # Snapshot IDs (fixed)
   SNAPSHOT_MASTER: "216070980"
