@@ -38,16 +38,20 @@ jobs:
       - name: Install Dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y asciinema fonts-noto-color-emoji
+          sudo apt-get install -y asciinema 
           pip install -r ${{ env.RECORDER_SRC }}/requirements.txt
-
-          # Refresh font cache
-          fc-cache -fv
 
       - name: Setup Recorder Directory
         run: |
           cp -r ${{ env.RECORDER_SRC }} ${{ env.RECORDER_DIR }}
           echo "Recorder copied to ${{ env.RECORDER_DIR }}"
+
+      - name: Install Emoji Font
+        run: |
+          mkdir -p /tmp/fonts
+          wget -q -O /tmp/fonts/NotoColorEmoji.ttf \
+            https://github.com/googlefonts/noto-emoji/raw/main/fonts/NotoColorEmoji.ttf
+          echo "Noto Color Emoji font downloaded"
 
       # ─────────────────────────────────────────────────────────────
       # Pull agg Docker Image
@@ -88,11 +92,12 @@ jobs:
 
             docker run --rm \
               -v "$(pwd)/recordings:/data" \
-              -v "/usr/share/fonts:/usr/share/fonts:ro" \
+              -v "/tmp/fonts:/fonts:ro" \
               ${{ env.AGG_IMAGE }} \
               "/data/${filename}.cast" \
               "/data/${filename}.gif" \
               --font-family "Noto Color Emoji" \
+              --font-dir "/fonts" \
               --font-size 14 \
               --cols 120 \
               --rows 48
