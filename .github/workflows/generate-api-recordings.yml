@@ -67,6 +67,55 @@ jobs:
       # ─────────────────────────────────────────────────────────────
       # Generate Recordings
       # ─────────────────────────────────────────────────────────────
+      # ─────────────────────────────────────────────────────────────
+      # Start Live Stream Tunnel
+      # ─────────────────────────────────────────────────────────────
+      - name: Start Cloudflare Tunnel
+        id: tunnel
+        run: |
+          # Start cloudflare tunnel
+          cloudflared tunnel --url http://localhost:7681 > /tmp/tunnel.log 2>&1 &
+          CLOUDFLARED_PID=$!
+          echo "CLOUDFLARED_PID=$CLOUDFLARED_PID" >> $GITHUB_ENV
+
+          # Retry mechanism to get tunnel URL
+          MAX_RETRIES=10
+          RETRY_DELAY=3
+          TUNNEL_URL=""
+
+          echo "Waiting for Cloudflare tunnel URL..."
+          for i in $(seq 1 $MAX_RETRIES); do
+            TUNNEL_URL=$(grep -o 'https://[^[:space:]]*\.trycloudflare\.com' /tmp/tunnel.log | head -1)
+
+            if [ -n "$TUNNEL_URL" ]; then
+              echo "Tunnel URL obtained on attempt $i"
+              break
+            fi
+
+            echo "  Attempt $i/$MAX_RETRIES - URL not ready, waiting ${RETRY_DELAY}s..."
+            sleep $RETRY_DELAY
+          done
+
+          if [ -z "$TUNNEL_URL" ]; then
+            echo "ERROR: Failed to obtain tunnel URL after $MAX_RETRIES attempts"
+            echo "Tunnel log:"
+            cat /tmp/tunnel.log
+            exit 1
+          fi
+
+          echo "════════════════════════════════════════════════════════════"
+          echo "  LIVE TERMINAL STREAM (Read-Only)"
+          echo "════════════════════════════════════════════════════════════"
+          echo "  URL: $TUNNEL_URL"
+          echo "════════════════════════════════════════════════════════════"
+          echo ""
+
+          echo "TUNNEL_URL=$TUNNEL_URL" >> $GITHUB_ENV
+          echo "tunnel_url=$TUNNEL_URL" >> $GITHUB_OUTPUT
+
+      # ─────────────────────────────────────────────────────────────
+      # Generate Recordings
+      # ─────────────────────────────────────────────────────────────
       - name: Generate API Recordings with Live Stream
         working-directory: documentation/tools/scripts/recording_automations_api
         env:
@@ -77,22 +126,20 @@ jobs:
           chmod +x automate.sh
           chmod +x api/*.sh
 
-          # Start cloudflare tunnel
-          cloudflared tunnel --url http://localhost:7681 > /tmp/tunnel.log 2>&1 &
-          sleep 5
+          # Debug: Show configuration
+          echo "RECORD_LIMIT=$RECORD_LIMIT"
+          echo "TUNNEL_URL=$TUNNEL_URL"
 
-          # Display live stream URL
-          echo "════════════════════════════════════════════════════════════"
-          echo "  LIVE TERMINAL STREAM (Read-Only)"
-          echo "════════════════════════════════════════════════════════════"
-          TUNNEL_URL=$(grep -o 'https://[^[:space:]]*\.trycloudflare\.com' /tmp/tunnel.log | head -1)
-          echo "  URL: $TUNNEL_URL"
-          echo "════════════════════════════════════════════════════════════"
-          echo ""
+          # Start ttyd in background for live streaming
+          ttyd -p 7681 bash -c "tail -f /tmp/recording.log" &
+          TTYD_PID=$!
 
-          # Run automate.sh inside ttyd (read-only by default, exit when done)
-          # phantom-api wrapper is defined in common.sh with unveil effect
-          ttyd --once -p 7681 sudo -E ./automate.sh
+          # Run automate.sh directly (output goes to log for ttyd viewers)
+          sudo -E bash -c "export RECORD_LIMIT=$RECORD_LIMIT && ./automate.sh" 2>&1 | tee /tmp/recording.log
+
+          # Cleanup
+          kill $TTYD_PID 2>/dev/null || true
+          kill $CLOUDFLARED_PID 2>/dev/null || true
 
       # ─────────────────────────────────────────────────────────────
       # Convert .cast to .gif
