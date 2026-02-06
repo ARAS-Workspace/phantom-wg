@@ -90,6 +90,7 @@ plugins:
             Factory Reset: Fabrika Sıfırlama
             Common Operations: Yaygın İşlemler
             Advanced Usage: Gelişmiş Kullanım
+            References: Referanslar
 
 
 markdown_extensions:
@@ -143,6 +144,7 @@ nav:
               - Complete Workflow: feature-showcase/modules/ghost/compact.md
           - Multihop:
               - Complete Workflow: feature-showcase/modules/multihop/compact.md
+      - References: feature-showcase/references.md
   - API Documentation:
       - Overview: api/index.md
       - Modules:
