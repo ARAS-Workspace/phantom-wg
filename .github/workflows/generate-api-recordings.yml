@@ -132,7 +132,8 @@ jobs:
 
           # Run automate.sh inside ttyd - viewers see the actual terminal session
           # asciinema records inside each script, ttyd streams the live view
-          ttyd -p 7681 sudo -E bash -c "export RECORD_LIMIT=$RECORD_LIMIT UNVEIL_DELAY=$UNVEIL_DELAY TERM=$TERM && ./automate.sh"
+          # Wrapper ensures ttyd exits when automate.sh completes (no restart loop)
+          ttyd -p 7681 bash -c "sudo -E bash -c 'export RECORD_LIMIT=$RECORD_LIMIT UNVEIL_DELAY=$UNVEIL_DELAY TERM=$TERM && ./automate.sh'; exit 0"
 
           # Cleanup
           kill $CLOUDFLARED_PID 2>/dev/null || true
