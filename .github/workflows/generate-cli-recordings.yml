@@ -53,6 +53,11 @@ jobs:
             https://github.com/googlefonts/noto-emoji/raw/main/fonts/NotoColorEmoji.ttf
           echo "Noto Color Emoji font downloaded"
 
+      - name: Setup Shell Prompt
+        run: |
+          echo 'export PS1="root@server:~# "' >> ~/.bashrc
+          echo "Shell prompt configured"
+
       # ─────────────────────────────────────────────────────────────
       # Pull agg Docker Image
       # ─────────────────────────────────────────────────────────────
