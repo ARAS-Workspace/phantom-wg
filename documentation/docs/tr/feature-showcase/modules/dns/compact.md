@@ -6,11 +6,10 @@ extra_javascript:
 <div class="asciinema-player-container">
     <div class="asciinema-player-header">
         <h3>Phantom-WG</h3>
-        <span class="asciinema-player-info">Özellik Tanıtımı</span>
     </div>
     <div class="asciinema-player-wrapper">
         <div class="asciinema-player"
-             data-cast-file="recordings/feature-showcase/dns_compact"
+             data-cast-file="recordings/feature-showcase/api/dns_compact"
              data-cols="120"
              data-rows="48"
              data-autoplay="false"
