@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write
 
 env:
   RECORDER_SRC: documentation/tools/scripts/phantom-recorder
@@ -117,3 +117,50 @@ jobs:
             ${{ env.RECORDER_DIR }}/recordings/*.cast
             ${{ env.RECORDER_DIR }}/recordings/*.gif
           retention-days: 90
+
+      # ─────────────────────────────────────────────────────────────
+      # Commit Recordings
+      # ─────────────────────────────────────────────────────────────
+      - name: Prepare Recordings for Commit
+        working-directory: ${{ env.RECORDER_DIR }}
+        run: |
+          TARGET_BASE="$GITHUB_WORKSPACE/documentation/docs/assets/static/recordings/feature-showcase"
+
+          # ── Manual Mapping: source_pattern -> target_dir/target_name ──
+          # interactive-cli workflow -> cli/interactive_cli
+          if ls recordings/interactive-cli_*.cast 1>/dev/null 2>&1; then
+            mkdir -p "$TARGET_BASE/cli"
+            cp recordings/interactive-cli_*.cast "$TARGET_BASE/cli/interactive_cli"
+            echo "Copied: interactive-cli -> cli/interactive_cli"
+          fi
+
+          # ── Add future mappings here ──
+          # if ls recordings/another-workflow_*.cast 1>/dev/null 2>&1; then
+          #   mkdir -p "$TARGET_BASE/cli"
+          #   cp recordings/another-workflow_*.cast "$TARGET_BASE/cli/another_name"
+          #   echo "Copied: another-workflow -> cli/another_name"
+          # fi
+
+          echo ""
+          echo "Files ready for commit:"
+          find "$TARGET_BASE" -type f -newer "$GITHUB_WORKSPACE/.git" 2>/dev/null || echo "No new files"
+
+      - name: Commit and Push Recordings
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+          git add documentation/docs/assets/static/recordings/feature-showcase/
+
+          if git diff --staged --quiet; then
+            echo "No changes to commit"
+          else
+            git commit -m "Update CLI recordings"
+            git push
+            echo "Recordings committed and pushed"
+          fi
+
+      - name: Trigger Docs Deployment
+        run: gh workflow run deploy-phantom-docs.yml
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
