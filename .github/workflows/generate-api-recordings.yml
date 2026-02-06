@@ -10,7 +10,7 @@ on:
         default: 0
 
 permissions:
-  contents: read
+  contents: write
 
 env:
   RECORDINGS_DIR: documentation/tools/scripts/recording_automations_api/recordings/api
@@ -107,3 +107,37 @@ jobs:
             ${{ env.RECORDINGS_DIR }}/*.cast
             ${{ env.RECORDINGS_DIR }}/*.gif
           retention-days: 90
+
+      # ─────────────────────────────────────────────────────────────
+      # Commit Recordings
+      # ─────────────────────────────────────────────────────────────
+      - name: Prepare Recordings for Commit
+        run: |
+          TARGET_DIR="documentation/docs/assets/static/recordings/feature-showcase/api"
+          mkdir -p "$TARGET_DIR"
+
+          for cast_file in ${{ env.RECORDINGS_DIR }}/*.cast; do
+            [ -f "$cast_file" ] || continue
+            filename=$(basename "$cast_file" .cast)
+            cp "$cast_file" "$TARGET_DIR/$filename"
+            echo "Copied: $filename"
+          done
+
+          echo ""
+          echo "Files ready for commit:"
+          ls -la "$TARGET_DIR/"
+
+      - name: Commit and Push Recordings
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+          git add documentation/docs/assets/static/recordings/feature-showcase/api/
+
+          if git diff --staged --quiet; then
+            echo "No changes to commit"
+          else
+            git commit -m "Update API recordings"
+            git push
+            echo "Recordings committed and pushed"
+          fi
