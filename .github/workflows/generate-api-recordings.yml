@@ -6,11 +6,18 @@ on:
 permissions:
   contents: read
 
+env:
+  RECORDINGS_DIR: documentation/tools/scripts/recording_automations_api/recordings/api
+  AGG_IMAGE: ghcr.io/asciinema/agg:latest
+
 jobs:
   record:
     runs-on: ubuntu-latest
 
     steps:
+      # ─────────────────────────────────────────────────────────────
+      # Setup
+      # ─────────────────────────────────────────────────────────────
       - name: Checkout code
         uses: actions/checkout@v4
 
@@ -21,22 +28,20 @@ jobs:
 
       - name: Verify Phantom-WG Installation
         run: |
-          echo "Verifying Phantom-WG installation..."
-          if [ ! -d "/opt/phantom-wg" ]; then
-            echo "Error: Installation directory not found"
+          if [ ! -d "/opt/phantom-wg" ] || [ ! -f "/opt/phantom-wg/.phantom-venv/bin/python" ]; then
+            echo "Error: Phantom-WG installation failed"
             exit 1
           fi
-          if [ ! -f "/opt/phantom-wg/.phantom-venv/bin/python" ]; then
-            echo "Error: Virtual environment not found"
-            exit 1
-          fi
-          echo "Installation verified successfully"
+          echo "Phantom-WG installation verified"
 
-      - name: Install Recording Dependencies
+      - name: Install Dependencies
         run: |
           sudo apt-get update
           sudo apt-get install -y asciinema jq
 
+      # ─────────────────────────────────────────────────────────────
+      # Live Stream Tools
+      # ─────────────────────────────────────────────────────────────
       - name: Install Live Stream Tools
         run: |
           # ttyd - web terminal (read-only)
@@ -47,6 +52,15 @@ jobs:
           sudo wget -q https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64 -O /usr/local/bin/cloudflared
           sudo chmod +x /usr/local/bin/cloudflared
 
+      # ─────────────────────────────────────────────────────────────
+      # Pull agg Docker Image
+      # ─────────────────────────────────────────────────────────────
+      - name: Pull agg Docker Image
+        run: docker pull ${{ env.AGG_IMAGE }}
+
+      # ─────────────────────────────────────────────────────────────
+      # Generate Recordings
+      # ─────────────────────────────────────────────────────────────
       - name: Generate API Recordings with Live Stream
         working-directory: documentation/tools/scripts/recording_automations_api
         env:
@@ -55,11 +69,11 @@ jobs:
           chmod +x automate.sh
           chmod +x api/*.sh
 
-          # Start cloudflare tunnel first
+          # Start cloudflare tunnel
           cloudflared tunnel --url http://localhost:7681 > /tmp/tunnel.log 2>&1 &
           sleep 5
 
-          # Extract and display the public URL
+          # Display live stream URL
           echo "════════════════════════════════════════════════════════════"
           echo "  LIVE TERMINAL STREAM (Read-Only)"
           echo "════════════════════════════════════════════════════════════"
@@ -68,12 +82,46 @@ jobs:
           echo "════════════════════════════════════════════════════════════"
           echo ""
 
-          # Run automate.sh inside ttyd (read-only viewers can watch)
-          ttyd -R -p 7681 sudo -E ./automate.sh
+          # Run automate.sh inside ttyd (read-only, exit when done)
+          ttyd -R -o -p 7681 sudo -E ./automate.sh
 
+      # ─────────────────────────────────────────────────────────────
+      # Convert .cast to .gif
+      # ─────────────────────────────────────────────────────────────
+      - name: Convert Recordings to GIF
+        run: |
+          echo "Converting .cast files to .gif..."
+
+          for cast_file in ${{ env.RECORDINGS_DIR }}/*.cast; do
+            [ -f "$cast_file" ] || continue
+
+            filename=$(basename "$cast_file" .cast)
+            gif_file="${{ env.RECORDINGS_DIR }}/${filename}.gif"
+
+            echo "  Converting: $filename.cast → $filename.gif"
+
+            docker run --rm \
+              -v "$(pwd)/${{ env.RECORDINGS_DIR }}:/data" \
+              ${{ env.AGG_IMAGE }} \
+              "/data/${filename}.cast" \
+              "/data/${filename}.gif" \
+              --font-size 14 \
+              --cols 120 \
+              --rows 48
+          done
+
+          echo ""
+          echo "Conversion complete. Files:"
+          ls -la ${{ env.RECORDINGS_DIR }}/
+
+      # ─────────────────────────────────────────────────────────────
+      # Upload Artifacts
+      # ─────────────────────────────────────────────────────────────
       - name: Upload Recordings Artifact
         uses: actions/upload-artifact@v4
         with:
           name: api-recordings-${{ github.run_id }}
-          path: documentation/tools/scripts/recording_automations_api/recordings/api/
+          path: |
+            ${{ env.RECORDINGS_DIR }}/*.cast
+            ${{ env.RECORDINGS_DIR }}/*.gif
           retention-days: 90
