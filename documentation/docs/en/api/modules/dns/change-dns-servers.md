@@ -4,40 +4,51 @@ Updates the primary and/or secondary DNS servers that all clients will use.
 Changes are instantly reflected across all client configurations.
 
 ```bash
-# Change both DNS servers
 phantom-api dns change_dns_servers primary="1.1.1.1" secondary="1.0.0.1"
+```
 
-# Change only primary DNS
+```bash
 phantom-api dns change_dns_servers primary="8.8.8.8"
 ```
 
 **Parameters:**
 
-- `primary` (optional): Primary DNS server IP
-- `secondary` (optional): Secondary DNS server IP
+| Parameter   | Required | Description              |
+|-------------|----------|--------------------------|
+| `primary`   | No       | Primary DNS server IP    |
+| `secondary` | No       | Secondary DNS server IP  |
 
-**Response:**
-```json
-{
-  "success": true,
-  "data": {
-    "success": true,
-    "dns_servers": {
-      "primary": "1.1.1.1",
-      "secondary": "1.0.0.1",
-      "previous_primary": "8.8.8.8",
-      "previous_secondary": "1.1.1.1"
-    },
-    "client_configs_updated": {
+!!! note
+    At least one parameter must be provided. Omitted parameters retain their current values.
+
+**Response Model:** [`ChangeDNSResult`](https://github.com/ARAS-Workspace/phantom-wg/blob/main/phantom/modules/dns/models/dns_models.py#L54)
+
+| Field                            | Type    | Description                          |
+|----------------------------------|---------|--------------------------------------|
+| `success`                        | boolean | Operation completed                  |
+| `dns_servers.primary`            | string  | New primary DNS server               |
+| `dns_servers.secondary`          | string  | New secondary DNS server             |
+| `dns_servers.previous_primary`   | string  | Previous primary DNS server          |
+| `dns_servers.previous_secondary` | string  | Previous secondary DNS server        |
+| `client_configs_updated.success` | boolean | Client configs updated successfully  |
+| `client_configs_updated.message` | string  | Update status message                |
+
+??? example "Example Response"
+    ```json
+    {
       "success": true,
-      "message": "DNS configuration updated globally"
+      "data": {
+        "success": true,
+        "dns_servers": {
+          "primary": "1.1.1.1",
+          "secondary": "1.0.0.1",
+          "previous_primary": "8.8.8.8",
+          "previous_secondary": "1.1.1.1"
+        },
+        "client_configs_updated": {
+          "success": true,
+          "message": "DNS configuration updated globally"
+        }
+      }
     }
-  },
-  "metadata": {
-    "module": "dns",
-    "action": "change_dns_servers",
-    "timestamp": "2025-07-11T05:17:32.309051Z",
-    "version": "core-v1"
-  }
-}
-```
+    ```

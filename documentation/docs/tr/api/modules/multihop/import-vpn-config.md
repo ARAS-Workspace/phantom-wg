@@ -1,3 +1,5 @@
+## Multihop Modülü
+
 Multihop modülü, istemci trafiğini Phantom sunucusundan çıkmadan önce bir harici VPN
 sağlayıcısı üzerinden geçirerek çift katmanlı şifreleme ve konum gizleme sağlar.
 Trafik akışı şu şekilde gerçekleşir:
@@ -13,14 +15,44 @@ herhangi bir VPN sağlayıcısıyla uyumludur.
 
 ### VPN Yapılandırmasını İçe Aktar
 
-```bash
-# Otomatik isim algılama ile içe aktar
-phantom-api multihop import_vpn_config config_path="/home/user/xeovo-uk.conf"
+Çıkış noktası olarak kullanmak üzere harici bir VPN sağlayıcısından WireGuard yapılandırma dosyası içe aktarır.
 
-# Özel isim ile içe aktar
+```bash
+phantom-api multihop import_vpn_config config_path="/home/user/xeovo-uk.conf"
+```
+
+```bash
 phantom-api multihop import_vpn_config config_path="/home/user/vpn.conf" custom_name="xeovo-uk"
 ```
 
 **Parametreler:**
-- `config_path` (zorunlu): WireGuard yapılandırma dosyasının yolu
-- `custom_name` (opsiyonel): Yapılandırma için özel isim
+
+| Parametre     | Zorunlu | Açıklama                              |
+|---------------|---------|---------------------------------------|
+| `config_path` | Evet    | WireGuard yapılandırma dosyasının yolu|
+| `custom_name` | Hayır   | Yapılandırma için özel isim           |
+
+**Yanıt Modeli:** [`ImportResult`](https://github.com/ARAS-Workspace/phantom-wg/blob/main/phantom/modules/multihop/models/multihop_models.py#L58)
+
+| Alan            | Tip     | Açıklama                                 |
+|-----------------|---------|------------------------------------------|
+| `success`       | boolean | İçe aktarma tamamlandı                   |
+| `exit_name`     | string  | Yapılandırmaya atanan isim               |
+| `message`       | string  | Sonuç mesajı                             |
+| `optimizations` | array   | Uygulanan optimizasyonlar (varsa)        |
+
+??? example "Örnek Yanıt"
+    ```json
+    {
+      "success": true,
+      "data": {
+        "success": true,
+        "exit_name": "xeovo-uk",
+        "message": "VPN configuration imported successfully",
+        "optimizations": [
+          "MTU optimized for multihop",
+          "PersistentKeepalive enabled"
+        ]
+      }
+    }
+    ```

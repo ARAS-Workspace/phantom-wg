@@ -15,15 +15,44 @@ with any VPN provider that supports WireGuard.
 
 ### Import VPN Configuration
 
-```bash
-# Import with automatic name detection
-phantom-api multihop import_vpn_config config_path="/home/user/xeovo-uk.conf"
+Imports a WireGuard configuration file from an external VPN provider for use as an exit point.
 
-# Import with custom name
+```bash
+phantom-api multihop import_vpn_config config_path="/home/user/xeovo-uk.conf"
+```
+
+```bash
 phantom-api multihop import_vpn_config config_path="/home/user/vpn.conf" custom_name="xeovo-uk"
 ```
 
 **Parameters:**
 
-- `config_path` (required): Path to WireGuard configuration file
-- `custom_name` (optional): Custom name for the configuration
+| Parameter     | Required | Description                           |
+|---------------|----------|---------------------------------------|
+| `config_path` | Yes      | Path to WireGuard configuration file  |
+| `custom_name` | No       | Custom name for the configuration     |
+
+**Response Model:** [`ImportResult`](https://github.com/ARAS-Workspace/phantom-wg/blob/main/phantom/modules/multihop/models/multihop_models.py#L58)
+
+| Field           | Type    | Description                              |
+|-----------------|---------|------------------------------------------|
+| `success`       | boolean | Import completed                         |
+| `exit_name`     | string  | Name assigned to the configuration       |
+| `message`       | string  | Result message                           |
+| `optimizations` | array   | Applied optimizations (if any)           |
+
+??? example "Example Response"
+    ```json
+    {
+      "success": true,
+      "data": {
+        "success": true,
+        "exit_name": "xeovo-uk",
+        "message": "VPN configuration imported successfully",
+        "optimizations": [
+          "MTU optimized for multihop",
+          "PersistentKeepalive enabled"
+        ]
+      }
+    }
+    ```

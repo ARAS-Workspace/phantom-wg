@@ -57,6 +57,7 @@ graph TD
 ```
 
 Bu yapı sayesinde:
+
 - Her modül bağımsız geliştirilebilir ve test edilebilir
 - Yeni modüller sisteme kolayca eklenebilir
 - Tüm modüller aynı yanıt formatını kullanır

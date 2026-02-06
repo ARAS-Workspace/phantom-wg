@@ -56,6 +56,7 @@ graph TD
 ```
 
 This architecture enables:
+
 - Independent development and testing of each module
 - Easy addition of new modules to the system
 - Consistent response format across all modules

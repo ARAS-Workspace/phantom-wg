@@ -9,6 +9,7 @@ directly on the server:
 ```
 
 This script performs the following operations in sequence:
+
 - Stops all active services (Ghost Mode, Multihop, WireGuard)
 - Deletes all client configurations and key information
 - Removes all logs, state files, and session data
