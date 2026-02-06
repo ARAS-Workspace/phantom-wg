@@ -3,11 +3,11 @@ name: Generate API Recordings
 on:
   workflow_dispatch:
     inputs:
-      test_mode:
-        description: 'Test mode (only record first 3 scripts)'
+      record_limit:
+        description: 'Number of scripts to record (0 = all)'
         required: false
-        type: boolean
-        default: false
+        type: number
+        default: 0
 
 permissions:
   contents: read
@@ -46,19 +46,6 @@ jobs:
           sudo apt-get install -y asciinema jq
 
       # ─────────────────────────────────────────────────────────────
-      # Live Stream Tools
-      # ─────────────────────────────────────────────────────────────
-      - name: Install Live Stream Tools
-        run: |
-          # ttyd - web terminal (read-only)
-          sudo wget -q https://github.com/tsl0922/ttyd/releases/download/1.7.7/ttyd.x86_64 -O /usr/local/bin/ttyd
-          sudo chmod +x /usr/local/bin/ttyd
-
-          # cloudflared tunnel
-          sudo wget -q https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64 -O /usr/local/bin/cloudflared
-          sudo chmod +x /usr/local/bin/cloudflared
-
-      # ─────────────────────────────────────────────────────────────
       # Pull agg Docker Image
       # ─────────────────────────────────────────────────────────────
       - name: Pull agg Docker Image
@@ -67,76 +54,18 @@ jobs:
       # ─────────────────────────────────────────────────────────────
       # Generate Recordings
       # ─────────────────────────────────────────────────────────────
-      # ─────────────────────────────────────────────────────────────
-      # Start Live Stream Tunnel
-      # ─────────────────────────────────────────────────────────────
-      - name: Start Cloudflare Tunnel
-        id: tunnel
-        run: |
-          # Start cloudflare tunnel
-          cloudflared tunnel --url http://localhost:7681 > /tmp/tunnel.log 2>&1 &
-          CLOUDFLARED_PID=$!
-          echo "CLOUDFLARED_PID=$CLOUDFLARED_PID" >> $GITHUB_ENV
-
-          # Retry mechanism to get tunnel URL
-          MAX_RETRIES=10
-          RETRY_DELAY=3
-          TUNNEL_URL=""
-
-          echo "Waiting for Cloudflare tunnel URL..."
-          for i in $(seq 1 $MAX_RETRIES); do
-            TUNNEL_URL=$(grep -o 'https://[^[:space:]]*\.trycloudflare\.com' /tmp/tunnel.log | head -1)
-
-            if [ -n "$TUNNEL_URL" ]; then
-              echo "Tunnel URL obtained on attempt $i"
-              break
-            fi
-
-            echo "  Attempt $i/$MAX_RETRIES - URL not ready, waiting ${RETRY_DELAY}s..."
-            sleep $RETRY_DELAY
-          done
-
-          if [ -z "$TUNNEL_URL" ]; then
-            echo "ERROR: Failed to obtain tunnel URL after $MAX_RETRIES attempts"
-            echo "Tunnel log:"
-            cat /tmp/tunnel.log
-            exit 1
-          fi
-
-          echo "════════════════════════════════════════════════════════════"
-          echo "  LIVE TERMINAL STREAM (Read-Only)"
-          echo "════════════════════════════════════════════════════════════"
-          echo "  URL: $TUNNEL_URL"
-          echo "════════════════════════════════════════════════════════════"
-          echo ""
-
-          echo "TUNNEL_URL=$TUNNEL_URL" >> $GITHUB_ENV
-          echo "tunnel_url=$TUNNEL_URL" >> $GITHUB_OUTPUT
-
-      # ─────────────────────────────────────────────────────────────
-      # Generate Recordings
-      # ─────────────────────────────────────────────────────────────
-      - name: Generate API Recordings with Live Stream
+      - name: Generate API Recordings
         working-directory: documentation/tools/scripts/recording_automations_api
         env:
           TERM: xterm-256color
           UNVEIL_DELAY: "0.04"
-          RECORD_LIMIT: ${{ inputs.test_mode && '3' || '0' }}
+          RECORD_LIMIT: ${{ inputs.record_limit }}
         run: |
           chmod +x automate.sh
           chmod +x api/*.sh
 
-          # Debug: Show configuration
           echo "RECORD_LIMIT=$RECORD_LIMIT"
-          echo "TUNNEL_URL=$TUNNEL_URL"
-
-          # Run automate.sh inside ttyd - viewers see the actual terminal session
-          # asciinema records inside each script, ttyd streams the live view
-          # Wrapper ensures ttyd exits when automate.sh completes (no restart loop)
-          ttyd -p 7681 bash -c "sudo -E bash -c 'export RECORD_LIMIT=$RECORD_LIMIT UNVEIL_DELAY=$UNVEIL_DELAY TERM=$TERM && ./automate.sh'; exit 0"
-
-          # Cleanup
-          kill $CLOUDFLARED_PID 2>/dev/null || true
+          sudo -E ./automate.sh
 
       # ─────────────────────────────────────────────────────────────
       # Convert .cast to .gif
