@@ -434,10 +434,13 @@ jobs:
           ssh $SSH_OPTS root@${{ steps.ips.outputs.EXIT_PUBLIC }} "printf '%s\n' '$USER_PUB_KEY' '$MASTER_PUB_KEY' > /root/.ssh/authorized_keys && chmod 600 /root/.ssh/authorized_keys"
           echo "exit authorized_keys finalized"
 
-          # Client root: user key + master key
-          ssh $SSH_OPTS root@${{ steps.ips.outputs.CLIENT_PUBLIC }} "printf '%s\n' '$USER_PUB_KEY' '$MASTER_PUB_KEY' > /root/.ssh/authorized_keys && chmod 600 /root/.ssh/authorized_keys"
-          # Client user: user key + master key
-          ssh $SSH_OPTS root@${{ steps.ips.outputs.CLIENT_PUBLIC }} "printf '%s\n' '$USER_PUB_KEY' '$MASTER_PUB_KEY' > /home/client/.ssh/authorized_keys && chmod 600 /home/client/.ssh/authorized_keys && chown client:client /home/client/.ssh/authorized_keys"
+          # Client: both root and client user in a single SSH session
+          ssh $SSH_OPTS root@${{ steps.ips.outputs.CLIENT_PUBLIC }} "\
+            printf '%s\n' '$USER_PUB_KEY' '$MASTER_PUB_KEY' > /home/client/.ssh/authorized_keys && \
+            chmod 600 /home/client/.ssh/authorized_keys && \
+            chown client:client /home/client/.ssh/authorized_keys && \
+            printf '%s\n' '$USER_PUB_KEY' '$MASTER_PUB_KEY' > /root/.ssh/authorized_keys && \
+            chmod 600 /root/.ssh/authorized_keys"
           echo "client authorized_keys finalized"
 
           echo ""
