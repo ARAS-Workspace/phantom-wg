@@ -357,8 +357,7 @@ jobs:
           $SSH "apt-get update -qq && apt-get install -y -qq wireguard-tools curl"
 
           # Deploy environment files
-          $SSH "rm -f /etc/motd && mkdir -p /etc/motd"
-          $SCP tools/recording-utilities/recording_environment/client/etc/motd/motd root@${{ steps.ips.outputs.CLIENT_PUBLIC }}:/etc/motd/motd
+          $SCP tools/recording-utilities/recording_environment/client/etc/motd/motd root@${{ steps.ips.outputs.CLIENT_PUBLIC }}:/etc/motd
 
           # Remove dynamic motd so our static motd is displayed
           $SSH "rm -rf /etc/update-motd.d/* /run/motd.dynamic 2>/dev/null; chmod -x /etc/update-motd.d/* 2>/dev/null || true"
@@ -382,8 +381,7 @@ jobs:
           $SSH "apt-get update -qq && apt-get install -y -qq curl"
 
           # Deploy environment files
-          $SSH "rm -f /etc/motd && mkdir -p /etc/motd"
-          $SCP tools/recording-utilities/recording_environment/exit/etc/motd/motd root@${{ steps.ips.outputs.EXIT_PUBLIC }}:/etc/motd/motd
+          $SCP tools/recording-utilities/recording_environment/exit/etc/motd/motd root@${{ steps.ips.outputs.EXIT_PUBLIC }}:/etc/motd
 
           # Remove dynamic motd so our static motd is displayed
           $SSH "rm -rf /etc/update-motd.d/* /run/motd.dynamic 2>/dev/null; chmod -x /etc/update-motd.d/* 2>/dev/null || true"
