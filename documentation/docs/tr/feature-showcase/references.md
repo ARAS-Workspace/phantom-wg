@@ -63,7 +63,18 @@ documentation/docs/assets/static/recordings/feature-showcase/
 
 **Mevcut Kayıtlar:**
 
-- `interactive_cli` - Ana menü navigasyonu
+- `server_status` - Sunucu durumu görüntüleme
+- `add_client` - İstemci ekleme
+- `remove_client` - İstemci silme
+- `list_clients` - İstemci listesi
+- `export_client` - Konfigürasyon dışa aktarma
+- `latest_clients` - Son eklenen istemciler
+- `tweak_settings` - Ayar değişiklikleri
+- `change_subnet` - Subnet değişikliği
+- `get_firewall_status` - Güvenlik duvarı durumu
+- `service_logs` - Servis logları
+- `restart_service` - Servis yeniden başlatma
+- `dns_compact` - DNS yönetimi
 
 ---
 

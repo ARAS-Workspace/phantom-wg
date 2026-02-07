@@ -52,7 +52,6 @@ plugins:
             Home: Ana Sayfa
             API Documentation: API Dokümantasyonu
             Feature Showcase: Özellik Tanıtımı
-            Interactive CLI: İnteraktif CLI
             Modules: Modüller
             Core: Çekirdek (Core)
             Add Client: İstemci Ekle
@@ -125,7 +124,6 @@ markdown_extensions:
 nav:
   - Home: index.md
   - Feature Showcase:
-      - Interactive CLI: feature-showcase/interactive-cli.md
       - Modules:
           - Core:
               - Add Client: feature-showcase/modules/core/add-client.md

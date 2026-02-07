@@ -1,4 +1,15 @@
-/* Asciinema Mode Toggle (CLI / API) */
+/* Asciinema Player Header with Toggle */
+.asciinema-player-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.asciinema-player-header h3 {
+  margin: 0;
+}
+
+/* Asciinema Mode Toggle (API / CLI) */
 .asciinema-mode-toggle {
   display: inline-flex;
   background-color: var(--phantom-bg-tertiary, rgba(255,255,255,0.08));

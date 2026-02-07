@@ -63,7 +63,18 @@ Automated recording of the interactive `phantom-wg` menu. Works with YAML-based 
 
 **Available Recordings:**
 
-- `interactive_cli` - Main menu navigation
+- `server_status` - Server status display
+- `add_client` - Client addition
+- `remove_client` - Client removal
+- `list_clients` - Client list
+- `export_client` - Configuration export
+- `latest_clients` - Recently added clients
+- `tweak_settings` - Setting modifications
+- `change_subnet` - Subnet change
+- `get_firewall_status` - Firewall status
+- `service_logs` - Service logs
+- `restart_service` - Service restart
+- `dns_compact` - DNS management
 
 ---
 

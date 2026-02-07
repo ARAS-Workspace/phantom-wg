@@ -1,4 +1,5 @@
-// Mode Toggle (CLI / API) for asciinema player
+// Mode Toggle (API / CLI) for asciinema player
+// API-first: default data-cast-file is API, data-cast-file-cli is alternative
 document.addEventListener('click', function(e) {
     const btn = e.target.closest('.asciinema-mode-toggle .mode-btn');
     if (!btn || btn.classList.contains('active')) return;
@@ -11,21 +12,21 @@ document.addEventListener('click', function(e) {
     if (!player) return;
 
     const mode = btn.getAttribute('data-mode');
-    const castCli = player.getAttribute('data-cast-file-cli') || player.getAttribute('data-cast-file');
-    const castApi = player.getAttribute('data-cast-file-api');
-    if (!castApi) return;
+    const castApi = player.getAttribute('data-cast-file-api') || player.getAttribute('data-cast-file');
+    const castCli = player.getAttribute('data-cast-file-cli');
+    if (!castCli) return;
 
-    // Store original CLI path on first toggle
-    if (!player.getAttribute('data-cast-file-cli')) {
-        player.setAttribute('data-cast-file-cli', castCli);
+    // Store original API path on first toggle
+    if (!player.getAttribute('data-cast-file-api')) {
+        player.setAttribute('data-cast-file-api', castApi);
     }
 
     // Update active button
     toggle.querySelectorAll('.mode-btn').forEach(function(b) { b.classList.remove('active'); });
     btn.classList.add('active');
 
-    // Determine new cast file
-    const newCast = mode === 'api' ? castApi : castCli;
+    // Determine new cast file (API-first)
+    const newCast = mode === 'cli' ? castCli : castApi;
     player.setAttribute('data-cast-file', newCast);
 
     // Recreate the player via PhantomModules
