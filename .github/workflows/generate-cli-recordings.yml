@@ -79,6 +79,7 @@ jobs:
         run: |
           # ─── Workflow Order (logical flow) ────────────────────────
           WORKFLOWS=(
+            "server-status"
             "add-client"
             "remove-client"
             "list-clients"
@@ -159,6 +160,7 @@ jobs:
           mkdir -p "$TARGET_BASE/cli"
 
           declare -A MAPPINGS=(
+            ["server-status"]="server_status"
             ["add-client"]="add_client"
             ["remove-client"]="remove_client"
             ["list-clients"]="list_clients"
