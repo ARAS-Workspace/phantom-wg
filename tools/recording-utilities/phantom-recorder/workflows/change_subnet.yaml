@@ -1,0 +1,28 @@
+name: "Change Subnet Workflow"
+
+settings:
+  typing_speed: 0.04
+  command_delay: 1.5
+  initial_delay: 3.0
+  clear_screen: false
+  cols: 120
+  rows: 48
+
+templates:
+  # Navigation
+  - &enter_key
+    text: ""
+
+commands:
+
+  #  Start phantom-wg CLI
+  - text: "phantom-wg"
+
+  #  Change Subnet Flow
+  - text: "1"
+  - text: "8"
+  - text: "y"
+  - text: "192.168.100.0/24"
+  - text: "y"
+  - *enter_key
+  - *enter_key

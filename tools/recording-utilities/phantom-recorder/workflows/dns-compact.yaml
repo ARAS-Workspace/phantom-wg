@@ -1,0 +1,42 @@
+name: "DNS Compact Workflow"
+
+settings:
+  typing_speed: 0.04
+  command_delay: 1.5
+  initial_delay: 3.0
+  clear_screen: false
+  cols: 120
+  rows: 48
+
+templates:
+  # Navigation
+  - &enter_key
+    text: ""
+
+commands:
+
+  #  Start phantom-wg CLI 
+  - text: "phantom-wg"
+
+  #  Main Menu → DNS Management
+  - text: "2"
+
+  #  DNS Management  → Change DNS Servers
+  - text: "1"
+  - text: "9.9.9.9"
+  - text: "149.112.112.112"
+  - text: "y"
+  - *enter_key
+
+  #  DNS Management  → Test DNS
+  - text: "2"
+  - *enter_key
+  - *enter_key
+
+  #  DNS Management  → DNS Status
+  - text: "3"
+  - *enter_key
+
+  #  DNS Management  → Current Servers
+  - text: "4"
+  - *enter_key

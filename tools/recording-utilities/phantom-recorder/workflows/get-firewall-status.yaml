@@ -1,0 +1,22 @@
+name: "Get Firewall Status Workflow"
+
+settings:
+  typing_speed: 0.04
+  command_delay: 1.5
+  initial_delay: 3.0
+  clear_screen: false
+  cols: 120
+  rows: 48
+
+templates:
+  # Navigation
+  - &enter_key
+    text: ""
+
+commands:
+
+  #  Get Firewall Status flow
+  - text: "phantom-wg"
+  - text: "1"
+  - text: "6"
+  - *enter_key

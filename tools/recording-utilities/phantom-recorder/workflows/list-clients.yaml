@@ -1,0 +1,41 @@
+name: "List Clients Workflow"
+
+settings:
+  typing_speed: 0.04
+  command_delay: 1.5
+  initial_delay: 3.0
+  clear_screen: false
+  cols: 120
+  rows: 48
+
+templates:
+  # Navigation
+  - &enter_key
+    text: ""
+
+commands:
+
+  #  Start phantom-wg CLI 
+  - text: "phantom-wg"
+
+  #  List Clients Flow
+  - text: "1"
+  - text: "1"
+  - text: "1"
+  - text: "alice-laptop"
+  - *enter_key
+  - text: "1"
+  - text: "bob-phone"
+  - *enter_key
+  - text: "1"
+  - text: "charlie-tablet"
+  - *enter_key
+  - text: "1"
+  - text: "diana-desktop"
+  - *enter_key
+  - text: "1"
+  - text: "eve-server"
+  - *enter_key
+  - text: "S"
+  - text: "bob"
+  - text: "C"
