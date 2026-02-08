@@ -46,5 +46,11 @@
     "crypto": "BTC, XMR, ETH",
     "url": "https://orangewebsite.com",
     "color": "#065F46"
+  },
+  {
+    "name": "SporeStack",
+    "crypto": "BTC, XMR",
+    "url": "https://sporestack.com",
+    "color": "#0F766E"
   }
 ]
