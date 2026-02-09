@@ -91,11 +91,11 @@ Yapılandırma ve kullanım detayları için:
 
 Tam akış mimarisi:
 
-![Trafik Akışı](https://raw.githubusercontent.com/ARAS-Workspace/phantom-wg/main/assets/articles/what-is-phantom-wg/assets/traffic-flow.png)
+![Trafik Akışı](https://raw.githubusercontent.com/ARAS-Workspace/phantom-wg/main/assets/articles/what-is-phantom-wg/assets/traffic-flow-tr.png)
 
 Reza'nın trafiği Tahran'dan Türkiye'deki Phantom-WG sunucusuna, oradan hedef ortamlara ulaşıyor. Peki günlük çalışmasında bu ortamlar arasında nasıl geçiş yapıyor?
 
-![Günlük Akış](https://raw.githubusercontent.com/ARAS-Workspace/phantom-wg/main/assets/articles/what-is-phantom-wg/assets/daily-workflow.png)
+![Günlük Akış](https://raw.githubusercontent.com/ARAS-Workspace/phantom-wg/main/assets/articles/what-is-phantom-wg/assets/daily-workflow-tr.png)
 
 ---
 
