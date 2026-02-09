@@ -4,10 +4,11 @@ on:
   push:
     paths:
       - 'tools/phantom-deployment-wizard/wizard/**'
+      - 'tools/phantom-deployment-wizard/deployments/hidden-service/**'
   workflow_dispatch:
 
 jobs:
-  deploy:
+  test-secure-deployment:
     runs-on: ubuntu-latest
 
     steps:
@@ -17,7 +18,33 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: '3.11'
+          python-version: '3.12'
+
+      - name: Install test dependencies
+        working-directory: tools/phantom-deployment-wizard
+        run: |
+          pip install --require-hashes -r requirements-dev-linux.txt
+
+      - name: Run integration tests
+        working-directory: tools/phantom-deployment-wizard
+        run: |
+          pytest deployments/hidden-service/secure-deployment-user/tests/integration/ \
+            -m docker \
+            -v \
+            --tb=short
+
+  deploy:
+    needs: test-secure-deployment
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
 
       - name: Install dependencies
         run: |
