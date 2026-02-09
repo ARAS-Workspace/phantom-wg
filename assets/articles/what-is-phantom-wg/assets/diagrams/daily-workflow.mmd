@@ -1,0 +1,25 @@
+flowchart TD
+    start(["☀️ Güne Başla"]) --> connect["Temel İstemci Bağlantı Döngüsü<br/>wstunnel - WireGuard Client"]
+    connect --> choice{"Hangi çalışma ortamı?"}
+
+    choice -->|"🇺🇸 NovaBridge"| us["phantom-api multihop<br/>enable_multihop<br/>exit_name='novabridge'"]
+    choice -->|"🇨🇦 MapleSoft"| ca["phantom-api multihop<br/>enable_multihop<br/>exit_name='maplesoft'"]
+    choice -->|"🌐 Genel İnternet"| direct["phantom-api multihop<br/>disable_multihop"]
+
+    us --> work_us["NovaBridge<br/>CI/CD, Code Review, Staging"]
+    ca --> work_ca["MapleSoft<br/>CI/CD, Code Review, Staging"]
+    direct --> browse["Genel İnternet<br/>Türkiye Çıkışı"]
+
+    work_us --> switch{"Ortam Değiştir?"}
+    work_ca --> switch
+    browse --> switch
+
+    switch -->|"Evet"| choice
+    switch -->|"Hayır"| continue["Çalışmaya Devam Et"]
+
+    style start fill:#8b5cf6,stroke:#7c3aed,color:#fff
+    style choice fill:#3b82f6,stroke:#2563eb,color:#fff
+    style switch fill:#3b82f6,stroke:#2563eb,color:#fff
+    style us fill:#1e40af,stroke:#1e3a8a,color:#fff
+    style ca fill:#dc2626,stroke:#b91c1c,color:#fff
+    style direct fill:#059669,stroke:#047857,color:#fff

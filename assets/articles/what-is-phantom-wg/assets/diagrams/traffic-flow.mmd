@@ -1,0 +1,39 @@
+flowchart LR
+    subgraph iran ["🇮🇷 İran — Tahran"]
+        reza["👨‍💻 Reza<br/>WireGuard Client"]
+        wsc["wstunnel client<br/>UDP → WSS"]
+    end
+
+    subgraph turkey ["🇹🇷 Türkiye — Phantom-WG Sunucusu"]
+        wss["wstunnel server<br/>WSS :443"]
+        wg["WireGuard<br/>wg0 :51820"]
+        direction TB
+        exit_direct["🌐 Doğrudan Çıkış<br/>(Türkiye IP)"]
+        exit_us["🇺🇸 Exit: NovaBridge<br/>WireGuard Tunnel"]
+        exit_ca["🇨🇦 Exit: MapleSoft<br/>WireGuard Tunnel"]
+    end
+
+    subgraph usa ["🇺🇸 San Francisco"]
+        us_infra["NovaBridge<br/>CI/CD, Staging, VPN"]
+    end
+
+    subgraph canada ["🇨🇦 Toronto"]
+        ca_infra["MapleSoft<br/>CI/CD, Staging, VPN"]
+    end
+
+    internet["🌍 İnternet"]
+
+    reza -->|"WireGuard<br/>UDP"| wsc
+    wsc -->|"WSS :443<br/>TLS 1.3 🔒<br/>(DPI: normal HTTPS)"| wss
+    wss -->|"UDP :51820"| wg
+    wg -->|"Multihop Exit"| exit_us
+    wg -->|"Multihop Exit"| exit_ca
+    wg -->|"Doğrudan"| exit_direct
+    exit_us -->|"WireGuard Tunnel"| us_infra
+    exit_ca -->|"WireGuard Tunnel"| ca_infra
+    exit_direct --> internet
+
+    style iran fill:#2d1b2e,stroke:#8b5cf6,color:#fff
+    style turkey fill:#1a2332,stroke:#3b82f6,color:#fff
+    style usa fill:#1e293b,stroke:#ef4444,color:#fff
+    style canada fill:#1e293b,stroke:#dc2626,color:#fff
