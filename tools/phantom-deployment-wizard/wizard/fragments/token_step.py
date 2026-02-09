@@ -16,6 +16,7 @@ import time
 from .lib.api import fetch_api
 from .lib.navigation import NavigationManager
 from .lib.state_manager import WizardState
+from .lib.utils import spinner
 
 
 @st.fragment
@@ -44,7 +45,7 @@ def token_step_fragment():
             type="primary",
             key="token_validate_btn"
         ):
-            with st.spinner("Validating token..."):
+            with spinner("Validating token..."):
                 # Validate token via API
                 token_info = fetch_api(f"/token/{token_input}/info")
 

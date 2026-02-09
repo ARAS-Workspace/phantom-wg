@@ -12,7 +12,7 @@ Copyright (c) 2025 Rıza Emre ARAS <r.emrearas@proton.me>
 """
 
 import streamlit as st
-from .lib.utils import get_current_server, update_current_server, generate_ssh_keypair, validate_ssh_public_key
+from .lib.utils import get_current_server, update_current_server, generate_ssh_keypair, validate_ssh_public_key, spinner
 from .lib.navigation import NavigationManager
 
 
@@ -80,7 +80,7 @@ def ssh_step_fragment():
             st.info("Click the button below to generate a new 4096-bit RSA key pair.")
 
             if st.button(":sparkles: Generate Keys Now", use_container_width=True, key="ssh_do_generate_btn"):
-                with st.spinner("Generating SSH key pair..."):
+                with spinner("Generating SSH key pair..."):
                     private_key, public_key = generate_ssh_keypair()
 
                     # Store private key temporarily for display only (not in server state)
@@ -113,7 +113,7 @@ def ssh_step_fragment():
             # Validate and Import button
             if st.button(":white_check_mark: Validate and Import", use_container_width=True, key="ssh_validate_import_btn"):
                 if import_key.strip():
-                    with st.spinner("Validating SSH public key..."):
+                    with spinner("Validating SSH public key..."):
                         is_valid, normalized_key, error_msg = validate_ssh_public_key(import_key)
 
                         if is_valid:

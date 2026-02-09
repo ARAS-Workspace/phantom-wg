@@ -188,6 +188,7 @@ def build_app_image(client, show_output=True):
         )
 
         # Process build logs
+        # noinspection DuplicatedCode
         for log in build_logs:
             if 'stream' in log:
                 output = log['stream']
@@ -241,6 +242,7 @@ def build_tor_image(client, show_output=True):
         )
 
         # Process build logs
+        # noinspection DuplicatedCode
         for log in build_logs:
             if 'stream' in log:
                 output = log['stream']

@@ -13,9 +13,23 @@ Copyright (c) 2025 Rıza Emre ARAS <r.emrearas@proton.me>
 
 import streamlit as st
 import paramiko
+from contextlib import contextmanager, AbstractContextManager
+from typing import cast, Generator
 from io import StringIO
 import base64
 import binascii
+
+
+@contextmanager
+def spinner(text: str = "In progress...") -> Generator[None, None, None]:
+    """Typed context manager wrapper for st.spinner
+
+    st.spinner is decorated with @contextmanager which returns AbstractContextManager
+    at runtime, but streamlit annotates it as Iterator[None]. This wrapper provides
+    correct typing for all call sites.
+    """
+    with cast(AbstractContextManager[None], cast(object, st.spinner(text))):
+        yield
 
 
 def get_current_server():
@@ -90,8 +104,6 @@ def validate_ssh_public_key(key_string):
         if key_type == 'ssh-rsa':
             # Try to create an RSA key from the data - validation only
             _ = paramiko.RSAKey(data=decoded)
-        elif key_type == 'ssh-dss':
-            _ = paramiko.DSSKey(data=decoded)
         elif key_type == 'ssh-ed25519':
             _ = paramiko.Ed25519Key(data=decoded)
         elif key_type.startswith('ecdsa'):

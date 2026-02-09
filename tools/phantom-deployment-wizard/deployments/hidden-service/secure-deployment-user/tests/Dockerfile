@@ -28,7 +28,7 @@ RUN apt-get update && \
 
 # Configure systemd
 RUN cd /lib/systemd/system/sysinit.target.wants/ && \
-    ls | grep -v systemd-tmpfiles-setup | xargs rm -f $1
+    ls | grep -v systemd-tmpfiles-setup | xargs rm -f
 
 RUN rm -f /lib/systemd/system/multi-user.target.wants/* \
     /etc/systemd/system/*.wants/* \

@@ -18,6 +18,7 @@ import yaml
 from pathlib import Path
 from .lib.api import post_api, fetch_api
 from .lib.navigation import NavigationManager
+from .lib.utils import spinner
 
 
 def get_cloud_init_config():
@@ -103,7 +104,7 @@ def deployment_process_step_fragment():
         if st.button(":rocket: Deploy Server", use_container_width=True, type="primary", key="deploy_server_btn"):
             st.session_state.deployment_initiated = True
 
-            with st.spinner("Deploying server... This may take a moment."):
+            with spinner("Deploying server... This may take a moment."):
                 deployment_responses = []
 
                 for idx, server in enumerate(st.session_state.servers):
