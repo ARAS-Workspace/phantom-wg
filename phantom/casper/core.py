@@ -83,6 +83,7 @@ class CasperService:
         # Setup configuration paths
         self.config_dir = Path("/opt/phantom-wg/config")
         self.ghost_state_file = self.config_dir / "ghost-state.json"
+        self.phantom_config_file = self.config_dir / "phantom.json"
 
         # Initialize API
         self.phantom_api = None
@@ -183,22 +184,35 @@ class CasperService:
         """Get Ghost Mode connection information.
 
         Reads the ghost-state.json file and extracts connection details
-        including domain, server IP, and secret.
+        including domain, server IP, and secret. Also reads phantom.json
+        for server IPv6 address if available.
 
         Returns:
-            dict: Connection info with 'domain', 'server_ip', and 'secret' keys,
-                 or None if unable to read the state file
+            dict: Connection info with 'domain', 'server_ip', 'server_ipv6',
+                 and 'secret' keys, or None if unable to read the state file
         """
         try:
             # Read state file
             with open(self.ghost_state_file, 'r') as f:
                 state = json.load(f)
-                # Return required fields
-                return {
-                    "domain": state.get("domain"),
-                    "server_ip": state.get("server_ip"),
-                    "secret": state.get("secret")
-                }
+
+            info = {
+                "domain": state.get("domain"),
+                "server_ip": state.get("server_ip"),
+                "server_ipv6": None,
+                "secret": state.get("secret")
+            }
+
+            # Read server IPv6 from phantom.json if available
+            if self.phantom_config_file.exists():
+                try:
+                    with open(self.phantom_config_file, 'r') as f:
+                        phantom_config = json.load(f)
+                    info["server_ipv6"] = phantom_config.get("server", {}).get("ipv6")
+                except (json.JSONDecodeError, KeyError):
+                    pass
+
+            return info
         except FileNotFoundError:
             return None
         except (json.JSONDecodeError, KeyError):
@@ -267,6 +281,8 @@ class CasperService:
 
         Modifies the standard WireGuard configuration for use with Ghost Mode
         by updating the endpoint to localhost and adjusting AllowedIPs.
+        When server has IPv6, adds IPv6 leak protection (fd00::2/128 address
+        and IPv6 AllowedIPs excluding server IPv6).
 
         Args:
             client_data: Dictionary containing client configuration data
@@ -277,6 +293,7 @@ class CasperService:
         """
         # Extract config
         client_config = client_data.get("config", "")
+        server_ipv6 = ghost_info.get("server_ipv6")
 
         # Replace endpoint with localhost
         modified_config = client_config.replace(
@@ -284,14 +301,24 @@ class CasperService:
             "Endpoint = 127.0.0.1:51820"
         )
 
+        # Add IPv6 dummy address for routing when server has IPv6
+        if server_ipv6:
+            modified_config = re.sub(
+                r'(Address\s*=\s*[^\n]+)',
+                r'\1, fd00::2/128',
+                modified_config
+            )
+
         # Update AllowedIPs
         allowed_ips_match = re.search(r'AllowedIPs\s*=\s*([^\n]+)', modified_config)
         if allowed_ips_match and ghost_info.get('server_ip'):
             # Get original IPs
             original_allowed_ips = allowed_ips_match.group(1).strip()
 
-            # Calculate new IPs
-            new_allowed_ips = self._calculate_allowed_ips(original_allowed_ips, ghost_info.get('server_ip'))
+            # Calculate new IPs (IPv4 split + IPv6 split if available)
+            new_allowed_ips = self._calculate_allowed_ips(
+                original_allowed_ips, ghost_info.get('server_ip'), server_ipv6
+            )
 
             # Update config
             modified_config = re.sub(
@@ -303,18 +330,21 @@ class CasperService:
         return modified_config
 
     # noinspection PyMethodMayBeStatic
-    def _calculate_allowed_ips(self, original_ips, server_ip):
-        """Calculate AllowedIPs excluding server IP.
+    def _calculate_allowed_ips(self, original_ips, server_ip, server_ipv6=None):
+        """Calculate AllowedIPs excluding server IP addresses.
 
         Uses a binary tree splitting algorithm to exclude the server's IP
         address from the default route (0.0.0.0/0) to prevent routing loops.
+        When server_ipv6 is provided, also splits ::/0 to exclude the server's
+        IPv6 address, preventing IPv6 leaks.
 
         Args:
             original_ips: Comma-separated string of original AllowedIPs
-            server_ip: The server's IP address to exclude
+            server_ip: The server's IPv4 address to exclude
+            server_ipv6: The server's IPv6 address to exclude (optional)
 
         Returns:
-            list: List of CIDR blocks that exclude the server IP
+            list: List of CIDR blocks that exclude the server IPs
         """
         # Parse IPs
         ips_list = [ip.strip() for ip in original_ips.split(',')]
@@ -330,10 +360,10 @@ class CasperService:
         server_ip_obj = ipaddress.IPv4Address(server_ip)
         server_int = int(server_ip_obj)
 
-        def split_cidr(network, exclude_ip):
+        def split_cidr(network, exclude_ip, max_prefix):
             """
             Recursively split a CIDR block to exclude a specific IP.
-            
+
             Uses binary tree splitting: divides the network in half,
             determines which half contains the excluded IP, and recurses.
             """
@@ -342,7 +372,7 @@ class CasperService:
                 return [str(network)]
 
             # Exclude single IP
-            if network.prefixlen >= 32:
+            if network.prefixlen >= max_prefix:
                 return []
 
             # Split network
@@ -351,13 +381,20 @@ class CasperService:
 
             # Process halves
             for subnet in networks:
-                result.extend(split_cidr(subnet, exclude_ip))
+                result.extend(split_cidr(subnet, exclude_ip, max_prefix))
 
             return result
 
-        # Start with full IPv4 space
+        # IPv4: Split 0.0.0.0/0 excluding server IPv4
         all_ipv4 = ipaddress.IPv4Network("0.0.0.0/0")
-        allowed_cidrs = split_cidr(all_ipv4, server_int)
+        allowed_cidrs = split_cidr(all_ipv4, server_int, 32)
+
+        # IPv6: Split ::/0 excluding server IPv6 (prevents IPv6 leak)
+        if server_ipv6:
+            server_ipv6_obj = ipaddress.IPv6Address(server_ipv6)
+            server_ipv6_int = int(server_ipv6_obj)
+            all_ipv6 = ipaddress.IPv6Network("::/0")
+            allowed_cidrs.extend(split_cidr(all_ipv6, server_ipv6_int, 128))
 
         # Add non-default routes
         for ip in ips_list:
