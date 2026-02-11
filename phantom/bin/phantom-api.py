@@ -114,6 +114,9 @@ def print_help():
         
             # Export client configuration
             phantom-api core export_client client_name="alice-laptop"
+
+            # Export client configuration with IPv6 endpoint
+            phantom-api core export_client client_name="alice-laptop" use_ipv6=true
         
             # Check server status
             phantom-api core server_status

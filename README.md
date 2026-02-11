@@ -30,7 +30,7 @@ censorship-resistant connections, multi-layer encryption, and advanced privacy s
 ### Requirements
 
 **Server:**
-- A server with internet access, a public IPv4 address, and a supported operating system
+- A server with internet access, a public IPv4 address (required), and a supported operating system. IPv6 is optional and supported for dual-stack connectivity.
 - Root access
 
 **Operating System:**
