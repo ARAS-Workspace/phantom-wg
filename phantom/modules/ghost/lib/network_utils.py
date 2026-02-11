@@ -79,10 +79,11 @@ def get_connection_command(state: Dict[str, Any]) -> str:
     """
     domain = state.get("domain", "<DOMAIN>")
     secret = state.get("secret")
+    wg_port = state.get("wg_port", 51820)
 
     return (
         f"wstunnel client --http-upgrade-path-prefix \"{secret}\" "
-        f"-L udp://127.0.0.1:51820:127.0.0.1:51820 "
+        f"-L udp://127.0.0.1:{wg_port}:127.0.0.1:{wg_port} "
         f"wss://{domain}:443"
     )
 

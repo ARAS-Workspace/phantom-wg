@@ -35,12 +35,13 @@ from typing import Dict, Any, Callable
 SECRET_LENGTH = 64
 
 
-def init_state(server_ip: str, domain: str = None) -> Dict[str, Any]:
+def init_state(server_ip: str, domain: str = None, wg_port: int = 51820) -> Dict[str, Any]:
     """Initialize Ghost Mode state with default values.
 
     Args:
         server_ip: Server's public IP address
         domain: Domain name for Ghost Mode (optional)
+        wg_port: WireGuard listening port (default: 51820)
 
     Returns:
         Initial state dictionary
@@ -52,6 +53,7 @@ def init_state(server_ip: str, domain: str = None) -> Dict[str, Any]:
         "server_ip": server_ip,
         "domain": domain,
         "secret": secret,
+        "wg_port": wg_port,
         "installed_at": datetime.now().isoformat(),
         "changes": {
             "files_created": [],

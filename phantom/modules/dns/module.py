@@ -99,7 +99,7 @@ from .models import (
 )
 
 # Module constants
-DEFAULT_DNS_PRIMARY = "8.8.8.8"
+DEFAULT_DNS_PRIMARY = "9.9.9.9"
 DEFAULT_DNS_SECONDARY = "1.1.1.1"
 DNS_TEST_DOMAINS = ["google.com", "cloudflare.com"]
 DNS_TEST_TIMEOUT = 5
@@ -135,8 +135,8 @@ class DnsModule(BaseModule):
         """Initialize DnsModule object and load DNS configuration.
 
         Inherits from BaseModule and loads DNS-specific configuration
-        from phantom.json file. Default values are set to Google DNS
-        (8.8.8.8) and Cloudflare DNS (1.1.1.1).
+        from phantom.json file. Default values are set to Quad9 DNS
+        (9.9.9.9) and Cloudflare DNS (1.1.1.1).
 
         Args:
             install_dir: Installation directory path (default: /opt/phantom-wg)
