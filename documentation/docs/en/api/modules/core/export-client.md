@@ -4,6 +4,9 @@ Exports a client's WireGuard configuration file.
 
 ```bash
 phantom-api core export_client client_name="john-laptop"
+
+# Export with IPv6 endpoint
+phantom-api core export_client client_name="john-laptop" use_ipv6=true
 ```
 
 **Parameters:**
@@ -11,6 +14,7 @@ phantom-api core export_client client_name="john-laptop"
 | Parameter     | Required | Description              |
 |---------------|----------|--------------------------|
 | `client_name` | Yes      | Client name to export    |
+| `use_ipv6`    | No       | Use IPv6 endpoint (`true`/`false`, default: `false`) |
 
 **Response Model:** [`ClientExportResult`](https://github.com/ARAS-Workspace/phantom-wg/blob/main/phantom/modules/core/models/client_models.py#L147)
 

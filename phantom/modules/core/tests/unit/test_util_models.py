@@ -84,7 +84,7 @@ class TestSuccessResponse:
                 "total": 2,
                 "active": 1,
                 "settings": {
-                    "dns": ["8.8.8.8", "8.8.4.4"],
+                    "dns": ["9.9.9.9", "1.1.1.1"],
                     "network": "10.0.0.0/24"
                 }
             },
@@ -96,7 +96,7 @@ class TestSuccessResponse:
             message="Data retrieved"
         )
         assert response.data["clients"][0]["name"] == "client1"
-        assert response.data["metadata"]["settings"]["dns"][0] == "8.8.8.8"
+        assert response.data["metadata"]["settings"]["dns"][0] == "9.9.9.9"
 
     def test_success_false(self):
         response = SuccessResponse(

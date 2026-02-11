@@ -30,7 +30,7 @@ modüler bir araçtır. Temel VPN yönetiminin ötesinde; sansüre dayanıklı b
 ### Gereksinimler
 
 **Sunucu:**
-- İnternet erişimi ve genel (public) IPv4 adresine sahip, desteklenen işletim sistemlerinden birine sahip sunucu
+- İnternet erişimi ve genel (public) IPv4 adresine sahip (zorunlu), desteklenen işletim sistemlerinden birine sahip sunucu. IPv6 opsiyoneldir ve dual-stack bağlantı için desteklenir.
 - Root erişimi
 
 **İşletim Sistemi:**

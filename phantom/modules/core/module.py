@@ -301,7 +301,7 @@ class CoreModule(BaseModule):
         result: ClientListResult = self.manage_clients.list_all_clients(page=page, per_page=per_page, search=search)
         return result.to_dict()
 
-    def export_client(self, client_name: str) -> Dict[str, Any]:
+    def export_client(self, client_name: str, use_ipv6: bool = False) -> Dict[str, Any]:
         """Export client configuration.
 
         Returns WireGuard configuration text for the client.
@@ -309,14 +309,20 @@ class CoreModule(BaseModule):
         Returns ClientExportResult through ClientHandler and converts
         to dict via to_dict().
 
+        Endpoint resolution (3-tier priority):
+            1. server.endpoint (user-defined override: domain or custom IP)
+            2. use_ipv6=True → server.ipv6 (explicit IPv6 request)
+            3. server.ip (default IPv4 behavior)
+
         Args:
             client_name: Name of the client to export
+            use_ipv6: If True, use IPv6 endpoint when available
 
         Returns:
             Dict containing client configuration and export details
         """
         # ClientHandler generates dynamic configs from database + phantom.json
-        result: ClientExportResult = self.manage_clients.export_client_configuration(client_name)
+        result: ClientExportResult = self.manage_clients.export_client_configuration(client_name, use_ipv6=use_ipv6)
         return result.to_dict()
 
     def server_status(self) -> Dict[str, Any]:

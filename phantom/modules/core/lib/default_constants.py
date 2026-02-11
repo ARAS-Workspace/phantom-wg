@@ -79,9 +79,9 @@ DEFAULT_SSH_PORT = "22"
 # DNS DEFAULTS
 # =============================================================================
 
-DEFAULT_DNS_PRIMARY = "8.8.8.8"
+DEFAULT_DNS_PRIMARY = "9.9.9.9"
 DEFAULT_DNS_SECONDARY = "1.1.1.1"
-DEFAULT_DNS_FALLBACK = "8.8.4.4"
+DEFAULT_DNS_FALLBACK = "149.112.112.112"
 
 # =============================================================================
 # OPERATIONAL DEFAULTS

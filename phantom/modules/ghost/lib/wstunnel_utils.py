@@ -31,8 +31,8 @@ from typing import Callable, Dict, Any
 from textwrap import dedent
 
 # Module constants
-WSTUNNEL_VERSION = "v10.4.3"
-WSTUNNEL_VERSION_NUM = "10.4.3"
+WSTUNNEL_VERSION = "v10.5.2"
+WSTUNNEL_VERSION_NUM = "10.5.2"
 
 
 # noinspection PyUnusedLocal
@@ -119,6 +119,7 @@ def configure_wstunnel(state: Dict[str, Any], run_command_func: Callable) -> boo
     """
     secret = state.get("secret")
     domain = state.get("domain")
+    wg_port = state.get("wg_port", 51820)
     cert_path = f"/etc/letsencrypt/live/{domain}/fullchain.pem"
     key_path = f"/etc/letsencrypt/live/{domain}/privkey.pem"
 
@@ -126,10 +127,10 @@ def configure_wstunnel(state: Dict[str, Any], run_command_func: Callable) -> boo
     exec_cmd = (
         f"/opt/wstunnel/wstunnel server "
         f"--restrict-http-upgrade-path-prefix \"{secret}\" "
-        f"--restrict-to 127.0.0.1:51820 "
+        f"--restrict-to 127.0.0.1:{wg_port} "
         f"--tls-certificate \"{cert_path}\" "
         f"--tls-private-key \"{key_path}\" "
-        f"wss://0.0.0.0:443"
+        f"wss://[::]:443"
     )
 
     service_content = dedent(f"""

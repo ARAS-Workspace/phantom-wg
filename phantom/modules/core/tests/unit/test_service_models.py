@@ -123,14 +123,14 @@ class TestServerConfig:
             config_file="/etc/wireguard/wg0.conf",
             port=51820,
             network="10.0.0.0/24",
-            dns=["8.8.8.8", "8.8.4.4"],
+            dns=["9.9.9.9", "1.1.1.1"],
             config_exists=True
         )
         assert config.interface == "wg0"
         assert config.config_file == "/etc/wireguard/wg0.conf"
         assert config.port == 51820
         assert config.network == "10.0.0.0/24"
-        assert config.dns == ["8.8.8.8", "8.8.4.4"]
+        assert config.dns == ["9.9.9.9", "1.1.1.1"]
         assert config.config_exists is True
 
     def test_to_dict(self):
@@ -157,7 +157,7 @@ class TestServerConfig:
             config_file="/etc/wireguard/wg0.conf",
             port=51820,
             network="10.0.0.0/24",
-            dns=["8.8.8.8", "8.8.4.4", "1.1.1.1", "1.0.0.1"],
+            dns=["9.9.9.9", "149.112.112.112", "1.1.1.1", "1.0.0.1"],
             config_exists=True
         )
         assert len(config.dns) == 4
@@ -509,7 +509,7 @@ class TestServiceHealth:
             config_file="/etc/wireguard/wg0.conf",
             port=51820,
             network="10.0.0.0/24",
-            dns=["8.8.8.8"],
+            dns=["9.9.9.9"],
             config_exists=True
         )
 

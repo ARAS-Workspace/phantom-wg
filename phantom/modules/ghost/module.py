@@ -252,15 +252,27 @@ class GhostModule(BaseModule):
         # Get server IP
         server_ip = dns_utils.get_server_ip(self._run_command, self.logger)
 
-        # Validate domain A record
+        # Validate domain A record (mandatory)
         if not dns_utils.validate_domain_a_record(domain, server_ip, self._run_command, self.logger):
             raise ValidationError(
                 f"Domain {domain} does not have an A record pointing to {server_ip}. "
                 f"Please create an A record for {domain} pointing to {server_ip} and try again."
             )
 
-        # Initialize state with domain
-        self.state = state_manager.init_state(server_ip, domain)
+        # Validate domain AAAA record (optional — warning only)
+        server_ipv6 = self.config.get("server", {}).get("ipv6")
+        if server_ipv6:
+            if dns_utils.validate_domain_aaaa_record(domain, server_ipv6, self._run_command, self.logger):
+                self.logger.info(f"IPv6 dual-stack enabled for Ghost Mode ({server_ipv6})")
+            else:
+                self.logger.warning(
+                    f"Domain {domain} AAAA record not pointing to {server_ipv6}. "
+                    f"Ghost Mode will work via IPv4 only."
+                )
+
+        # Initialize state with domain and WireGuard port from config
+        wg_port = self.config.get("wireguard", {}).get("port", 51820)
+        self.state = state_manager.init_state(server_ip, domain, wg_port)
         state_manager.save_state(self.state_file, self.state, self._write_json_file)
 
         try:
@@ -278,7 +290,7 @@ class GhostModule(BaseModule):
 
             # Configure firewall rules
             self.logger.info("Configuring firewall rules...")
-            firewall_utils.configure_firewall(self.state, self._run_command, self.logger)
+            firewall_utils.configure_firewall(self.state, self._run_command, self.logger, server_ipv6)
 
             # Start services
             self.logger.info("Starting services...")

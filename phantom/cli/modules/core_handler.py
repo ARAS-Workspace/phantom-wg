@@ -748,7 +748,7 @@ class CoreUIHandler(BaseUIHandler):
                     conn_details = client.get("connection", {})
                     endpoint = conn_details.get("endpoint", "N/A")
                     if endpoint != "N/A":
-                        connection = endpoint.split(":")[0]  # Just IP
+                        connection = endpoint.rsplit(":", 1)[0]  # Just IP (IPv4 or [IPv6])
                     else:
                         connection = "Connected"
                 else:

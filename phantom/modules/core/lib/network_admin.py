@@ -274,8 +274,8 @@ class NetworkAdmin:
             "clients": clients_detail
         }
 
-        # Determine server IP address (typically first usable IP)
-        server_ip = wg_config.get("server_ip", str(network.network_address + 1))
+        # Determine server IP address (first usable IP in network)
+        server_ip = str(network.network_address + 1)
 
         # Network change allowed only when no blockers present
         can_change = not (ghost_mode or multihop or active_count > 0)

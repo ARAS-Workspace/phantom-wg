@@ -129,19 +129,7 @@ if [[ -z "$DEFAULT_INTERFACE" ]]; then
     DEFAULT_INTERFACE="eth0"
 fi
 
-# 11. Create FRESH WireGuard config
-cat > /etc/wireguard/$WG_INTERFACE.conf << EOF
-[Interface]
-PrivateKey = $private_key
-Address = $SERVER_ADDRESS
-ListenPort = $WG_PORT
-SaveConfig = false
-PostUp = iptables -A FORWARD -i $WG_INTERFACE -j ACCEPT; iptables -t nat -A POSTROUTING -o $DEFAULT_INTERFACE -j MASQUERADE
-PostDown = iptables -D FORWARD -i $WG_INTERFACE -j ACCEPT; iptables -t nat -D POSTROUTING -o $DEFAULT_INTERFACE -j MASQUERADE
-EOF
-
-# 12. Create FRESH phantom.json
-# Get server IP using multiple services for reliability
+# 11. Get server IP using multiple services for reliability
 IP_CHECK_SERVICES=(
     "https://install.phantom.tc/ip"
     "https://ipinfo.io/ip"
@@ -153,17 +141,54 @@ SERVER_IP=""
 for service in "${IP_CHECK_SERVICES[@]}"; do
     SERVER_IP=$(curl --ipv4 -s --connect-timeout 5 "$service" 2>/dev/null | tr -d '\n\r ')
     if [[ $SERVER_IP =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
-        log "Server IP detected: $SERVER_IP (via $service)" "$GREEN"
+        echo "Server IP detected: $SERVER_IP (via $service)"
         break
     fi
 done
 
 # Check if we got a valid IP
 if [[ ! $SERVER_IP =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
-    log "ERROR: Failed to detect server IP address" "$RED"
+    echo "ERROR: Failed to detect server IP address"
     exit 1
 fi
 
+# 12. IPv6 detection (optional)
+SERVER_IPV6=""
+for service in "${IP_CHECK_SERVICES[@]}"; do
+    SERVER_IPV6=$(curl --ipv6 -s --connect-timeout 5 "$service" 2>/dev/null | tr -d '\n\r ' || echo "")
+    if [[ -n "$SERVER_IPV6" ]] && [[ "$SERVER_IPV6" =~ : ]]; then
+        echo "Server IPv6 detected: $SERVER_IPV6 (via $service)"
+        break
+    else
+        SERVER_IPV6=""
+    fi
+done
+
+if [[ -z "$SERVER_IPV6" ]]; then
+    echo "No IPv6 address detected (IPv4-only mode)"
+fi
+
+# 13. Build PostUp/PostDown rules
+POSTUP="iptables -A FORWARD -i $WG_INTERFACE -j ACCEPT; iptables -t nat -A POSTROUTING -o $DEFAULT_INTERFACE -j MASQUERADE"
+POSTDOWN="iptables -D FORWARD -i $WG_INTERFACE -j ACCEPT; iptables -t nat -D POSTROUTING -o $DEFAULT_INTERFACE -j MASQUERADE"
+
+if [[ -n "$SERVER_IPV6" ]]; then
+    POSTUP="$POSTUP; ip6tables -A FORWARD -i $WG_INTERFACE -j ACCEPT; ip6tables -t nat -A POSTROUTING -o $DEFAULT_INTERFACE -j MASQUERADE"
+    POSTDOWN="$POSTDOWN; ip6tables -D FORWARD -i $WG_INTERFACE -j ACCEPT; ip6tables -t nat -D POSTROUTING -o $DEFAULT_INTERFACE -j MASQUERADE"
+fi
+
+# Create FRESH WireGuard config
+cat > /etc/wireguard/$WG_INTERFACE.conf << EOF
+[Interface]
+PrivateKey = $private_key
+Address = $SERVER_ADDRESS
+ListenPort = $WG_PORT
+SaveConfig = false
+PostUp = $POSTUP
+PostDown = $POSTDOWN
+EOF
+
+# 14. Create FRESH phantom.json
 cat > /opt/phantom-wg/config/phantom.json << EOF
 {
   "version": "core-v1",
@@ -181,13 +206,20 @@ cat > /opt/phantom-wg/config/phantom.json << EOF
     "restart_service_after_client_creation": false
   },
   "dns": {
-    "primary": "8.8.8.8",
-    "secondary": "8.8.4.4"
+    "primary": "9.9.9.9",
+    "secondary": "1.1.1.1"
   }
 }
 EOF
 
-# 13. Reset firewall (keeping SSH port)
+# Add IPv6 to phantom.json if detected
+if [[ -n "$SERVER_IPV6" ]]; then
+    tmp_json=$(jq --arg ipv6 "$SERVER_IPV6" '.server.ipv6 = $ipv6' /opt/phantom-wg/config/phantom.json)
+    echo "$tmp_json" > /opt/phantom-wg/config/phantom.json
+    echo "IPv6 address added to phantom.json"
+fi
+
+# 15. Reset firewall (keeping SSH port)
 echo "Resetting firewall (keeping SSH port $SSH_PORT)..."
 ufw --force reset
 ufw --force enable
@@ -196,12 +228,12 @@ ufw allow $WG_PORT/udp
 ufw allow from $WG_NETWORK to any port 53 comment 'DNS for WireGuard'
 ufw reload
 
-# 14. Start fresh WireGuard
+# 16. Start fresh WireGuard
 echo "Starting fresh WireGuard..."
 systemctl enable wg-quick@$WG_INTERFACE
 systemctl start wg-quick@$WG_INTERFACE
 
-# 15. Set permissions
+# 17. Set permissions
 chown -R root:root /opt/phantom-wg
 chmod 755 /opt/phantom-wg
 chmod 700 /opt/phantom-wg/data

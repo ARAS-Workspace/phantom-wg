@@ -372,7 +372,7 @@ class ClientHandler:
         # Return result
         return result
 
-    def export_client_configuration(self, client_name: str) -> ClientExportResult:
+    def export_client_configuration(self, client_name: str, use_ipv6: bool = False) -> ClientExportResult:
         if not client_name:
             raise InvalidClientNameError("Client name is required")
 
@@ -383,7 +383,7 @@ class ClientHandler:
 
         try:
             # Generate client configuration (convert to dict for compatibility)
-            config_content = self.config_service.generate_client_config(client.to_dict())
+            config_content = self.config_service.generate_client_config(client.to_dict(), use_ipv6=use_ipv6)
 
             result = ClientExportResult(
                 client=client,

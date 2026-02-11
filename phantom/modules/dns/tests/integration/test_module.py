@@ -310,7 +310,7 @@ class TestModule:
         dns_module = DnsModule(install_dir=test_environment["tmp_path"])
 
         result = dns_module.get_dns_servers()
-        assert result["primary"] == "8.8.8.8"
+        assert result["primary"] == "9.9.9.9"
         assert result["secondary"] == "1.1.1.1"
 
     @pytest.mark.dependency(depends=["TestModule::test_dns_config_defaults"])

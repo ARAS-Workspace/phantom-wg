@@ -4,6 +4,9 @@ Bir istemcinin WireGuard yapılandırma dosyasını dışa aktarır.
 
 ```bash
 phantom-api core export_client client_name="john-laptop"
+
+# IPv6 endpoint ile dışa aktar
+phantom-api core export_client client_name="john-laptop" use_ipv6=true
 ```
 
 **Parametreler:**
@@ -11,6 +14,7 @@ phantom-api core export_client client_name="john-laptop"
 | Parametre     | Zorunlu | Açıklama                     |
 |---------------|---------|------------------------------|
 | `client_name` | Evet    | Dışa aktarılacak istemci adı |
+| `use_ipv6`    | Hayır   | IPv6 endpoint kullan (`true`/`false`, varsayılan: `false`) |
 
 **Yanıt Modeli:** [`ClientExportResult`](https://github.com/ARAS-Workspace/phantom-wg/blob/main/phantom/modules/core/models/client_models.py#L147)
 

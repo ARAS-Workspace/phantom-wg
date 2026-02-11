@@ -29,17 +29,20 @@ from typing import Callable, Dict, Any
 
 
 # noinspection PyUnusedLocal
-def configure_firewall(state: Dict[str, Any], run_command_func: Callable, logger) -> bool:
+def configure_firewall(state: Dict[str, Any], run_command_func: Callable, logger,
+                       server_ipv6: str = None) -> bool:
     """Configure firewall rules for Ghost Mode operation.
 
     Args:
         state: State dictionary to track changes
         run_command_func: Function to execute system commands
         logger: Logger instance for output
+        server_ipv6: Server IPv6 address (if available, adds ip6tables rules)
 
     Returns:
         True on successful configuration
     """
+    wg_port = str(state.get("wg_port", 51820))
     ufw_status = run_command_func(["ufw", "status"])
 
     if "Status: active" in ufw_status.get("stdout", ""):
@@ -48,9 +51,9 @@ def configure_firewall(state: Dict[str, Any], run_command_func: Callable, logger
         ]
 
         # Restrict WireGuard to localhost for security
-        run_command_func(["ufw", "delete", "allow", "51820/udp"])
+        run_command_func(["ufw", "delete", "allow", f"{wg_port}/udp"])
         wireguard_restrict = ["ufw", "allow", "from", "127.0.0.1", "to", "any",
-                              "port", "51820", "proto", "udp"]
+                              "port", wg_port, "proto", "udp"]
         result = run_command_func(wireguard_restrict)
         if result["success"]:
             state["changes"]["wireguard_restricted"] = True
@@ -67,8 +70,8 @@ def configure_firewall(state: Dict[str, Any], run_command_func: Callable, logger
 
     # Localhost-only WireGuard access
     iptables_restrict = [
-        ["iptables", "-A", "INPUT", "-p", "udp", "--dport", "51820", "-s", "127.0.0.1", "-j", "ACCEPT"],
-        ["iptables", "-A", "INPUT", "-p", "udp", "--dport", "51820", "-j", "DROP"]
+        ["iptables", "-A", "INPUT", "-p", "udp", "--dport", wg_port, "-s", "127.0.0.1", "-j", "ACCEPT"],
+        ["iptables", "-A", "INPUT", "-p", "udp", "--dport", wg_port, "-j", "DROP"]
     ]
 
     for rule in iptables_rules:
@@ -76,6 +79,19 @@ def configure_firewall(state: Dict[str, Any], run_command_func: Callable, logger
 
     for rule in iptables_restrict:
         run_command_func(rule)
+
+    # Add ip6tables rules when server has IPv6
+    if server_ipv6:
+        ip6tables_rules = [
+            ["ip6tables", "-A", "INPUT", "-p", "tcp", "--dport", "443", "-j", "ACCEPT"],
+            ["ip6tables", "-A", "INPUT", "-p", "udp", "--dport", wg_port, "-s", "::1", "-j", "ACCEPT"],
+            ["ip6tables", "-A", "INPUT", "-p", "udp", "--dport", wg_port, "-j", "DROP"]
+        ]
+
+        for rule in ip6tables_rules:
+            run_command_func(rule)
+
+        state["changes"]["ipv6_firewall_configured"] = True
 
     return True
 
@@ -90,6 +106,8 @@ def remove_firewall_rules(state: Dict[str, Any], run_command_func: Callable, log
     """
     if not state.get("changes", {}).get("firewall_modified", False):
         return
+
+    wg_port = str(state.get("wg_port", 51820))
     ufw_status = run_command_func(["ufw", "status"])
 
     if "Status: active" in ufw_status.get("stdout", ""):
@@ -100,13 +118,13 @@ def remove_firewall_rules(state: Dict[str, Any], run_command_func: Callable, log
         # Restore WireGuard to open access
         delete_result = run_command_func([
             "ufw", "--force", "delete", "allow", "from", "127.0.0.1",
-            "to", "any", "port", "51820", "proto", "udp"
+            "to", "any", "port", wg_port, "proto", "udp"
         ])
 
         if delete_result["success"]:
             logger.info("Removed localhost-only WireGuard rule")
 
-        allow_result = run_command_func(["ufw", "allow", "51820/udp"])
+        allow_result = run_command_func(["ufw", "allow", f"{wg_port}/udp"])
         if allow_result["success"]:
             logger.info("Restored WireGuard port to open access")
 
@@ -115,9 +133,20 @@ def remove_firewall_rules(state: Dict[str, Any], run_command_func: Callable, log
     # Clean up iptables rules
     iptables_rules = [
         ["iptables", "-D", "INPUT", "-p", "tcp", "--dport", "443", "-j", "ACCEPT"],
-        ["iptables", "-D", "INPUT", "-p", "udp", "--dport", "51820", "-s", "127.0.0.1", "-j", "ACCEPT"],
-        ["iptables", "-D", "INPUT", "-p", "udp", "--dport", "51820", "-j", "DROP"]
+        ["iptables", "-D", "INPUT", "-p", "udp", "--dport", wg_port, "-s", "127.0.0.1", "-j", "ACCEPT"],
+        ["iptables", "-D", "INPUT", "-p", "udp", "--dport", wg_port, "-j", "DROP"]
     ]
 
     for rule in iptables_rules:
         run_command_func(rule)
+
+    # Clean up ip6tables rules
+    if state.get("changes", {}).get("ipv6_firewall_configured", False):
+        ip6tables_rules = [
+            ["ip6tables", "-D", "INPUT", "-p", "tcp", "--dport", "443", "-j", "ACCEPT"],
+            ["ip6tables", "-D", "INPUT", "-p", "udp", "--dport", wg_port, "-s", "::1", "-j", "ACCEPT"],
+            ["ip6tables", "-D", "INPUT", "-p", "udp", "--dport", wg_port, "-j", "DROP"]
+        ]
+
+        for rule in ip6tables_rules:
+            run_command_func(rule)
