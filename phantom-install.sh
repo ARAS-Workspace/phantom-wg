@@ -302,7 +302,25 @@ configure_wireguard() {
         log "ERROR: Failed to detect server IP address" "$RED"
         exit 1
     fi
-    
+
+    # IPv6 detection (optional - not required for installation)
+    SERVER_IPV6=""
+    if [[ "${PHANTOM_SKIP_IP_CHECK:-false}" != "true" ]]; then
+        for service in "${IP_CHECK_SERVICES[@]}"; do
+            SERVER_IPV6=$(curl --ipv6 -s --connect-timeout 5 "$service" 2>/dev/null | tr -d '\n\r ' || echo "")
+            if [[ -n "$SERVER_IPV6" ]] && [[ "$SERVER_IPV6" =~ : ]]; then
+                log "Server IPv6 detected: $SERVER_IPV6 (via $service)" "$GREEN"
+                break
+            else
+                SERVER_IPV6=""
+            fi
+        done
+    fi
+
+    if [[ -z "$SERVER_IPV6" ]]; then
+        log "No IPv6 address detected (IPv4-only mode)" "$BLUE"
+    fi
+
     # Get default interface
     DEFAULT_INTERFACE=$(get_default_interface)
     log "Network interface: $DEFAULT_INTERFACE" "$BLUE"
@@ -327,6 +345,15 @@ configure_wireguard() {
     echo 'net.ipv6.conf.all.forwarding=1' >> /etc/sysctl.d/99-wireguard.conf
     sysctl -p /etc/sysctl.d/99-wireguard.conf > /dev/null
     
+    # Build PostUp/PostDown rules
+    POSTUP="iptables -A FORWARD -i $WG_INTERFACE -j ACCEPT; iptables -t nat -A POSTROUTING -o $DEFAULT_INTERFACE -j MASQUERADE"
+    POSTDOWN="iptables -D FORWARD -i $WG_INTERFACE -j ACCEPT; iptables -t nat -D POSTROUTING -o $DEFAULT_INTERFACE -j MASQUERADE"
+
+    if [[ -n "$SERVER_IPV6" ]]; then
+        POSTUP="$POSTUP; ip6tables -A FORWARD -i $WG_INTERFACE -j ACCEPT; ip6tables -t nat -A POSTROUTING -o $DEFAULT_INTERFACE -j MASQUERADE"
+        POSTDOWN="$POSTDOWN; ip6tables -D FORWARD -i $WG_INTERFACE -j ACCEPT; ip6tables -t nat -D POSTROUTING -o $DEFAULT_INTERFACE -j MASQUERADE"
+    fi
+
     # Create WireGuard config
     cat > "/etc/wireguard/$WG_INTERFACE.conf" << EOF
 [Interface]
@@ -334,8 +361,8 @@ PrivateKey = $SERVER_PRIVATE_KEY
 Address = $SERVER_ADDRESS
 ListenPort = $WG_PORT
 SaveConfig = false
-PostUp = iptables -A FORWARD -i $WG_INTERFACE -j ACCEPT; iptables -t nat -A POSTROUTING -o $DEFAULT_INTERFACE -j MASQUERADE
-PostDown = iptables -D FORWARD -i $WG_INTERFACE -j ACCEPT; iptables -t nat -D POSTROUTING -o $DEFAULT_INTERFACE -j MASQUERADE
+PostUp = $POSTUP
+PostDown = $POSTDOWN
 EOF
     
     # Create Phantom configuration
@@ -356,12 +383,20 @@ EOF
     "restart_service_after_client_creation": false
   },
   "dns": {
-    "primary": "8.8.8.8",
+    "primary": "9.9.9.9",
     "secondary": "1.1.1.1"
   }
 }
 EOF
-    
+
+    # Add IPv6 to phantom.json if detected
+    if [[ -n "$SERVER_IPV6" ]]; then
+        local tmp_json
+        tmp_json=$(jq --arg ipv6 "$SERVER_IPV6" '.server.ipv6 = $ipv6' "$INSTALL_DIR/config/phantom.json")
+        echo "$tmp_json" > "$INSTALL_DIR/config/phantom.json"
+        log "IPv6 address added to phantom.json" "$GREEN"
+    fi
+
     # Configure firewall - detect and allow SSH ports first to prevent lockout
     log "Detecting SSH ports..." "$BLUE"
     local ssh_ports
@@ -381,6 +416,9 @@ EOF
     
     log "WireGuard configured" "$GREEN"
     log "Server: $SERVER_IP:$WG_PORT" "$BLUE"
+    if [[ -n "$SERVER_IPV6" ]]; then
+        log "Server (IPv6): [$SERVER_IPV6]:$WG_PORT" "$BLUE"
+    fi
 }
 
 # Create global commands

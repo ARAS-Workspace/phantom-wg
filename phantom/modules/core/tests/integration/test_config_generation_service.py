@@ -16,6 +16,7 @@ WireGuard® is a registered trademark of Jason A. Donenfeld.
 
 import pytest
 
+from phantom.api.exceptions import ConfigurationError
 from phantom.modules.core.lib.config_generation_service import ConfigGenerationService
 
 
@@ -106,64 +107,8 @@ class TestConfigGenerationService:
         service = ConfigGenerationService(config_no_dns)
         result = service.generate_client_config(client_data)
 
-        # Verify default DNS servers (8.8.8.8, 1.1.1.1) are used when not configured
-        assert "DNS = 8.8.8.8, 1.1.1.1" in result
-
-    @pytest.mark.integration
-    def test_server_endpoint_fallback(self):
-        """Test server endpoint fallback logic for different configuration scenarios."""
-        # Prepare common client data to be used across all test scenarios
-        client_data = {
-            "private_key": "testPrivateKey12345678901234567890123456789=",
-            "ip": "10.8.0.2",
-            "preshared_key": "testPresharedKey123456789012345678901234567="
-        }
-
-        # Test case 1: Verify wireguard.server_ip takes precedence over server.ip
-        config_with_server_ip = {
-            "server": {
-                "public_key": "serverKey123=",
-                "ip": "192.168.1.1"  # This will be ignored
-            },
-            "wireguard": {
-                "server_ip": "203.0.113.1",  # This takes precedence
-                "port": 51820
-            }
-        }
-
-        service = ConfigGenerationService(config_with_server_ip)
-        result = service.generate_client_config(client_data)
-        assert "Endpoint = 203.0.113.1:51820" in result  # Uses wireguard.server_ip
-
-        # Test case 2: Verify fallback to server.ip when wireguard.server_ip is not set
-        config_with_ip = {
-            "server": {
-                "public_key": "serverKey123=",
-                "ip": "192.168.1.1"  # This will be used as fallback
-            },
-            "wireguard": {
-                "port": 51820
-            }
-        }
-
-        service = ConfigGenerationService(config_with_ip)
-        result = service.generate_client_config(client_data)
-        assert "Endpoint = 192.168.1.1:51820" in result  # Uses server.ip as fallback
-
-        # Test case 3: Verify placeholder is used when no server IP is configured
-        config_no_server = {
-            "server": {
-                "public_key": "serverKey123="
-                # No IP configured
-            },
-            "wireguard": {
-                "port": 51820
-            }
-        }
-
-        service = ConfigGenerationService(config_no_server)
-        result = service.generate_client_config(client_data)
-        assert "Endpoint = YOUR_SERVER_IP:51820" in result  # Placeholder for manual configuration
+        # Verify default DNS servers (9.9.9.9, 1.1.1.1) are used when not configured
+        assert "DNS = 9.9.9.9, 1.1.1.1" in result
 
     @pytest.mark.integration
     def test_port_and_network_defaults(self):
@@ -253,8 +198,8 @@ class TestConfigGenerationService:
         # Setup configuration with domain name endpoint to test hostname support
         config = {
             "dns": {
-                "primary": "8.8.8.8",
-                "secondary": "8.8.4.4"
+                "primary": "9.9.9.9",
+                "secondary": "1.1.1.1"
             },
             "server": {
                 "public_key": "serverPublicKey1234567890123456789012345678=",
@@ -327,7 +272,7 @@ class TestConfigGenerationService:
         # Verify configuration is still generated with all default values
         assert '[Interface]' in result
         assert '[Peer]' in result
-        assert 'DNS = 8.8.8.8, 1.1.1.1' in result  # Default DNS
+        assert 'DNS = 9.9.9.9, 1.1.1.1' in result  # Default DNS
         assert ':51820' in result  # Default port
         assert 'YOUR_SERVER_IP' in result  # Placeholder when no server configured
 
@@ -350,3 +295,110 @@ class TestConfigGenerationService:
         # Verify proper error handling for missing private_key field
         with pytest.raises(KeyError):
             service.generate_client_config(client_missing_private_key)
+
+
+class TestEndpointResolution:
+    """Test 3-tier endpoint resolution priority."""
+
+    @pytest.fixture
+    def client_data(self):
+        return {
+            "private_key": "clientPrivateKey12345678901234567890123456789=",
+            "ip": "10.8.0.2",
+            "preshared_key": "presharedKey12345678901234567890123456789=="
+        }
+
+    @pytest.fixture
+    def base_config(self):
+        return {
+            "server": {
+                "public_key": "serverPublicKey12345678901234567890123456789=",
+                "ip": "203.0.113.45"
+            },
+            "wireguard": {
+                "port": 51820,
+                "network": "10.8.0.0/24"
+            }
+        }
+
+    @pytest.mark.integration
+    def test_default_ipv4_endpoint(self, base_config, client_data):
+        """Priority 3: Default behavior uses server.ip (IPv4)."""
+        service = ConfigGenerationService(base_config)
+        result = service.generate_client_config(client_data)
+
+        assert "Endpoint = 203.0.113.45:51820" in result
+
+    @pytest.mark.integration
+    def test_ipv6_endpoint(self, base_config, client_data):
+        """Priority 2: use_ipv6=True with server.ipv6 available."""
+        base_config["server"]["ipv6"] = "2001:db8::1"
+
+        service = ConfigGenerationService(base_config)
+        result = service.generate_client_config(client_data, use_ipv6=True)
+
+        assert "Endpoint = [2001:db8::1]:51820" in result
+
+    @pytest.mark.integration
+    def test_ipv6_not_available_raises_error(self, base_config, client_data):
+        """Priority 2: use_ipv6=True but no server.ipv6 → ConfigurationError."""
+        service = ConfigGenerationService(base_config)
+
+        with pytest.raises(ConfigurationError):
+            service.generate_client_config(client_data, use_ipv6=True)
+
+    @pytest.mark.integration
+    def test_ipv6_false_ignores_ipv6_address(self, base_config, client_data):
+        """Default use_ipv6=False uses IPv4 even when server.ipv6 exists."""
+        base_config["server"]["ipv6"] = "2001:db8::1"
+
+        service = ConfigGenerationService(base_config)
+        result = service.generate_client_config(client_data)
+
+        assert "Endpoint = 203.0.113.45:51820" in result
+
+    @pytest.mark.integration
+    def test_custom_endpoint_overrides_ipv4(self, base_config, client_data):
+        """Priority 1: server.endpoint overrides default IPv4."""
+        base_config["server"]["endpoint"] = "vpn.example.com"
+
+        service = ConfigGenerationService(base_config)
+        result = service.generate_client_config(client_data)
+
+        assert "Endpoint = vpn.example.com:51820" in result
+
+    @pytest.mark.integration
+    def test_custom_endpoint_overrides_ipv6(self, base_config, client_data):
+        """Priority 1: server.endpoint wins even when use_ipv6=True."""
+        base_config["server"]["endpoint"] = "vpn.example.com"
+        base_config["server"]["ipv6"] = "2001:db8::1"
+
+        service = ConfigGenerationService(base_config)
+        result = service.generate_client_config(client_data, use_ipv6=True)
+
+        assert "Endpoint = vpn.example.com:51820" in result
+
+    @pytest.mark.integration
+    def test_resolve_endpoint_static_method(self):
+        """Test _resolve_endpoint directly for all priority tiers."""
+        server_config = {
+            "ip": "1.2.3.4",
+            "ipv6": "2001:db8::1",
+            "endpoint": "vpn.example.com"
+        }
+
+        # Priority 1: endpoint always wins
+        assert ConfigGenerationService._resolve_endpoint(server_config, 51820) == "vpn.example.com:51820"
+        assert ConfigGenerationService._resolve_endpoint(server_config, 51820, use_ipv6=True) == "vpn.example.com:51820"
+
+        # Priority 2: IPv6 when no endpoint
+        server_no_endpoint = {"ip": "1.2.3.4", "ipv6": "2001:db8::1"}
+        assert ConfigGenerationService._resolve_endpoint(server_no_endpoint, 51820, use_ipv6=True) == "[2001:db8::1]:51820"
+
+        # Priority 3: IPv4 default
+        assert ConfigGenerationService._resolve_endpoint(server_no_endpoint, 51820) == "1.2.3.4:51820"
+
+        # Error: IPv6 requested but not available
+        server_ipv4_only = {"ip": "1.2.3.4"}
+        with pytest.raises(ConfigurationError):
+            ConfigGenerationService._resolve_endpoint(server_ipv4_only, 51820, use_ipv6=True)
