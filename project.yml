@@ -54,12 +54,14 @@ targets:
           - "-lresolv"
           - "-Wl,-w"
         SWIFT_VERSION: "5.0"
-        MARKETING_VERSION: "1.0.0"
+        MARKETING_VERSION: "1.0.1"
         CURRENT_PROJECT_VERSION: 1
         TARGETED_DEVICE_FAMILY: "1,2"
     info:
       path: Phantom-WG/Info.plist
       properties:
+        CFBundleShortVersionString: "$(MARKETING_VERSION)"
+        CFBundleVersion: "$(CURRENT_PROJECT_VERSION)"
         CFBundleDisplayName: Phantom-WG
         UILaunchScreen:
           UIImageName: PhantomLogo
@@ -130,7 +132,7 @@ targets:
         OTHER_LDFLAGS:
           - "-lresolv"
         SWIFT_VERSION: "5.0"
-        MARKETING_VERSION: "1.0.0"
+        MARKETING_VERSION: "1.0.1"
         CURRENT_PROJECT_VERSION: 1
         LIBRARY_SEARCH_PATHS:
           - "$(PROJECT_DIR)/Libraries/WstunnelKit"
@@ -139,6 +141,8 @@ targets:
     info:
       path: PhantomTunnel/Info.plist
       properties:
+        CFBundleShortVersionString: "$(MARKETING_VERSION)"
+        CFBundleVersion: "$(CURRENT_PROJECT_VERSION)"
         CFBundleDisplayName: PhantomTunnel
         NSExtension:
           NSExtensionPointIdentifier: com.apple.networkextension.packet-tunnel
