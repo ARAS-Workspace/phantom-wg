@@ -15,15 +15,16 @@ concurrency:
 
 env:
   SCHEME: Phantom-WG
-  ARCHIVE_PATH: ${{ runner.temp }}/Phantom-WG.xcarchive
-  KEYCHAIN_PATH: ${{ runner.temp }}/signing.keychain-db
-  API_KEY_DIR: ${{ runner.temp }}/private_keys
 
 jobs:
   deploy:
     name: Build & Upload to TestFlight
     runs-on: macos-26
     timeout-minutes: 45
+    env:
+      ARCHIVE_PATH: ${{ runner.temp }}/Phantom-WG.xcarchive
+      KEYCHAIN_PATH: ${{ runner.temp }}/signing.keychain-db
+      API_KEY_DIR: ${{ runner.temp }}/private_keys
     steps:
 
       # ── 1. Checkout ──────────────────────────────────────────
