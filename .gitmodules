@@ -1,0 +1,4 @@
+[submodule "Libraries/WireGuardKit"]
+	path = Libraries/WireGuardKit
+	url = https://github.com/ARAS-Workspace/wireguard-apple.git
+	branch = ios/phantom-wg

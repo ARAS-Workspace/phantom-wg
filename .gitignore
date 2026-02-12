@@ -1,0 +1,11 @@
+# Xcode generated project (regenerated via xcodegen)
+*.xcodeproj/
+*.xcworkspace/
+xcuserdata/
+
+# Build artifacts
+build/
+DerivedData/
+
+# macOS
+.DS_Store
