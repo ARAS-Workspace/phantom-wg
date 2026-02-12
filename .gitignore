@@ -9,3 +9,6 @@ DerivedData/
 
 # macOS
 .DS_Store
+
+# Other IDE files & directories
+.idea/
