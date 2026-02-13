@@ -195,7 +195,8 @@ class TestGhostFunctionality:
         import io
         import contextlib
 
-        from phantom.casper import CasperService
+        # noinspection PyUnresolvedReferences
+        from tools.casper import CasperService
         service = CasperService()
 
         # Capture output

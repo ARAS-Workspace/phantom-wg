@@ -15,8 +15,10 @@ from pathlib import Path
 import pytest
 
 INSTALL_DIR = Path("/opt/phantom-wg")
+BIN_DIR = INSTALL_DIR / "phantom" / "bin"
 
 sys.path.insert(0, str(INSTALL_DIR))
+sys.path.insert(0, str(BIN_DIR))
 
 # Import PhantomAPI after path setup
 from phantom.api.core import PhantomAPI

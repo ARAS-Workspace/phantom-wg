@@ -7,39 +7,37 @@
 ██║     ██║  ██║██║  ██║██║ ╚████║   ██║   ╚██████╔╝██║ ╚═╝ ██║
 ╚═╝     ╚═╝  ╚═╝╚═╝  ╚═╝╚═╝  ╚═══╝   ╚═╝    ╚═════╝ ╚═╝     ╚═╝
 
-TR: Casper - Ghost Mode Client Configuration Exporter
+TR: Casper iOS - Ghost Mode iOS Client Configuration Exporter
     ========================================================
-    
-    Bu araç, Ghost Mode aktifken kullanıcıların WireGuard client konfigürasyonlarını
-    görüntülemelerine olanak sağlar.
-    
+
+    Bu araç, Ghost Mode aktifken kullanıcıların Phantom-WG iOS uygulaması
+    için JSON formatında konfigürasyon üretir.
+
     Ana Özellikler:
         - Ghost Mode durumunu kontrol eder
         - İstemci verilerini Phantom API üzerinden alır
-        - wstunnel komutunu Ghost API'den çeker
-        - WireGuard konfigürasyonunu dinamik olarak üretir
-        - AllowedIPs'i sunucu IP'sini hariç tutacak şekilde hesaplar
-    
-    Kullanım:
-        phantom-casper [kullanıcı_adı]     # İstemci konfigürasyonunu görüntüle
-        phantom-casper --help              # Yardımı göster
+        - AllowedIPs'i sunucu IPv4 IP'sini hariç tutacak şekilde hesaplar
+        - iOS uyumlu JSON yapısı üretir
 
-EN: Casper - Ghost Mode Client Configuration Exporter
+    Kullanım:
+        phantom-casper-ios [kullanıcı_adı]     # iOS JSON konfigürasyonunu göster
+        phantom-casper-ios --help              # Yardımı göster
+
+EN: Casper iOS - Ghost Mode iOS Client Configuration Exporter
     ================================================
-    
-    This tool allows users to view their WireGuard client configurations when Ghost Mode
-    is active.
-    
+
+    This tool generates JSON-format configurations for the Phantom-WG iOS
+    application when Ghost Mode is active.
+
     Key Features:
         - Checks Ghost Mode status
         - Retrieves client data via Phantom API
-        - Fetches wstunnel command from Ghost API
-        - Dynamically generates WireGuard configuration
-        - Calculates AllowedIPs to exclude server IP
-    
+        - Calculates AllowedIPs to exclude server IPv4 IP
+        - Produces iOS-compatible JSON structure
+
     Usage:
-        phantom-casper [username]     # Display client configuration
-        phantom-casper --help         # Show help
+        phantom-casper-ios [username]     # Show iOS JSON configuration
+        phantom-casper-ios --help         # Show help
 
 Copyright (c) 2025 Rıza Emre ARAS <r.emrearas@proton.me>
 Licensed under AGPL-3.0 - see LICENSE file for details
@@ -57,57 +55,56 @@ from path_helper import setup_phantom_path
 # Setup phantom module path
 setup_phantom_path()
 
-from tools.casper.core import CasperService
+from tools.casper_ios.core import CasperIOSService
 
 
 def show_help():
     """
     TR: Yardım mesajını göster.
-    
-        Casper aracının kullanım bilgilerini, örneklerini ve gereksinimlerini
+
+        Casper iOS aracının kullanım bilgilerini, örneklerini ve gereksinimlerini
         gösterir. Çıktı formatı hakkında bilgi verir.
-    
+
     EN: Show help message.
-    
+
         Displays usage information, examples, and requirements for the Casper
-        tool. Provides information about the output format.
+        iOS tool. Provides information about the output format.
     """
-    print("Casper - Ghost Mode Configuration Exporter")
-    print("=" * 45)
+    print("Casper iOS - Ghost Mode iOS Configuration Exporter")
+    print("=" * 52)
     print()
-    print("Usage: phantom-casper [username]")
+    print("Usage: phantom-casper-ios [username]")
     print()
     print("Examples:")
-    print("  phantom-casper john-laptop    # Show config for john-laptop")
-    print("  phantom-casper alice-phone    # Show config for alice-phone")
+    print("  phantom-casper-ios john-laptop    # Show iOS JSON config")
+    print("  phantom-casper-ios alice-phone    # Show iOS JSON config")
     print()
     print("Requirements:")
     print("  - Ghost Mode must be active")
     print("  - Client must exist in the system")
     print()
     print("Output:")
-    print("  - WireGuard configuration (ghost.conf)")
-    print("  - Setup instructions")
+    print("  - iOS WireGuard JSON configuration")
     print("  - No files created - stdout only")
 
 
 def main():
     """
     TR: Ana giriş noktası.
-    
+
         Komut satırı argümanlarını işler, yardım mesajını gösterir veya
-        istenen istemci için konfigürasyon dışa aktarımını gerçekleştirir.
+        istenen istemci için iOS konfigürasyonunu dışa aktarır.
         Hata durumlarını yakalar ve uygun çıkış kodlarıyla sonlanır.
-    
+
     EN: Main entry point.
-    
+
         Processes command-line arguments, shows help message or performs
-        configuration export for the requested client. Catches error
+        iOS configuration export for the requested client. Catches error
         conditions and exits with appropriate exit codes.
     """
     # Initialize argument parser with custom help handling
     parser = argparse.ArgumentParser(
-        description="Ghost Mode Configuration Exporter",
+        description="Ghost Mode iOS Configuration Exporter",
         add_help=False  # We handle --help ourselves for custom formatting
     )
 
@@ -133,10 +130,10 @@ def main():
 
     # Initialize service and perform export
     try:
-        # Create Casper service instance
-        service = CasperService()
+        # Create Casper iOS service instance
+        service = CasperIOSService()
 
-        # Export client configuration to stdout
+        # Export client configuration
         service.export_client_config(args.username)
 
     except KeyboardInterrupt:
