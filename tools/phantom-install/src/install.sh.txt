@@ -10,7 +10,7 @@ set -euo pipefail
 # =============================================================================
 # CONFIGURATION - Update this URL for each release
 # =============================================================================
-LATEST_RELEASE_URL="https://github.com/ARAS-Workspace/phantom-wg/releases/download/core-v1.0.2/phantom-wg-core-v1.0.2.zip"
+LATEST_RELEASE_URL="https://github.com/ARAS-Workspace/phantom-wg/releases/download/core-v1.0.3/phantom-wg-core-v1.0.3.zip"
 # =============================================================================
 
 # Supported OS versions
