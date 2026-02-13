@@ -211,6 +211,8 @@ jobs:
             <string>${TEAM_ID}</string>
             <key>signingStyle</key>
             <string>manual</string>
+            <key>destination</key>
+            <string>upload</string>
             <key>uploadSymbols</key>
             <true/>
             <key>provisioningProfiles</key>
@@ -241,8 +243,7 @@ jobs:
             -authenticationKeyPath "$ASC_KEY_PATH" \
             -authenticationKeyID "$ASC_KEY_ID" \
             -authenticationKeyIssuerID "$ASC_ISSUER_ID" \
-            -allowProvisioningUpdates \
-            2>&1 | xcpretty --color
+            -allowProvisioningUpdates
 
           echo "### Upload Complete" >> "$GITHUB_STEP_SUMMARY"
           echo "- **Version:** ${{ steps.version.outputs.version }} (${{ steps.version.outputs.build_number }})" >> "$GITHUB_STEP_SUMMARY"
