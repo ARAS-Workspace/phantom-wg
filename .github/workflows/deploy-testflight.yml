@@ -1,0 +1,256 @@
+name: Deploy to TestFlight
+
+on:
+  push:
+    tags:
+      - 'testflight-v*'
+  workflow_dispatch:
+    inputs:
+      version_override:
+        description: 'Version override (e.g. 1.0.1) — leave empty to use tag'
+        required: false
+        type: string
+
+concurrency:
+  group: deploy-testflight-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    name: Archive & Upload to TestFlight
+    runs-on: macos-26
+    timeout-minutes: 45
+    env:
+      APP_BUNDLE_ID: com.remrearas.Phantom-WG
+      TUNNEL_BUNDLE_ID: com.remrearas.Phantom-WG.PhantomTunnel
+      TEAM_ID: 9C5SL5H7CM
+
+    steps:
+      # ── 0. Setup temp paths ─────────────────────────────────
+      - name: Setup temp paths
+        run: |
+          echo "KEYCHAIN_PATH=$RUNNER_TEMP/signing.keychain-db" >> "$GITHUB_ENV"
+          echo "KEYCHAIN_PASSWORD=ci_ephemeral_${{ github.run_id }}" >> "$GITHUB_ENV"
+          echo "P12_PATH=$RUNNER_TEMP/certificate.p12" >> "$GITHUB_ENV"
+          echo "PP_APP_PATH=$RUNNER_TEMP/app.mobileprovision" >> "$GITHUB_ENV"
+          echo "PP_TUNNEL_PATH=$RUNNER_TEMP/tunnel.mobileprovision" >> "$GITHUB_ENV"
+          echo "ASC_KEY_PATH=$RUNNER_TEMP/AuthKey.p8" >> "$GITHUB_ENV"
+          echo "ARCHIVE_PATH=$RUNNER_TEMP/Phantom-WG.xcarchive" >> "$GITHUB_ENV"
+          echo "EXPORT_PATH=$RUNNER_TEMP/export" >> "$GITHUB_ENV"
+          echo "EXPORT_OPTIONS_PATH=$RUNNER_TEMP/ExportOptions.plist" >> "$GITHUB_ENV"
+
+      # ── 1. Checkout ──────────────────────────────────────────
+      - name: Checkout with submodules
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+          fetch-depth: 0
+
+      # ── 2. Extract version from tag ──────────────────────────
+      - name: Extract version & build number
+        id: version
+        run: |
+          if [[ -n "${{ inputs.version_override }}" ]]; then
+            VERSION="${{ inputs.version_override }}"
+          elif [[ "$GITHUB_REF" == refs/tags/testflight-v* ]]; then
+            VERSION="${GITHUB_REF#refs/tags/testflight-v}"
+          else
+            echo "::error::No version found. Push a testflight-v* tag or provide version_override."
+            exit 1
+          fi
+
+          if [[ ! "$VERSION" =~ ^[0-9]+\.[0-9]+(\.[0-9]+)?$ ]]; then
+            echo "::error::Invalid semver format: $VERSION (expected X.Y or X.Y.Z)"
+            exit 1
+          fi
+
+          BUILD_NUMBER="${{ github.run_number }}"
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "build_number=$BUILD_NUMBER" >> "$GITHUB_OUTPUT"
+          echo "### Version Info" >> "$GITHUB_STEP_SUMMARY"
+          echo "- **Version:** $VERSION" >> "$GITHUB_STEP_SUMMARY"
+          echo "- **Build:** $BUILD_NUMBER" >> "$GITHUB_STEP_SUMMARY"
+
+      # ── 3. Import signing certificate ────────────────────────
+      - name: Import signing certificate
+        env:
+          APPLE_CERTIFICATE_P12: ${{ secrets.APPLE_CERTIFICATE_P12 }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+        run: |
+          set -euo pipefail
+
+          echo -n "$APPLE_CERTIFICATE_P12" | base64 --decode -o "$P12_PATH"
+
+          security create-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+          security set-keychain-settings -lut 21600 "$KEYCHAIN_PATH"
+          security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+
+          security import "$P12_PATH" \
+            -k "$KEYCHAIN_PATH" \
+            -P "$APPLE_CERTIFICATE_PASSWORD" \
+            -T /usr/bin/codesign \
+            -T /usr/bin/security
+
+          security set-key-partition-list \
+            -S apple-tool:,apple: \
+            -k "$KEYCHAIN_PASSWORD" \
+            "$KEYCHAIN_PATH"
+
+          security list-keychains -d user -s "$KEYCHAIN_PATH" login.keychain-db
+
+          echo "Certificate imported. Identities found:"
+          security find-identity -v -p codesigning "$KEYCHAIN_PATH"
+
+      # ── 4. Install provisioning profiles ─────────────────────
+      - name: Install provisioning profiles
+        env:
+          PROVISIONING_PROFILE_APP: ${{ secrets.PROVISIONING_PROFILE_APP }}
+          PROVISIONING_PROFILE_TUNNEL: ${{ secrets.PROVISIONING_PROFILE_TUNNEL }}
+        run: |
+          set -euo pipefail
+
+          PROFILES_DIR="$HOME/Library/MobileDevice/Provisioning Profiles"
+          mkdir -p "$PROFILES_DIR"
+
+          echo -n "$PROVISIONING_PROFILE_APP" | base64 --decode -o "$PP_APP_PATH"
+          echo -n "$PROVISIONING_PROFILE_TUNNEL" | base64 --decode -o "$PP_TUNNEL_PATH"
+
+          extract_and_install() {
+            local profile_path="$1"
+            local expected_bundle_id="$2"
+            local label="$3"
+
+            local plist
+            plist=$(security cms -D -i "$profile_path")
+
+            local uuid name app_id bundle_id
+            uuid=$(/usr/libexec/PlistBuddy -c "Print UUID" /dev/stdin <<< "$plist")
+            name=$(/usr/libexec/PlistBuddy -c "Print Name" /dev/stdin <<< "$plist")
+            app_id=$(/usr/libexec/PlistBuddy -c "Print Entitlements:application-identifier" /dev/stdin <<< "$plist")
+
+            bundle_id="${app_id#*.}"
+            if [[ "$bundle_id" != "$expected_bundle_id" ]]; then
+              echo "::error::$label profile bundle ID mismatch: got '$bundle_id', expected '$expected_bundle_id'"
+              exit 1
+            fi
+
+            cp "$profile_path" "$PROFILES_DIR/$uuid.mobileprovision"
+            echo "$label: UUID=$uuid, Name=$name, BundleID=$bundle_id" >&2
+            echo "$uuid $name"
+          }
+
+          read -r APP_UUID APP_PROFILE_NAME <<< "$(extract_and_install "$PP_APP_PATH" "$APP_BUNDLE_ID" "App")"
+          read -r TUNNEL_UUID TUNNEL_PROFILE_NAME <<< "$(extract_and_install "$PP_TUNNEL_PATH" "$TUNNEL_BUNDLE_ID" "Tunnel")"
+
+          echo "PP_APP_UUID=$APP_UUID" >> "$GITHUB_ENV"
+          echo "PP_TUNNEL_UUID=$TUNNEL_UUID" >> "$GITHUB_ENV"
+          echo "APP_PROFILE_NAME=$APP_PROFILE_NAME" >> "$GITHUB_ENV"
+          echo "TUNNEL_PROFILE_NAME=$TUNNEL_PROFILE_NAME" >> "$GITHUB_ENV"
+
+      # ── 5. Patch project.yml for manual signing ──────────────
+      - name: Patch project.yml for manual signing
+        run: |
+          set -euo pipefail
+
+          # Replace Automatic → Manual for both targets
+          sed -i '' 's/CODE_SIGN_STYLE: Automatic/CODE_SIGN_STYLE: Manual/g' project.yml
+
+          # Inject PROVISIONING_PROFILE_SPECIFIER after each target's bundle ID
+          sed -i '' "/PRODUCT_BUNDLE_IDENTIFIER: ${APP_BUNDLE_ID}$/a\\
+          \        PROVISIONING_PROFILE_SPECIFIER: ${APP_PROFILE_NAME}" project.yml
+
+          sed -i '' "/PRODUCT_BUNDLE_IDENTIFIER: ${TUNNEL_BUNDLE_ID}$/a\\
+          \        PROVISIONING_PROFILE_SPECIFIER: ${TUNNEL_PROFILE_NAME}" project.yml
+
+          echo "--- Patched project.yml signing settings ---"
+          grep -A2 'CODE_SIGN_STYLE\|PROVISIONING_PROFILE_SPECIFIER' project.yml
+
+      # ── 6. Install tools ─────────────────────────────────────
+      - name: Install Go & XcodeGen
+        run: brew install go@1.22 xcodegen
+
+      # ── 7. Generate Xcode project ───────────────────────────
+      - name: Generate Xcode project
+        run: xcodegen generate
+
+      # ── 8. Write ASC API key ─────────────────────────────────
+      - name: Write App Store Connect API key
+        env:
+          ASC_PRIVATE_KEY: ${{ secrets.ASC_PRIVATE_KEY }}
+        run: |
+          echo -n "$ASC_PRIVATE_KEY" > "$ASC_KEY_PATH"
+          chmod 600 "$ASC_KEY_PATH"
+
+      # ── 9. Archive ──────────────────────────────────────────
+      - name: Archive
+        run: |
+          set -o pipefail
+          xcodebuild archive \
+            -scheme "Phantom-WG" \
+            -destination 'generic/platform=iOS' \
+            -archivePath "$ARCHIVE_PATH" \
+            MARKETING_VERSION="${{ steps.version.outputs.version }}" \
+            CURRENT_PROJECT_VERSION="${{ steps.version.outputs.build_number }}" \
+            CODE_SIGN_STYLE=Manual \
+            CODE_SIGN_IDENTITY="Apple Distribution" \
+            DEVELOPMENT_TEAM="$TEAM_ID" \
+            2>&1 | xcpretty --color
+
+      # ── 10. Generate ExportOptions.plist ─────────────────────
+      - name: Generate ExportOptions.plist
+        run: |
+          cat > "$EXPORT_OPTIONS_PATH" <<PLIST
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN"
+            "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0">
+          <dict>
+            <key>method</key>
+            <string>app-store-connect</string>
+            <key>teamID</key>
+            <string>${TEAM_ID}</string>
+            <key>signingStyle</key>
+            <string>manual</string>
+            <key>uploadSymbols</key>
+            <true/>
+            <key>provisioningProfiles</key>
+            <dict>
+              <key>${APP_BUNDLE_ID}</key>
+              <string>${PP_APP_UUID}</string>
+              <key>${TUNNEL_BUNDLE_ID}</key>
+              <string>${PP_TUNNEL_UUID}</string>
+            </dict>
+          </dict>
+          </plist>
+          PLIST
+
+          echo "--- ExportOptions.plist ---"
+          cat "$EXPORT_OPTIONS_PATH"
+
+      # ── 11. Export & Upload to TestFlight ────────────────────
+      - name: Export & Upload to TestFlight
+        env:
+          ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+          ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+        run: |
+          set -o pipefail
+          xcodebuild -exportArchive \
+            -archivePath "$ARCHIVE_PATH" \
+            -exportOptionsPlist "$EXPORT_OPTIONS_PATH" \
+            -exportPath "$EXPORT_PATH" \
+            -authenticationKeyPath "$ASC_KEY_PATH" \
+            -authenticationKeyID "$ASC_KEY_ID" \
+            -authenticationKeyIssuerID "$ASC_ISSUER_ID" \
+            -allowProvisioningUpdates \
+            2>&1 | xcpretty --color
+
+          echo "### Upload Complete" >> "$GITHUB_STEP_SUMMARY"
+          echo "- **Version:** ${{ steps.version.outputs.version }} (${{ steps.version.outputs.build_number }})" >> "$GITHUB_STEP_SUMMARY"
+
+      # ── 12. Cleanup ─────────────────────────────────────────
+      - name: Cleanup signing artifacts
+        if: always()
+        run: |
+          security delete-keychain "$KEYCHAIN_PATH" 2>/dev/null || true
+          rm -f "$P12_PATH" "$PP_APP_PATH" "$PP_TUNNEL_PATH" "$ASC_KEY_PATH"
+          rm -rf "$ARCHIVE_PATH" "$EXPORT_PATH" "$EXPORT_OPTIONS_PATH"
