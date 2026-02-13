@@ -64,7 +64,7 @@ jobs:
             exit 1
           fi
 
-          BUILD_NUMBER="${{ github.run_number }}"
+          BUILD_NUMBER=$(date -u +"%Y%m%d.%H%M")
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
           echo "build_number=$BUILD_NUMBER" >> "$GITHUB_OUTPUT"
           echo "### Version Info" >> "$GITHUB_STEP_SUMMARY"
