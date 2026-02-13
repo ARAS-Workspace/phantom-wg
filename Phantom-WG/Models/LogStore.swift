@@ -6,7 +6,7 @@ final class LogStore: ObservableObject {
 
     let tunnelId: String?
     private var lastSeenId: Int64 = 0
-    private var pollTimer: Timer?
+    private var pollingTask: Task<Void, Never>?
 
     init(tunnelId: String? = nil) {
         self.tunnelId = tunnelId
@@ -21,10 +21,15 @@ final class LogStore: ObservableObject {
 
     /// Load all existing logs from DB and start polling for new ones.
     func startPolling() {
-        guard pollTimer == nil else { return }
+        guard pollingTask == nil else { return }
         loadAll()
-        pollTimer = Timer.scheduledTimer(withTimeInterval: 0.5, repeats: true) { [weak self] _ in
-            Task { @MainActor in
+        pollingTask = Task { [weak self] in
+            while !Task.isCancelled {
+                do {
+                    try await Task.sleep(for: .seconds(0.5))
+                } catch {
+                    break
+                }
                 self?.pollOnce()
             }
         }
@@ -32,8 +37,8 @@ final class LogStore: ObservableObject {
 
     /// Stop polling (view disappeared).
     func stopPolling() {
-        pollTimer?.invalidate()
-        pollTimer = nil
+        pollingTask?.cancel()
+        pollingTask = nil
     }
 
     /// Explicit clear: wipe logs for this tunnel and reset view.

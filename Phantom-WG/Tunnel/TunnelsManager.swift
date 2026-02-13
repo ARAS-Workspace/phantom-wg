@@ -158,10 +158,12 @@ class TunnelsManager: ObservableObject {
         // Disable on-demand first, otherwise system will reconnect
         if tunnel.isActivateOnDemandEnabled {
             tunnel.tunnelProvider.isOnDemandEnabled = false
-            tunnel.tunnelProvider.savePreferences { [weak self] error in
-                if error != nil { return }
-                Task { @MainActor in
-                    self?.performDeactivation(of: tunnel)
+            Task {
+                do {
+                    try await tunnel.tunnelProvider.savePreferences()
+                    performDeactivation(of: tunnel)
+                } catch {
+                    // Save failed, skip deactivation
                 }
             }
         } else {
@@ -178,8 +180,8 @@ class TunnelsManager: ObservableObject {
     private func startActivation(of tunnel: TunnelContainer, at retryIndex: Int) {
         guard retryIndex < maxRetries else {
             tunnel.isAttemptingActivation = false
-            tunnel.activationTimer?.invalidate()
-            tunnel.activationTimer = nil
+            tunnel.activationTask?.cancel()
+            tunnel.activationTask = nil
             tunnel.status = .inactive
             tunnel.lastActivationError = .retryLimitReached(
                 lastSystemError: NSError(domain: NEVPNErrorDomain, code: 1))
@@ -197,58 +199,54 @@ class TunnelsManager: ObservableObject {
 
         // Ensure manager is enabled and save
         tunnel.tunnelProvider.isEnabled = true
-        tunnel.tunnelProvider.savePreferences { [weak self] error in
-            guard let self else { return }
-            Task { @MainActor in
+        Task {
+            do {
+                try await tunnel.tunnelProvider.savePreferences()
                 guard tunnel.activationAttemptId == attemptId else { return }
-
-                if let error {
-                    tunnel.isAttemptingActivation = false
-                    tunnel.status = .inactive
-                    tunnel.lastActivationError = .savingFailed(systemError: error)
-                    return
-                }
-
-                self.doStartVPNTunnel(tunnel: tunnel, attemptId: attemptId, retryIndex: retryIndex)
+                await self.doStartVPNTunnel(tunnel: tunnel, attemptId: attemptId, retryIndex: retryIndex)
+            } catch {
+                tunnel.isAttemptingActivation = false
+                tunnel.status = .inactive
+                tunnel.lastActivationError = .savingFailed(systemError: error)
             }
         }
     }
 
-    private func doStartVPNTunnel(tunnel: TunnelContainer, attemptId: String, retryIndex: Int) {
-        tunnel.tunnelProvider.loadPreferences { [weak self] error in
-            guard let self else { return }
-            Task { @MainActor in
-                guard tunnel.activationAttemptId == attemptId else { return }
+    private func doStartVPNTunnel(tunnel: TunnelContainer, attemptId: String, retryIndex: Int) async {
+        do {
+            try await tunnel.tunnelProvider.loadPreferences()
+        } catch {
+            tunnel.isAttemptingActivation = false
+            tunnel.status = .inactive
+            tunnel.lastActivationError = .loadingFailed(systemError: error)
+            return
+        }
 
-                if let error {
-                    tunnel.isAttemptingActivation = false
-                    tunnel.status = .inactive
-                    tunnel.lastActivationError = .loadingFailed(systemError: error)
-                    return
-                }
+        guard tunnel.activationAttemptId == attemptId else { return }
 
-                do {
-                    try tunnel.tunnelProvider.startTunnel()
-                } catch {
-                    tunnel.isAttemptingActivation = false
-                    tunnel.status = .inactive
-                    tunnel.lastActivationError = .startingFailed(systemError: error)
-                    return
-                }
+        do {
+            try tunnel.tunnelProvider.startTunnel()
+        } catch {
+            tunnel.isAttemptingActivation = false
+            tunnel.status = .inactive
+            tunnel.lastActivationError = .startingFailed(systemError: error)
+            return
+        }
 
-                // Start retry timer
-                tunnel.activationTimer?.invalidate()
-                let tunnelId = tunnel.id
-                tunnel.activationTimer = Timer.scheduledTimer(withTimeInterval: self.retryInterval, repeats: false) { [weak self] _ in
-                    Task { @MainActor in
-                        guard let self,
-                              let tunnel = self.tunnels.first(where: { $0.id == tunnelId }),
-                              tunnel.activationAttemptId == attemptId else { return }
-                        if tunnel.status == .activating || tunnel.status == .reasserting {
-                            self.startActivation(of: tunnel, at: retryIndex + 1)
-                        }
-                    }
-                }
+        // Start retry task
+        tunnel.activationTask?.cancel()
+        let tunnelId = tunnel.id
+        tunnel.activationTask = Task { [weak self] in
+            do {
+                try await Task.sleep(for: .seconds(self?.retryInterval ?? 5.0))
+            } catch {
+                return
+            }
+            guard let self,
+                  let tunnel = self.tunnels.first(where: { $0.id == tunnelId }),
+                  tunnel.activationAttemptId == attemptId else { return }
+            if tunnel.status == .activating || tunnel.status == .reasserting {
+                self.startActivation(of: tunnel, at: retryIndex + 1)
             }
         }
     }
@@ -297,14 +295,14 @@ class TunnelsManager: ObservableObject {
             switch systemStatus {
             case .connected:
                 tunnel.isAttemptingActivation = false
-                tunnel.activationTimer?.invalidate()
-                tunnel.activationTimer = nil
+                tunnel.activationTask?.cancel()
+                tunnel.activationTask = nil
                 tunnel.status = .active
 
             case .disconnected:
                 tunnel.isAttemptingActivation = false
-                tunnel.activationTimer?.invalidate()
-                tunnel.activationTimer = nil
+                tunnel.activationTask?.cancel()
+                tunnel.activationTask = nil
                 tunnel.status = .inactive
 
                 if tunnel.lastActivationError == nil {

@@ -27,7 +27,7 @@ class TunnelContainer: ObservableObject, Identifiable {
     var onDeactivated: ((TunnelContainer) -> Void)?
     var isAttemptingActivation = false
     var activationAttemptId: String?
-    var activationTimer: Timer?
+    var activationTask: Task<Void, Never>?
 
     init(tunnel: TunnelProviding) {
         tunnelProvider = tunnel

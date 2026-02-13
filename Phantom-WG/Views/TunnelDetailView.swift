@@ -18,7 +18,7 @@ struct TunnelDetailView: View {
     @State private var lastHandshake: String = "—"
     @State private var rxBytes: String = "—"
     @State private var txBytes: String = "—"
-    @State private var statsTimer: Timer?
+    @State private var statsPollingTask: Task<Void, Never>?
 
     private var hasChanges: Bool { editConfig != originalConfig }
     private var isActive: Bool { tunnel.status != .inactive }
@@ -281,7 +281,8 @@ struct TunnelDetailView: View {
         Button {
             action()
             copiedItem = id
-            DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
+            Task {
+                try? await Task.sleep(for: .seconds(2))
                 if copiedItem == id { copiedItem = nil }
             }
         } label: {
@@ -301,8 +302,7 @@ struct TunnelDetailView: View {
                 tunnel.status == .restarting
             },
             set: { isOn in
-                if isOn { tunnelsManager.startActivation(of: tunnel) }
-                else { tunnelsManager.startDeactivation(of: tunnel) }
+                if isOn { tunnelsManager.startActivation(of: tunnel) } else { tunnelsManager.startDeactivation(of: tunnel) }
             }
         )
     }
@@ -314,8 +314,9 @@ struct TunnelDetailView: View {
                 let option: ActivateOnDemandOption = isOn ? .wifiOrCellular : .off
                 let provider = tunnel.tunnelProvider
                 option.apply(on: provider)
-                provider.savePreferences { _ in
-                    provider.loadPreferences { _ in }
+                Task {
+                    try? await provider.savePreferences()
+                    try? await provider.loadPreferences()
                 }
             }
         )
@@ -383,16 +384,21 @@ struct TunnelDetailView: View {
     private func startStatsPolling() {
         stopStatsPolling()
         pollStats()
-        statsTimer = Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) { _ in
-            Task { @MainActor in
+        statsPollingTask = Task {
+            while !Task.isCancelled {
+                do {
+                    try await Task.sleep(for: .seconds(1))
+                } catch {
+                    break
+                }
                 pollStats()
             }
         }
     }
 
     private func stopStatsPolling() {
-        statsTimer?.invalidate()
-        statsTimer = nil
+        statsPollingTask?.cancel()
+        statsPollingTask = nil
     }
 
     private func resetStats() {
@@ -430,51 +436,4 @@ struct TunnelDetailView: View {
         }
     }
 
-    // MARK: - Helpers
-
-    private var statusTextColor: Color {
-        switch tunnel.status {
-        case .active: return .green
-        case .activating, .waiting, .reasserting, .restarting: return .orange
-        case .deactivating: return .orange
-        case .inactive: return .secondary
-        }
-    }
-
-    private var statusBadgeColor: Color {
-        switch tunnel.status {
-        case .active: return .green
-        case .activating, .waiting, .reasserting, .restarting: return .orange
-        case .deactivating: return .orange
-        case .inactive: return .secondary
-        }
-    }
-
-    private var statusBadgeIcon: String {
-        switch tunnel.status {
-        case .active: return "shield.checkered"
-        case .activating, .waiting, .reasserting, .restarting: return "arrow.triangle.2.circlepath"
-        case .deactivating: return "arrow.down.circle"
-        case .inactive: return "shield.slash"
-        }
-    }
-}
-
-// MARK: - Stat Row
-
-private struct StatRow: View {
-    let icon: String
-    let label: String
-    let value: String
-    var valueColor: Color = .secondary
-
-    var body: some View {
-        HStack {
-            Label(label, systemImage: icon)
-            Spacer()
-            Text(value)
-                .foregroundStyle(valueColor)
-                .font(.system(.body, design: .monospaced))
-        }
-    }
 }

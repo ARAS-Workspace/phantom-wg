@@ -14,7 +14,7 @@ struct PhantomApp: App {
                 } else if let error = tunnelsManager.loadError {
                     ContentUnavailableView(
                         loc.t("error"),
-                        systemImage: "exclamationmark.triangle",
+                        systemImage: "Kod g.triangle",
                         description: Text(error)
                     )
                 } else {

@@ -1,0 +1,47 @@
+# ── SwiftLint Configuration ───────────────────────────────
+
+excluded:
+  - Libraries
+  - build
+  - .build
+  - DerivedData
+
+# ── Rule Configuration ───────────────────────────────────
+
+line_length:
+  warning: 140
+  error: 200
+  ignores_comments: true
+  ignores_urls: true
+  ignores_interpolated_strings: true
+
+type_body_length:
+  warning: 400
+  error: 600
+
+file_length:
+  warning: 500
+  error: 800
+  ignore_comment_only_lines: true
+
+# Common Swift abbreviations are allowed explicitly
+identifier_name:
+  min_length:
+    warning: 2
+    error: 1
+  max_length:
+    warning: 50
+    error: 60
+  excluded:
+    - id    # Identifiable protocol
+    - db    # database (SharedLogger)
+    - ts    # timestamp
+    - tr    # Turkish locale
+    - en    # English locale
+    - vc    # view controller
+    - ok    # boolean result
+    - v     # closure parameter (Binding get/set)
+    - f     # formatter
+    - h     # hours
+    - m     # minutes
+    - s     # seconds

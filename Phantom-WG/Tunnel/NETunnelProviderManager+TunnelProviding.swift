@@ -26,7 +26,10 @@ extension NETunnelProviderManager: TunnelProviding {
     // MARK: - VPN Control
 
     func startTunnel() throws {
-        let session = connection as! NETunnelProviderSession
+        guard let session = connection as? NETunnelProviderSession else {
+            throw NSError(domain: "PhantomWG", code: -2,
+                          userInfo: [NSLocalizedDescriptionKey: "Invalid tunnel session"])
+        }
         try session.startVPNTunnel()
     }
 
@@ -35,7 +38,10 @@ extension NETunnelProviderManager: TunnelProviding {
     }
 
     func sendProviderMessage(_ data: Data, responseHandler: @escaping @Sendable (Data?) -> Void) throws {
-        let session = connection as! NETunnelProviderSession
+        guard let session = connection as? NETunnelProviderSession else {
+            throw NSError(domain: "PhantomWG", code: -3,
+                          userInfo: [NSLocalizedDescriptionKey: "Invalid tunnel session"])
+        }
         try session.sendProviderMessage(data, responseHandler: responseHandler)
     }
 
