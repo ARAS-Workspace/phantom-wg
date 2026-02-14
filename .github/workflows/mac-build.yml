@@ -1,0 +1,36 @@
+name: macOS Build Validation
+
+on:
+  push:
+    branches: [ "mac/main", "mac/*" ]
+  pull_request:
+    branches: [ "mac/main" ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    name: Unsigned Build (macOS)
+    runs-on: macos-26
+    steps:
+      - name: Checkout with submodules
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Install Go for WireGuardKit
+        run: brew install go@1.22
+
+      - name: Install XcodeGen
+        run: brew install xcodegen
+
+      - name: Generate Xcode project
+        run: xcodegen generate
+
+      - name: Build (unsigned)
+        run: |
+          set -o pipefail
+          xcodebuild build \
+            -scheme "Phantom-WG-Mac" \
+            -destination 'platform=macOS,arch=arm64' \
+            CODE_SIGNING_ALLOWED=NO \
+            2>&1 | xcpretty --color

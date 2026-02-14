@@ -1,0 +1,140 @@
+name: Build & Deploy DMG
+
+on:
+  push:
+    tags: [ "dmg-v*" ]
+  workflow_dispatch:
+    inputs:
+      version_override:
+        description: "Version override (e.g. 1.0.1)"
+        required: false
+
+env:
+  SCHEME: Phantom-WG-Mac
+  APP_NAME: Phantom-WG-Mac
+  TEAM_ID: 9C5SL5H7CM
+
+jobs:
+  build:
+    name: Archive & DMG (macOS arm64)
+    runs-on: macos-26
+    steps:
+      - name: Checkout with submodules
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Resolve version
+        run: |
+          if [ -n "${{ github.event.inputs.version_override }}" ]; then
+            VERSION="${{ github.event.inputs.version_override }}"
+          else
+            VERSION="${GITHUB_REF_NAME#dmg-v}"
+          fi
+          echo "VERSION=$VERSION" >> "$GITHUB_ENV"
+          echo "BUILD_NUMBER=$(date -u +%Y%m%d.%H%M)" >> "$GITHUB_ENV"
+          echo "Version: $VERSION"
+
+      - name: Install Go for WireGuardKit
+        run: brew install go@1.22
+
+      - name: Install XcodeGen
+        run: brew install xcodegen
+
+      - name: Generate Xcode project
+        run: xcodegen generate
+
+      - name: Import signing certificate
+        env:
+          CERTIFICATE_P12: ${{ secrets.DEVELOPER_ID_CERTIFICATE_P12 }}
+          CERTIFICATE_PASSWORD: ${{ secrets.DEVELOPER_ID_CERTIFICATE_PASSWORD }}
+        run: |
+          KEYCHAIN_PATH="$RUNNER_TEMP/build.keychain-db"
+          security create-keychain -p "" "$KEYCHAIN_PATH"
+          security set-keychain-settings -lut 21600 "$KEYCHAIN_PATH"
+          security unlock-keychain -p "" "$KEYCHAIN_PATH"
+
+          echo "$CERTIFICATE_P12" | base64 --decode > "$RUNNER_TEMP/cert.p12"
+          security import "$RUNNER_TEMP/cert.p12" \
+            -k "$KEYCHAIN_PATH" \
+            -P "$CERTIFICATE_PASSWORD" \
+            -T /usr/bin/codesign \
+            -T /usr/bin/productsign
+
+          security set-key-partition-list -S apple-tool:,apple: -s -k "" "$KEYCHAIN_PATH"
+          security list-keychains -d user -s "$KEYCHAIN_PATH" login.keychain-db
+
+      - name: Archive
+        run: |
+          set -o pipefail
+          xcodebuild archive \
+            -scheme "$SCHEME" \
+            -destination 'platform=macOS,arch=arm64' \
+            -archivePath "$RUNNER_TEMP/$APP_NAME.xcarchive" \
+            MARKETING_VERSION="$VERSION" \
+            CURRENT_PROJECT_VERSION="$BUILD_NUMBER" \
+            CODE_SIGN_STYLE=Manual \
+            DEVELOPMENT_TEAM="$TEAM_ID" \
+            2>&1 | xcpretty --color
+
+      - name: Export app
+        run: |
+          cat > "$RUNNER_TEMP/ExportOptions.plist" << 'PLIST'
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0">
+          <dict>
+              <key>method</key>
+              <string>developer-id</string>
+              <key>teamID</key>
+              <string>9C5SL5H7CM</string>
+          </dict>
+          </plist>
+          PLIST
+
+          xcodebuild -exportArchive \
+            -archivePath "$RUNNER_TEMP/$APP_NAME.xcarchive" \
+            -exportPath "$RUNNER_TEMP/export" \
+            -exportOptionsPlist "$RUNNER_TEMP/ExportOptions.plist"
+
+      - name: Notarize app
+        env:
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_ID_PASSWORD: ${{ secrets.APPLE_ID_PASSWORD }}
+        run: |
+          ditto -c -k --keepParent "$RUNNER_TEMP/export/$APP_NAME.app" "$RUNNER_TEMP/$APP_NAME.zip"
+
+          xcrun notarytool submit "$RUNNER_TEMP/$APP_NAME.zip" \
+            --apple-id "$APPLE_ID" \
+            --password "$APPLE_ID_PASSWORD" \
+            --team-id "$TEAM_ID" \
+            --wait
+
+          xcrun stapler staple "$RUNNER_TEMP/export/$APP_NAME.app"
+
+      - name: Create DMG
+        run: |
+          DMG_PATH="$RUNNER_TEMP/$APP_NAME-$VERSION.dmg"
+
+          hdiutil create -volname "$APP_NAME" \
+            -srcfolder "$RUNNER_TEMP/export/$APP_NAME.app" \
+            -ov -format UDZO \
+            "$DMG_PATH"
+
+          # Notarize DMG too
+          xcrun notarytool submit "$DMG_PATH" \
+            --apple-id "${{ secrets.APPLE_ID }}" \
+            --password "${{ secrets.APPLE_ID_PASSWORD }}" \
+            --team-id "$TEAM_ID" \
+            --wait
+
+          xcrun stapler staple "$DMG_PATH"
+
+          echo "DMG_PATH=$DMG_PATH" >> "$GITHUB_ENV"
+
+      - name: Upload DMG artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: "${{ env.APP_NAME }}-${{ env.VERSION }}.dmg"
+          path: "${{ env.DMG_PATH }}"
+          retention-days: 90
