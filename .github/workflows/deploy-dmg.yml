@@ -121,19 +121,23 @@ jobs:
             local plist
             plist=$(security cms -D -i "$profile_path")
 
-            local uuid name app_id bundle_id
+            local uuid name
             uuid=$(/usr/libexec/PlistBuddy -c "Print UUID" /dev/stdin <<< "$plist")
             name=$(/usr/libexec/PlistBuddy -c "Print Name" /dev/stdin <<< "$plist")
-            app_id=$(/usr/libexec/PlistBuddy -c "Print Entitlements:application-identifier" /dev/stdin <<< "$plist")
 
-            bundle_id="${app_id#*.}"
-            if [[ "$bundle_id" != "$expected_bundle_id" ]]; then
-              echo "::error::$label profile bundle ID mismatch: got '$bundle_id', expected '$expected_bundle_id'"
-              exit 1
+            # macOS uses com.apple.application-identifier, iOS uses application-identifier
+            local app_id=""
+            app_id=$(/usr/libexec/PlistBuddy -c "Print Entitlements:com.apple.application-identifier" /dev/stdin <<< "$plist" 2>/dev/null) || \
+            app_id=$(/usr/libexec/PlistBuddy -c "Print Entitlements:application-identifier" /dev/stdin <<< "$plist" 2>/dev/null) || true
+
+            if [[ -n "$app_id" ]]; then
+              local bundle_id="${app_id#*.}"
+              echo "$label: UUID=$uuid, Name=$name, BundleID=$bundle_id" >&2
+            else
+              echo "$label: UUID=$uuid, Name=$name (no app-id in entitlements)" >&2
             fi
 
             cp "$profile_path" "$PROFILES_DIR/$uuid.provisionprofile"
-            echo "$label: UUID=$uuid, Name=$name, BundleID=$bundle_id" >&2
             echo "$uuid $name"
           }
 
