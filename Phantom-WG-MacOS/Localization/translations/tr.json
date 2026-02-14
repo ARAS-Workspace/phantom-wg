@@ -4,7 +4,6 @@
   "error": "Hata",
   "ok": "Tamam",
   "cancel": "İptal",
-  "save": "Kaydet",
   "delete": "Sil",
 
   "tunnel_list_empty_title": "Tünel Yok",
@@ -17,8 +16,6 @@
   "detail_handshake": "El Sıkışma",
   "detail_received": "Alınan",
   "detail_sent": "Gönderilen",
-  "detail_on_demand": "İsteğe Bağlı Etkinleştir",
-  "detail_on_demand_footer": "Uygulama kapatılsa bile VPN'i aktif tutar.",
   "detail_general": "Genel",
   "detail_name": "Ad",
   "detail_wstunnel": "Wstunnel",
@@ -40,8 +37,6 @@
   "detail_keepalive": "Canlı Tutma",
   "detail_logs": "Günlükler",
   "detail_copy_json": "Yapılandırmayı Kopyala (JSON)",
-  "detail_copy_logs": "Günlükleri Kopyala",
-  "detail_clear_logs": "Günlükleri Temizle",
   "detail_copied": "Kopyalandı!",
   "detail_delete_tunnel": "Tüneli Sil",
   "detail_delete_confirm_title": "Tünel Silinsin mi?",
@@ -70,8 +65,14 @@
   "import_quick_actions": "Hızlı Eylemler",
   "import_paste": "Panodan Yapıştır",
   "import_button": "İçe Aktar",
-  "import_invalid_input": "Geçersiz girdi.",
   "import_invalid_format": "Geçersiz yapılandırma formatı.",
+  "import_err_empty_name": "Yapılandırma adı gereklidir.",
+  "import_err_empty_wstunnel_url": "Wstunnel sunucu URL'si gereklidir.",
+  "import_err_empty_private_key": "Arayüz özel anahtarı gereklidir.",
+  "import_err_empty_public_key": "Eş açık anahtarı gereklidir.",
+  "import_err_empty_address": "Arayüz adresi gereklidir.",
+  "import_err_empty_endpoint": "Eş uç noktası gereklidir.",
+  "import_err_invalid_json": "Geçersiz yapılandırma formatı: %@",
 
   "error_tunnel_inactive": "Tünel pasif durumda.",
   "error_starting_failed": "Tünel etkinleştirilemedi. %@",
@@ -84,5 +85,13 @@
   "error_invalid_name": "Tünel adı geçersiz.",
   "error_add_tunnel": "Tünel oluşturulamadı. %@",
   "error_modify_tunnel": "Tünel düzenlenemedi. %@",
-  "error_remove_tunnel": "Tünel kaldırılamadı. %@"
+  "error_remove_tunnel": "Tünel kaldırılamadı. %@",
+
+  "sysext_activating": "VPN uzantısı etkinleştiriliyor...",
+  "sysext_approval_title": "Ağ Uzantısı Onayı Gerekli",
+  "sysext_approval_message": "**Sistem Ayarları → Genel → Oturum Açma Öğeleri ve Uzantılar → Ağ Uzantıları** bölümüne gidip Phantom-WG Mac'e izin verin.",
+  "sysext_open_settings": "Sistem Ayarlarını Aç",
+  "sysext_check_again": "Tekrar Kontrol Et",
+  "sysext_failed_title": "Uzantı Etkinleştirme Başarısız",
+  "sysext_retry": "Tekrar Dene"
 }

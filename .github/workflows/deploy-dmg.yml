@@ -20,8 +20,8 @@ jobs:
     runs-on: macos-26
     timeout-minutes: 45
     env:
-      APP_BUNDLE_ID: com.remrearas.Phantom-WG-Mac
-      TUNNEL_BUNDLE_ID: com.remrearas.Phantom-WG-Mac.PhantomTunnel
+      APP_BUNDLE_ID: com.remrearas.Phantom-WG-MacOS
+      TUNNEL_BUNDLE_ID: com.remrearas.Phantom-WG-MacOS.PhantomTunnel
       TEAM_ID: 9C5SL5H7CM
 
     steps:
@@ -33,7 +33,7 @@ jobs:
           echo "P12_PATH=$RUNNER_TEMP/certificate.p12" >> "$GITHUB_ENV"
           echo "PP_APP_PATH=$RUNNER_TEMP/app.provisionprofile" >> "$GITHUB_ENV"
           echo "PP_TUNNEL_PATH=$RUNNER_TEMP/tunnel.provisionprofile" >> "$GITHUB_ENV"
-          echo "ARCHIVE_PATH=$RUNNER_TEMP/Phantom-WG-Mac.xcarchive" >> "$GITHUB_ENV"
+          echo "ARCHIVE_PATH=$RUNNER_TEMP/Phantom-WG-MacOS.xcarchive" >> "$GITHUB_ENV"
           echo "EXPORT_PATH=$RUNNER_TEMP/export" >> "$GITHUB_ENV"
           echo "EXPORT_OPTIONS_PATH=$RUNNER_TEMP/ExportOptions.plist" >> "$GITHUB_ENV"
 
@@ -162,7 +162,7 @@ jobs:
           sed -i '' "/PRODUCT_BUNDLE_IDENTIFIER: ${TUNNEL_BUNDLE_ID}$/a\\
           \        PROVISIONING_PROFILE_SPECIFIER: ${TUNNEL_PROFILE_NAME}" project.yml
 
-          echo "--- Patched project.yml ---"
+          echo "--- Patched project.yml signing settings ---"
           grep -A2 'CODE_SIGN_STYLE\|PROVISIONING_PROFILE_SPECIFIER' project.yml
 
       # ── 6. Install tools ─────────────────────────────────────
@@ -177,7 +177,7 @@ jobs:
       - name: Archive
         run: |
           xcodebuild archive \
-            -scheme "Phantom-WG-Mac" \
+            -scheme "Phantom-WG-MacOS" \
             -destination 'platform=macOS,arch=arm64' \
             -archivePath "$ARCHIVE_PATH" \
             MARKETING_VERSION="${{ steps.version.outputs.version }}" \
@@ -230,7 +230,7 @@ jobs:
           APPLE_ID: ${{ secrets.APPLE_ID }}
           APPLE_ID_PASSWORD: ${{ secrets.APPLE_ID_PASSWORD }}
         run: |
-          APP_PATH="$EXPORT_PATH/Phantom-WG-Mac.app"
+          APP_PATH="$EXPORT_PATH/Phantom-WG-MacOS.app"
 
           ditto -c -k --keepParent "$APP_PATH" "$RUNNER_TEMP/app.zip"
 
@@ -246,10 +246,10 @@ jobs:
       - name: Create DMG
         run: |
           VERSION="${{ steps.version.outputs.version }}"
-          DMG_PATH="$RUNNER_TEMP/Phantom-WG-Mac-$VERSION.dmg"
+          DMG_PATH="$RUNNER_TEMP/Phantom-WG-MacOS-$VERSION.dmg"
 
           hdiutil create -volname "Phantom-WG Mac" \
-            -srcfolder "$EXPORT_PATH/Phantom-WG-Mac.app" \
+            -srcfolder "$EXPORT_PATH/Phantom-WG-MacOS.app" \
             -ov -format UDZO \
             "$DMG_PATH"
 
@@ -263,13 +263,13 @@ jobs:
 
           echo "DMG_PATH=$DMG_PATH" >> "$GITHUB_ENV"
           echo "### DMG Created" >> "$GITHUB_STEP_SUMMARY"
-          echo "- **File:** Phantom-WG-Mac-$VERSION.dmg" >> "$GITHUB_STEP_SUMMARY"
+          echo "- **File:** Phantom-WG-MacOS-$VERSION.dmg" >> "$GITHUB_STEP_SUMMARY"
 
       # ── 13. Upload artifact ──────────────────────────────────
       - name: Upload DMG artifact
         uses: actions/upload-artifact@v4
         with:
-          name: "Phantom-WG-Mac-${{ steps.version.outputs.version }}.dmg"
+          name: "Phantom-WG-MacOS-${{ steps.version.outputs.version }}.dmg"
           path: "${{ env.DMG_PATH }}"
           retention-days: 90
 

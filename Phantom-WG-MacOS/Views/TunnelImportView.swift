@@ -72,12 +72,13 @@ struct TunnelImportView: View {
         let trimmed = inputText.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return }
 
-        guard let jsonData = trimmed.data(using: .utf8) else {
-            errorMessage = loc.t("import_invalid_input")
+        var config: TunnelConfig
+        do {
+            config = try ConfigStore.decodeAndValidate(json: trimmed)
+        } catch let error as ConfigStore.ValidationError {
+            errorMessage = validationErrorMessage(error)
             return
-        }
-
-        guard var config = try? JSONDecoder().decode(TunnelConfig.self, from: jsonData) else {
+        } catch {
             errorMessage = loc.t("import_invalid_format")
             return
         }
@@ -86,11 +87,24 @@ struct TunnelImportView: View {
 
         Task {
             do {
-                _ = try await tunnelsManager.add(config: config, activateOnDemand: .off)
+                _ = try await tunnelsManager.add(config: config)
                 dismiss()
             } catch {
                 errorMessage = error.localizedDescription
             }
+        }
+    }
+
+    private func validationErrorMessage(_ error: ConfigStore.ValidationError) -> String {
+        switch error {
+        case .emptyName:        return loc.t("import_err_empty_name")
+        case .emptyWstunnelUrl: return loc.t("import_err_empty_wstunnel_url")
+        case .emptyPrivateKey:  return loc.t("import_err_empty_private_key")
+        case .emptyPublicKey:   return loc.t("import_err_empty_public_key")
+        case .emptyAddress:     return loc.t("import_err_empty_address")
+        case .emptyEndpoint:    return loc.t("import_err_empty_endpoint")
+        case .invalidJson(let detail):
+            return loc.t("import_err_invalid_json", detail)
         }
     }
 }

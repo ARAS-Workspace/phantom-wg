@@ -15,14 +15,6 @@ class TunnelContainer: ObservableObject, Identifiable {
         tunnelProvider.tunnelConfig
     }
 
-    var activateOnDemandSetting: ActivateOnDemandOption {
-        ActivateOnDemandOption.from(provider: tunnelProvider)
-    }
-
-    var isActivateOnDemandEnabled: Bool {
-        tunnelProvider.isOnDemandEnabled
-    }
-
     // Activation tracking (used by TunnelsManager)
     var onDeactivated: ((TunnelContainer) -> Void)?
     var isAttemptingActivation = false

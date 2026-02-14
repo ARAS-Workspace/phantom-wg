@@ -4,7 +4,6 @@
   "error": "Error",
   "ok": "OK",
   "cancel": "Cancel",
-  "save": "Save",
   "delete": "Delete",
 
   "tunnel_list_empty_title": "No Tunnels",
@@ -17,8 +16,6 @@
   "detail_handshake": "Handshake",
   "detail_received": "Received",
   "detail_sent": "Sent",
-  "detail_on_demand": "Activate On Demand",
-  "detail_on_demand_footer": "Keeps the VPN active even when the app is closed.",
   "detail_general": "General",
   "detail_name": "Name",
   "detail_wstunnel": "Wstunnel",
@@ -40,8 +37,6 @@
   "detail_keepalive": "Keepalive",
   "detail_logs": "Logs",
   "detail_copy_json": "Copy Config (JSON)",
-  "detail_copy_logs": "Copy Logs",
-  "detail_clear_logs": "Clear Logs",
   "detail_copied": "Copied!",
   "detail_delete_tunnel": "Delete Tunnel",
   "detail_delete_confirm_title": "Delete Tunnel?",
@@ -70,8 +65,14 @@
   "import_quick_actions": "Quick Actions",
   "import_paste": "Paste from Clipboard",
   "import_button": "Import",
-  "import_invalid_input": "Invalid input.",
   "import_invalid_format": "Invalid configuration format.",
+  "import_err_empty_name": "Configuration name is required.",
+  "import_err_empty_wstunnel_url": "Wstunnel server URL is required.",
+  "import_err_empty_private_key": "Interface private key is required.",
+  "import_err_empty_public_key": "Peer public key is required.",
+  "import_err_empty_address": "Interface address is required.",
+  "import_err_empty_endpoint": "Peer endpoint is required.",
+  "import_err_invalid_json": "Invalid configuration format: %@",
 
   "error_tunnel_inactive": "The tunnel is inactive.",
   "error_starting_failed": "Could not activate tunnel. %@",
@@ -84,5 +85,13 @@
   "error_invalid_name": "The tunnel name is invalid.",
   "error_add_tunnel": "Unable to create the tunnel. %@",
   "error_modify_tunnel": "Unable to modify the tunnel. %@",
-  "error_remove_tunnel": "Unable to remove the tunnel. %@"
+  "error_remove_tunnel": "Unable to remove the tunnel. %@",
+
+  "sysext_activating": "Activating VPN extension...",
+  "sysext_approval_title": "Network Extension Approval Required",
+  "sysext_approval_message": "Go to **System Settings → General → Login Items & Extensions → Network Extensions** and allow Phantom-WG Mac.",
+  "sysext_open_settings": "Open System Settings",
+  "sysext_check_again": "Check Again",
+  "sysext_failed_title": "Extension Activation Failed",
+  "sysext_retry": "Retry"
 }

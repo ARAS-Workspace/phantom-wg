@@ -25,14 +25,13 @@ struct TunnelDetailView: View {
 
     init(tunnel: TunnelContainer) {
         self.tunnel = tunnel
-        _logStore = StateObject(wrappedValue: LogStore(tunnelId: tunnel.tunnelConfig?.id.uuidString))
+        _logStore = StateObject(wrappedValue: LogStore(tunnel: tunnel))
     }
 
     var body: some View {
         List {
             statusSection
             if isActive { statsSection }
-            onDemandSection
             nameSection
             wstunnelSection
             interfaceSection
@@ -124,17 +123,6 @@ struct TunnelDetailView: View {
         }
     }
 
-    private var onDemandSection: some View {
-        Section {
-            Toggle(isOn: onDemandBinding) {
-                Label(loc.t("detail_on_demand"), systemImage: "bolt.shield")
-            }
-            .toggleStyle(.switch)
-        } footer: {
-            Text(loc.t("detail_on_demand_footer"))
-        }
-    }
-
     private var nameSection: some View {
         Section {
             textField(loc.t("detail_name"), text: $editConfig.name)
@@ -205,15 +193,6 @@ struct TunnelDetailView: View {
         Section {
             copyButton(loc.t("detail_copy_json"), icon: "curlybraces", id: "json") { copyJSON() }
                 .listRowSeparator(.hidden)
-            copyButton(loc.t("detail_copy_logs"), icon: "text.quote", id: "logs") { copyLogs() }
-                .listRowSeparator(.hidden)
-
-            Button {
-                logStore.clear()
-            } label: {
-                Label(loc.t("detail_clear_logs"), systemImage: "trash.circle")
-            }
-            .listRowSeparator(.hidden)
 
             Button(role: .destructive) {
                 showingDeleteConfirmation = true
@@ -307,21 +286,6 @@ struct TunnelDetailView: View {
         )
     }
 
-    private var onDemandBinding: Binding<Bool> {
-        Binding(
-            get: { tunnel.isActivateOnDemandEnabled },
-            set: { isOn in
-                let option: ActivateOnDemandOption = isOn ? .anyNetwork : .off
-                let provider = tunnel.tunnelProvider
-                option.apply(on: provider)
-                Task {
-                    try? await provider.savePreferences()
-                    try? await provider.loadPreferences()
-                }
-            }
-        )
-    }
-
     private var presharedKeyBinding: Binding<String> {
         Binding(
             get: { editConfig.peer.presharedKey ?? "" },
@@ -341,8 +305,7 @@ struct TunnelDetailView: View {
     private func saveConfig() {
         Task {
             do {
-                try await tunnelsManager.modify(tunnel: tunnel, with: editConfig,
-                                                onDemand: tunnel.activateOnDemandSetting)
+                try await tunnelsManager.modify(tunnel: tunnel, with: editConfig)
                 originalConfig = editConfig
             } catch {
                 errorMessage = error.localizedDescription
@@ -358,12 +321,6 @@ struct TunnelDetailView: View {
               let json = String(data: data, encoding: .utf8) else { return }
         NSPasteboard.general.clearContents()
         NSPasteboard.general.setString(json, forType: .string)
-    }
-
-    private func copyLogs() {
-        let text = logStore.entries.map { $0.text }.joined(separator: "\n")
-        NSPasteboard.general.clearContents()
-        NSPasteboard.general.setString(text.isEmpty ? loc.t("detail_no_logs") : text, forType: .string)
     }
 
     private func deleteTunnel() {

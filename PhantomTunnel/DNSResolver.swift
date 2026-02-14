@@ -3,8 +3,24 @@ import Foundation
 enum DNSResolver {
 
     /// Resolves a hostname to its IPv4 addresses using getaddrinfo.
-    /// Returns an empty array if resolution fails.
-    static func resolveIPv4(_ hostname: String) -> [String] {
+    /// Returns an empty array if resolution fails or times out.
+    static func resolveIPv4(_ hostname: String, timeout: TimeInterval = 5.0) -> [String] {
+        var result: [String] = []
+        let semaphore = DispatchSemaphore(value: 0)
+
+        DispatchQueue.global(qos: .userInitiated).async {
+            result = resolveSync(hostname)
+            semaphore.signal()
+        }
+
+        if semaphore.wait(timeout: .now() + timeout) == .timedOut {
+            TunnelLogger.log(.tunnel, "WARNING: DNS resolution timed out for \(hostname) after \(Int(timeout))s")
+            return []
+        }
+        return result
+    }
+
+    private static func resolveSync(_ hostname: String) -> [String] {
         var hints = addrinfo()
         hints.ai_family = AF_INET
         hints.ai_socktype = SOCK_STREAM

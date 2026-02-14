@@ -17,11 +17,6 @@ protocol TunnelProviding: AnyObject {
     var tunnelConfig: TunnelConfig? { get }
     func configure(with config: TunnelConfig) throws
 
-    // MARK: - On-Demand
-
-    var isOnDemandEnabled: Bool { get set }
-    var onDemandRules: [NEOnDemandRule]? { get set }
-
     // MARK: - Connection
 
     var connectionStatus: NEVPNStatus { get }

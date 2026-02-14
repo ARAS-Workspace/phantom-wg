@@ -3,8 +3,10 @@ import WireGuardKit
 
 enum PacketTunnelProviderError: String, Error {
     case savedProtocolConfigurationIsInvalid
+    case invalidWstunnelConfig
     case couldNotStartWstunnel
     case couldNotStartWireGuard
+    case dnsResolutionFailed
 }
 
 extension WireGuardLogLevel {
@@ -17,5 +19,5 @@ extension WireGuardLogLevel {
 }
 
 func wg_log(_ type: OSLogType, message: String) {
-    SharedLogger.log(.wireGuard, message)
+    TunnelLogger.log(.wireGuard, message)
 }

@@ -41,7 +41,7 @@ class TunnelsManager: ObservableObject {
 
     // MARK: - CRUD
 
-    func add(config: TunnelConfig, activateOnDemand: ActivateOnDemandOption = .off) async throws -> TunnelContainer {
+    func add(config: TunnelConfig) async throws -> TunnelContainer {
         let name = config.name.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !name.isEmpty else {
             throw TunnelManagementError.tunnelInvalidName
@@ -60,8 +60,6 @@ class TunnelsManager: ObservableObject {
             throw TunnelManagementError.vpnSystemErrorOnAddTunnel(systemError: error)
         }
 
-        activateOnDemand.apply(on: provider)
-
         do {
             try await provider.savePreferences()
             try await provider.loadPreferences()
@@ -74,8 +72,7 @@ class TunnelsManager: ObservableObject {
         return tunnel
     }
 
-    func modify(tunnel: TunnelContainer, with config: TunnelConfig,
-                onDemand: ActivateOnDemandOption) async throws {
+    func modify(tunnel: TunnelContainer, with config: TunnelConfig) async throws {
         let name = config.name.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !name.isEmpty else {
             throw TunnelManagementError.tunnelInvalidName
@@ -93,8 +90,6 @@ class TunnelsManager: ObservableObject {
             throw TunnelManagementError.vpnSystemErrorOnModifyTunnel(systemError: error)
         }
 
-        onDemand.apply(on: tunnel.tunnelProvider)
-
         do {
             try await tunnel.tunnelProvider.savePreferences()
             try await tunnel.tunnelProvider.loadPreferences()
@@ -106,9 +101,8 @@ class TunnelsManager: ObservableObject {
     }
 
     func remove(tunnel: TunnelContainer) async throws {
-        // Destroy config from Keychain (if underlying provider supports it)
         if let proto = tunnel.tunnelProvider.protocolConfiguration as? NETunnelProviderProtocol {
-            proto.destroyConfigInKeychain()
+            proto.destroyConfig()
         }
 
         do {
@@ -131,9 +125,7 @@ class TunnelsManager: ObservableObject {
     func startActivation(of tunnel: TunnelContainer) {
         guard tunnel.status == .inactive else { return }
 
-        // If another tunnel is already active, queue this one as waiting
         if let activeTunnel = tunnels.first(where: { $0.status != .inactive && $0.status != .waiting }) {
-            // Reset previous waiting tunnel if any
             if let previousWaiting = waitingTunnel, previousWaiting.id != tunnel.id {
                 previousWaiting.status = .inactive
             }
@@ -143,32 +135,12 @@ class TunnelsManager: ObservableObject {
             return
         }
 
-        // Disable on-demand on all other tunnels before activating
-        tunnels.filter { $0.id != tunnel.id && $0.isActivateOnDemandEnabled }.forEach { other in
-            other.tunnelProvider.isOnDemandEnabled = false
-            other.tunnelProvider.savePreferences { _ in }
-        }
-
         startActivation(of: tunnel, at: 0)
     }
 
     func startDeactivation(of tunnel: TunnelContainer) {
         guard tunnel.status != .inactive && tunnel.status != .deactivating else { return }
-
-        // Disable on-demand first, otherwise system will reconnect
-        if tunnel.isActivateOnDemandEnabled {
-            tunnel.tunnelProvider.isOnDemandEnabled = false
-            Task {
-                do {
-                    try await tunnel.tunnelProvider.savePreferences()
-                    performDeactivation(of: tunnel)
-                } catch {
-                    // Save failed, skip deactivation
-                }
-            }
-        } else {
-            performDeactivation(of: tunnel)
-        }
+        performDeactivation(of: tunnel)
     }
 
     func refreshStatuses() {
@@ -197,18 +169,13 @@ class TunnelsManager: ObservableObject {
         let attemptId = UUID().uuidString
         tunnel.activationAttemptId = attemptId
 
-        print("[DEBUG] startActivation retry=\(retryIndex) tunnel=\(tunnel.name)")
-
-        // Ensure manager is enabled and save
         tunnel.tunnelProvider.isEnabled = true
         Task {
             do {
                 try await tunnel.tunnelProvider.savePreferences()
-                print("[DEBUG] savePreferences OK")
                 guard tunnel.activationAttemptId == attemptId else { return }
                 await self.doStartVPNTunnel(tunnel: tunnel, attemptId: attemptId, retryIndex: retryIndex)
             } catch {
-                print("[DEBUG] savePreferences FAILED: \(error)")
                 tunnel.isAttemptingActivation = false
                 tunnel.status = .inactive
                 tunnel.lastActivationError = .savingFailed(systemError: error)
@@ -219,9 +186,7 @@ class TunnelsManager: ObservableObject {
     private func doStartVPNTunnel(tunnel: TunnelContainer, attemptId: String, retryIndex: Int) async {
         do {
             try await tunnel.tunnelProvider.loadPreferences()
-            print("[DEBUG] loadPreferences OK")
         } catch {
-            print("[DEBUG] loadPreferences FAILED: \(error)")
             tunnel.isAttemptingActivation = false
             tunnel.status = .inactive
             tunnel.lastActivationError = .loadingFailed(systemError: error)
@@ -232,9 +197,7 @@ class TunnelsManager: ObservableObject {
 
         do {
             try tunnel.tunnelProvider.startTunnel()
-            print("[DEBUG] startTunnel OK")
         } catch {
-            print("[DEBUG] startTunnel FAILED: \(error)")
             tunnel.isAttemptingActivation = false
             tunnel.status = .inactive
             tunnel.lastActivationError = .startingFailed(systemError: error)
@@ -267,10 +230,7 @@ class TunnelsManager: ObservableObject {
     private func activateWaitingTunnelIfNeeded() {
         guard let waitingTunnel else { return }
         self.waitingTunnel = nil
-
-        // Verify the waiting tunnel is still in waiting state
         guard waitingTunnel.status == .waiting else { return }
-
         startActivation(of: waitingTunnel, at: 0)
     }
 
@@ -293,13 +253,9 @@ class TunnelsManager: ObservableObject {
 
     private func handleStatusChange(for tunnel: TunnelContainer) {
         let systemStatus = tunnel.tunnelProvider.connectionStatus
-        print("[DEBUG] statusChange: \(tunnel.name) → \(systemStatus.rawValue) (isAttempting=\(tunnel.isAttemptingActivation))")
 
-        // Notify parent observers (e.g. TunnelListView) so computed
-        // properties like hasActiveTunnel update instantly.
         objectWillChange.send()
 
-        // If we're attempting activation, interpret the status in that context
         if tunnel.isAttemptingActivation {
             switch systemStatus {
             case .connected:
@@ -332,7 +288,6 @@ class TunnelsManager: ObservableObject {
                 break
             }
         } else {
-            // Normal status tracking
             let newStatus = TunnelStatus(from: systemStatus)
             tunnel.status = newStatus
 
@@ -345,7 +300,6 @@ class TunnelsManager: ObservableObject {
             }
         }
 
-        // Notify status bar
         let isActive = tunnels.contains { $0.status == .active }
         NotificationCenter.default.post(
             name: NSNotification.Name("PhantomTunnelStatusChanged"),
@@ -372,7 +326,6 @@ class TunnelsManager: ObservableObject {
     private func reload() async {
         guard let providers = try? await providerFactory.loadAllFromPreferences() else { return }
 
-        // Update existing tunnels, add new ones, remove deleted ones
         var newTunnels: [TunnelContainer] = []
 
         for provider in providers {

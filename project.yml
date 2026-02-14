@@ -1,4 +1,4 @@
-name: Phantom-WG-Mac
+name: Phantom-WG-MacOS
 options:
   bundleIdPrefix: com.remrearas
   deploymentTarget:
@@ -14,40 +14,41 @@ targets:
 
   # ── Main App ──────────────────────────────────────────────
 
-  Phantom-WG-Mac:
+  Phantom-WG-MacOS:
     type: application
     platform: macOS
     sources:
-      - path: Phantom-WG-Mac
+      - path: Phantom-WG-MacOS
         excludes:
           - "**/.DS_Store"
           - Assets/pages
           - Localization/translations
-      - path: Phantom-WG-Mac/Localization/translations
+      - path: Phantom-WG-MacOS/Localization/translations
         type: folder
         buildPhase: resources
-      - path: Phantom-WG-Mac/Assets/pages
+      - path: Phantom-WG-MacOS/Assets/pages
         type: folder
         buildPhase: resources
     dependencies:
       - target: PhantomTunnel
         embed: true
         codeSign: true
-        buildPhase:
-          copyFiles:
-            destination: plugins
       - framework: Libraries/WstunnelKit/libwstunnel_mac.a
         embed: false
     settings:
       base:
         ARCHS: arm64
         ENABLE_HARDENED_RUNTIME: YES
-        PRODUCT_BUNDLE_IDENTIFIER: com.remrearas.Phantom-WG-Mac
-        INFOPLIST_FILE: Phantom-WG-Mac/Info.plist
-        CODE_SIGN_ENTITLEMENTS: Phantom-WG-Mac/Phantom-WG-Mac.entitlements
-        CODE_SIGN_STYLE: Automatic
+        CODE_SIGN_INJECT_BASE_ENTITLEMENTS: NO
+        PRODUCT_NAME: Phantom-WG Mac
+        PRODUCT_BUNDLE_IDENTIFIER: com.remrearas.Phantom-WG-MacOS
+        INFOPLIST_FILE: Phantom-WG-MacOS/Info.plist
+        CODE_SIGN_ENTITLEMENTS: Phantom-WG-MacOS/Phantom-WG-MacOS.entitlements
+        CODE_SIGN_STYLE: Manual
+        CODE_SIGN_IDENTITY: "Developer ID Application"
         DEVELOPMENT_TEAM: 9C5SL5H7CM
-        SWIFT_OBJC_BRIDGING_HEADER: Phantom-WG-Mac/BridgingHeader.h
+        PROVISIONING_PROFILE_SPECIFIER: Mac_Phantom_WG_DeveloperID
+        SWIFT_OBJC_BRIDGING_HEADER: Phantom-WG-MacOS/BridgingHeader.h
         HEADER_SEARCH_PATHS:
           - "$(PROJECT_DIR)/Libraries/WstunnelKit/include"
         LIBRARY_SEARCH_PATHS:
@@ -59,38 +60,39 @@ targets:
         MARKETING_VERSION: "1.0.1"
         CURRENT_PROJECT_VERSION: 1
     info:
-      path: Phantom-WG-Mac/Info.plist
+      path: Phantom-WG-MacOS/Info.plist
       properties:
         CFBundleShortVersionString: "$(MARKETING_VERSION)"
         CFBundleVersion: "$(CURRENT_PROJECT_VERSION)"
         CFBundleDisplayName: Phantom-WG Mac
+        NSSystemExtensionUsageDescription: "Phantom-WG Mac needs to install a system extension to provide VPN tunnel functionality."
     entitlements:
-      path: Phantom-WG-Mac/Phantom-WG-Mac.entitlements
+      path: Phantom-WG-MacOS/Phantom-WG-MacOS.entitlements
       properties:
         com.apple.security.app-sandbox: true
         com.apple.security.network.client: true
         com.apple.security.files.user-selected.read-write: true
         com.apple.security.application-groups:
-          - group.com.remrearas.phantom-wg-mac
+          - group.com.remrearas.phantom-wg-macos
         com.apple.developer.networking.networkextension:
-          - packet-tunnel-provider
+          - packet-tunnel-provider-systemextension
+        com.apple.developer.system-extension.install: true
 
-  # ── Network Extension (App Extension) ────────────────────
+  # ── Network Extension (System Extension) ─────────────────
 
   PhantomTunnel:
-    type: app-extension
+    type: system-extension
     platform: macOS
     sources:
       - path: PhantomTunnel
         excludes:
           - "**/.DS_Store"
       # Shared files from main app
-      - path: Phantom-WG-Mac/Models/TunnelConfig.swift
-      - path: Phantom-WG-Mac/Models/TunnelConfig+Keychain.swift
-      - path: Phantom-WG-Mac/SharedConstants.swift
-      - path: Phantom-WG-Mac/SharedLogger.swift
-      - path: Phantom-WG-Mac/WstunnelBridge.swift
-      - path: Phantom-WG-Mac/Helpers/Keychain.swift
+      - path: Phantom-WG-MacOS/Models/TunnelConfig.swift
+      - path: Phantom-WG-MacOS/Models/TunnelConfig+Keychain.swift
+      - path: Phantom-WG-MacOS/Models/ConfigStore.swift
+      - path: Phantom-WG-MacOS/SharedConstants.swift
+      - path: Phantom-WG-MacOS/WstunnelBridge.swift
     dependencies:
       - package: WireGuardKit
         product: WireGuardKit
@@ -115,17 +117,23 @@ targets:
         ARCHS: arm64
         ENABLE_HARDENED_RUNTIME: YES
         ENABLE_USER_SCRIPT_SANDBOXING: NO
-        PRODUCT_BUNDLE_IDENTIFIER: com.remrearas.Phantom-WG-Mac.PhantomTunnel
+        CODE_SIGN_INJECT_BASE_ENTITLEMENTS: NO
+        PRODUCT_NAME: com.remrearas.Phantom-WG-MacOS.PhantomTunnel
+        PRODUCT_MODULE_NAME: PhantomTunnel
+        PRODUCT_BUNDLE_IDENTIFIER: com.remrearas.Phantom-WG-MacOS.PhantomTunnel
         INFOPLIST_FILE: PhantomTunnel/Info.plist
         CODE_SIGN_ENTITLEMENTS: PhantomTunnel/PhantomTunnel.entitlements
-        CODE_SIGN_STYLE: Automatic
+        CODE_SIGN_STYLE: Manual
+        CODE_SIGN_IDENTITY: "Developer ID Application"
         DEVELOPMENT_TEAM: 9C5SL5H7CM
+        PROVISIONING_PROFILE_SPECIFIER: Mac_PhantomTunnel_DeveloperID
         SWIFT_OBJC_BRIDGING_HEADER: PhantomTunnel/BridgingHeader.h
         HEADER_SEARCH_PATHS:
           - "$(PROJECT_DIR)/Libraries/WstunnelKit/include"
         OTHER_LDFLAGS:
           - "-lresolv"
           - "-lwstunnel_mac"
+        ALWAYS_EMBED_SWIFT_STANDARD_LIBRARIES: YES
         SWIFT_VERSION: "5.0"
         MARKETING_VERSION: "1.0.1"
         CURRENT_PROJECT_VERSION: 1
@@ -136,19 +144,21 @@ targets:
     info:
       path: PhantomTunnel/Info.plist
       properties:
+        CFBundlePackageType: SYSX
         CFBundleShortVersionString: "$(MARKETING_VERSION)"
         CFBundleVersion: "$(CURRENT_PROJECT_VERSION)"
         CFBundleDisplayName: PhantomTunnel
-        NSExtension:
-          NSExtensionPointIdentifier: com.apple.networkextension.packet-tunnel
-          NSExtensionPrincipalClass: $(PRODUCT_MODULE_NAME).PacketTunnelProvider
+        NSSystemExtensionUsageDescription: "Phantom-WG Mac needs to install a system extension to provide VPN tunnel functionality."
+        NetworkExtension:
+          NEProviderClasses:
+            com.apple.networkextension.packet-tunnel: $(PRODUCT_MODULE_NAME).PacketTunnelProvider
     entitlements:
       path: PhantomTunnel/PhantomTunnel.entitlements
       properties:
+        com.apple.developer.networking.networkextension:
+          - packet-tunnel-provider-systemextension
         com.apple.security.app-sandbox: true
         com.apple.security.application-groups:
-          - group.com.remrearas.phantom-wg-mac
-        com.apple.developer.networking.networkextension:
-          - packet-tunnel-provider
+          - group.com.remrearas.phantom-wg-macos
         com.apple.security.network.client: true
         com.apple.security.network.server: true

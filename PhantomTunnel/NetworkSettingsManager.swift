@@ -10,7 +10,7 @@ enum NetworkSettingsManager {
             var excluded = ipv4Settings.excludedRoutes ?? []
             for ip in excludedIPs {
                 excluded.append(NEIPv4Route(destinationAddress: ip, subnetMask: "255.255.255.255"))
-                SharedLogger.log(.tunnel, "Excluded route: \(ip)/32")
+                TunnelLogger.log(.tunnel, "Excluded route: \(ip)/32")
             }
             ipv4Settings.excludedRoutes = excluded
         }
@@ -21,6 +21,6 @@ enum NetworkSettingsManager {
         ipv6.includedRoutes = [NEIPv6Route.default()]
         ipv6.excludedRoutes = []
         settings.ipv6Settings = ipv6
-        SharedLogger.log(.tunnel, "IPv6 kill switch active (all IPv6 \u{2192} blackhole)")
+        TunnelLogger.log(.tunnel, "IPv6 kill switch active (all IPv6 \u{2192} blackhole)")
     }
 }
