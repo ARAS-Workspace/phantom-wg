@@ -176,7 +176,6 @@ jobs:
       # ── 8. Archive ──────────────────────────────────────────
       - name: Archive
         run: |
-          set -o pipefail
           xcodebuild archive \
             -scheme "Phantom-WG-Mac" \
             -destination 'platform=macOS,arch=arm64' \
@@ -185,8 +184,7 @@ jobs:
             CURRENT_PROJECT_VERSION="${{ steps.version.outputs.build_number }}" \
             CODE_SIGN_STYLE=Manual \
             CODE_SIGN_IDENTITY="Developer ID Application" \
-            DEVELOPMENT_TEAM="$TEAM_ID" \
-            2>&1 | xcpretty --color
+            DEVELOPMENT_TEAM="$TEAM_ID"
 
       # ── 9. Generate ExportOptions.plist ──────────────────────
       - name: Generate ExportOptions.plist
