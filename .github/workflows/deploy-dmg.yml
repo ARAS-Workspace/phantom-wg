@@ -69,19 +69,21 @@ jobs:
           MAC_PROFILE_APP: ${{ secrets.MAC_PROVISIONING_PROFILE_APP }}
           MAC_PROFILE_EXT: ${{ secrets.MAC_PROVISIONING_PROFILE_EXTENSION }}
         run: |
+          # Install to both possible profile directories
           mkdir -p ~/Library/MobileDevice/Provisioning\ Profiles
+          mkdir -p ~/Library/Developer/Xcode/UserData/Provisioning\ Profiles
 
-          echo "$MAC_PROFILE_APP" | base64 --decode > ~/Library/MobileDevice/Provisioning\ Profiles/mac_app.provisionprofile
-          echo "$MAC_PROFILE_EXT" | base64 --decode > ~/Library/MobileDevice/Provisioning\ Profiles/mac_ext.provisionprofile
+          echo "$MAC_PROFILE_APP" | base64 --decode > /tmp/mac_app.provisionprofile
+          echo "$MAC_PROFILE_EXT" | base64 --decode > /tmp/mac_ext.provisionprofile
 
-          APP_UUID=$(/usr/libexec/PlistBuddy -c "Print UUID" /dev/stdin <<< "$(security cms -D -i ~/Library/MobileDevice/Provisioning\ Profiles/mac_app.provisionprofile)")
-          EXT_UUID=$(/usr/libexec/PlistBuddy -c "Print UUID" /dev/stdin <<< "$(security cms -D -i ~/Library/MobileDevice/Provisioning\ Profiles/mac_ext.provisionprofile)")
+          APP_UUID=$(security cms -D -i /tmp/mac_app.provisionprofile | plutil -extract UUID raw -)
+          EXT_UUID=$(security cms -D -i /tmp/mac_ext.provisionprofile | plutil -extract UUID raw -)
 
-          cp ~/Library/MobileDevice/Provisioning\ Profiles/mac_app.provisionprofile ~/Library/MobileDevice/Provisioning\ Profiles/"$APP_UUID".provisionprofile
-          cp ~/Library/MobileDevice/Provisioning\ Profiles/mac_ext.provisionprofile ~/Library/MobileDevice/Provisioning\ Profiles/"$EXT_UUID".provisionprofile
+          for DIR in ~/Library/MobileDevice/Provisioning\ Profiles ~/Library/Developer/Xcode/UserData/Provisioning\ Profiles; do
+            cp /tmp/mac_app.provisionprofile "$DIR/$APP_UUID.provisionprofile"
+            cp /tmp/mac_ext.provisionprofile "$DIR/$EXT_UUID.provisionprofile"
+          done
 
-          echo "APP_PROFILE_UUID=$APP_UUID" >> "$GITHUB_ENV"
-          echo "EXT_PROFILE_UUID=$EXT_UUID" >> "$GITHUB_ENV"
           echo "Installed profiles: APP=$APP_UUID EXT=$EXT_UUID"
 
       - name: Archive
@@ -91,19 +93,14 @@ jobs:
             -scheme "$SCHEME" \
             -destination 'platform=macOS,arch=arm64' \
             -archivePath "$RUNNER_TEMP/$APP_NAME.xcarchive" \
+            -allowProvisioningUpdates \
             MARKETING_VERSION="$VERSION" \
             CURRENT_PROJECT_VERSION="$BUILD_NUMBER" \
-            CODE_SIGN_STYLE=Manual \
-            DEVELOPMENT_TEAM="$TEAM_ID" \
-            CODE_SIGN_IDENTITY="Developer ID Application" \
-            PROVISIONING_PROFILE_SPECIFIER="" \
-            Phantom_WG_Mac_PROVISIONING_PROFILE_SPECIFIER="$APP_PROFILE_UUID" \
-            PhantomTunnel_PROVISIONING_PROFILE_SPECIFIER="$EXT_PROFILE_UUID" \
             2>&1 | xcpretty --color
 
       - name: Export app
         run: |
-          cat > "$RUNNER_TEMP/ExportOptions.plist" << PLIST
+          cat > "$RUNNER_TEMP/ExportOptions.plist" << 'PLIST'
           <?xml version="1.0" encoding="UTF-8"?>
           <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
           <plist version="1.0">
@@ -111,16 +108,7 @@ jobs:
               <key>method</key>
               <string>developer-id</string>
               <key>teamID</key>
-              <string>$TEAM_ID</string>
-              <key>signingStyle</key>
-              <string>manual</string>
-              <key>provisioningProfiles</key>
-              <dict>
-                  <key>com.remrearas.Phantom-WG-Mac</key>
-                  <string>$APP_PROFILE_UUID</string>
-                  <key>com.remrearas.Phantom-WG-Mac.PhantomTunnel</key>
-                  <string>$EXT_PROFILE_UUID</string>
-              </dict>
+              <string>9C5SL5H7CM</string>
           </dict>
           </plist>
           PLIST
@@ -128,7 +116,8 @@ jobs:
           xcodebuild -exportArchive \
             -archivePath "$RUNNER_TEMP/$APP_NAME.xcarchive" \
             -exportPath "$RUNNER_TEMP/export" \
-            -exportOptionsPlist "$RUNNER_TEMP/ExportOptions.plist"
+            -exportOptionsPlist "$RUNNER_TEMP/ExportOptions.plist" \
+            -allowProvisioningUpdates
 
       - name: Notarize app
         env:
