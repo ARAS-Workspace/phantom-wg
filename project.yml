@@ -72,7 +72,7 @@ targets:
         com.apple.security.application-groups:
           - group.com.remrearas.phantom-wg-mac
         com.apple.developer.networking.networkextension:
-          - packet-tunnel-provider-systemextension
+          - packet-tunnel-provider
 
   # ── Network Extension (App Extension) ────────────────────
 
@@ -147,6 +147,6 @@ targets:
         com.apple.security.application-groups:
           - group.com.remrearas.phantom-wg-mac
         com.apple.developer.networking.networkextension:
-          - packet-tunnel-provider-systemextension
+          - packet-tunnel-provider
         com.apple.security.network.client: true
         com.apple.security.network.server: true

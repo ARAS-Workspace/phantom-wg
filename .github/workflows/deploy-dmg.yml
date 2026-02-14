@@ -162,8 +162,11 @@ jobs:
           sed -i '' "/PRODUCT_BUNDLE_IDENTIFIER: ${TUNNEL_BUNDLE_ID}$/a\\
           \        PROVISIONING_PROFILE_SPECIFIER: ${TUNNEL_PROFILE_NAME}" project.yml
 
-          echo "--- Patched project.yml signing settings ---"
-          grep -A2 'CODE_SIGN_STYLE\|PROVISIONING_PROFILE_SPECIFIER' project.yml
+          # Developer ID profiles use systemextension variant
+          sed -i '' 's/packet-tunnel-provider$/packet-tunnel-provider-systemextension/' project.yml
+
+          echo "--- Patched project.yml ---"
+          grep -A2 'CODE_SIGN_STYLE\|PROVISIONING_PROFILE_SPECIFIER\|networkextension' project.yml
 
       # ── 6. Install tools ─────────────────────────────────────
       - name: Install Go & XcodeGen
