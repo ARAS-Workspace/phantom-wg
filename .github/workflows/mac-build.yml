@@ -30,7 +30,7 @@ jobs:
         run: |
           set -o pipefail
           xcodebuild build \
-            -scheme "Phantom-WG-Mac" \
+            -scheme "Phantom-WG-MacOS" \
             -destination 'platform=macOS,arch=arm64' \
             CODE_SIGNING_ALLOWED=NO \
             2>&1 | xcpretty --color
