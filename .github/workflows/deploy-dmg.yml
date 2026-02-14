@@ -23,6 +23,7 @@ jobs:
       APP_BUNDLE_ID: com.remrearas.Phantom-WG-MacOS
       TUNNEL_BUNDLE_ID: com.remrearas.Phantom-WG-MacOS.PhantomTunnel
       TEAM_ID: 9C5SL5H7CM
+      APP_NAME: "Phantom-WG Mac"
 
     steps:
       # ── 0. Setup temp paths ─────────────────────────────────
@@ -125,7 +126,6 @@ jobs:
             uuid=$(/usr/libexec/PlistBuddy -c "Print UUID" /dev/stdin <<< "$plist")
             name=$(/usr/libexec/PlistBuddy -c "Print Name" /dev/stdin <<< "$plist")
 
-            # macOS uses com.apple.application-identifier, iOS uses application-identifier
             local app_id=""
             app_id=$(/usr/libexec/PlistBuddy -c "Print Entitlements:com.apple.application-identifier" /dev/stdin <<< "$plist" 2>/dev/null) || \
             app_id=$(/usr/libexec/PlistBuddy -c "Print Entitlements:application-identifier" /dev/stdin <<< "$plist" 2>/dev/null) || true
@@ -133,6 +133,10 @@ jobs:
             if [[ -n "$app_id" ]]; then
               local bundle_id="${app_id#*.}"
               echo "$label: UUID=$uuid, Name=$name, BundleID=$bundle_id" >&2
+              if [[ "$bundle_id" != "$expected_bundle_id" ]]; then
+                echo "::error::$label profile bundle ID mismatch: got '$bundle_id', expected '$expected_bundle_id'"
+                exit 1
+              fi
             else
               echo "$label: UUID=$uuid, Name=$name (no app-id in entitlements)" >&2
             fi
@@ -149,18 +153,14 @@ jobs:
           echo "APP_PROFILE_NAME=$APP_PROFILE_NAME" >> "$GITHUB_ENV"
           echo "TUNNEL_PROFILE_NAME=$TUNNEL_PROFILE_NAME" >> "$GITHUB_ENV"
 
-      # ── 5. Patch project.yml for manual signing ──────────────
-      - name: Patch project.yml for manual signing
+      # ── 5. Patch project.yml with CI profile names ──────────
+      - name: Patch project.yml for CI signing
         run: |
           set -euo pipefail
 
-          sed -i '' 's/CODE_SIGN_STYLE: Automatic/CODE_SIGN_STYLE: Manual/g' project.yml
-
-          sed -i '' "/PRODUCT_BUNDLE_IDENTIFIER: ${APP_BUNDLE_ID}$/a\\
-          \        PROVISIONING_PROFILE_SPECIFIER: ${APP_PROFILE_NAME}" project.yml
-
-          sed -i '' "/PRODUCT_BUNDLE_IDENTIFIER: ${TUNNEL_BUNDLE_ID}$/a\\
-          \        PROVISIONING_PROFILE_SPECIFIER: ${TUNNEL_PROFILE_NAME}" project.yml
+          # Replace existing PROVISIONING_PROFILE_SPECIFIER values with CI profile names
+          sed -i '' "s/PROVISIONING_PROFILE_SPECIFIER: Mac_Phantom_WG_DeveloperID/PROVISIONING_PROFILE_SPECIFIER: ${APP_PROFILE_NAME}/" project.yml
+          sed -i '' "s/PROVISIONING_PROFILE_SPECIFIER: Mac_PhantomTunnel_DeveloperID/PROVISIONING_PROFILE_SPECIFIER: ${TUNNEL_PROFILE_NAME}/" project.yml
 
           echo "--- Patched project.yml signing settings ---"
           grep -A2 'CODE_SIGN_STYLE\|PROVISIONING_PROFILE_SPECIFIER' project.yml
@@ -230,7 +230,7 @@ jobs:
           APPLE_ID: ${{ secrets.APPLE_ID }}
           APPLE_ID_PASSWORD: ${{ secrets.APPLE_ID_PASSWORD }}
         run: |
-          APP_PATH="$EXPORT_PATH/Phantom-WG-MacOS.app"
+          APP_PATH="$EXPORT_PATH/$APP_NAME.app"
 
           ditto -c -k --keepParent "$APP_PATH" "$RUNNER_TEMP/app.zip"
 
@@ -248,8 +248,8 @@ jobs:
           VERSION="${{ steps.version.outputs.version }}"
           DMG_PATH="$RUNNER_TEMP/Phantom-WG-MacOS-$VERSION.dmg"
 
-          hdiutil create -volname "Phantom-WG Mac" \
-            -srcfolder "$EXPORT_PATH/Phantom-WG-MacOS.app" \
+          hdiutil create -volname "$APP_NAME" \
+            -srcfolder "$EXPORT_PATH/$APP_NAME.app" \
             -ov -format UDZO \
             "$DMG_PATH"
 
