@@ -64,6 +64,26 @@ jobs:
           security set-key-partition-list -S apple-tool:,apple: -s -k "" "$KEYCHAIN_PATH"
           security list-keychains -d user -s "$KEYCHAIN_PATH" login.keychain-db
 
+      - name: Install provisioning profiles
+        env:
+          MAC_PROFILE_APP: ${{ secrets.MAC_PROVISIONING_PROFILE_APP }}
+          MAC_PROFILE_EXT: ${{ secrets.MAC_PROVISIONING_PROFILE_EXTENSION }}
+        run: |
+          mkdir -p ~/Library/MobileDevice/Provisioning\ Profiles
+
+          echo "$MAC_PROFILE_APP" | base64 --decode > ~/Library/MobileDevice/Provisioning\ Profiles/mac_app.provisionprofile
+          echo "$MAC_PROFILE_EXT" | base64 --decode > ~/Library/MobileDevice/Provisioning\ Profiles/mac_ext.provisionprofile
+
+          APP_UUID=$(/usr/libexec/PlistBuddy -c "Print UUID" /dev/stdin <<< "$(security cms -D -i ~/Library/MobileDevice/Provisioning\ Profiles/mac_app.provisionprofile)")
+          EXT_UUID=$(/usr/libexec/PlistBuddy -c "Print UUID" /dev/stdin <<< "$(security cms -D -i ~/Library/MobileDevice/Provisioning\ Profiles/mac_ext.provisionprofile)")
+
+          cp ~/Library/MobileDevice/Provisioning\ Profiles/mac_app.provisionprofile ~/Library/MobileDevice/Provisioning\ Profiles/"$APP_UUID".provisionprofile
+          cp ~/Library/MobileDevice/Provisioning\ Profiles/mac_ext.provisionprofile ~/Library/MobileDevice/Provisioning\ Profiles/"$EXT_UUID".provisionprofile
+
+          echo "APP_PROFILE_UUID=$APP_UUID" >> "$GITHUB_ENV"
+          echo "EXT_PROFILE_UUID=$EXT_UUID" >> "$GITHUB_ENV"
+          echo "Installed profiles: APP=$APP_UUID EXT=$EXT_UUID"
+
       - name: Archive
         run: |
           set -o pipefail
@@ -75,11 +95,15 @@ jobs:
             CURRENT_PROJECT_VERSION="$BUILD_NUMBER" \
             CODE_SIGN_STYLE=Manual \
             DEVELOPMENT_TEAM="$TEAM_ID" \
+            CODE_SIGN_IDENTITY="Developer ID Application" \
+            PROVISIONING_PROFILE_SPECIFIER="" \
+            Phantom_WG_Mac_PROVISIONING_PROFILE_SPECIFIER="$APP_PROFILE_UUID" \
+            PhantomTunnel_PROVISIONING_PROFILE_SPECIFIER="$EXT_PROFILE_UUID" \
             2>&1 | xcpretty --color
 
       - name: Export app
         run: |
-          cat > "$RUNNER_TEMP/ExportOptions.plist" << 'PLIST'
+          cat > "$RUNNER_TEMP/ExportOptions.plist" << PLIST
           <?xml version="1.0" encoding="UTF-8"?>
           <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
           <plist version="1.0">
@@ -87,7 +111,16 @@ jobs:
               <key>method</key>
               <string>developer-id</string>
               <key>teamID</key>
-              <string>9C5SL5H7CM</string>
+              <string>$TEAM_ID</string>
+              <key>signingStyle</key>
+              <string>manual</string>
+              <key>provisioningProfiles</key>
+              <dict>
+                  <key>com.remrearas.Phantom-WG-Mac</key>
+                  <string>$APP_PROFILE_UUID</string>
+                  <key>com.remrearas.Phantom-WG-Mac.PhantomTunnel</key>
+                  <string>$EXT_PROFILE_UUID</string>
+              </dict>
           </dict>
           </plist>
           PLIST
@@ -121,7 +154,6 @@ jobs:
             -ov -format UDZO \
             "$DMG_PATH"
 
-          # Notarize DMG too
           xcrun notarytool submit "$DMG_PATH" \
             --apple-id "${{ secrets.APPLE_ID }}" \
             --password "${{ secrets.APPLE_ID_PASSWORD }}" \
