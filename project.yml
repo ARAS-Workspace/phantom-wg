@@ -39,15 +39,12 @@ targets:
       base:
         ARCHS: arm64
         ENABLE_HARDENED_RUNTIME: YES
-        CODE_SIGN_INJECT_BASE_ENTITLEMENTS: NO
         PRODUCT_NAME: Phantom-WG Mac
         PRODUCT_BUNDLE_IDENTIFIER: com.remrearas.Phantom-WG-MacOS
         INFOPLIST_FILE: Phantom-WG-MacOS/Info.plist
         CODE_SIGN_ENTITLEMENTS: Phantom-WG-MacOS/Phantom-WG-MacOS.entitlements
         CODE_SIGN_STYLE: Manual
-        CODE_SIGN_IDENTITY: "Developer ID Application"
         DEVELOPMENT_TEAM: 9C5SL5H7CM
-        PROVISIONING_PROFILE_SPECIFIER: Mac_Phantom_WG_DeveloperID
         SWIFT_OBJC_BRIDGING_HEADER: Phantom-WG-MacOS/BridgingHeader.h
         HEADER_SEARCH_PATHS:
           - "$(PROJECT_DIR)/Libraries/WstunnelKit/include"
@@ -59,6 +56,13 @@ targets:
         SWIFT_VERSION: "5.0"
         MARKETING_VERSION: "1.0.1"
         CURRENT_PROJECT_VERSION: 1
+        CODE_SIGN_IDENTITY: "Developer ID Application"
+        PROVISIONING_PROFILE_SPECIFIER: Mac_Phantom_WG_DeveloperID
+      configs:
+        Debug:
+          CODE_SIGN_INJECT_BASE_ENTITLEMENTS: YES
+        Release:
+          CODE_SIGN_INJECT_BASE_ENTITLEMENTS: NO
     info:
       path: Phantom-WG-MacOS/Info.plist
       properties:
@@ -77,6 +81,31 @@ targets:
         com.apple.developer.networking.networkextension:
           - packet-tunnel-provider-systemextension
         com.apple.developer.system-extension.install: true
+
+  # ── Unit Tests (Swift Testing) ────────────────────────────
+
+  PhantomTests:
+    type: bundle.unit-test
+    platform: macOS
+    sources:
+      - path: PhantomTests
+        excludes:
+          - "**/.DS_Store"
+    dependencies:
+      - target: Phantom-WG-MacOS
+    settings:
+      base:
+        ARCHS: arm64
+        SWIFT_VERSION: "5.0"
+        GENERATE_INFOPLIST_FILE: YES
+        TEST_HOST: "$(BUILT_PRODUCTS_DIR)/Phantom-WG Mac.app/Contents/MacOS/Phantom-WG Mac"
+        BUNDLE_LOADER: "$(TEST_HOST)"
+        SWIFT_OBJC_BRIDGING_HEADER: ""
+        HEADER_SEARCH_PATHS:
+          - "$(PROJECT_DIR)/Libraries/WstunnelKit/include"
+        CODE_SIGN_STYLE: Manual
+        CODE_SIGN_IDENTITY: "Developer ID Application"
+        DEVELOPMENT_TEAM: 9C5SL5H7CM
 
   # ── Network Extension (System Extension) ─────────────────
 

@@ -20,8 +20,8 @@ struct TunnelDetailView: View {
     @State private var txBytes: String = "—"
     @State private var statsPollingTask: Task<Void, Never>?
 
-    private var hasChanges: Bool { editConfig != originalConfig }
-    private var isActive: Bool { tunnel.status != .inactive }
+    /// Engine'den türetilen convenience — tüm field disabled/enabled kararları buradan
+    private var isEditable: Bool { PhantomUIEngine.canEditConfig(status: tunnel.status) }
 
     init(tunnel: TunnelContainer) {
         self.tunnel = tunnel
@@ -31,7 +31,7 @@ struct TunnelDetailView: View {
     var body: some View {
         List {
             statusSection
-            if isActive { statsSection }
+            if PhantomUIEngine.shouldShowStats(status: tunnel.status) { statsSection }
             nameSection
             wstunnelSection
             interfaceSection
@@ -40,8 +40,11 @@ struct TunnelDetailView: View {
             actionsSection
         }
         .navigationTitle(editConfig.name.isEmpty ? loc.t("detail_tunnel") : editConfig.name)
-                .onChange(of: editConfig) { _, newConfig in
-            if newConfig != originalConfig && !isActive {
+        .onChange(of: editConfig) { _, newConfig in
+            if PhantomUIEngine.shouldAutoSave(
+                status: tunnel.status,
+                hasChanges: newConfig != originalConfig
+            ) {
                 saveConfig()
             }
         }
@@ -84,17 +87,17 @@ struct TunnelDetailView: View {
             HStack(spacing: 12) {
                 ZStack {
                     RoundedRectangle(cornerRadius: 8)
-                        .fill(statusBadgeColor.opacity(0.12))
+                        .fill(PhantomUIEngine.statusColor(for: tunnel.status).opacity(0.12))
                         .frame(width: 36, height: 36)
-                    Image(systemName: statusBadgeIcon)
+                    Image(systemName: PhantomUIEngine.statusIcon(for: tunnel.status))
                         .font(.system(size: 16, weight: .semibold))
-                        .foregroundStyle(statusBadgeColor)
+                        .foregroundStyle(PhantomUIEngine.statusColor(for: tunnel.status))
                 }
 
                 VStack(alignment: .leading, spacing: 2) {
                     Text(tunnel.status.localizedDescription)
                         .font(.body.weight(.medium))
-                        .foregroundStyle(statusTextColor)
+                        .foregroundStyle(PhantomUIEngine.statusColor(for: tunnel.status))
                     if let error = tunnel.lastActivationError {
                         Text(error.alertText)
                             .font(.caption)
@@ -104,7 +107,7 @@ struct TunnelDetailView: View {
 
                 Spacer()
 
-                Toggle("", isOn: tunnelBinding)
+                Toggle("", isOn: PhantomUIEngine.tunnelToggleBinding(for: tunnel, manager: tunnelsManager))
                     .toggleStyle(.switch)
                     .labelsHidden()
             }
@@ -125,7 +128,7 @@ struct TunnelDetailView: View {
 
     private var nameSection: some View {
         Section {
-            textField(loc.t("detail_name"), text: $editConfig.name)
+            PhantomTextField(label: loc.t("detail_name"), text: $editConfig.name, isDisabled: !isEditable)
         } header: {
             Label(loc.t("detail_general"), systemImage: "gearshape")
         }
@@ -133,11 +136,11 @@ struct TunnelDetailView: View {
 
     private var wstunnelSection: some View {
         Section {
-            textField(loc.t("detail_server_url"), text: $editConfig.wstunnel.url)
-            textField(loc.t("detail_secret"), text: $editConfig.wstunnel.secret)
-            portField(loc.t("detail_local_port"), value: $editConfig.wstunnel.localPort)
-            textField(loc.t("detail_remote_host"), text: $editConfig.wstunnel.remoteHost)
-            portField(loc.t("detail_remote_port"), value: $editConfig.wstunnel.remotePort)
+            PhantomTextField(label: loc.t("detail_server_url"), text: $editConfig.wstunnel.url, isDisabled: !isEditable)
+            PhantomTextField(label: loc.t("detail_secret"), text: $editConfig.wstunnel.secret, isDisabled: !isEditable)
+            PhantomNumericField(label: loc.t("detail_local_port"), value: $editConfig.wstunnel.localPort, isDisabled: !isEditable)
+            PhantomTextField(label: loc.t("detail_remote_host"), text: $editConfig.wstunnel.remoteHost, isDisabled: !isEditable)
+            PhantomNumericField(label: loc.t("detail_remote_port"), value: $editConfig.wstunnel.remotePort, isDisabled: !isEditable)
         } header: {
             Label(loc.t("detail_wstunnel"), systemImage: "network.badge.shield.half.filled")
         }
@@ -145,10 +148,10 @@ struct TunnelDetailView: View {
 
     private var interfaceSection: some View {
         Section {
-            textField(loc.t("detail_private_key"), text: $editConfig.interface.privateKey)
-            textField(loc.t("detail_address"), text: $editConfig.interface.address)
-            textField(loc.t("detail_dns"), text: $editConfig.interface.dns)
-            intField(loc.t("detail_mtu"), value: $editConfig.interface.mtu)
+            PhantomTextField(label: loc.t("detail_private_key"), text: $editConfig.interface.privateKey, isDisabled: !isEditable)
+            PhantomTextField(label: loc.t("detail_address"), text: $editConfig.interface.address, isDisabled: !isEditable)
+            PhantomTextField(label: loc.t("detail_dns"), text: $editConfig.interface.dns, isDisabled: !isEditable)
+            PhantomNumericField(label: loc.t("detail_mtu"), value: $editConfig.interface.mtu, isDisabled: !isEditable)
         } header: {
             Label(loc.t("detail_interface"), systemImage: "rectangle.connected.to.line.below")
         }
@@ -156,11 +159,11 @@ struct TunnelDetailView: View {
 
     private var peerSection: some View {
         Section {
-            textField(loc.t("detail_public_key"), text: $editConfig.peer.publicKey)
-            textField(loc.t("detail_preshared_key"), text: presharedKeyBinding)
-            textField(loc.t("detail_allowed_ips"), text: $editConfig.peer.allowedIPs)
-            textField(loc.t("detail_endpoint"), text: $editConfig.peer.endpoint)
-            intField(loc.t("detail_keepalive"), value: $editConfig.peer.persistentKeepalive)
+            PhantomTextField(label: loc.t("detail_public_key"), text: $editConfig.peer.publicKey, isDisabled: !isEditable)
+            PhantomTextField(label: loc.t("detail_preshared_key"), text: presharedKeyBinding, isDisabled: !isEditable)
+            PhantomTextField(label: loc.t("detail_allowed_ips"), text: $editConfig.peer.allowedIPs, isDisabled: !isEditable)
+            PhantomTextField(label: loc.t("detail_endpoint"), text: $editConfig.peer.endpoint, isDisabled: !isEditable)
+            PhantomNumericField(label: loc.t("detail_keepalive"), value: $editConfig.peer.persistentKeepalive, isDisabled: !isEditable)
         } header: {
             Label(loc.t("detail_peer"), systemImage: "point.3.connected.trianglepath.dotted")
         }
@@ -199,62 +202,14 @@ struct TunnelDetailView: View {
             } label: {
                 Label(loc.t("detail_delete_tunnel"), systemImage: "trash")
             }
-            .disabled(isActive)
+            .disabled(!PhantomUIEngine.canDeleteTunnel(status: tunnel.status))
             .listRowSeparator(.hidden)
         } header: {
             Label(loc.t("detail_actions"), systemImage: "ellipsis.circle")
         }
     }
 
-    // MARK: - Field Builders
-
-    private func textField(_ label: String, text: Binding<String>) -> some View {
-        VStack(alignment: .leading, spacing: 4) {
-            Text(label)
-                .font(.caption)
-                .foregroundStyle(.secondary)
-            TextField(label, text: text)
-                .font(.system(.body, design: .monospaced))
-                .autocorrectionDisabled()
-                .disabled(isActive)
-                .foregroundStyle(isActive ? .secondary : .primary)
-        }
-        .padding(.vertical, 2)
-    }
-
-    private func portField(_ label: String, value: Binding<UInt16>) -> some View {
-        let stringBinding = Binding<String>(
-            get: { "\(value.wrappedValue)" },
-            set: { if let v = UInt16($0) { value.wrappedValue = v } }
-        )
-        return VStack(alignment: .leading, spacing: 4) {
-            Text(label)
-                .font(.caption)
-                .foregroundStyle(.secondary)
-            TextField(label, text: stringBinding)
-                .font(.system(.body, design: .monospaced))
-                                .disabled(isActive)
-                .foregroundStyle(isActive ? .secondary : .primary)
-        }
-        .padding(.vertical, 2)
-    }
-
-    private func intField(_ label: String, value: Binding<Int>) -> some View {
-        let stringBinding = Binding<String>(
-            get: { "\(value.wrappedValue)" },
-            set: { if let v = Int($0) { value.wrappedValue = v } }
-        )
-        return VStack(alignment: .leading, spacing: 4) {
-            Text(label)
-                .font(.caption)
-                .foregroundStyle(.secondary)
-            TextField(label, text: stringBinding)
-                .font(.system(.body, design: .monospaced))
-                                .disabled(isActive)
-                .foregroundStyle(isActive ? .secondary : .primary)
-        }
-        .padding(.vertical, 2)
-    }
+    // MARK: - Copy Button
 
     private func copyButton(_ title: String, icon: String, id: String, action: @escaping () -> Void) -> some View {
         Button {
@@ -272,19 +227,6 @@ struct TunnelDetailView: View {
     }
 
     // MARK: - Bindings
-
-    private var tunnelBinding: Binding<Bool> {
-        Binding(
-            get: {
-                tunnel.status == .active || tunnel.status == .activating ||
-                tunnel.status == .waiting || tunnel.status == .reasserting ||
-                tunnel.status == .restarting
-            },
-            set: { isOn in
-                if isOn { tunnelsManager.startActivation(of: tunnel) } else { tunnelsManager.startDeactivation(of: tunnel) }
-            }
-        )
-    }
 
     private var presharedKeyBinding: Binding<String> {
         Binding(

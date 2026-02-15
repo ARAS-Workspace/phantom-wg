@@ -4,6 +4,13 @@ import NetworkExtension
 
 @main
 struct PhantomApp: App {
+
+    /// Test ortamında system extension aktivasyonunu atlar.
+    /// Skips system extension activation in the test environment.
+    static var isRunningTests: Bool {
+        ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] != nil
+    }
+
     @StateObject private var extensionState = SystemExtensionState()
     @StateObject private var tunnelsManager = TunnelsManagerLoader()
     @StateObject private var loc = LocalizationManager.shared
@@ -29,6 +36,10 @@ struct PhantomApp: App {
             .tint(Color.accentColor)
             .frame(width: 420, height: 640)
             .onAppear {
+                guard !PhantomApp.isRunningTests else {
+                    extensionState.status = .activated
+                    return
+                }
                 extensionState.activate()
             }
         }
