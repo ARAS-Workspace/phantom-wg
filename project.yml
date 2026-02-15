@@ -103,8 +103,8 @@ targets:
       - name: Build WireGuard Go Bridge
         script: |
           set -eo pipefail
-          if [ -d "/opt/homebrew/opt/go@1.22/libexec" ]; then
-            export GOROOT="/opt/homebrew/opt/go@1.22/libexec"
+          if [ -d "/opt/homebrew/opt/go@1.25/libexec" ]; then
+            export GOROOT="/opt/homebrew/opt/go@1.25/libexec"
           elif command -v go >/dev/null 2>&1; then
             export GOROOT="$(go env GOROOT)"
           fi
