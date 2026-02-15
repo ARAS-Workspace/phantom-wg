@@ -89,7 +89,8 @@
 
   "sysext_activating": "Activating VPN extension...",
   "sysext_approval_title": "Network Extension Approval Required",
-  "sysext_approval_message": "Go to **System Settings → General → Login Items & Extensions → Network Extensions** and allow Phantom-WG Mac.",
+  "sysext_approval_message_sequoia": "Go to **System Settings → General → Login Items & Extensions → Network Extensions** and allow Phantom-WG Mac.",
+  "sysext_approval_message_sonoma": "Go to **System Settings → Privacy & Security → Extensions → Network Extensions** and allow Phantom-WG Mac.",
   "sysext_open_settings": "Open System Settings",
   "sysext_check_again": "Check Again",
   "sysext_failed_title": "Extension Activation Failed",

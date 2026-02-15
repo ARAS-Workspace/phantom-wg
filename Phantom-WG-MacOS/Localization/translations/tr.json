@@ -89,7 +89,8 @@
 
   "sysext_activating": "VPN uzantısı etkinleştiriliyor...",
   "sysext_approval_title": "Ağ Uzantısı Onayı Gerekli",
-  "sysext_approval_message": "**Sistem Ayarları → Genel → Oturum Açma Öğeleri ve Uzantılar → Ağ Uzantıları** bölümüne gidip Phantom-WG Mac'e izin verin.",
+  "sysext_approval_message_sequoia": "**Sistem Ayarları → Genel → Oturum Açma Öğeleri ve Uzantılar → Ağ Uzantıları** bölümüne gidip Phantom-WG Mac'e izin verin.",
+  "sysext_approval_message_sonoma": "**Sistem Ayarları → Gizlilik ve Güvenlik → Uzantılar → Ağ Uzantıları** bölümüne gidip Phantom-WG Mac'e izin verin.",
   "sysext_open_settings": "Sistem Ayarlarını Aç",
   "sysext_check_again": "Tekrar Kontrol Et",
   "sysext_failed_title": "Uzantı Etkinleştirme Başarısız",

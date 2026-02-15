@@ -35,6 +35,14 @@ struct PhantomApp: App {
         .windowResizability(.contentSize)
     }
 
+    private var approvalMessage: String {
+        if #available(macOS 15.0, *) {
+            return loc.t("sysext_approval_message_sequoia")
+        } else {
+            return loc.t("sysext_approval_message_sonoma")
+        }
+    }
+
     // MARK: - Extension States
 
     private var extensionActivatingView: some View {
@@ -57,14 +65,20 @@ struct PhantomApp: App {
             Text(loc.t("sysext_approval_title"))
                 .font(.headline)
 
-            Text(.init(loc.t("sysext_approval_message")))
+            Text(.init(approvalMessage))
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
                 .multilineTextAlignment(.center)
                 .padding(.horizontal, 32)
 
             Button(loc.t("sysext_open_settings")) {
-                NSWorkspace.shared.open(URL(string: "x-apple.systempreferences:com.apple.LoginItems-Settings.extension")!)
+                if #available(macOS 15.0, *) {
+                    // Sequoia+: Login Items & Extensions → Network Extensions
+                    NSWorkspace.shared.open(URL(string: "x-apple.systempreferences:com.apple.LoginItems-Settings.extension")!)
+                } else {
+                    // Sonoma: Privacy & Security → Extensions
+                    NSWorkspace.shared.open(URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_AllFiles")!)
+                }
             }
             .buttonStyle(.borderedProminent)
 
