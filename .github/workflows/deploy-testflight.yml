@@ -167,7 +167,7 @@ jobs:
 
       # ── 6. Install tools ─────────────────────────────────────
       - name: Install Go & XcodeGen
-        run: brew install go@1.22 xcodegen
+        run: brew install go@1.25 xcodegen
 
       # ── 7. Generate Xcode project ───────────────────────────
       - name: Generate Xcode project
