@@ -6,7 +6,6 @@ enum PacketTunnelProviderError: String, Error {
     case invalidWstunnelConfig
     case couldNotStartWstunnel
     case couldNotStartWireGuard
-    case dnsResolutionFailed
 }
 
 extension WireGuardLogLevel {

@@ -74,13 +74,11 @@
   "import_err_empty_endpoint": "Peer endpoint is required.",
   "import_err_invalid_json": "Invalid configuration format: %@",
 
-  "error_tunnel_inactive": "The tunnel is inactive.",
   "error_starting_failed": "Could not activate tunnel. %@",
   "error_saving_failed": "Could not save tunnel configuration. %@",
   "error_loading_failed": "Could not load tunnel configuration. %@",
   "error_retry_limit": "Activation attempt limit exceeded. %@",
   "error_activation_failed": "Activation failed. %@",
-  "error_waiting_failed": "Activation failed while waiting for another tunnel to deactivate. %@",
   "error_duplicate_name": "A tunnel with that name already exists.",
   "error_invalid_name": "The tunnel name is invalid.",
   "error_add_tunnel": "Unable to create the tunnel. %@",
@@ -94,5 +92,12 @@
   "sysext_open_settings": "Open System Settings",
   "sysext_check_again": "Check Again",
   "sysext_failed_title": "Extension Activation Failed",
-  "sysext_retry": "Retry"
+  "sysext_retry": "Retry",
+  "sysext_err_unsupported_location": "The app must be in /Applications to install the system extension.",
+  "sysext_err_not_found": "System extension bundle not found inside the app.",
+  "sysext_err_code_signature": "Code signature is invalid. The app may need to be re-signed.",
+  "sysext_err_validation": "System extension validation failed. Check entitlements and provisioning profile.",
+  "sysext_err_system_policy": "Blocked by system policy. Check System Settings → Privacy & Security.",
+  "sysext_err_entitlement": "Missing entitlement. The app may need to be re-signed.",
+  "sysext_err_unknown": "System extension error (code %d): %@"
 }

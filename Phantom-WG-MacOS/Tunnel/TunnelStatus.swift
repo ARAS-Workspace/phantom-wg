@@ -41,13 +41,4 @@ enum TunnelStatus: Equatable {
         case .waiting: return loc.t("status_waiting")
         }
     }
-
-    var isActiveOrTransitioning: Bool {
-        switch self {
-        case .active, .activating, .deactivating, .reasserting, .restarting, .waiting:
-            return true
-        case .inactive:
-            return false
-        }
-    }
 }

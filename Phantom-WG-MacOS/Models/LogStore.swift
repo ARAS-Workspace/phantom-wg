@@ -1,5 +1,4 @@
 import Foundation
-import NetworkExtension
 
 /// Fetches logs from the tunnel extension via handleAppMessage.
 /// Logs are disposable: visible during the session, gone when tunnel stops.

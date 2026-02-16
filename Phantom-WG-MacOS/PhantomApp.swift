@@ -1,6 +1,5 @@
 import SwiftUI
 import SystemExtensions
-import NetworkExtension
 
 @main
 struct PhantomApp: App {
@@ -184,7 +183,13 @@ class SystemExtensionState: NSObject, ObservableObject, OSSystemExtensionRequest
 
     func activate() {
         stopApprovalPolling()
-        status = .activating
+
+        // Polling recheck sirasinda approval ekranini flash ettirmemek icin
+        // sadece ilk cagri ve manuel retry'da activating'e gec.
+        if status != .needsApproval {
+            status = .activating
+        }
+
         NSLog("[SysExt] Activating: \(Self.extensionBundleId)")
 
         let request = OSSystemExtensionRequest.activationRequest(
@@ -265,6 +270,7 @@ class SystemExtensionState: NSObject, ObservableObject, OSSystemExtensionRequest
 
         Task { @MainActor in
             stopApprovalPolling()
+            let loc = LocalizationManager.shared
 
             guard domain == OSSystemExtensionErrorDomain else {
                 status = .failed(error.localizedDescription)
@@ -281,19 +287,19 @@ class SystemExtensionState: NSObject, ObservableObject, OSSystemExtensionRequest
                 startApprovalPolling()
                 return
             case .unsupportedParentBundleLocation:
-                status = .failed("The app must be in /Applications to install the system extension.")
+                status = .failed(loc.t("sysext_err_unsupported_location"))
             case .extensionNotFound:
-                status = .failed("System extension bundle not found inside the app.")
+                status = .failed(loc.t("sysext_err_not_found"))
             case .codeSignatureInvalid:
-                status = .failed("Code signature is invalid. The app may need to be re-signed.")
+                status = .failed(loc.t("sysext_err_code_signature"))
             case .validationFailed:
-                status = .failed("System extension validation failed. Check entitlements and provisioning profile.")
+                status = .failed(loc.t("sysext_err_validation"))
             case .forbiddenBySystemPolicy:
-                status = .failed("Blocked by system policy. Check System Settings → Privacy & Security.")
+                status = .failed(loc.t("sysext_err_system_policy"))
             case .missingEntitlement:
-                status = .failed("Missing entitlement. The app may need to be re-signed.")
+                status = .failed(loc.t("sysext_err_entitlement"))
             default:
-                status = .failed("System extension error (code \(code)): \(error.localizedDescription)")
+                status = .failed(loc.t("sysext_err_unknown", code, error.localizedDescription))
             }
         }
     }

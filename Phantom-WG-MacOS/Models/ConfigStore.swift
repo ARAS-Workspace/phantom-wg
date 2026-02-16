@@ -136,51 +136,6 @@ enum ConfigStore {
         return sqlite3_step(stmt) == SQLITE_DONE
     }
 
-    /// Load a single config by UUID.
-    static func load(id: UUID) -> TunnelConfig? {
-        guard let db = db else { return nil }
-
-        var stmt: OpaquePointer?
-        guard sqlite3_prepare_v2(db,
-            "SELECT json_data FROM tunnel_configs WHERE id = ?",
-            -1, &stmt, nil) == SQLITE_OK else { return nil }
-        defer { sqlite3_finalize(stmt) }
-
-        sqlite3_bind_text(stmt, 1, id.uuidString, -1, transient)
-
-        guard sqlite3_step(stmt) == SQLITE_ROW else { return nil }
-        let jsonString = String(cString: sqlite3_column_text(stmt, 0))
-        guard let data = jsonString.data(using: .utf8) else { return nil }
-        return try? JSONDecoder().decode(TunnelConfig.self, from: data)
-    }
-
-    /// Load a single config by UUID string (convenience for configId from providerConfiguration).
-    static func load(idString: String) -> TunnelConfig? {
-        guard let uuid = UUID(uuidString: idString) else { return nil }
-        return load(id: uuid)
-    }
-
-    /// Load all configs ordered by creation time.
-    static func loadAll() -> [TunnelConfig] {
-        guard let db = db else { return [] }
-
-        var stmt: OpaquePointer?
-        guard sqlite3_prepare_v2(db,
-            "SELECT json_data FROM tunnel_configs ORDER BY created_at ASC",
-            -1, &stmt, nil) == SQLITE_OK else { return [] }
-        defer { sqlite3_finalize(stmt) }
-
-        var configs: [TunnelConfig] = []
-        while sqlite3_step(stmt) == SQLITE_ROW {
-            let jsonString = String(cString: sqlite3_column_text(stmt, 0))
-            if let data = jsonString.data(using: .utf8),
-               let config = try? JSONDecoder().decode(TunnelConfig.self, from: data) {
-                configs.append(config)
-            }
-        }
-        return configs
-    }
-
     /// Delete a config by UUID.
     @discardableResult
     static func delete(id: UUID) -> Bool {

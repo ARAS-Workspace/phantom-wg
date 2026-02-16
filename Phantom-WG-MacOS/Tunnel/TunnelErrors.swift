@@ -1,19 +1,15 @@
 import Foundation
 
 enum TunnelActivationError: Error {
-    case inactive
     case startingFailed(systemError: Error)
     case savingFailed(systemError: Error)
     case loadingFailed(systemError: Error)
     case retryLimitReached(lastSystemError: Error)
     case failedWhileActivating(systemError: Error)
-    case failedWhileWaiting(systemError: Error)
 
     var alertText: String {
         let loc = LocalizationManager.shared
         switch self {
-        case .inactive:
-            return loc.t("error_tunnel_inactive")
         case .startingFailed(let error):
             return loc.t("error_starting_failed", error.localizedDescription)
         case .savingFailed(let error):
@@ -24,8 +20,6 @@ enum TunnelActivationError: Error {
             return loc.t("error_retry_limit", error.localizedDescription)
         case .failedWhileActivating(let error):
             return loc.t("error_activation_failed", error.localizedDescription)
-        case .failedWhileWaiting(let error):
-            return loc.t("error_waiting_failed", error.localizedDescription)
         }
     }
 }

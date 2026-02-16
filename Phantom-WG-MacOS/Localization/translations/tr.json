@@ -74,13 +74,11 @@
   "import_err_empty_endpoint": "Eş uç noktası gereklidir.",
   "import_err_invalid_json": "Geçersiz yapılandırma formatı: %@",
 
-  "error_tunnel_inactive": "Tünel pasif durumda.",
   "error_starting_failed": "Tünel etkinleştirilemedi. %@",
   "error_saving_failed": "Tünel yapılandırması kaydedilemedi. %@",
   "error_loading_failed": "Tünel yapılandırması yüklenemedi. %@",
   "error_retry_limit": "Etkinleştirme deneme sınırı aşıldı. %@",
   "error_activation_failed": "Etkinleştirme başarısız oldu. %@",
-  "error_waiting_failed": "Başka bir tünelin devre dışı kalması beklenirken etkinleştirme başarısız oldu. %@",
   "error_duplicate_name": "Bu adla zaten bir tünel mevcut.",
   "error_invalid_name": "Tünel adı geçersiz.",
   "error_add_tunnel": "Tünel oluşturulamadı. %@",
@@ -94,5 +92,12 @@
   "sysext_open_settings": "Sistem Ayarlarını Aç",
   "sysext_check_again": "Tekrar Kontrol Et",
   "sysext_failed_title": "Uzantı Etkinleştirme Başarısız",
-  "sysext_retry": "Tekrar Dene"
+  "sysext_retry": "Tekrar Dene",
+  "sysext_err_unsupported_location": "Sistem uzantısını yüklemek için uygulama /Applications klasöründe olmalıdır.",
+  "sysext_err_not_found": "Uygulama içinde sistem uzantısı paketi bulunamadı.",
+  "sysext_err_code_signature": "Kod imzası geçersiz. Uygulamanın yeniden imzalanması gerekebilir.",
+  "sysext_err_validation": "Sistem uzantısı doğrulaması başarısız oldu. Yetkilendirme ve sağlama profilini kontrol edin.",
+  "sysext_err_system_policy": "Sistem politikası tarafından engellendi. Sistem Ayarları → Gizlilik ve Güvenlik bölümünü kontrol edin.",
+  "sysext_err_entitlement": "Eksik yetkilendirme. Uygulamanın yeniden imzalanması gerekebilir.",
+  "sysext_err_unknown": "Sistem uzantısı hatası (kod %d): %@"
 }
