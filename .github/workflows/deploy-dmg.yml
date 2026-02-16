@@ -3,6 +3,25 @@ name: Deploy DMG
 on:
   push:
     tags: [ "dmg-v*" ]
+  workflow_call:
+    inputs:
+      version:
+        description: "Version to build (e.g. 1.0.1)"
+        required: true
+        type: string
+    secrets:
+      DEVELOPER_ID_CERTIFICATE_P12:
+        required: true
+      DEVELOPER_ID_CERTIFICATE_PASSWORD:
+        required: true
+      MAC_PROVISIONING_PROFILE_APP:
+        required: true
+      MAC_PROVISIONING_PROFILE_EXTENSION:
+        required: true
+      APPLE_ID:
+        required: true
+      APPLE_ID_PASSWORD:
+        required: true
   workflow_dispatch:
     inputs:
       version_override:
@@ -49,7 +68,9 @@ jobs:
       - name: Extract version & build number
         id: version
         run: |
-          if [[ -n "${{ inputs.version_override }}" ]]; then
+          if [[ -n "${{ inputs.version }}" ]]; then
+            VERSION="${{ inputs.version }}"
+          elif [[ -n "${{ inputs.version_override }}" ]]; then
             VERSION="${{ inputs.version_override }}"
           elif [[ "$GITHUB_REF" == refs/tags/dmg-v* ]]; then
             VERSION="${GITHUB_REF#refs/tags/dmg-v}"

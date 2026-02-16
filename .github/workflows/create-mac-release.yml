@@ -1,0 +1,115 @@
+name: Create Mac Release
+
+on:
+  push:
+    tags: [ "mac-v*" ]
+
+permissions:
+  contents: write
+
+jobs:
+  extract-version:
+    name: Extract Version
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+    steps:
+      - name: Extract version from tag
+        id: version
+        run: |
+          VERSION="${GITHUB_REF#refs/tags/mac-v}"
+          if [[ ! "$VERSION" =~ ^[0-9]+\.[0-9]+(\.[0-9]+)?$ ]]; then
+            echo "::error::Invalid semver format: $VERSION (expected X.Y or X.Y.Z)"
+            exit 1
+          fi
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+
+  build-dmg:
+    needs: extract-version
+    uses: ./.github/workflows/deploy-dmg.yml
+    with:
+      version: ${{ needs.extract-version.outputs.version }}
+    secrets: inherit
+
+  create-release:
+    name: Create GitHub Release
+    needs: [extract-version, build-dmg]
+    runs-on: ubuntu-latest
+    if: success()
+
+    steps:
+      - name: Download DMG artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: "Phantom-WG-MacOS-${{ needs.extract-version.outputs.version }}.dmg"
+          path: ${{ runner.temp }}/release
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: "mac-v${{ needs.extract-version.outputs.version }}"
+          name: "Phantom-WG Mac ${{ needs.extract-version.outputs.version }}"
+          body: |
+            ## Phantom-WG Mac ${{ needs.extract-version.outputs.version }}
+
+            ---
+
+            ### 🇺🇸
+
+            #### Contents
+
+            - `Phantom-WG Mac.app`
+
+            #### Installation
+
+            1. Download and open the DMG:
+            ```
+            Phantom-WG-MacOS-${{ needs.extract-version.outputs.version }}.dmg
+            ```
+
+            2. Drag **Phantom-WG Mac** to the **Applications** folder
+
+            3. On first launch, approve the system extension:
+               - **macOS 15+ (Sequoia):** System Settings → General → Login Items & Extensions → Network Extensions
+               - **macOS 14 (Sonoma):** System Settings → Privacy & Security → Extensions → Network Extensions
+
+            4. Import your tunnel configuration (JSON) and connect
+
+            #### Requirements
+
+            - macOS 14.0 (Sonoma) or later
+            - Apple Silicon (arm64)
+
+            ---
+
+            ### 🇹🇷
+
+            #### Paket
+
+            - `Phantom-WG Mac.app`
+
+            #### Kurulum
+
+            1. DMG dosyasını indirin ve açın:
+            ```
+            Phantom-WG-MacOS-${{ needs.extract-version.outputs.version }}.dmg
+            ```
+
+            2. **Phantom-WG Mac** uygulamasını **Applications** klasörüne sürükleyin
+
+            3. İlk çalıştırmada sistem uzantısını onaylayın:
+               - **macOS 15+ (Sequoia):** Sistem Ayarları → Genel → Oturum Açma Öğeleri ve Uzantılar → Ağ Uzantıları
+               - **macOS 14 (Sonoma):** Sistem Ayarları → Gizlilik ve Güvenlik → Uzantılar → Ağ Uzantıları
+
+            4. Tünel yapılandırmanızı (JSON) içe aktarın ve bağlanın
+
+            #### Gereksinimler
+
+            - macOS 14.0 (Sonoma) veya üzeri
+            - Apple Silicon (arm64)
+
+          files: |
+            ${{ runner.temp }}/release/Phantom-WG-MacOS-${{ needs.extract-version.outputs.version }}.dmg
+          draft: false
+          prerelease: false
+          generate_release_notes: false
