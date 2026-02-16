@@ -1,0 +1,104 @@
+name: Create Mac Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      version_id:
+        description: "Release version (e.g. 1.0.1)"
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+jobs:
+  build-dmg:
+    uses: ./.github/workflows/deploy-dmg.yml
+    with:
+      version: ${{ inputs.version_id }}
+    secrets: inherit
+
+  create-release:
+    name: Create GitHub Release
+    needs: build-dmg
+    runs-on: ubuntu-latest
+    if: success()
+
+    steps:
+      - name: Download DMG artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: "Phantom-WG-MacOS-${{ inputs.version_id }}.dmg"
+          path: ${{ runner.temp }}/release
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: "mac-release-v${{ inputs.version_id }}"
+          name: "Phantom-WG Mac ${{ inputs.version_id }}"
+          body: |
+            ## Phantom-WG Mac ${{ inputs.version_id }}
+
+            ---
+
+            ### EN
+
+            #### Contents
+
+            - `Phantom-WG Mac.app` — Signed & notarized macOS application
+            - `Applications` — Shortcut for drag-and-drop installation
+
+            #### Installation
+
+            1. Download and open the DMG:
+            ```
+            Phantom-WG-MacOS-${{ inputs.version_id }}.dmg
+            ```
+
+            2. Drag **Phantom-WG Mac** to the **Applications** folder
+
+            3. On first launch, approve the system extension:
+               - **macOS 15+ (Sequoia):** System Settings → General → Login Items & Extensions → Network Extensions
+               - **macOS 14 (Sonoma):** System Settings → Privacy & Security → Extensions → Network Extensions
+
+            4. Import your tunnel configuration (JSON) and connect
+
+            #### Requirements
+
+            - macOS 14.0 (Sonoma) or later
+            - Apple Silicon (arm64)
+
+            ---
+
+            ### TR
+
+            #### Paket
+
+            - `Phantom-WG Mac.app` — Imzali ve noterize edilmis macOS uygulamasi
+            - `Applications` — Surukle-birak kurulum kisayolu
+
+            #### Kurulum
+
+            1. DMG dosyasini indirin ve acin:
+            ```
+            Phantom-WG-MacOS-${{ inputs.version_id }}.dmg
+            ```
+
+            2. **Phantom-WG Mac** uygulamasini **Applications** klasorune surukleyin
+
+            3. Ilk calistirmada sistem uzantisini onaylayin:
+               - **macOS 15+ (Sequoia):** Sistem Ayarlari → Genel → Oturum Acma Ogeleri ve Uzantilar → Ag Uzantilari
+               - **macOS 14 (Sonoma):** Sistem Ayarlari → Gizlilik ve Guvenlik → Uzantilar → Ag Uzantilari
+
+            4. Tunel yapilandirmanizi (JSON) ice aktarin ve baglanin
+
+            #### Gereksinimler
+
+            - macOS 14.0 (Sonoma) veya uzeri
+            - Apple Silicon (arm64)
+
+          files: |
+            ${{ runner.temp }}/release/Phantom-WG-MacOS-${{ inputs.version_id }}.dmg
+          draft: false
+          prerelease: false
+          generate_release_notes: false
