@@ -1,0 +1,31 @@
+name: multihop-exit
+priority: 80
+type: system
+metadata:
+  description: "Multihop exit routing — main VPN to exit tunnel"
+
+table:
+  - ensure: {id: 200, name: mh}
+  - policy: {from: "{ipv4_subnet}", table: mh, priority: 100}
+  - route: {destination: "{ipv4_subnet}", device: "{wg_interface}", table: mh}
+  - route: {destination: default, device: "{wg_interface_exit}", table: mh}
+
+rules:
+  # main → exit forwarding
+  - chain: forward
+    action: accept
+    in_iface: "{wg_interface}"
+    out_iface: "{wg_interface_exit}"
+
+  # exit → main return traffic
+  - chain: forward
+    action: accept
+    in_iface: "{wg_interface_exit}"
+    out_iface: "{wg_interface}"
+    state: "established,related"
+
+  # exit masquerade
+  - chain: postrouting
+    action: masquerade
+    source: "{ipv4_subnet}"
+    out_iface: "{wg_interface_exit}"

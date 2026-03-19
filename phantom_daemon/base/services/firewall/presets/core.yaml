@@ -1,0 +1,33 @@
+name: core
+priority: 50
+type: system
+metadata:
+  description: "Core VPN firewall — listen port, forwarding, masquerade"
+
+rules:
+  # wg-listen
+  - chain: input
+    action: accept
+    proto: udp
+    dport: "{listen_port}"
+
+  # established-in
+  - chain: input
+    action: accept
+    state: "established,related"
+
+  # wg-forward-in
+  - chain: forward
+    action: accept
+    in_iface: "{wg_interface}"
+
+  # wg-forward-out
+  - chain: forward
+    action: accept
+    out_iface: "{wg_interface}"
+    state: "established,related"
+
+  # vpn-masquerade
+  - chain: postrouting
+    action: masquerade
+    source: "{ipv4_subnet}"

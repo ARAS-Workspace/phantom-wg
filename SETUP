@@ -1,0 +1,103 @@
+Phantom-WG Modern — Setup Guide
+=================================
+
+Prerequisites:
+  - Docker Engine 20.10+
+  - Docker Compose v2
+  - bash
+
+Directory Structure:
+  phantom-wg/
+  ├── Dockerfile                  Daemon image (multi-stage build)
+  ├── docker-compose.yml          Production stack (3 services)
+  ├── .env.daemon.example         Daemon environment template
+  ├── .env.auth-service.example   Auth service environment template
+  ├── requirements.txt            Python dependencies (pinned, hashed)
+  ├── SETUP                       This file
+  ├── LICENSE                     AGPL-3.0
+  ├── THIRD_PARTY_LICENSES        Dependency licenses
+  ├── phantom_daemon/             Daemon source
+  ├── services/
+  │   ├── auth-service/           Authentication service
+  │   ├── nginx/                  TLS reverse proxy config
+  │   └── react-spa/dist/         Web dashboard (pre-built)
+  └── tools/
+      ├── prod.sh                 Production CLI
+      ├── prod.vars               Environment variables
+      └── lib/                    Shell libraries
+
+Quick Start:
+  1. Setup (first time only):
+     ./tools/prod.sh setup
+
+     This generates:
+       - .env.daemon from .env.daemon.example (if not exists)
+       - .env.auth-service from .env.auth-service.example (if not exists)
+       - WireGuard server keypair
+       - Auth service keypair + admin account + database
+       - Self-signed TLS certificate
+
+     Credentials are written to:
+       container-data/secrets/production/
+       container-data/secrets/production/.admin_password
+
+  2. Configure endpoints:
+     Edit .env.daemon and set your server's public IP:
+       WIREGUARD_ENDPOINT_V4=203.0.113.1
+       WIREGUARD_ENDPOINT_V6=2001:db8::1    (optional)
+
+  3. Start:
+     ./tools/prod.sh up
+
+  4. Access:
+     Dashboard:  https://<server-ip>
+     WireGuard:  UDP port 51820
+
+Environment Files:
+  .env.daemon               Daemon configuration (WireGuard, storage)
+  .env.auth-service         Auth service configuration (JWT, rate limiting)
+
+  These files are created from .example templates during setup.
+  They are NOT tracked by git — safe for user-specific values.
+  Edit them to customize ports, timeouts, or any service parameter.
+
+Commands:
+  ./tools/prod.sh help             Show all commands
+  ./tools/prod.sh setup            Full setup (env + keys + auth + TLS)
+  ./tools/prod.sh up               Start stack (builds images on first run)
+  ./tools/prod.sh down             Stop stack
+  ./tools/prod.sh restart          Restart all services
+  ./tools/prod.sh build            Rebuild images (after dependency changes)
+  ./tools/prod.sh logs             Follow logs
+  ./tools/prod.sh status           Container status
+  ./tools/prod.sh shell [service]  Open shell (default: daemon)
+  ./tools/prod.sh exec <svc> <cmd> Execute command in service
+  ./tools/prod.sh hard-reset       Wipe ALL data (destructive)
+
+Ports:
+  443/tcp     HTTPS (nginx → auth-service → daemon)
+  51820/udp   WireGuard
+
+Data Directories (created at runtime):
+  container-data/
+  ├── secrets/production/         Keys and certificates
+  ├── db/                         Client and peer databases
+  ├── state/db/                   Runtime state (bridges)
+  └── auth-db/                    Authentication database
+
+TLS Certificate:
+  Default is self-signed. To use your own certificate,
+  replace the files before starting the stack:
+    container-data/secrets/production/tls_cert
+    container-data/secrets/production/tls_key
+
+Updating:
+  git pull
+  ./tools/prod.sh restart
+
+  If dependencies changed (requirements.txt, Dockerfile):
+    ./tools/prod.sh build
+    ./tools/prod.sh restart
+
+  Environment files (.env.daemon, .env.auth-service) are preserved
+  across updates — docker-compose.yml is never manually edited.

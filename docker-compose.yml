@@ -1,0 +1,90 @@
+# ──────────────────────────────────────────────────────────────────
+# phantom-daemon  ·  Production Compose
+# ──────────────────────────────────────────────────────────────────
+# Usage:
+#   ./tools/prod.sh setup       # first-time: keys + auth + TLS cert
+#   ./tools/prod.sh up          # start production stack
+#
+# Topology:
+#   Internet → :443 (nginx, TLS) → auth-service → daemon (UDS)
+#   Internet → :51820/udp (WireGuard) → daemon
+#
+# Environment: .env.daemon + .env.auth-service (see .example files)
+# Set WIREGUARD_ENDPOINT_V4 to your server's public IP.
+# ──────────────────────────────────────────────────────────────────
+
+services:
+  daemon:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: phantom-daemon
+    command: ["python", "-m", "phantom_daemon.main", "/var/run/phantom/daemon.sock"]
+    restart: unless-stopped
+    volumes:
+      - phantom-sock:/var/run/phantom
+      - ./phantom_daemon:/app/phantom_daemon:ro
+      - ./container-data/db:/var/lib/phantom/db
+      - ./container-data/state/db:/var/lib/phantom/state/db
+    secrets:
+      - wg_private_key
+      - wg_public_key
+    env_file: .env.daemon
+    cap_add:
+      - NET_ADMIN
+      - NET_RAW
+    sysctls:
+      - net.ipv4.ip_forward=1
+    devices:
+      - /dev/net/tun:/dev/net/tun
+    ports:
+      - "51820:51820/udp"
+
+  auth-service:
+    build:
+      context: ./services/auth-service
+      dockerfile: Dockerfile
+    container_name: phantom-auth
+    restart: unless-stopped
+    depends_on:
+      - daemon
+    volumes:
+      - phantom-sock:/var/run/phantom
+      - ./services/auth-service/auth_service:/app/auth_service:ro
+      - ./container-data/auth-db:/var/lib/phantom/auth
+    secrets:
+      - auth_signing_key
+      - auth_verify_key
+    env_file: .env.auth-service
+
+  nginx:
+    image: nginx:1-alpine
+    container_name: phantom-nginx
+    restart: unless-stopped
+    depends_on:
+      - auth-service
+    volumes:
+      - ./services/nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./services/react-spa/dist:/usr/share/nginx/html:ro
+    secrets:
+      - tls_cert
+      - tls_key
+    ports:
+      - "443:443"
+
+secrets:
+  wg_private_key:
+    file: ./container-data/secrets/production/wg_private_key
+  wg_public_key:
+    file: ./container-data/secrets/production/wg_public_key
+  auth_signing_key:
+    file: ./container-data/secrets/production/auth_signing_key
+  auth_verify_key:
+    file: ./container-data/secrets/production/auth_verify_key
+  tls_cert:
+    file: ./container-data/secrets/production/tls_cert
+  tls_key:
+    file: ./container-data/secrets/production/tls_key
+
+volumes:
+  phantom-sock:

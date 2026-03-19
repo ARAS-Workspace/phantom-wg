@@ -1,0 +1,32 @@
+services:
+  auth:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    environment:
+      # ── Server ──
+      - AUTH_HOST=0.0.0.0
+      - AUTH_PORT=8443
+      - AUTH_LOG_LEVEL=info
+      # ── Proxy ──
+      - AUTH_PROXY_URL=unix:///var/run/phantom/daemon.sock
+      - AUTH_PROXY_TIMEOUT=30.0
+      - AUTH_PROXY_MAX_BODY=65536
+      # ── Auth ──
+      - AUTH_TOKEN_LIFETIME=86400
+      - AUTH_INACTIVITY_TIMEOUT=1800
+      - AUTH_MFA_TOKEN_LIFETIME=120
+      - AUTH_TOTP_SETUP_LIFETIME=300
+      # ── Rate Limit ──
+      - AUTH_RATE_LIMIT_WINDOW=60
+      - AUTH_RATE_LIMIT_MAX=5
+    secrets:
+      - auth_signing_key
+      - auth_verify_key
+
+secrets:
+  auth_signing_key:
+    file: ${AUTH_SECRETS_DIR:?AUTH_SECRETS_DIR must be set}/auth_signing_key
+  auth_verify_key:
+    file: ${AUTH_SECRETS_DIR:?AUTH_SECRETS_DIR must be set}/auth_verify_key

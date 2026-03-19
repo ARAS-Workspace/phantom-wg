@@ -1,0 +1,203 @@
+██████╗ ██╗  ██╗ █████╗ ███╗   ██╗████████╗ ██████╗ ███╗   ███╗
+██╔══██╗██║  ██║██╔══██╗████╗  ██║╚══██╔══╝██╔═══██╗████╗ ████║
+██████╔╝███████║███████║██╔██╗ ██║   ██║   ██║   ██║██╔████╔██║
+██╔═══╝ ██╔══██║██╔══██║██║╚██╗██║   ██║   ██║   ██║██║╚██╔╝██║
+██║     ██║  ██║██║  ██║██║ ╚████║   ██║   ╚██████╔╝██║ ╚═╝ ██║
+╚═╝     ╚═╝  ╚═╝╚═╝  ╚═╝╚═╝  ╚═══╝   ╚═╝    ╚═════╝ ╚═╝     ╚═╝
+
+THIRD PARTY LICENSES
+================================================================================
+
+Phantom-WG Modern
+Copyright (c) 2025 - Riza Emre ARAS <r.emrearas@proton.me>
+Licensed under AGPL-3.0 - see LICENSE file for details
+
+This document lists third-party software dependencies and their licenses.
+
+================================================================================
+DAEMON — PYTHON DEPENDENCIES
+================================================================================
+
+Production dependencies (requirements.txt):
+
+| Package            | Version | License      | SPDX Identifier |
+|--------------------|---------|--------------|-----------------|
+| fastapi            | 0.135.1 | MIT          | MIT             |
+| uvicorn            | 0.41.0  | BSD 3-Clause | BSD-3-Clause    |
+| pydantic           | 2.12.5  | MIT          | MIT             |
+| python-multipart   | 0.0.22  | Apache 2.0   | Apache-2.0      |
+| pyyaml             | 6.0.2   | MIT          | MIT             |
+
+Transitive dependencies:
+
+| Package            | Version | License      | SPDX Identifier | Required By       |
+|--------------------|---------|--------------|-----------------|-------------------|
+| pydantic-core      | 2.41.5  | MIT          | MIT             | pydantic          |
+| starlette          | 0.52.1  | BSD 3-Clause | BSD-3-Clause    | fastapi           |
+| h11                | 0.16.0  | MIT          | MIT             | uvicorn           |
+| click              | 8.3.1   | BSD 3-Clause | BSD-3-Clause    | uvicorn           |
+| anyio              | 4.12.1  | MIT          | MIT             | starlette         |
+| idna               | 3.11    | BSD 3-Clause | BSD-3-Clause    | anyio             |
+| typing-extensions  | 4.15.0  | PSF-2.0      | PSF-2.0         | pydantic, fastapi |
+| typing-inspection  | 0.4.2   | MIT          | MIT             | pydantic          |
+| annotated-doc      | 0.0.4   | MIT          | MIT             | fastapi           |
+| annotated-types    | 0.7.0   | MIT          | MIT             | pydantic          |
+
+License URLs:
+- FastAPI:           https://github.com/fastapi/fastapi/blob/master/LICENSE
+- uvicorn:           https://github.com/encode/uvicorn/blob/master/LICENSE.md
+- Pydantic:          https://github.com/pydantic/pydantic/blob/main/LICENSE
+- python-multipart:  https://github.com/Kludex/python-multipart/blob/master/LICENSE.txt
+- PyYAML:            https://github.com/yaml/pyyaml/blob/main/LICENSE
+- Starlette:         https://github.com/encode/starlette/blob/master/LICENSE.md
+- Click:             https://github.com/pallets/click/blob/main/LICENSE.txt
+- AnyIO:             https://github.com/agronholm/anyio/blob/master/LICENSE
+
+================================================================================
+AUTH SERVICE — ADDITIONAL PYTHON DEPENDENCIES
+================================================================================
+
+| Package            | Version | License      | SPDX Identifier |
+|--------------------|---------|--------------|-----------------|
+| pynacl             | 1.6.2   | Apache 2.0   | Apache-2.0      |
+| httpx              | 0.28.1  | BSD 3-Clause | BSD-3-Clause    |
+| cffi               | 2.0.0   | MIT          | MIT             |
+| python-dotenv      | 1.2.2   | BSD 3-Clause | BSD-3-Clause    |
+| uvloop             | 0.22.1  | MIT / Apache | MIT / Apache-2.0|
+
+Transitive dependencies:
+
+| Package            | Version | License      | SPDX Identifier | Required By |
+|--------------------|---------|--------------|-----------------|-------------|
+| httpcore           | 1.0.9   | BSD 3-Clause | BSD-3-Clause    | httpx       |
+| httptools          | 0.7.1   | MIT          | MIT             | uvicorn     |
+| certifi            | 2026.2  | MPL 2.0      | MPL-2.0         | httpx       |
+| pycparser          | 3.0     | BSD 3-Clause | BSD-3-Clause    | cffi        |
+| watchfiles         | 1.1.1   | MIT          | MIT             | uvicorn     |
+| websockets         | 16.0    | BSD 3-Clause | BSD-3-Clause    | uvicorn     |
+
+License URLs:
+- PyNaCl:            https://github.com/pyca/pynacl/blob/main/LICENSE
+- httpx:             https://github.com/encode/httpx/blob/master/LICENSE.md
+- cffi:              https://github.com/python-cffi/cffi/blob/main/LICENSE
+- python-dotenv:     https://github.com/theskumar/python-dotenv/blob/main/LICENSE
+- uvloop:            https://github.com/MagicStack/uvloop/blob/master/LICENSE-MIT
+
+================================================================================
+DASHBOARD — NPM DEPENDENCIES (pre-built, bundled in SPA)
+================================================================================
+
+Runtime dependencies:
+
+| Package               | Version | License      | SPDX Identifier |
+|-----------------------|---------|--------------|-----------------|
+| react                 | 19.2.4  | MIT          | MIT             |
+| react-dom             | 19.2.4  | MIT          | MIT             |
+| react-router-dom      | 7.13.1  | MIT          | MIT             |
+| @carbon/react         | 1.102.0 | Apache 2.0   | Apache-2.0      |
+| @carbon/icons-react   | 11.76.0 | Apache 2.0   | Apache-2.0      |
+| @carbon/styles        | 1.101.0 | Apache 2.0   | Apache-2.0      |
+| @mdx-js/react         | 3.1.1   | MIT          | MIT             |
+| mermaid               | 11.13.0 | MIT          | MIT             |
+| qrcode.react          | 4.2.0   | ISC          | ISC             |
+| shiki                 | 4.0.2   | MIT          | MIT             |
+| swr                   | 2.4.1   | MIT          | MIT             |
+
+Build-time only (not bundled in production):
+
+| Package               | Version | License      | SPDX Identifier |
+|-----------------------|---------|--------------|-----------------|
+| @mdx-js/rollup        | 3.1.1   | MIT          | MIT             |
+| remark-frontmatter    | 5.0.0   | MIT          | MIT             |
+| remark-gfm            | 4.0.1   | MIT          | MIT             |
+| remark-mdx-frontmatter| 5.2.0   | MIT          | MIT             |
+
+Fonts:
+
+| Package               | Version | License      | SPDX Identifier |
+|-----------------------|---------|--------------|-----------------|
+| @ibm/plex-mono        | 1.1.0   | OFL 1.1      | OFL-1.1         |
+| @ibm/plex-sans        | 1.1.0   | OFL 1.1      | OFL-1.1         |
+| @ibm/plex-serif       | 1.1.0   | OFL 1.1      | OFL-1.1         |
+
+License URLs:
+- React:              https://github.com/facebook/react/blob/main/LICENSE
+- React Router:       https://github.com/remix-run/react-router/blob/main/LICENSE.md
+- Carbon:             https://github.com/carbon-design-system/carbon/blob/main/LICENSE
+- MDX:                https://github.com/mdx-js/mdx/blob/main/license
+- Mermaid:            https://github.com/mermaid-js/mermaid/blob/develop/LICENSE
+- qrcode.react:       https://github.com/zpao/qrcode.react/blob/main/LICENSE
+- Shiki:              https://github.com/shikijs/shiki/blob/main/LICENSE
+- SWR:                https://github.com/vercel/swr/blob/main/LICENSE
+- IBM Plex:           https://github.com/IBM/plex/blob/master/LICENSE.md
+
+================================================================================
+NATIVE BRIDGES (vendor artifacts)
+================================================================================
+
+| Component            | Version | Language | License         | Source             |
+|----------------------|---------|----------|-----------------|--------------------|
+| wireguard-go-bridge  | 2.1.1   | Go       | MIT             | Internal (wraps    |
+|                      |         |          |                 | wireguard-go)      |
+| firewall-bridge      | 2.1.0   | Rust     | AGPL-3.0        | Internal           |
+
+Upstream dependency:
+
+| Component            | License      | SPDX Identifier | URL                                     |
+|----------------------|--------------|-----------------|---------------------------------------- |
+| wireguard-go         | MIT          | MIT             | https://git.zx2c4.com/wireguard-go      |
+
+================================================================================
+DOCKER BASE IMAGES
+================================================================================
+
+| Image              | License            | URL                                      |
+|--------------------|--------------------|------------------------------------------|
+| python:3.12-slim   | PSF-2.0 + Debian   | https://hub.docker.com/_/python          |
+| nginx:1-alpine     | BSD 2-Clause       | https://hub.docker.com/_/nginx           |
+
+================================================================================
+SYSTEM LIBRARIES (installed in container)
+================================================================================
+
+Daemon container:
+
+| Library            | License      | SPDX Identifier | Purpose                  |
+|--------------------|--------------|-----------------|--------------------------|
+| libnftables1       | GPL-2.0      | GPL-2.0-only    | Firewall bridge runtime  |
+| nftables           | GPL-2.0      | GPL-2.0-only    | Netfilter management     |
+| iproute2           | GPL-2.0      | GPL-2.0-only    | Network routing          |
+
+Auth service container:
+
+| Library            | License      | SPDX Identifier | Purpose                  |
+|--------------------|--------------|-----------------|--------------------------|
+| libsodium          | ISC          | ISC             | Cryptographic operations |
+
+Usage Note:
+GPL-2.0 system libraries are used at runtime via their standard interfaces.
+This constitutes mere aggregation, not derivative work.
+
+================================================================================
+TRADEMARK NOTICES
+================================================================================
+
+WireGuard is a registered trademark of Jason A. Donenfeld.
+https://www.wireguard.com/
+
+================================================================================
+LICENSE COMPATIBILITY
+================================================================================
+
+All listed licenses (MIT, BSD-2-Clause, BSD-3-Clause, Apache-2.0, ISC,
+PSF-2.0, MPL-2.0, OFL-1.1) are compatible with AGPL-3.0 and allow use
+in this project.
+
+GPL-2.0 components (nftables, iproute2) are system libraries used via
+standard interfaces, which does not create licensing obligations.
+
+================================================================================
+
+Maintained by:  Riza Emre ARAS <r.emrearas@proton.me>
+Project:        Phantom-WG Modern
+License:        AGPL-3.0-or-later
