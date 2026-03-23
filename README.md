@@ -3,7 +3,7 @@
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="assets/phantom-vertical-master-stellar-silver.svg">
   <source media="(prefers-color-scheme: light)" srcset="assets/phantom-vertical-master-midnight-phantom.svg">
-  <img alt="Phantom-WG" src="assets/phantom-vertical-master-midnight-phantom.svg" width="400">
+  <img alt="Phantom-WG" src="assets/phantom-vertical-master-midnight-phantom.svg" width="600">
 </picture>
 
 [![CI](https://img.shields.io/badge/CI-passing-brightgreen)](https://github.com/ARAS-Workspace/phantom-wg/actions/runs/23315327358)
