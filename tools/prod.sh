@@ -126,6 +126,7 @@ Usage: ./tools/prod.sh <command>
 
   Stack:
     build               Build production images
+    rebuild             Rebuild images from scratch (no-cache)
     up                  Start production stack
     down                Stop production stack
     restart [service]   Restart all or specific service
@@ -151,6 +152,7 @@ case "${1:-help}" in
     setup-tls)  shift; cmd_setup_tls "$@" ;;
 
     build)      cmd_build ;;
+    rebuild)    cmd_rebuild ;;
     up)         _bootstrap_env; _check_secrets; cmd_up ;;
     down)       cmd_down ;;
     restart)    shift; cmd_restart "$@" ;;
