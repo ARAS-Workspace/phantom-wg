@@ -91,6 +91,32 @@ cmd_setup() {
     bold "Start with: ./tools/prod.sh up"
 }
 
+cmd_update() {
+    local skip_compose=false
+    for arg in "$@"; do
+        case "$arg" in
+            --skip-compose) skip_compose=true ;;
+        esac
+    done
+
+    bold "Pulling latest changes..."
+
+    if [[ "$skip_compose" == true ]]; then
+        git update-index --skip-worktree docker-compose.yml
+        echo "  docker-compose.yml preserved (--skip-compose)"
+    fi
+
+    git pull
+
+    if [[ "$skip_compose" == true ]]; then
+        git update-index --no-skip-worktree docker-compose.yml
+    fi
+
+    bold "Restarting stack..."
+    $COMPOSE restart
+    green "Update complete."
+}
+
 cmd_hard_reset() {
     bold "This will destroy ALL data: secrets, auth DB, and Docker volumes."
     printf "Type 'yes' to confirm: "
@@ -135,6 +161,10 @@ Usage: ./tools/prod.sh <command>
     shell [service]     Open shell (default: daemon)
     exec <svc> <cmd>    Execute command in service
 
+  Update:
+    update              Pull latest + restart
+    update --skip-compose  Pull but preserve local docker-compose.yml
+
   Danger:
     hard-reset          Wipe ALL data (secrets + auth DB + volumes)
 
@@ -161,6 +191,7 @@ case "${1:-help}" in
     shell)      shift; cmd_shell "$@" ;;
     exec)       shift; cmd_exec "$@" ;;
 
+    update)     shift; cmd_update "$@" ;;
     hard-reset) cmd_hard_reset ;;
 
     help|*)     cmd_help ;;

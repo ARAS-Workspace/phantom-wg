@@ -12,8 +12,10 @@
 FROM python:3.12-slim AS vendor-fetch
 
 ARG TARGETARCH
-ARG VENDOR_URL=https://vendor-artifacts.phantom.tc
+ARG VENDOR_URL=https://vendor.phantom.tc
 ARG VENDOR_DIR=/opt/phantom/vendor
+ARG FIREWALL_BRIDGE_VERSION=latest
+ARG WIREGUARD_GO_BRIDGE_VERSION=latest
 
 RUN apt-get update \
  && apt-get install -y --no-install-recommends curl unzip \
@@ -24,13 +26,18 @@ RUN set -e; \
         amd64|arm64) ;; \
         *) echo "Unsupported arch: ${TARGETARCH}" && exit 1 ;; \
     esac; \
-    ZIP_NAME="vendor-pack-linux-${TARGETARCH}.zip"; \
-    URL="${VENDOR_URL}/${ZIP_NAME}"; \
-    echo "Fetching ${URL}"; \
-    curl -fSL -o /tmp/vendor-pack.zip "${URL}"; \
     mkdir -p "${VENDOR_DIR}"; \
-    unzip -o /tmp/vendor-pack.zip -d "${VENDOR_DIR}"; \
-    rm /tmp/vendor-pack.zip
+    for BRIDGE in firewall-bridge wireguard-go-bridge; do \
+        case "${BRIDGE}" in \
+            firewall-bridge)      VER="${FIREWALL_BRIDGE_VERSION}" ;; \
+            wireguard-go-bridge)  VER="${WIREGUARD_GO_BRIDGE_VERSION}" ;; \
+        esac; \
+        URL="${VENDOR_URL}/${BRIDGE}/${VER}/linux-${TARGETARCH}.zip"; \
+        echo "Fetching ${URL}"; \
+        curl -fSL -o /tmp/bridge.zip "${URL}"; \
+        unzip -o /tmp/bridge.zip -d "${VENDOR_DIR}"; \
+        rm /tmp/bridge.zip; \
+    done
 
 # ── Stage 2: python deps ────────────────────────────────────────
 FROM python:3.12-slim AS deps
