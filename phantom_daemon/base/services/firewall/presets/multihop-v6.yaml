@@ -1,0 +1,35 @@
+name: multihop-exit-v6
+priority: 80
+type: system
+metadata:
+  description: "Multihop exit routing (IPv6) — main VPN to exit tunnel"
+
+table:
+  - ensure: {id: 201, name: mh6, family: 10}
+  - policy: {from: "{ipv6_subnet}", to: "{ipv6_subnet}", table: main, priority: 99, family: 10}
+  - policy: {from: "{ipv6_subnet}", table: mh6, priority: 100, family: 10}
+  - route: {destination: "{ipv6_subnet}", device: "{wg_interface}", table: mh6, family: 10}
+  - route: {destination: default, device: "{wg_interface_exit}", table: mh6, family: 10}
+
+rules:
+  # main → exit forwarding
+  - chain: forward
+    action: accept
+    family: 10
+    in_iface: "{wg_interface}"
+    out_iface: "{wg_interface_exit}"
+
+  # exit → main return traffic
+  - chain: forward
+    action: accept
+    family: 10
+    in_iface: "{wg_interface_exit}"
+    out_iface: "{wg_interface}"
+    state: "established,related"
+
+  # exit masquerade
+  - chain: postrouting
+    action: masquerade
+    family: 10
+    source: "{ipv6_subnet}"
+    out_iface: "{wg_interface_exit}"

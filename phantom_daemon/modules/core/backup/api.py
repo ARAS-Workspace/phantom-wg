@@ -26,7 +26,8 @@ from pydantic import BaseModel
 from starlette.background import BackgroundTask
 
 from phantom_daemon.base.backup import create_backup_tar, restore_backup_tar
-from phantom_daemon.base.services.firewall.service import MULTIHOP_PRESET_NAME
+from firewall_bridge import GroupNotFoundError
+from phantom_daemon.base.services.firewall.service import MULTIHOP_PRESET_NAME, MULTIHOP_V6_PRESET_NAME
 from phantom_daemon.modules._envelope import ApiOk
 
 
@@ -97,11 +98,12 @@ async def import_backup(file: UploadFile, request: Request):
     # Teardown multihop before restore — DB will be replaced with
     # multihop disabled, kernel state must be consistent.
     if wg_exit is not None:
-        try:
-            fw = request.app.state.fw
-            fw.remove_preset(MULTIHOP_PRESET_NAME)
-        except (RuntimeError, OSError, AttributeError):
-            pass
+        fw = request.app.state.fw
+        for preset_name in (MULTIHOP_PRESET_NAME, MULTIHOP_V6_PRESET_NAME):
+            try:
+                fw.remove_preset(preset_name)
+            except (RuntimeError, OSError, AttributeError, GroupNotFoundError):
+                pass
         try:
             wg_exit.down()
         except (RuntimeError, OSError):

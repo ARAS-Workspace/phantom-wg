@@ -21,6 +21,8 @@ services:
     container_name: phantom-daemon
     command: ["python", "-m", "phantom_daemon.main", "/var/run/phantom/daemon.sock"]
     restart: unless-stopped
+    networks:
+      - phantom-net
     volumes:
       - phantom-sock:/var/run/phantom
       - ./phantom_daemon:/app/phantom_daemon:ro
@@ -35,6 +37,7 @@ services:
       - NET_RAW
     sysctls:
       - net.ipv4.ip_forward=1
+      - net.ipv6.conf.all.forwarding=1
     devices:
       - /dev/net/tun:/dev/net/tun
     ports:
@@ -48,6 +51,8 @@ services:
     restart: unless-stopped
     depends_on:
       - daemon
+    networks:
+      - phantom-net
     volumes:
       - phantom-sock:/var/run/phantom
       - ./services/auth-service/auth_service:/app/auth_service:ro
@@ -63,6 +68,8 @@ services:
     restart: unless-stopped
     depends_on:
       - auth-service
+    networks:
+      - phantom-net
     volumes:
       - ./services/nginx/nginx.conf:/etc/nginx/nginx.conf:ro
       - ./services/react-spa/dist:/usr/share/nginx/html:ro
@@ -85,6 +92,14 @@ secrets:
     file: ./container-data/secrets/production/tls_cert
   tls_key:
     file: ./container-data/secrets/production/tls_key
+
+networks:
+  phantom-net:
+    enable_ipv6: true
+    ipam:
+      config:
+        - subnet: "172.28.0.0/24"
+        - subnet: "fd00:d0ce::/64"
 
 volumes:
   phantom-sock:

@@ -18,11 +18,15 @@ from __future__ import annotations
 from fastapi import APIRouter, Request
 from pydantic import BaseModel, Field
 
+from firewall_bridge import GroupNotFoundError
 from phantom_daemon.base.errors import DaemonHTTPException
 from phantom_daemon.base.exit_store import parse_wireguard_config
 from phantom_daemon.base.services.firewall.service import (
     MULTIHOP_PRESET_NAME,
+    MULTIHOP_V6_PRESET_NAME,
     resolve_multihop_preset,
+    resolve_multihop_v6_preset,
+    parse_allowed_ips_families,
 )
 from phantom_daemon.base.services.wireguard import WG_INTERFACE_NAME_EXIT
 from phantom_daemon.base.services.wireguard.ipc import build_exit_config
@@ -227,16 +231,21 @@ async def enable_multihop(body: ExitNameRequest, request: Request):
         wg_exit.up()
         wg_exit.apply_exit_interface(exit_data["address"])
 
-        ipv4_subnet = wallet.get_config("ipv4_subnet") or ""
-        mh_spec = resolve_multihop_preset(ipv4_subnet=ipv4_subnet)
-        fw.apply_preset(mh_spec)
+        has_v4, has_v6 = parse_allowed_ips_families(exit_data["allowed_ips"])
+        if has_v4:
+            ipv4_subnet = wallet.get_config("ipv4_subnet") or ""
+            fw.apply_preset(resolve_multihop_preset(ipv4_subnet=ipv4_subnet))
+        if has_v6:
+            ipv6_subnet = wallet.get_config("ipv6_subnet") or ""
+            fw.apply_preset(resolve_multihop_v6_preset(ipv6_subnet=ipv6_subnet))
     except Exception:
         # Rollback: always attempt cleanup regardless of which step failed.
         # remove_preset is safe to call even if preset was never applied.
-        try:
-            fw.remove_preset(MULTIHOP_PRESET_NAME)
-        except (RuntimeError, OSError):
-            pass
+        for preset_name in (MULTIHOP_PRESET_NAME, MULTIHOP_V6_PRESET_NAME):
+            try:
+                fw.remove_preset(preset_name)
+            except (RuntimeError, OSError, GroupNotFoundError):
+                pass
         try:
             wg_exit.down()
         except (RuntimeError, OSError):
@@ -267,10 +276,11 @@ async def disable_multihop(request: Request):
     if not exit_store.is_enabled():
         return ApiOk(data={"status": "already_disabled", "code": "MULTIHOP_ALREADY_DISABLED"})
 
-    try:
-        fw.remove_preset(MULTIHOP_PRESET_NAME)
-    except (RuntimeError, OSError):
-        pass
+    for preset_name in (MULTIHOP_PRESET_NAME, MULTIHOP_V6_PRESET_NAME):
+        try:
+            fw.remove_preset(preset_name)
+        except (RuntimeError, OSError):
+            pass
 
     if wg_exit is not None:
         wg_exit.down()

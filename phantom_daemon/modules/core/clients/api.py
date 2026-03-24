@@ -16,6 +16,7 @@ Client CRUD endpoints: assign, list, get, revoke, config export.
 from __future__ import annotations
 
 import base64
+import ipaddress
 from typing import Literal
 
 from fastapi import APIRouter, Query, Request
@@ -185,10 +186,17 @@ async def export_config(body: ConfigExportRequest, request: Request):
     if body.version in ("v6", "hybrid") and not env.endpoint_v6:
         raise DaemonHTTPException(400, "ENDPOINT_V6_NOT_CONFIGURED", "endpoint_v6 is not configured")
 
-    if body.version in ("v4", "hybrid"):
+    if body.version == "v4":
         endpoint = f"{env.endpoint_v4}:{env.listen_port}"
+    elif body.version == "v6":
+        try:
+            ipaddress.IPv6Address(env.endpoint_v6)
+            endpoint = f"[{env.endpoint_v6}]:{env.listen_port}"
+        except ValueError:
+            endpoint = f"{env.endpoint_v6}:{env.listen_port}"
     else:
-        endpoint = f"{env.endpoint_v6}:{env.listen_port}"
+        # hybrid: prefer IPv4 endpoint
+        endpoint = f"{env.endpoint_v4}:{env.listen_port}"
 
     dns_v4 = wallet.get_dns("v4")
     dns_v6 = wallet.get_dns("v6")

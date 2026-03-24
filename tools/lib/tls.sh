@@ -1,7 +1,7 @@
 # ──────────────────────────────────────────────────────────────────
 # TLS certificate generation (self-signed)
 # Requires: SECRETS_DIR, TLS_SUBJECT, TLS_SAN
-# Optional: TLS_PRODUCTION (enables policy extensions + detail output)
+# Optional: TLS_PRODUCTION (enables detail output)
 # ──────────────────────────────────────────────────────────────────
 
 cmd_setup_tls() {
@@ -32,12 +32,10 @@ cmd_setup_tls() {
         -out /secrets/tls_cert
         -subj "$TLS_SUBJECT"
         -addext "subjectAltName=${TLS_SAN}"
+        -addext "basicConstraints=critical,CA:TRUE"
+        -addext "keyUsage=critical,digitalSignature,keyCertSign,keyEncipherment"
+        -addext "extendedKeyUsage=serverAuth"
     )
-
-    if [[ "${TLS_PRODUCTION:-false}" == true ]]; then
-        args+=(-addext "certificatePolicies=2.5.29.32.0")
-        args+=(-addext "nsComment=Phantom-WG Self-Signed Certificate")
-    fi
 
     docker run --rm \
         -v "$(pwd)/${SECRETS_DIR}:/secrets" \

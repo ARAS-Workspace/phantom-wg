@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import copy
 import importlib.resources
+import ipaddress
 import logging
 import re
 from pathlib import Path
@@ -35,6 +36,7 @@ log = logging.getLogger("phantom-daemon")
 
 CORE_PRESET_NAME = "core"
 MULTIHOP_PRESET_NAME = "multihop-exit"
+MULTIHOP_V6_PRESET_NAME = "multihop-exit-v6"
 
 
 # ── Pure Functions ────────────────────────────────────────────────
@@ -85,6 +87,7 @@ def _resolve_core_preset(env: DaemonEnv, wallet: Wallet) -> dict:
         "listen_port": env.listen_port,
         "wg_interface": WG_INTERFACE_NAME,
         "ipv4_subnet": wallet.get_config("ipv4_subnet") or "",
+        "ipv6_subnet": wallet.get_config("ipv6_subnet") or "",
     }
     return _resolve_templates(spec, context)
 
@@ -111,6 +114,51 @@ def resolve_multihop_preset(
         "wg_interface_exit": wg_interface_exit,
     }
     return _resolve_templates(spec, context)
+
+
+def _read_multihop_v6_preset() -> dict:
+    """Read multihop-v6.yaml from package resources."""
+    ref = importlib.resources.files(
+        "phantom_daemon.base.services.firewall.presets"
+    ).joinpath("multihop-v6.yaml")
+    return yaml.safe_load(ref.read_text(encoding="utf-8"))
+
+
+def resolve_multihop_v6_preset(
+    ipv6_subnet: str,
+    wg_interface: str = WG_INTERFACE_NAME,
+    wg_interface_exit: str = WG_INTERFACE_NAME_EXIT,
+) -> dict:
+    """Load multihop IPv6 preset YAML and resolve {template} placeholders."""
+    spec = _read_multihop_v6_preset()
+    context = {
+        "ipv6_subnet": ipv6_subnet,
+        "wg_interface": wg_interface,
+        "wg_interface_exit": wg_interface_exit,
+    }
+    return _resolve_templates(spec, context)
+
+
+def parse_allowed_ips_families(allowed_ips: str) -> tuple[bool, bool]:
+    """Determine IPv4/IPv6 presence in AllowedIPs string.
+
+    Returns (has_v4, has_v6).
+    """
+    has_v4 = False
+    has_v6 = False
+    for cidr in allowed_ips.split(","):
+        cidr = cidr.strip()
+        if not cidr:
+            continue
+        try:
+            net = ipaddress.ip_network(cidr, strict=False)
+            if net.version == 4:
+                has_v4 = True
+            elif net.version == 6:
+                has_v6 = True
+        except ValueError:
+            continue
+    return has_v4, has_v6
 
 
 # ── Service ──────────────────────────────────────────────────────
@@ -158,7 +206,12 @@ class FirewallService:
         return apply_preset(self._bridge, preset, **override)
 
     def remove_preset(self, name: str) -> None:
-        """Remove a preset group by name."""
+        """Remove a preset group by name. No-op if group does not exist."""
+        from firewall_bridge import GroupNotFoundError
+        try:
+            self._bridge.get_group(name)
+        except GroupNotFoundError:
+            return
         remove_preset(self._bridge, name)
 
     def enable_preset(self, name: str) -> None:

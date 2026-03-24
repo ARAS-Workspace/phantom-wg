@@ -31,3 +31,9 @@ rules:
   - chain: postrouting
     action: masquerade
     source: "{ipv4_subnet}"
+
+  # vpn-masquerade-v6
+  - chain: postrouting
+    action: masquerade
+    family: 10
+    source: "{ipv6_subnet}"

@@ -13,7 +13,7 @@ WireGuard® is a registered trademark of Jason A. Donenfeld.
 Phantom-WG Daemon root package definition.
 """
 
-__version__ = "1.0.0"
+__version__ = "1.0.1"
 __author__ = "Rıza Emre ARAS"
 __email__ = "r.emrearas@proton.me"
 __license__ = "AGPL-3.0"
