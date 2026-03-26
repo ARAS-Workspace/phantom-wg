@@ -158,6 +158,7 @@ Usage: ./tools/prod.sh <command>
     restart [service]   Restart all or specific service
     logs [service]      Follow logs (all or specific)
     status              Show container status
+    show-versions       Show daemon + bridge versions
     shell [service]     Open shell (default: daemon)
     exec <svc> <cmd>    Execute command in service
 
@@ -188,6 +189,7 @@ case "${1:-help}" in
     restart)    shift; cmd_restart "$@" ;;
     logs)       shift; cmd_logs "$@" ;;
     status)     cmd_status ;;
+    show-versions) cmd_show_versions ;;
     shell)      shift; cmd_shell "$@" ;;
     exec)       shift; cmd_exec "$@" ;;
 
