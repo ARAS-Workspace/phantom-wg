@@ -129,16 +129,23 @@ sed -i "s/^WIREGUARD_ENDPOINT_V6=.*/WIREGUARD_ENDPOINT_V6=${IPV6}/" .env.daemon
 - WireGuard: UDP port `51820`
 - Admin password: `cat container-data/secrets/production/.admin_password`
 
+> [!TIP]
+> To access the dashboard while connected to the VPN, use the nginx container's Docker network address:
+> ```bash
+> docker inspect phantom-nginx --format '{{range .NetworkSettings.Networks}}IPv4: {{.IPAddress}} | IPv6: {{.GlobalIPv6Address}}{{end}}'
+> ```
+> Accessible via `https://<IPv4>` or `https://[<IPv6>]` through the tunnel. You can also remove the `ports: "443:443"` line from `docker-compose.yml` to make the dashboard accessible only through the VPN tunnel.
+
 ---
 
 ## Environment Variables
 
 Configuration is managed through env files created from templates during setup:
 
-| File                | Service        |
-|---------------------|----------------|
-| `.env.daemon`       | phantom-daemon |
-| `.env.auth-service` | phantom-auth   |
+| File                | Service      |
+|---------------------|--------------|
+| `.env.daemon`       | daemon       |
+| `.env.auth-service` | auth-service |
 
 See `.example` files for all available options.
 

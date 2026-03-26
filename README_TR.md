@@ -130,16 +130,23 @@ sed -i "s/^WIREGUARD_ENDPOINT_V6=.*/WIREGUARD_ENDPOINT_V6=${IPV6}/" .env.daemon
 - WireGuard: UDP port `51820`
 - Admin şifresi: `cat container-data/secrets/production/.admin_password`
 
+> [!TIP]
+> VPN'e bağlıyken kontrol paneline erişmek için nginx container'ın Docker network adresini kullanabilirsiniz:
+> ```bash
+> docker inspect phantom-nginx --format '{{range .NetworkSettings.Networks}}IPv4: {{.IPAddress}} | IPv6: {{.GlobalIPv6Address}}{{end}}'
+> ```
+> Tünel içerisinden `https://<IPv4>` veya `https://[<IPv6>]` adresi ile erişilebilir. Dilerseniz `docker-compose.yml` dosyasından `ports: "443:443"` satırını kaldırarak kontrol panelini yalnızca VPN tüneli üzerinden erişilebilir hale getirebilirsiniz.
+
 ---
 
 ## Ortam Değişkenleri
 
 Yapılandırma, kurulum sırasında şablonlardan oluşturulan env dosyaları ile yönetilir:
 
-| Dosya               | Servis         |
-|---------------------|----------------|
-| `.env.daemon`       | phantom-daemon |
-| `.env.auth-service` | phantom-auth   |
+| Dosya               | Servis       |
+|---------------------|--------------|
+| `.env.daemon`       | daemon       |
+| `.env.auth-service` | auth-service |
 
 Tüm seçenekler için `.example` dosyalarına bakın.
 
