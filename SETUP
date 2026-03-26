@@ -16,15 +16,18 @@ Directory Structure:
   ├── SETUP                       This file
   ├── LICENSE                     AGPL-3.0
   ├── THIRD_PARTY_LICENSES        Dependency licenses
+  ├── SEMVER.md                  Versioning strategy
   ├── phantom_daemon/             Daemon source
   ├── services/
   │   ├── auth-service/           Authentication service
   │   ├── nginx/                  TLS reverse proxy config
   │   └── react-spa/dist/         Web dashboard (pre-built)
-  └── tools/
-      ├── prod.sh                 Production CLI
-      ├── prod.vars               Environment variables
-      └── lib/                    Shell libraries
+  ├── tools/
+  │   ├── prod.sh                 Production CLI
+  │   ├── prod.vars               Environment variables
+  │   └── lib/                    Shell libraries
+  └── .github/
+      └── scripts/release.sh      Release trigger
 
 Quick Start:
   1. Setup (first time only):
@@ -67,7 +70,10 @@ Commands:
   ./tools/prod.sh up               Start stack (builds images on first run)
   ./tools/prod.sh down             Stop stack
   ./tools/prod.sh restart          Restart all services
-  ./tools/prod.sh build            Rebuild images (after dependency changes)
+  ./tools/prod.sh build            Build images
+  ./tools/prod.sh rebuild          Rebuild images from scratch (no-cache)
+  ./tools/prod.sh update           Pull latest + restart
+  ./tools/prod.sh update --skip-compose  Pull but preserve local compose changes
   ./tools/prod.sh logs             Follow logs
   ./tools/prod.sh status           Container status
   ./tools/prod.sh shell [service]  Open shell (default: daemon)
@@ -92,12 +98,14 @@ TLS Certificate:
     container-data/secrets/production/tls_key
 
 Updating:
-  git pull
-  ./tools/prod.sh restart
+  ./tools/prod.sh update
+
+  If docker-compose.yml has local changes (e.g. custom ports):
+    ./tools/prod.sh update --skip-compose
 
   If dependencies changed (requirements.txt, Dockerfile):
-    ./tools/prod.sh build
+    ./tools/prod.sh rebuild
     ./tools/prod.sh restart
 
   Environment files (.env.daemon, .env.auth-service) are preserved
-  across updates — docker-compose.yml is never manually edited.
+  across updates.
