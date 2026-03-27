@@ -50,7 +50,7 @@ Phantom-WG'de bir güvenlik açığı keşfettiyseniz, aşağıdaki kanallar üz
 | Yöntem       | Adres                                  |
 |--------------|----------------------------------------|
 | E-posta      | issue@phantom.tc, r.emrearas@proton.me |
-| GitHub Issue | Yalnızca hassas olmayan konular için    |
+| GitHub Issue | Yalnızca hassas olmayan konular için   |
 
 ### Desteklenen Sürümler
 
@@ -58,6 +58,15 @@ Phantom-WG'de bir güvenlik açığı keşfettiyseniz, aşağıdaki kanallar üz
 |--------------------------|-----------------|
 | Phantom-WG Modern (main) | Evet            |
 | Phantom-WG Retro (retro) | Yalnızca bakım  |
+
+### Güvenlik Tasarımı
+
+- **Phantom Daemon** internet'e hiçbir TCP portu açmaz
+- Yönetim erişimi yalnızca Unix Domain Socket (UDS) üzerinden sağlanır
+- Tüm dış erişim auth-service proxy katmanından geçer (JWT)
+- TLS sonlandırma nginx'te, yalnızca TLSv1.2/1.3
+- Tüm kriptografik materyal Docker secrets ile yönetilir
+- SQLite veritabanları WAL modunda, crash recovery desteği
 
 ---
 

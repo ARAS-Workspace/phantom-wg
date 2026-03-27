@@ -32,7 +32,7 @@
 - **Dual-Stack IPv6** — Host'ta IPv6 olmasa bile container içinde IPv6 subnet atanır, tünel içinde trafik taşınabilir.
 - **Container İzolasyonu** — `NET_ADMIN` + `NET_RAW` yeterlidir. WireGuard arayüzleri container namespace içerisinde yaşar. `SYS_ADMIN`, `privileged` veya `host` network mode gibi host güvenliğini zayıflatan konfigürasyonlar kullanılmaz.
 
-<img alt="Phantom-WG Retro" src="https://raw.githubusercontent.com/ARAS-Workspace/phantom-wg/press-kit/assets/phantom-modern-banner.png">
+<img alt="Phantom-WG Modern" src="https://raw.githubusercontent.com/ARAS-Workspace/phantom-wg/press-kit/assets/phantom-modern-banner.png">
 
 ---
 
@@ -92,6 +92,39 @@ IPv6 desteği tüm katmanlarda — firewall kuralları, policy routing, masquera
 
 Servis başlatıldığında kernel state (nftables kuralları, routing policy'leri) SQLite durum veritabanlarından yeniden oluşturulur. Beklenmeyen kapanma sonrası veri kaybı yaşanmaz.
 
+---
+
+## Auth-Service (Kimlik Doğrulama ve Güvenli Proxy Katmanı)
+
+Daemon'a erişim, bağımsız bir kimlik doğrulama servisi tarafından korunur. Auth-service daemon'dan ayrı bir container'da çalışır ve UDS üzerinden API isteklerini proxy mekanizmasında aktarır.
+
+### Kimlik Doğrulama
+
+| Özellik                       | Detay                                                                                                        |
+|-------------------------------|--------------------------------------------------------------------------------------------------------------|
+| Oturum yönetimi               | JWT (Ed25519 imzalı),                                                                                        |
+| Çok faktörlü kimlik doğrulama | TOTP (RFC 6238), yedek kodlar ile erişim                                                                     |
+| Şifre depolama                | Argon2id hash                                                                                                |
+| Brute-force koruması          | IP tabanlı rate limiting (yapılandırılabilir sliding window ve deneme sayısı bazlı konfigürasyon)            |
+| Denetim kaydı                 | Tüm kimlik doğrulama ve API proxy olayları kullanıcı özelinde loglanır (giriş, çıkış, başarısız deneme, MFA) |
+
+### RBAC (Rol Tabanlı Erişim Kontrolü)
+
+| Yetki                                                | Superadmin | Admin |
+|------------------------------------------------------|:----------:|:-----:|
+| Daemon yönetimi (client, multihop, firewall, backup) |     ✓      |   ✓   |
+| Kendi şifresini değiştirme                           |     ✓      |   ✓   |
+| Kendi TOTP yapılandırması                            |     ✓      |   ✓   |
+| Admin hesabı oluşturma / silme                       |     ✓      |   —   |
+| Herhangi bir kullanıcının şifresini değiştirme       |     ✓      |   —   |
+| Başka kullanıcının TOTP'sini devre dışı bırakma      |     ✓      |   —   |
+| Audit log görüntüleme                                |     ✓      |   —   |
+
+> [!TIP]
+> İlk kurulumda oluşturulan hesap `superadmin` rolündedir. Sunucuyu birden fazla kişi yönetiyorsa operasyonel erişim için `admin` hesapları oluşturulabilir — idari yetkiler superadmin'de kalır.
+
+Her iki rol de daemon'u aynı yetki düzeyinde yönetebilir — client oluşturma, multihop, firewall, backup gibi daemon üzerinden yürütülen tüm operasyonlar ortaktır. 
+Ayrım yalnızca auth-service üzerindedir: superadmin kullanıcı yönetimi ve denetim yetkisine sahipken, admin yalnızca operasyonel erişime sahiptir. Auth-service bağımsız bir bileşendir — özelleştirmeler daemon yapısını etkilemez. Daemon bu servisin varlığından haberdar değildir ve yalnızca ağ operasyonları ile ilgilenir. Farklı kullanıcı gruplarını izole etmek istiyorsanız auth-service üzerinde yetkilendirme yerine, yapılandırma değişiklikleri ile aynı host üzerinde çalışan multi-tenant bir yapı kurabilirsiniz. Böylece hem ağ hem de kullanıcı erişimi tarafında izolasyon sağlarken, port ve network konfigürasyonunu çoğaltarak bağımsız instance'lar oluşturabilirsiniz. Bu operasyonel konfigürasyonlar, varolan yapıyı kendi senaryosuna uyarlamak isteyen ileri düzey kullanıcılar içindir.
 
 ---
 

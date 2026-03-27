@@ -32,7 +32,7 @@
 - **Dual-Stack IPv6** — Even without IPv6 on the host, an IPv6 subnet is assigned within the container and traffic is carried through the tunnel.
 - **Container Isolation** — `NET_ADMIN` + `NET_RAW` is sufficient. WireGuard interfaces live within the container namespace. Configurations that weaken host security such as `SYS_ADMIN`, `privileged`, or `host` network mode are not used.
 
-<img alt="Phantom-WG Retro" src="https://raw.githubusercontent.com/ARAS-Workspace/phantom-wg/press-kit/assets/phantom-modern-banner.png">
+<img alt="Phantom-WG Modern" src="https://raw.githubusercontent.com/ARAS-Workspace/phantom-wg/press-kit/assets/phantom-modern-banner.png">
 
 ---
 
@@ -91,6 +91,39 @@ IPv6 support across all layers — firewall rules, policy routing, masquerade, a
 ### Crash Recovery
 
 When the service starts, kernel state (nftables rules, routing policies) is rebuilt from SQLite state databases. No data loss after an unexpected shutdown.
+
+---
+
+## Auth-Service (Authentication and Secure Proxy Layer)
+
+Access to the daemon is protected by an independent authentication service. Auth-service runs in a separate container from the daemon and proxies API requests over UDS.
+
+### Authentication
+
+| Feature                     | Detail                                                                                           |
+|-----------------------------|--------------------------------------------------------------------------------------------------|
+| Session management          | JWT (Ed25519 signed)                                                                             |
+| Multi-factor authentication | TOTP (RFC 6238), backup code access                                                              |
+| Password storage            | Argon2id hash                                                                                    |
+| Brute-force protection      | IP-based rate limiting (configurable sliding window and attempt-based configuration)             |
+| Audit log                   | All authentication and API proxy events are logged per user (login, logout, failed attempt, MFA) |
+
+### RBAC (Role-Based Access Control)
+
+| Permission                                             | Superadmin | Admin |
+|--------------------------------------------------------|:----------:|:-----:|
+| Daemon management (client, multihop, firewall, backup) |     ✓      |   ✓   |
+| Change own password                                    |     ✓      |   ✓   |
+| Configure own TOTP                                     |     ✓      |   ✓   |
+| Create / delete admin accounts                         |     ✓      |   —   |
+| Change any user's password                             |     ✓      |   —   |
+| Disable another user's TOTP                            |     ✓      |   —   |
+| View audit log                                         |     ✓      |   —   |
+
+> [!TIP]
+> The account created during initial setup has the `superadmin` role. If multiple people manage the server, `admin` accounts can be created for operational access — administrative privileges remain with the superadmin.
+
+Both roles can manage the daemon at the same permission level — all operations executed through the daemon such as client creation, multihop, firewall, and backup are shared. The distinction is only on the auth-service side: superadmin has user management and audit authority, while admin has only operational access. Auth-service is an independent component — customizations do not affect the daemon structure. The daemon is unaware of this service's existence and only handles network operations. If you want to isolate different user groups, instead of authorization through auth-service, you can set up a multi-tenant structure running on the same host through configuration changes. This way, you can create independent instances by multiplying port and network configurations while ensuring isolation on both the network and user access sides. These operational configurations are for advanced users who want to adapt the existing structure to their own scenario.
 
 ---
 
