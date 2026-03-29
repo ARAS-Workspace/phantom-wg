@@ -19,6 +19,7 @@ import importlib.resources
 import ipaddress
 import json
 import math
+import os
 import sqlite3
 import uuid
 from datetime import datetime, timezone
@@ -139,8 +140,9 @@ def _create_wallet(db_path: Path) -> sqlite3.Connection:
         conn.execute("PRAGMA wal_autocheckpoint = 1")
 
         # Config defaults
+        ipv4_subnet = os.environ.get("DEFAULT_IPV4_SUBNET") or _DEFAULT_IPV4_SUBNET
         ipv4_str, ipv6_str, _capacity, _host_bits = _calculate_terazi(
-            _DEFAULT_IPV4_SUBNET
+            ipv4_subnet
         )
         config_rows = [
             ("ipv4_subnet", ipv4_str),

@@ -32,6 +32,8 @@ services:
       - wg_private_key
       - wg_public_key
     env_file: .env.daemon
+    environment:
+      - DEFAULT_IPV4_SUBNET=${DEFAULT_IPV4_SUBNET:-}  # setup-only: --terazi-ipv4-subnet
     cap_add:
       - NET_ADMIN
       - NET_RAW

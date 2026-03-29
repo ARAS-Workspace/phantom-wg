@@ -73,11 +73,27 @@ _bootstrap_env() {
 }
 
 cmd_setup() {
+    local terazi_subnet=""
+    local pass_args=()
+
+    for arg in "$@"; do
+        case "$arg" in
+            --terazi-ipv4-subnet=*) terazi_subnet="${arg#*=}" ;;
+            *) pass_args+=("$arg") ;;
+        esac
+    done
+
     bold "Full production setup..."
     _bootstrap_env
-    cmd_gen_keys "$@"
-    cmd_setup_auth "$@"
-    cmd_setup_tls "$@"
+    cmd_gen_keys "${pass_args[@]}"
+    cmd_setup_auth "${pass_args[@]}"
+    cmd_setup_tls "${pass_args[@]}"
+
+    if [[ -n "$terazi_subnet" ]]; then
+        echo "$terazi_subnet" > "${TOOLS_DIR}/../.terazi-subnet"
+        echo "  Terazi subnet: ${terazi_subnet}"
+    fi
+
     green "Production setup complete."
     echo ""
     echo "  Environment:  .env.daemon, .env.auth-service"
@@ -135,6 +151,13 @@ cmd_hard_reset() {
     bold "Removing auth database..."
     rm -rf "$AUTH_DB_DIR"
 
+    bold "Removing daemon databases..."
+    rm -f container-data/db/*.db
+    rm -f container-data/state/db/firewall.db
+    rm -rf container-data/state/db/wireguard/
+
+    rm -f "${TOOLS_DIR}/../.terazi-subnet"
+
     green "Hard reset complete. Run './tools/prod.sh setup' to start fresh."
 }
 
@@ -184,7 +207,14 @@ case "${1:-help}" in
 
     build)      cmd_build ;;
     rebuild)    cmd_rebuild ;;
-    up)         _bootstrap_env; _check_secrets; cmd_up ;;
+    up)
+        _bootstrap_env; _check_secrets
+        if [[ -f "${TOOLS_DIR}/../.terazi-subnet" ]]; then
+            export DEFAULT_IPV4_SUBNET="$(cat "${TOOLS_DIR}/../.terazi-subnet")"
+            rm -f "${TOOLS_DIR}/../.terazi-subnet"
+        fi
+        cmd_up ;;
+
     down)       cmd_down ;;
     restart)    shift; cmd_restart "$@" ;;
     logs)       shift; cmd_logs "$@" ;;
