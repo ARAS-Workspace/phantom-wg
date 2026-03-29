@@ -147,8 +147,11 @@ curl -sSL get.phantom.tc | bash
 ```bash
 cd phantom-wg
 
-# İlk kurulum 
+# İlk kurulum
 ./tools/prod.sh setup
+
+# Veya özel subnet ile (bkz. https://www.phantom.tc/docs/architecture/terazi)
+# ./tools/prod.sh setup --terazi-ipv4-subnet=10.9.0.0/24
 
 # Endpoint yapılandırması
 IPV4=$(curl -4 -sSL https://get.phantom.tc/ip)
@@ -191,22 +194,23 @@ Tüm seçenekler için `.example` dosyalarına bakın.
 
 Yönetim için `./tools/prod.sh` konumunda kullanışlı bir araç bulunur.
 
-| Komut                   | Açıklama                                        |
-|-------------------------|-------------------------------------------------|
-| `setup`                 | Tam Kurulum                                     |
-| `up`                    | Başlat                                          |
-| `down`                  | Durdur                                          |
-| `restart [service]`     | Yeniden Başlat (Tümü veya Belirli Servis)       |
-| `build`                 | İmaj Derle                                      |
-| `rebuild`               | Sıfırdan İmaj Derle (no-cache)                  |
-| `update`                | Güncelle (git pull + restart)                   |
-| `update --skip-compose` | Güncelle (docker-compose.yml hariç tut)         |
-| `logs [service]`        | Log Takibi (Tümü veya Belirli Servis)           |
-| `status`                | Docker Compose Durumu                           |
-| `show-versions`         | Bileşen Versiyonları (Daemon, Vendor Paketleri) |
-| `shell [service]`       | Shell (varsayılan: daemon)                      |
-| `exec <svc> <cmd>`      | Komut Çalıştır                                  |
-| `hard-reset`            | Tüm Veriyi Sil                                  |
+| Komut                               | Açıklama                                        |
+|-------------------------------------|-------------------------------------------------|
+| `setup`                             | Tam Kurulum                                     |
+| `setup --terazi-ipv4-subnet=SUBNET` | Özel subnet ile kurulum (ör. `10.9.0.0/24`)     |
+| `up`                                | Başlat                                          |
+| `down`                              | Durdur                                          |
+| `restart [service]`                 | Yeniden Başlat (Tümü veya Belirli Servis)       |
+| `build`                             | İmaj Derle                                      |
+| `rebuild`                           | Sıfırdan İmaj Derle (no-cache)                  |
+| `update`                            | Güncelle (git pull + restart)                   |
+| `update --skip-compose`             | Güncelle (docker-compose.yml hariç tut)         |
+| `logs [service]`                    | Log Takibi (Tümü veya Belirli Servis)           |
+| `status`                            | Docker Compose Durumu                           |
+| `show-versions`                     | Bileşen Versiyonları (Daemon, Vendor Paketleri) |
+| `shell [service]`                   | Shell (varsayılan: daemon)                      |
+| `exec <svc> <cmd>`                  | Komut Çalıştır                                  |
+| `hard-reset`                        | Tüm Veriyi Sil                                  |
 
 ### Kurulum
 
@@ -221,6 +225,8 @@ Yönetim için `./tools/prod.sh` konumunda kullanışlı bir araç bulunur.
 4. Nginx için self-signed TLS sertifikası üretir. (`tls_cert`, `tls_key`)
 
 Tüm bu işlemler container içerisinde gerçekleşir — host tarafında ek bir bağımlılık veya araç kurulumu gerekmez.
+
+Terazi, IP havuzunu oluşturmak için bir base subnet'e ihtiyaç duyar. Varsayılan `10.8.0.0/24` olup `--terazi-ipv4-subnet` argümanı ile kurulumda özelleştirilebilir. Bu değer yalnızca `wallet.db` oluşturulurken kullanılır — veritabanı oluştuktan sonra subnet burada saklanır ve argümana tekrar ihtiyaç duyulmaz. Detaylar için [Terazi dokümantasyonuna](https://www.phantom.tc/docs/architecture/terazi) bakın.
 
 > [!TIP]
 > Gizli anahtarlar `container-data/secrets/production/` altında saklanır. Admin şifresi aynı dizindeki `.admin_password` dosyasına yazılır — giriş yaptıktan sonra güvenle kaldırabilirsiniz.

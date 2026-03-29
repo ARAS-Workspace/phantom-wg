@@ -149,6 +149,9 @@ cd phantom-wg
 # First-time setup
 ./tools/prod.sh setup
 
+# Or with a custom subnet (see https://www.phantom.tc/docs/architecture/terazi)
+# ./tools/prod.sh setup --terazi-ipv4-subnet=10.9.0.0/24
+
 # Endpoint configuration
 IPV4=$(curl -4 -sSL https://get.phantom.tc/ip)
 IPV6=$(curl -6 -sSL https://get.phantom.tc/ip)
@@ -190,10 +193,11 @@ See `.example` files for all available options.
 
 A convenient tool is available at `./tools/prod.sh` for management.
 
-| Command                 | Description                                  |
-|-------------------------|----------------------------------------------|
-| `setup`                 | Full Setup                                   |
-| `up`                    | Start                                        |
+| Command                               | Description                                    |
+|---------------------------------------|------------------------------------------------|
+| `setup`                               | Full Setup                                     |
+| `setup --terazi-ipv4-subnet=SUBNET`   | Setup with custom subnet (e.g. `10.9.0.0/24`) |
+| `up`                                  | Start                                          |
 | `down`                  | Stop                                         |
 | `restart [service]`     | Restart (All or Specific Service)            |
 | `build`                 | Build Images                                 |
@@ -220,6 +224,8 @@ The `setup` command creates all required components during first-time installati
 4. Generates self-signed TLS certificate for nginx. (`tls_cert`, `tls_key`)
 
 All of these operations take place within the container — no additional dependencies or tools need to be installed on the host.
+
+Terazi requires a base subnet to create the IP pool. The default is `10.8.0.0/24` and can be customized at setup with the `--terazi-ipv4-subnet` argument. This value is only used when `wallet.db` is created — once the database exists, the subnet is stored there and the argument is no longer needed. See the [Terazi documentation](https://www.phantom.tc/docs/architecture/terazi) for details.
 
 > [!TIP]
 > Secret keys are stored under `container-data/secrets/production/`. The admin password is written to `.admin_password` in the same directory — you can safely remove it after logging in.
