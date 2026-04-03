@@ -82,6 +82,24 @@ def _server_address(subnet: str) -> str:
     return f"{net.network_address + 1}/{net.prefixlen}"
 
 
+def _split_addresses(address: str) -> tuple[list[str], list[str]]:
+    """Split comma-separated address string into (ipv4_list, ipv6_list).
+
+    Uses ipaddress.ip_interface for reliable family detection.
+    Raises ValueError on invalid addresses.
+    """
+    ipv4: list[str] = []
+    ipv6: list[str] = []
+    for part in address.split(","):
+        addr = part.strip()
+        iface = ipaddress.ip_interface(addr)
+        if iface.version == 6:
+            ipv6.append(addr)
+        else:
+            ipv4.append(addr)
+    return ipv4, ipv6
+
+
 # ── Service ──────────────────────────────────────────────────────
 
 
@@ -183,31 +201,53 @@ class WireGuardService:
             ) from exc
 
     def apply_exit_interface(self, address: str) -> None:
-        """Bring exit interface UP and assign address.
+        """Bring exit interface UP and assign address(es).
 
-        address should include prefix (e.g. '10.0.0.2/32').
-        Raises WireGuardError on failure.
+        address may be a single CIDR ('10.0.0.2/24') or comma-separated
+        dual-stack ('10.0.0.2/24, fd10::2/64').  IPv6 failure is tolerated.
+        Raises WireGuardError on link or IPv4 failure.
         """
+        ipv4_addrs, ipv6_addrs = _split_addresses(address)
         try:
             subprocess.run(["ip", "link", "set", self._ifname, "up"], check=True)
-            subprocess.run(
-                ["ip", "addr", "add", address, "dev", self._ifname], check=True,
-            )
+            for addr in ipv4_addrs:
+                subprocess.run(
+                    ["ip", "addr", "add", addr, "dev", self._ifname], check=True,
+                )
+            for addr in ipv6_addrs:
+                try:
+                    subprocess.run(
+                        ["ip", "-6", "addr", "add", addr, "dev", self._ifname],
+                        check=True,
+                    )
+                except subprocess.CalledProcessError:
+                    log.warning("IPv6 exit address assignment failed — continuing IPv4-only")
         except subprocess.CalledProcessError as exc:
             raise WireGuardError(
                 f"Exit interface setup failed: {exc.cmd} exit={exc.returncode}"
             ) from exc
 
     def update_exit_address(self, address: str) -> None:
-        """Flush and re-assign exit interface address.
+        """Flush and re-assign exit interface address(es).
 
+        address may be comma-separated dual-stack.  IPv6 failure is tolerated.
         Raises WireGuardError on failure.
         """
+        ipv4_addrs, ipv6_addrs = _split_addresses(address)
         try:
             subprocess.run(["ip", "addr", "flush", "dev", self._ifname], check=True)
-            subprocess.run(
-                ["ip", "addr", "add", address, "dev", self._ifname], check=True,
-            )
+            for addr in ipv4_addrs:
+                subprocess.run(
+                    ["ip", "addr", "add", addr, "dev", self._ifname], check=True,
+                )
+            for addr in ipv6_addrs:
+                try:
+                    subprocess.run(
+                        ["ip", "-6", "addr", "add", addr, "dev", self._ifname],
+                        check=True,
+                    )
+                except subprocess.CalledProcessError:
+                    log.warning("IPv6 exit address update failed — continuing IPv4-only")
         except subprocess.CalledProcessError as exc:
             raise WireGuardError(
                 f"Exit address update failed: {exc.cmd} exit={exc.returncode}"
