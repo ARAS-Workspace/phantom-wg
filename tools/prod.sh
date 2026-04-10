@@ -72,6 +72,50 @@ _bootstrap_env() {
     fi
 }
 
+_is_compose_locked() {
+    git ls-files -v docker-compose.yml 2>/dev/null | grep -q '^S'
+}
+
+cmd_compose() {
+    local action="${1:-status}"
+
+    case "$action" in
+        lock)
+            if _is_compose_locked; then
+                echo "  Compose already locked."
+                return 0
+            fi
+            git update-index --skip-worktree docker-compose.yml
+            green "Compose locked."
+            echo "  Future 'prod.sh update' calls will preserve local docker-compose.yml changes."
+            echo "  Run 'prod.sh compose unlock' to release."
+            ;;
+        unlock)
+            if ! _is_compose_locked; then
+                echo "  Compose already unlocked."
+                return 0
+            fi
+            git update-index --no-skip-worktree docker-compose.yml
+            green "Compose unlocked."
+            echo "  Next 'prod.sh update' will pull upstream docker-compose.yml."
+            ;;
+        status)
+            if _is_compose_locked; then
+                bold "Compose: LOCKED"
+                echo "  Local docker-compose.yml changes are preserved on update."
+            else
+                bold "Compose: UNLOCKED"
+                echo "  docker-compose.yml will be pulled from upstream on update."
+            fi
+            ;;
+        *)
+            red "Unknown action: $action"
+            echo "Usage: prod.sh compose {lock|unlock|status}"
+            exit 1
+            ;;
+    esac
+}
+
 cmd_setup() {
     local terazi_subnet=""
     local pass_args=()
@@ -108,23 +152,51 @@ cmd_setup() {
 }
 
 cmd_update() {
-    local skip_compose=false
+    local legacy_skip=false
     for arg in "$@"; do
         case "$arg" in
-            --skip-compose) skip_compose=true ;;
+            --skip-compose) legacy_skip=true ;;
         esac
     done
 
+    if [[ "$legacy_skip" == true ]]; then
+        red "WARNING: --skip-compose is deprecated."
+        echo "  Use 'prod.sh compose lock' to permanently preserve docker-compose.yml changes."
+    fi
+
+    local locked=false
+    if _is_compose_locked; then
+        locked=true
+    fi
+
+    # Sanity check: unlocked + uncommitted changes → hard stop
+    if [[ "$locked" == false && "$legacy_skip" == false ]]; then
+        if ! git diff --quiet docker-compose.yml 2>/dev/null; then
+            red "docker-compose.yml has uncommitted local changes."
+            echo ""
+            echo "  Options:"
+            echo "    Preserve changes permanently: ./tools/prod.sh compose lock"
+            echo "    Skip once (deprecated):       ./tools/prod.sh update --skip-compose"
+            echo "    Discard changes:              git checkout -- docker-compose.yml"
+            exit 1
+        fi
+    fi
+
     bold "Pulling latest changes..."
 
-    if [[ "$skip_compose" == true ]]; then
+    if [[ "$locked" == true ]]; then
+        echo "  Compose locked, docker-compose.yml preserved."
+    fi
+
+    # One-shot legacy skip (doesn't persist)
+    if [[ "$legacy_skip" == true && "$locked" == false ]]; then
         git update-index --skip-worktree docker-compose.yml
-        echo "  docker-compose.yml preserved (--skip-compose)"
+        echo "  One-shot skip applied to docker-compose.yml."
     fi
 
     git pull
 
-    if [[ "$skip_compose" == true ]]; then
+    if [[ "$legacy_skip" == true && "$locked" == false ]]; then
         git update-index --no-skip-worktree docker-compose.yml
     fi
 
@@ -185,9 +257,14 @@ Usage: ./tools/prod.sh <command>
     shell [service]     Open shell (default: daemon)
     exec <svc> <cmd>    Execute command in service
 
+  Compose Lock:
+    compose lock        Preserve local docker-compose.yml on update
+    compose unlock      Release lock to pull upstream changes
+    compose status      Show current lock state
+
   Update:
-    update              Pull latest + restart
-    update --skip-compose  Pull but preserve local docker-compose.yml
+    update                 Pull latest + restart (honors compose lock)
+    update --skip-compose  One-shot compose skip (deprecated)
 
   Danger:
     hard-reset          Wipe ALL data (secrets + auth DB + volumes)
@@ -223,6 +300,7 @@ case "${1:-help}" in
     shell)      shift; cmd_shell "$@" ;;
     exec)       shift; cmd_exec "$@" ;;
 
+    compose)    shift; cmd_compose "$@" ;;
     update)     shift; cmd_update "$@" ;;
     hard-reset) cmd_hard_reset ;;
 

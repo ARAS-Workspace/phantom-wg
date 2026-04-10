@@ -1,0 +1,19 @@
+# Runtime environment files
+.env
+.env.daemon
+.env.auth-service
+
+# Runtime state
+.terazi-subnet
+
+# Container data (secrets, databases, logs)
+container-data/
+
+# Backup artifacts
+*.tar
+dist/
+
+# Editor / OS
+.DS_Store
+*.swp
+*.swo
