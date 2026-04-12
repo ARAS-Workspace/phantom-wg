@@ -1,0 +1,21 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "phantom-check",
+  "main": "src/index.ts",
+  "compatibility_date": "2025-11-18",
+  "workers_dev": false,
+  "observability": {
+    "enabled": true
+  }
+
+  // ── Secrets (set via wrangler) ─────────────────────────
+  //   dotenv -- wrangler secret put SHARED_SECRET
+  //   dotenv -- wrangler secret put DNS_ZONE
+  //   dotenv -- wrangler secret put TURNSTILE_SECRET
+  //   dotenv -- wrangler secret put MAXMIND_ACCOUNT_ID
+  //   dotenv -- wrangler secret put MAXMIND_LICENSE_KEY
+  //
+  // ── Custom Domain ──────────────────────────────────────
+  // Workers & Pages > phantom-check > Settings > Domains & Routes
+  // Add route: check.phantom.tc/*
+}

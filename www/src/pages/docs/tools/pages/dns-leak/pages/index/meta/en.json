@@ -1,0 +1,10 @@
+{
+  "seo": {
+    "title": "DNS Leak Test",
+    "description": "Test if your DNS queries are leaking outside your VPN tunnel. Detect which DNS resolvers handle your requests."
+  },
+  "kv": {
+    "datePublished": "01/04/2026 00:00",
+    "dateModified": "01/04/2026 00:00"
+  }
+}

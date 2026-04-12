@@ -1,0 +1,192 @@
+import Mermaid from '@shared/components/visualization/Mermaid';
+import { InlineNotification } from '@carbon/react';
+import ContentTabs from '@shared/components/content/ContentTabs';
+import ProductionTopology from './data/container-architecture/production-topology/index.mdx';
+import NginxTab from './data/container-architecture/nginx/index.mdx';
+import AuthServiceTab from './data/container-architecture/auth-service/index.mdx';
+import PhantomDaemonTab from './data/container-architecture/phantom-daemon/index.mdx';
+
+# Sistem Mimarisi
+
+***Phantom-WG***, WireGuard® tabanlı bir VPN yönetim platformudur. Tüm bileşenler Docker container yapısı içerisinde çalışır ve asıl işi yapan ***Phantom Daemon*** Unix Domain Socket (UDS) üzerinden haberleşir.
+
+<ContentTabs contained={false} tabs={[
+  { label: 'Üretim Topolojisi', content: ProductionTopology },
+  { label: 'Nginx (phantom-nginx)', content: NginxTab },
+  { label: 'Auth Service (phantom-auth)', content: AuthServiceTab },
+  { label: 'Daemon (phantom-daemon)', content: PhantomDaemonTab }
+]} />
+
+---
+
+## Docker Compose Yapısı
+
+```yaml
+# ──────────────────────────────────────────────────────────────────
+# phantom-daemon  ·  Production Compose
+# ──────────────────────────────────────────────────────────────────
+# Usage:
+#   ./tools/prod.sh setup       # first-time: keys + auth + TLS cert
+#   ./tools/prod.sh up          # start production stack
+#
+# Topology:
+#   Internet → :443 (nginx, TLS) → auth-service → daemon (UDS)
+#   Internet → :51820/udp (WireGuard) → daemon
+#
+# Environment: .env.daemon + .env.auth-service (see .example files)
+# Set WIREGUARD_ENDPOINT_V4 to your server's public IP.
+# ──────────────────────────────────────────────────────────────────
+
+services:
+  daemon:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: phantom-daemon
+    command: ["python", "-m", "phantom_daemon.main", "/var/run/phantom/daemon.sock"]
+    restart: unless-stopped
+    volumes:
+      - phantom-sock:/var/run/phantom
+      - ./phantom_daemon:/app/phantom_daemon:ro
+      - ./container-data/db:/var/lib/phantom/db
+      - ./container-data/state/db:/var/lib/phantom/state/db
+    secrets:
+      - wg_private_key
+      - wg_public_key
+    env_file: .env.daemon
+    cap_add:
+      - NET_ADMIN
+      - NET_RAW
+    sysctls:
+      - net.ipv4.ip_forward=1
+    devices:
+      - /dev/net/tun:/dev/net/tun
+    ports:
+      - "51820:51820/udp"
+
+  auth-service:
+    build:
+      context: ./services/auth-service
+      dockerfile: Dockerfile
+    container_name: phantom-auth
+    restart: unless-stopped
+    depends_on:
+      - daemon
+    volumes:
+      - phantom-sock:/var/run/phantom
+      - ./services/auth-service/auth_service:/app/auth_service:ro
+      - ./container-data/auth-db:/var/lib/phantom/auth
+    secrets:
+      - auth_signing_key
+      - auth_verify_key
+    env_file: .env.auth-service
+
+  nginx:
+    image: nginx:1-alpine
+    container_name: phantom-nginx
+    restart: unless-stopped
+    depends_on:
+      - auth-service
+    volumes:
+      - ./services/nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./services/react-spa/dist:/usr/share/nginx/html:ro
+    secrets:
+      - tls_cert
+      - tls_key
+    ports:
+      - "443:443"
+
+secrets:
+  wg_private_key:
+    file: ./container-data/secrets/production/wg_private_key
+  wg_public_key:
+    file: ./container-data/secrets/production/wg_public_key
+  auth_signing_key:
+    file: ./container-data/secrets/production/auth_signing_key
+  auth_verify_key:
+    file: ./container-data/secrets/production/auth_verify_key
+  tls_cert:
+    file: ./container-data/secrets/production/tls_cert
+  tls_key:
+    file: ./container-data/secrets/production/tls_key
+
+volumes:
+  phantom-sock:
+```
+
+---
+
+## İstek Yaşam Döngüsü
+
+Bir API isteğinin sistemden geçiş süreci:
+
+<Mermaid chart={`sequenceDiagram
+  participant B as Tarayıcı (SPA)
+  participant N as nginx (:443)
+  participant A as auth-service
+  participant D as daemon (UDS)
+
+  B->>N: HTTPS GET /api/core/wireguard
+  N->>A: Proxy /api/*
+  A->>A: JWT doğrula (Bearer token)
+  A->>A: Denetim kaydı (proxy_request)
+  A->>D: UDS iletim (daemon.sock)
+  D->>D: İşlem (WireGuard IPC / nftables API)
+  D-->>A: JSON yanıt
+  A-->>N: JSON yanıt
+  N-->>B: HTTPS yanıt
+`} />
+
+<InlineNotification
+  kind="info"
+  title="Güvenlik katmanları."
+  subtitle="Her istek 3 katmandan geçer: Nginx (TLS) → Auth Service (JWT) → Phantom Daemon (Unix Socket)"
+  hideCloseButton
+  lowContrast
+/>
+
+---
+
+## Bridge Mimarisi
+
+Daemon, sistem düzeyindeki işlemleri native bridge'ler aracılığıyla gerçekleştirir. Python katmanı iş mantığını yönetir, bridge'ler ise kernel ile doğrudan iletişim kurar.
+
+<Mermaid chart={`flowchart TD
+  D["Phantom Daemon\n(Python)"]
+  D -->|"FFI"| WGB["wireguard-go-bridge\n(Go)"]
+  D -->|"FFI"| FWB["firewall-bridge\n(Rust)"]
+  WGB -->|"tun.CreateTUN"| TUN["/dev/net/tun\nWireGuard arayüzleri"]
+  FWB -->|"nftables API"| NFT["nftables\nKernel kuralları"]
+`} />
+
+| Bridge                  | Dil  | Sorumluluk                                                               |
+|-------------------------|------|--------------------------------------------------------------------------|
+| **wireguard-go-bridge** | Go   | WireGuard userspace, TUN arayüz oluşturma, peer yönetimi, UAPI protokolü |
+| **firewall-bridge**     | Rust | nftables kural grupları, routing policy, atomik kural uygulaması         |
+
+---
+
+## Veritabanları
+
+Tüm veritabanları SQLite formatındadır. İki kategoriye ayrılır:
+
+### Kalıcı Veriler
+
+Kullanıcı verileri ve yapılandırma. Yedekleme ve taşıma bu veritabanları üzerinden yapılır.
+
+| Veritabanı    | Sahip        | Konteyner Yolu        |
+|---------------|--------------|-----------------------|
+| **wallet.db** | daemon       | /var/lib/phantom/db   |
+| **exit.db**   | daemon       | /var/lib/phantom/db   |
+| **auth.db**   | auth-service | /var/lib/phantom/auth |
+
+### Çalışma Zamanı (Runtime) Durumu
+
+Bridge'ler tarafından yönetilen çalışma zamanı verileri. Daemon başlatıldığında otomatik oluşturulur, müdahale gerektirmez.
+
+| Veritabanı      | Sahip               | Konteyner Yolu                                  |
+|-----------------|---------------------|-------------------------------------------------|
+| **device.db**   | wireguard-go-bridge | /var/lib/phantom/state/db/wireguard/\{ifname\}/ |
+| **firewall.db** | firewall-bridge     | /var/lib/phantom/state/db                       |
+
+

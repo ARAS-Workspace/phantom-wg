@@ -1,0 +1,64 @@
+name: Push documents to main
+
+on:
+  push:
+    tags:
+      - 'push-documents'
+
+permissions:
+  contents: read
+
+jobs:
+  push:
+    name: Push documents
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Harden runner
+        uses: step-security/harden-runner@58077d3c7e43986b6b15fba718e8ea69e387dfcc # v2.15.1
+        with:
+          egress-policy: audit
+
+      - name: Checkout press-kit
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          ref: press-kit
+          path: press-kit
+          persist-credentials: false
+          token: ${{ secrets.RELEASE_TOKEN }}
+
+      - name: Checkout main
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          ref: main
+          path: main
+          persist-credentials: false
+          token: ${{ secrets.RELEASE_TOKEN }}
+
+      - name: Copy documents to main
+        run: |
+          cp press-kit/README.md main/README.md
+          cp press-kit/README_TR.md main/README_TR.md
+          cp press-kit/CONTRIBUTING.md main/CONTRIBUTING.md
+          cp press-kit/SECURITY.md main/SECURITY.md
+
+      - name: Push to main
+        env:
+          RELEASE_TOKEN: ${{ secrets.RELEASE_TOKEN }}
+        working-directory: main
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git remote set-url origin "https://x-access-token:${RELEASE_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
+
+          git add README.md README_TR.md CONTRIBUTING.md SECURITY.md
+
+          if git diff --cached --quiet; then
+            echo "No changes to push."
+            exit 0
+          fi
+
+          git commit -m "Docs: Update README, CONTRIBUTING, SECURITY from press-kit"
+          git push origin main

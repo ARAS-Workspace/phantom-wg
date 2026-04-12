@@ -1,0 +1,19 @@
+.footer-logo {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.footer-logo-svg {
+  height: 96px;
+  width: auto;
+  transition: transform 0.2s ease;
+
+  path, circle {
+    transition: fill 0.25s ease;
+  }
+
+  &:hover {
+    transform: scale(1.05);
+  }
+}

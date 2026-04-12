@@ -1,0 +1,20 @@
+{
+  "title": "Phantom-WG",
+  "subtitle": "Kendi Sunucun. Kendi Ağın. Kendi Gizliliğin.",
+  "description": "Phantom-WG, kendi sunucunuzda WireGuard VPN altyapısı kurmanızı ve yönetmenizi sağlayan modüler bir araçtır. Temel VPN yönetiminin ötesinde; sansüre dayanıklı bağlantılar, çok katmanlı şifreleme ve gelişmiş gizlilik senaryoları sunar.",
+  "versions": [
+    {
+      "title": "Phantom-WG Modern",
+      "description": "Native Konteyner Mimarisi",
+      "href": "/docs",
+      "icon": "container"
+    },
+    {
+      "title": "Phantom-WG Retro",
+      "description": "Bare Metal & Gelişmiş Gizlilik",
+      "href": "https://retro.phantom.tc",
+      "external": true,
+      "icon": "bare-metal"
+    }
+  ]
+}

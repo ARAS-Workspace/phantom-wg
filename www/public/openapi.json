@@ -1,0 +1,2550 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "phantom-daemon",
+    "version": "1.0.5"
+  },
+  "paths": {
+    "/api/core/backup/export": {
+      "post": {
+        "tags": [
+          "backup"
+        ],
+        "summary": "Export Backup",
+        "description": "Create and download a portable backup archive (.tar) containing wallet.db, exit.db, and a JSON manifest. The response is a binary file stream \u2014 save it directly to disk.",
+        "operationId": "export_backup_api_core_backup_export_post",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/core/backup/import": {
+      "post": {
+        "tags": [
+          "backup"
+        ],
+        "summary": "Import Backup",
+        "description": "Upload a previously exported .tar backup and restore it. Replaces wallet.db and exit.db, then re-syncs WireGuard peers with the restored data. If multihop is active, it is torn down automatically before restore to keep kernel state consistent.",
+        "operationId": "import_backup_api_core_backup_import_post",
+        "requestBody": {
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/Body_import_backup_api_core_backup_import_post"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiOk_RestoreResult_"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/core/clients/assign": {
+      "post": {
+        "tags": [
+          "clients"
+        ],
+        "summary": "Assign Client",
+        "description": "Create a new WireGuard client with the given name. Generates a key pair, allocates IPv4/IPv6 addresses from the pool, and registers the peer on the WireGuard interface. Returns 409 if the name already exists, 400 if the pool is full.",
+        "operationId": "assign_client_api_core_clients_assign_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ClientNameRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiOk_ClientRecord_"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErr"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErr"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/core/clients/list": {
+      "get": {
+        "tags": [
+          "clients"
+        ],
+        "summary": "List Clients",
+        "description": "Return a paginated list of all WireGuard clients. Supports search by name and ascending/descending order by creation date.",
+        "operationId": "list_clients_api_core_clients_list_get",
+        "parameters": [
+          {
+            "name": "page",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "default": 1,
+              "title": "Page"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 100,
+              "minimum": 1,
+              "default": 25,
+              "title": "Limit"
+            }
+          },
+          {
+            "name": "search",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Search"
+            }
+          },
+          {
+            "name": "order",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "pattern": "^(asc|desc)$",
+              "default": "desc",
+              "title": "Order"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiOk_ClientListResponse_"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/core/clients/get": {
+      "post": {
+        "tags": [
+          "clients"
+        ],
+        "summary": "Get Client",
+        "description": "Retrieve the full record for a single client including private key material. Returns 404 if the client does not exist.",
+        "operationId": "get_client_api_core_clients_get_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ClientNameRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiOk_ClientRecord_"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErr"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/core/clients/config": {
+      "post": {
+        "tags": [
+          "clients"
+        ],
+        "summary": "Export Client Config",
+        "description": "Generate a WireGuard configuration file for the given client and IP version. Returns the config as a base64-encoded string. Returns 404 if the client does not exist, 400 if the required endpoint is not configured.",
+        "operationId": "export_config_api_core_clients_config_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ConfigExportRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiOk_str_"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErr"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErr"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/core/clients/revoke": {
+      "post": {
+        "tags": [
+          "clients"
+        ],
+        "summary": "Revoke Client",
+        "description": "Remove a WireGuard client by name. Deletes the peer from the interface and releases the allocated IP addresses back to the pool. Returns 400 if the client does not exist.",
+        "operationId": "revoke_client_api_core_clients_revoke_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ClientNameRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiOk_dict_"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErr"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/core/firewall/groups/list": {
+      "get": {
+        "tags": [
+          "firewall"
+        ],
+        "summary": "List Groups",
+        "description": "Return all firewall rule groups. Each group contains a set of nftables rules and routing policies applied as a unit.",
+        "operationId": "list_groups_api_core_firewall_groups_list_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiOk_list_GroupRecord__"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/core/firewall/groups/get": {
+      "post": {
+        "tags": [
+          "firewall"
+        ],
+        "summary": "Get Group",
+        "description": "Retrieve a single firewall group by name. Returns 404 if the group does not exist.",
+        "operationId": "get_group_api_core_firewall_groups_get_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/GroupNameRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiOk_GroupRecord_"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErr"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/core/firewall/rules/list": {
+      "post": {
+        "tags": [
+          "firewall"
+        ],
+        "summary": "List Firewall Rules",
+        "description": "Return nftables firewall rules. Optionally filter by group name \u2014 omit the group field to list rules from all groups.",
+        "operationId": "list_firewall_rules_api_core_firewall_rules_list_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/GroupFilterRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiOk_list_FirewallRuleRecord__"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/core/firewall/routing/list": {
+      "post": {
+        "tags": [
+          "firewall"
+        ],
+        "summary": "List Routing Rules",
+        "description": "Return IP routing and policy rules. Optionally filter by group name \u2014 omit the group field to list rules from all groups.",
+        "operationId": "list_routing_rules_api_core_firewall_routing_list_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/GroupFilterRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiOk_list_RoutingRuleRecord__"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/core/firewall/table": {
+      "get": {
+        "tags": [
+          "firewall"
+        ],
+        "summary": "Raw nftables Table",
+        "description": "Return the raw nftables ruleset as JSON (output of 'nft -j list ruleset'). Useful for debugging the live kernel state.",
+        "operationId": "list_table_api_core_firewall_table_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiOk_dict_"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/core/hello": {
+      "get": {
+        "tags": [
+          "hello"
+        ],
+        "summary": "Health Check",
+        "description": "Returns daemon status and version. Use this endpoint to verify that the daemon process is running and reachable.",
+        "operationId": "hello_api_core_hello_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiOk_HelloResponse_"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/core/network": {
+      "get": {
+        "tags": [
+          "network"
+        ],
+        "summary": "Network Status",
+        "description": "Return current IPv4/IPv6 subnets, DNS configuration for both address families, and IP address pool utilization (total, assigned, free).",
+        "operationId": "network_status_api_core_network_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiOk_NetworkStatus_"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/core/network/cidr": {
+      "post": {
+        "tags": [
+          "network"
+        ],
+        "summary": "Change CIDR",
+        "description": "Change the IPv4 CIDR prefix length. The pool is expanded or contracted and existing clients are migrated to the new subnet. Returns 400 if the new prefix cannot accommodate current clients.",
+        "operationId": "change_cidr_api_core_network_cidr_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ChangeCidrRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiOk_ChangeCidrResponse_"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErr"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/core/network/validate": {
+      "get": {
+        "tags": [
+          "network"
+        ],
+        "summary": "Validate Pool",
+        "description": "Run integrity checks on the IP address pool. Returns a list of errors if inconsistencies are found (e.g. duplicate addresses, out-of-range allocations). An empty error list means the pool is healthy.",
+        "operationId": "validate_pool_api_core_network_validate_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiOk_ValidatePoolResponse_"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/core/wireguard": {
+      "get": {
+        "tags": [
+          "wireguard"
+        ],
+        "summary": "WireGuard Status",
+        "description": "Return the current WireGuard interface status including public key, listen port, and all registered peers with their live traffic statistics, handshake timestamps, and connection endpoints.",
+        "operationId": "get_status_api_core_wireguard_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiOk_WireGuardStatus_"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/core/wireguard/peer": {
+      "post": {
+        "tags": [
+          "wireguard"
+        ],
+        "summary": "Lookup Peer",
+        "description": "Look up a single peer by client name and return its live WireGuard status. Returns 404 if the client does not exist or the peer is not registered on the interface.",
+        "operationId": "get_peer_api_core_wireguard_peer_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PeerQuery"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiOk_PeerInfo_"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErr"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/dns/get": {
+      "post": {
+        "tags": [
+          "dns"
+        ],
+        "summary": "Get DNS",
+        "description": "Return the primary and secondary DNS servers for the given address family (v4 or v6).",
+        "operationId": "get_dns_api_dns_get_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DnsFamilyRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiOk_DnsRecord_"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/dns/change": {
+      "post": {
+        "tags": [
+          "dns"
+        ],
+        "summary": "Change DNS",
+        "description": "Update the primary and secondary DNS servers for the given address family. Returns the updated DNS record. Returns 400 if the provided addresses are invalid.",
+        "operationId": "change_dns_api_dns_change_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ChangeDnsRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiOk_DnsRecord_"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErr"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/multihop/import": {
+      "post": {
+        "tags": [
+          "multihop"
+        ],
+        "summary": "Import Exit",
+        "description": "Import a WireGuard .conf file as a new exit server configuration. Parses the config to extract endpoint, keys, and allowed IPs. Returns 400 if the config is invalid or the name already exists.",
+        "operationId": "import_exit_api_multihop_import_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ImportRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiOk_ExitSummary_"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErr"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/multihop/remove": {
+      "post": {
+        "tags": [
+          "multihop"
+        ],
+        "summary": "Remove Exit",
+        "description": "Delete an exit server configuration by name. The exit must not be currently active \u2014 disable multihop first if needed.",
+        "operationId": "remove_exit_api_multihop_remove_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ExitNameRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiOk_dict_"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErr"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/multihop/list": {
+      "get": {
+        "tags": [
+          "multihop"
+        ],
+        "summary": "List Exits",
+        "description": "Return all imported exit server configurations along with the current multihop state (enabled/disabled and active exit name).",
+        "operationId": "list_exits_api_multihop_list_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiOk_ExitListResponse_"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/multihop/enable": {
+      "post": {
+        "tags": [
+          "multihop"
+        ],
+        "summary": "Enable Multihop",
+        "description": "Activate multihop routing through the named exit server. Creates the exit WireGuard interface, applies firewall forwarding rules, and starts the tunnel. Multihop must be disabled first \u2014 switching exits requires disable then re-enable. Returns 404 if the exit does not exist.",
+        "operationId": "enable_multihop_api_multihop_enable_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ExitNameRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiOk_dict_"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErr"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErr"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/multihop/disable": {
+      "post": {
+        "tags": [
+          "multihop"
+        ],
+        "summary": "Disable Multihop",
+        "description": "Deactivate multihop routing. Tears down the exit WireGuard interface and removes the firewall forwarding rules. Client traffic returns to the default direct route.",
+        "operationId": "disable_multihop_api_multihop_disable_post",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiOk_dict_"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErr"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/multihop/status": {
+      "get": {
+        "tags": [
+          "multihop"
+        ],
+        "summary": "Multihop Status",
+        "description": "Return current multihop state: enabled/disabled, active exit server details, and live WireGuard peer statistics (handshake, RX/TX) for the exit tunnel.",
+        "operationId": "multihop_status_api_multihop_status_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiOk_MultihopStatus_"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "ApiErr": {
+        "properties": {
+          "ok": {
+            "type": "boolean",
+            "const": false,
+            "title": "Ok",
+            "default": false
+          },
+          "error": {
+            "type": "string",
+            "title": "Error"
+          },
+          "code": {
+            "type": "string",
+            "title": "Code"
+          }
+        },
+        "type": "object",
+        "required": [
+          "error",
+          "code"
+        ],
+        "title": "ApiErr"
+      },
+      "ApiOk_ChangeCidrResponse_": {
+        "properties": {
+          "ok": {
+            "type": "boolean",
+            "const": true,
+            "title": "Ok",
+            "default": true
+          },
+          "data": {
+            "$ref": "#/components/schemas/ChangeCidrResponse"
+          }
+        },
+        "type": "object",
+        "required": [
+          "data"
+        ],
+        "title": "ApiOk[ChangeCidrResponse]"
+      },
+      "ApiOk_ClientListResponse_": {
+        "properties": {
+          "ok": {
+            "type": "boolean",
+            "const": true,
+            "title": "Ok",
+            "default": true
+          },
+          "data": {
+            "$ref": "#/components/schemas/ClientListResponse"
+          }
+        },
+        "type": "object",
+        "required": [
+          "data"
+        ],
+        "title": "ApiOk[ClientListResponse]"
+      },
+      "ApiOk_ClientRecord_": {
+        "properties": {
+          "ok": {
+            "type": "boolean",
+            "const": true,
+            "title": "Ok",
+            "default": true
+          },
+          "data": {
+            "$ref": "#/components/schemas/ClientRecord"
+          }
+        },
+        "type": "object",
+        "required": [
+          "data"
+        ],
+        "title": "ApiOk[ClientRecord]"
+      },
+      "ApiOk_DnsRecord_": {
+        "properties": {
+          "ok": {
+            "type": "boolean",
+            "const": true,
+            "title": "Ok",
+            "default": true
+          },
+          "data": {
+            "$ref": "#/components/schemas/DnsRecord"
+          }
+        },
+        "type": "object",
+        "required": [
+          "data"
+        ],
+        "title": "ApiOk[DnsRecord]"
+      },
+      "ApiOk_ExitListResponse_": {
+        "properties": {
+          "ok": {
+            "type": "boolean",
+            "const": true,
+            "title": "Ok",
+            "default": true
+          },
+          "data": {
+            "$ref": "#/components/schemas/ExitListResponse"
+          }
+        },
+        "type": "object",
+        "required": [
+          "data"
+        ],
+        "title": "ApiOk[ExitListResponse]"
+      },
+      "ApiOk_ExitSummary_": {
+        "properties": {
+          "ok": {
+            "type": "boolean",
+            "const": true,
+            "title": "Ok",
+            "default": true
+          },
+          "data": {
+            "$ref": "#/components/schemas/ExitSummary"
+          }
+        },
+        "type": "object",
+        "required": [
+          "data"
+        ],
+        "title": "ApiOk[ExitSummary]"
+      },
+      "ApiOk_GroupRecord_": {
+        "properties": {
+          "ok": {
+            "type": "boolean",
+            "const": true,
+            "title": "Ok",
+            "default": true
+          },
+          "data": {
+            "$ref": "#/components/schemas/GroupRecord"
+          }
+        },
+        "type": "object",
+        "required": [
+          "data"
+        ],
+        "title": "ApiOk[GroupRecord]"
+      },
+      "ApiOk_HelloResponse_": {
+        "properties": {
+          "ok": {
+            "type": "boolean",
+            "const": true,
+            "title": "Ok",
+            "default": true
+          },
+          "data": {
+            "$ref": "#/components/schemas/HelloResponse"
+          }
+        },
+        "type": "object",
+        "required": [
+          "data"
+        ],
+        "title": "ApiOk[HelloResponse]"
+      },
+      "ApiOk_MultihopStatus_": {
+        "properties": {
+          "ok": {
+            "type": "boolean",
+            "const": true,
+            "title": "Ok",
+            "default": true
+          },
+          "data": {
+            "$ref": "#/components/schemas/MultihopStatus"
+          }
+        },
+        "type": "object",
+        "required": [
+          "data"
+        ],
+        "title": "ApiOk[MultihopStatus]"
+      },
+      "ApiOk_NetworkStatus_": {
+        "properties": {
+          "ok": {
+            "type": "boolean",
+            "const": true,
+            "title": "Ok",
+            "default": true
+          },
+          "data": {
+            "$ref": "#/components/schemas/NetworkStatus"
+          }
+        },
+        "type": "object",
+        "required": [
+          "data"
+        ],
+        "title": "ApiOk[NetworkStatus]"
+      },
+      "ApiOk_PeerInfo_": {
+        "properties": {
+          "ok": {
+            "type": "boolean",
+            "const": true,
+            "title": "Ok",
+            "default": true
+          },
+          "data": {
+            "$ref": "#/components/schemas/PeerInfo"
+          }
+        },
+        "type": "object",
+        "required": [
+          "data"
+        ],
+        "title": "ApiOk[PeerInfo]"
+      },
+      "ApiOk_RestoreResult_": {
+        "properties": {
+          "ok": {
+            "type": "boolean",
+            "const": true,
+            "title": "Ok",
+            "default": true
+          },
+          "data": {
+            "$ref": "#/components/schemas/RestoreResult"
+          }
+        },
+        "type": "object",
+        "required": [
+          "data"
+        ],
+        "title": "ApiOk[RestoreResult]"
+      },
+      "ApiOk_ValidatePoolResponse_": {
+        "properties": {
+          "ok": {
+            "type": "boolean",
+            "const": true,
+            "title": "Ok",
+            "default": true
+          },
+          "data": {
+            "$ref": "#/components/schemas/ValidatePoolResponse"
+          }
+        },
+        "type": "object",
+        "required": [
+          "data"
+        ],
+        "title": "ApiOk[ValidatePoolResponse]"
+      },
+      "ApiOk_WireGuardStatus_": {
+        "properties": {
+          "ok": {
+            "type": "boolean",
+            "const": true,
+            "title": "Ok",
+            "default": true
+          },
+          "data": {
+            "$ref": "#/components/schemas/WireGuardStatus"
+          }
+        },
+        "type": "object",
+        "required": [
+          "data"
+        ],
+        "title": "ApiOk[WireGuardStatus]"
+      },
+      "ApiOk_dict_": {
+        "properties": {
+          "ok": {
+            "type": "boolean",
+            "const": true,
+            "title": "Ok",
+            "default": true
+          },
+          "data": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Data"
+          }
+        },
+        "type": "object",
+        "required": [
+          "data"
+        ],
+        "title": "ApiOk[dict]"
+      },
+      "ApiOk_list_FirewallRuleRecord__": {
+        "properties": {
+          "ok": {
+            "type": "boolean",
+            "const": true,
+            "title": "Ok",
+            "default": true
+          },
+          "data": {
+            "items": {
+              "$ref": "#/components/schemas/FirewallRuleRecord"
+            },
+            "type": "array",
+            "title": "Data"
+          }
+        },
+        "type": "object",
+        "required": [
+          "data"
+        ],
+        "title": "ApiOk[list[FirewallRuleRecord]]"
+      },
+      "ApiOk_list_GroupRecord__": {
+        "properties": {
+          "ok": {
+            "type": "boolean",
+            "const": true,
+            "title": "Ok",
+            "default": true
+          },
+          "data": {
+            "items": {
+              "$ref": "#/components/schemas/GroupRecord"
+            },
+            "type": "array",
+            "title": "Data"
+          }
+        },
+        "type": "object",
+        "required": [
+          "data"
+        ],
+        "title": "ApiOk[list[GroupRecord]]"
+      },
+      "ApiOk_list_RoutingRuleRecord__": {
+        "properties": {
+          "ok": {
+            "type": "boolean",
+            "const": true,
+            "title": "Ok",
+            "default": true
+          },
+          "data": {
+            "items": {
+              "$ref": "#/components/schemas/RoutingRuleRecord"
+            },
+            "type": "array",
+            "title": "Data"
+          }
+        },
+        "type": "object",
+        "required": [
+          "data"
+        ],
+        "title": "ApiOk[list[RoutingRuleRecord]]"
+      },
+      "ApiOk_str_": {
+        "properties": {
+          "ok": {
+            "type": "boolean",
+            "const": true,
+            "title": "Ok",
+            "default": true
+          },
+          "data": {
+            "type": "string",
+            "title": "Data"
+          }
+        },
+        "type": "object",
+        "required": [
+          "data"
+        ],
+        "title": "ApiOk[str]"
+      },
+      "Body_import_backup_api_core_backup_import_post": {
+        "properties": {
+          "file": {
+            "type": "string",
+            "contentMediaType": "application/octet-stream",
+            "title": "File"
+          }
+        },
+        "type": "object",
+        "required": [
+          "file"
+        ],
+        "title": "Body_import_backup_api_core_backup_import_post"
+      },
+      "ChangeCidrRequest": {
+        "properties": {
+          "prefix": {
+            "type": "integer",
+            "maximum": 30.0,
+            "minimum": 16.0,
+            "title": "Prefix",
+            "description": "New IPv4 CIDR prefix length (16\u201330). Expanding the prefix migrates existing clients to the new subnet."
+          }
+        },
+        "type": "object",
+        "required": [
+          "prefix"
+        ],
+        "title": "ChangeCidrRequest",
+        "description": "Request body for changing the IPv4 CIDR prefix length."
+      },
+      "ChangeCidrResponse": {
+        "properties": {
+          "ipv4_subnet": {
+            "type": "string",
+            "title": "Ipv4 Subnet"
+          },
+          "ipv6_subnet": {
+            "type": "string",
+            "title": "Ipv6 Subnet"
+          },
+          "pool": {
+            "$ref": "#/components/schemas/PoolStats"
+          }
+        },
+        "type": "object",
+        "required": [
+          "ipv4_subnet",
+          "ipv6_subnet",
+          "pool"
+        ],
+        "title": "ChangeCidrResponse",
+        "description": "Result after a CIDR change including updated subnets and pool stats."
+      },
+      "ChangeDnsRequest": {
+        "properties": {
+          "family": {
+            "type": "string",
+            "enum": [
+              "v4",
+              "v6"
+            ],
+            "title": "Family"
+          },
+          "primary": {
+            "type": "string",
+            "title": "Primary"
+          },
+          "secondary": {
+            "type": "string",
+            "title": "Secondary"
+          }
+        },
+        "type": "object",
+        "required": [
+          "family",
+          "primary",
+          "secondary"
+        ],
+        "title": "ChangeDnsRequest",
+        "description": "Request body for updating DNS servers."
+      },
+      "ClientListResponse": {
+        "properties": {
+          "clients": {
+            "items": {
+              "$ref": "#/components/schemas/ClientSummary"
+            },
+            "type": "array",
+            "title": "Clients"
+          },
+          "total": {
+            "type": "integer",
+            "title": "Total"
+          },
+          "page": {
+            "type": "integer",
+            "title": "Page"
+          },
+          "limit": {
+            "type": "integer",
+            "title": "Limit"
+          },
+          "pages": {
+            "type": "integer",
+            "title": "Pages"
+          },
+          "order": {
+            "type": "string",
+            "title": "Order"
+          }
+        },
+        "type": "object",
+        "required": [
+          "clients",
+          "total",
+          "page",
+          "limit",
+          "pages",
+          "order"
+        ],
+        "title": "ClientListResponse",
+        "description": "Paginated client list response."
+      },
+      "ClientNameRequest": {
+        "properties": {
+          "name": {
+            "type": "string",
+            "maxLength": 64,
+            "minLength": 1,
+            "pattern": "^[a-zA-Z0-9_-]+$",
+            "title": "Name",
+            "description": "Unique client name (alphanumeric, hyphens, underscores)."
+          }
+        },
+        "type": "object",
+        "required": [
+          "name"
+        ],
+        "title": "ClientNameRequest",
+        "description": "Request body identifying a client by name."
+      },
+      "ClientRecord": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "ipv4_address": {
+            "type": "string",
+            "title": "Ipv4 Address"
+          },
+          "ipv6_address": {
+            "type": "string",
+            "title": "Ipv6 Address"
+          },
+          "private_key_hex": {
+            "type": "string",
+            "title": "Private Key Hex"
+          },
+          "public_key_hex": {
+            "type": "string",
+            "title": "Public Key Hex"
+          },
+          "preshared_key_hex": {
+            "type": "string",
+            "title": "Preshared Key Hex"
+          },
+          "created_at": {
+            "type": "string",
+            "title": "Created At"
+          },
+          "updated_at": {
+            "type": "string",
+            "title": "Updated At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "name",
+          "ipv4_address",
+          "ipv6_address",
+          "private_key_hex",
+          "public_key_hex",
+          "preshared_key_hex",
+          "created_at",
+          "updated_at"
+        ],
+        "title": "ClientRecord",
+        "description": "Full client record including private key material."
+      },
+      "ClientSummary": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "ipv4_address": {
+            "type": "string",
+            "title": "Ipv4 Address"
+          },
+          "ipv6_address": {
+            "type": "string",
+            "title": "Ipv6 Address"
+          },
+          "public_key_hex": {
+            "type": "string",
+            "title": "Public Key Hex"
+          },
+          "created_at": {
+            "type": "string",
+            "title": "Created At"
+          },
+          "updated_at": {
+            "type": "string",
+            "title": "Updated At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "name",
+          "ipv4_address",
+          "ipv6_address",
+          "public_key_hex",
+          "created_at",
+          "updated_at"
+        ],
+        "title": "ClientSummary",
+        "description": "Client summary without private key material (used in list responses)."
+      },
+      "ConfigExportRequest": {
+        "properties": {
+          "name": {
+            "type": "string",
+            "maxLength": 64,
+            "minLength": 1,
+            "pattern": "^[a-zA-Z0-9_-]+$",
+            "title": "Name",
+            "description": "Client name to export config for."
+          },
+          "version": {
+            "type": "string",
+            "enum": [
+              "v4",
+              "v6",
+              "hybrid"
+            ],
+            "title": "Version",
+            "description": "IP version: v4 (IPv4-only), v6 (IPv6-only), or hybrid (dual-stack)."
+          }
+        },
+        "type": "object",
+        "required": [
+          "name",
+          "version"
+        ],
+        "title": "ConfigExportRequest",
+        "description": "Request body for exporting a client WireGuard configuration."
+      },
+      "DnsDetail": {
+        "properties": {
+          "primary": {
+            "type": "string",
+            "title": "Primary"
+          },
+          "secondary": {
+            "type": "string",
+            "title": "Secondary"
+          }
+        },
+        "type": "object",
+        "required": [
+          "primary",
+          "secondary"
+        ],
+        "title": "DnsDetail",
+        "description": "Primary and secondary DNS server addresses for one IP family."
+      },
+      "DnsFamilyRequest": {
+        "properties": {
+          "family": {
+            "type": "string",
+            "enum": [
+              "v4",
+              "v6"
+            ],
+            "title": "Family"
+          }
+        },
+        "type": "object",
+        "required": [
+          "family"
+        ],
+        "title": "DnsFamilyRequest",
+        "description": "Request body selecting an IP address family."
+      },
+      "DnsRecord": {
+        "properties": {
+          "family": {
+            "type": "string",
+            "title": "Family"
+          },
+          "primary": {
+            "type": "string",
+            "title": "Primary"
+          },
+          "secondary": {
+            "type": "string",
+            "title": "Secondary"
+          }
+        },
+        "type": "object",
+        "required": [
+          "family",
+          "primary",
+          "secondary"
+        ],
+        "title": "DnsRecord",
+        "description": "DNS server pair for a single address family."
+      },
+      "ExitListResponse": {
+        "properties": {
+          "exits": {
+            "items": {
+              "$ref": "#/components/schemas/ExitSummary"
+            },
+            "type": "array",
+            "title": "Exits"
+          },
+          "total": {
+            "type": "integer",
+            "title": "Total"
+          },
+          "enabled": {
+            "type": "boolean",
+            "title": "Enabled"
+          },
+          "active": {
+            "type": "string",
+            "title": "Active"
+          }
+        },
+        "type": "object",
+        "required": [
+          "exits",
+          "total",
+          "enabled",
+          "active"
+        ],
+        "title": "ExitListResponse",
+        "description": "List of all imported exit servers with current multihop state."
+      },
+      "ExitNameRequest": {
+        "properties": {
+          "name": {
+            "type": "string",
+            "maxLength": 64,
+            "minLength": 1,
+            "pattern": "^[a-zA-Z0-9_-]+$",
+            "title": "Name",
+            "description": "Exit server name."
+          }
+        },
+        "type": "object",
+        "required": [
+          "name"
+        ],
+        "title": "ExitNameRequest",
+        "description": "Request body identifying an exit server by name."
+      },
+      "ExitSummary": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "endpoint": {
+            "type": "string",
+            "title": "Endpoint"
+          },
+          "address": {
+            "type": "string",
+            "title": "Address"
+          },
+          "public_key_hex": {
+            "type": "string",
+            "title": "Public Key Hex"
+          },
+          "allowed_ips": {
+            "type": "string",
+            "title": "Allowed Ips"
+          },
+          "keepalive": {
+            "type": "integer",
+            "title": "Keepalive"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "name",
+          "endpoint",
+          "address",
+          "public_key_hex",
+          "allowed_ips",
+          "keepalive"
+        ],
+        "title": "ExitSummary",
+        "description": "Summary of an imported exit server configuration."
+      },
+      "FirewallRuleRecord": {
+        "properties": {
+          "id": {
+            "type": "integer",
+            "title": "Id"
+          },
+          "group_id": {
+            "type": "integer",
+            "title": "Group Id"
+          },
+          "chain": {
+            "type": "string",
+            "title": "Chain"
+          },
+          "action": {
+            "type": "string",
+            "title": "Action"
+          },
+          "family": {
+            "type": "integer",
+            "title": "Family"
+          },
+          "proto": {
+            "type": "string",
+            "title": "Proto"
+          },
+          "dport": {
+            "type": "integer",
+            "title": "Dport"
+          },
+          "source": {
+            "type": "string",
+            "title": "Source"
+          },
+          "destination": {
+            "type": "string",
+            "title": "Destination"
+          },
+          "in_iface": {
+            "type": "string",
+            "title": "In Iface"
+          },
+          "out_iface": {
+            "type": "string",
+            "title": "Out Iface"
+          },
+          "state_match": {
+            "type": "string",
+            "title": "State Match"
+          },
+          "comment": {
+            "type": "string",
+            "title": "Comment"
+          },
+          "position": {
+            "type": "integer",
+            "title": "Position"
+          },
+          "applied": {
+            "type": "boolean",
+            "title": "Applied"
+          },
+          "nft_handle": {
+            "type": "integer",
+            "title": "Nft Handle"
+          },
+          "created_at": {
+            "type": "integer",
+            "title": "Created At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "group_id",
+          "chain",
+          "action",
+          "family",
+          "proto",
+          "dport",
+          "source",
+          "destination",
+          "in_iface",
+          "out_iface",
+          "state_match",
+          "comment",
+          "position",
+          "applied",
+          "nft_handle",
+          "created_at"
+        ],
+        "title": "FirewallRuleRecord",
+        "description": "A single nftables firewall rule within a group."
+      },
+      "GroupFilterRequest": {
+        "properties": {
+          "group": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Group"
+          }
+        },
+        "type": "object",
+        "title": "GroupFilterRequest",
+        "description": "Optional group filter \u2014 omit to list all rules."
+      },
+      "GroupNameRequest": {
+        "properties": {
+          "name": {
+            "type": "string",
+            "title": "Name"
+          }
+        },
+        "type": "object",
+        "required": [
+          "name"
+        ],
+        "title": "GroupNameRequest",
+        "description": "Request body identifying a firewall group by name."
+      },
+      "GroupRecord": {
+        "properties": {
+          "id": {
+            "type": "integer",
+            "title": "Id"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "group_type": {
+            "type": "string",
+            "title": "Group Type"
+          },
+          "enabled": {
+            "type": "boolean",
+            "title": "Enabled"
+          },
+          "priority": {
+            "type": "integer",
+            "title": "Priority"
+          },
+          "metadata": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Metadata"
+          },
+          "created_at": {
+            "type": "integer",
+            "title": "Created At"
+          },
+          "updated_at": {
+            "type": "integer",
+            "title": "Updated At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "name",
+          "group_type",
+          "enabled",
+          "priority",
+          "metadata",
+          "created_at",
+          "updated_at"
+        ],
+        "title": "GroupRecord",
+        "description": "Firewall rule group (e.g. base, nat, multihop preset)."
+      },
+      "HTTPValidationError": {
+        "properties": {
+          "detail": {
+            "items": {
+              "$ref": "#/components/schemas/ValidationError"
+            },
+            "type": "array",
+            "title": "Detail"
+          }
+        },
+        "type": "object",
+        "title": "HTTPValidationError"
+      },
+      "HelloResponse": {
+        "properties": {
+          "message": {
+            "type": "string",
+            "title": "Message"
+          },
+          "version": {
+            "type": "string",
+            "title": "Version"
+          }
+        },
+        "type": "object",
+        "required": [
+          "message",
+          "version"
+        ],
+        "title": "HelloResponse",
+        "description": "Daemon health status."
+      },
+      "ImportRequest": {
+        "properties": {
+          "name": {
+            "type": "string",
+            "maxLength": 64,
+            "minLength": 1,
+            "pattern": "^[a-zA-Z0-9_-]+$",
+            "title": "Name",
+            "description": "Unique name for this exit server."
+          },
+          "config": {
+            "type": "string",
+            "minLength": 1,
+            "title": "Config",
+            "description": "WireGuard .conf file contents (plain text, not base64)."
+          }
+        },
+        "type": "object",
+        "required": [
+          "name",
+          "config"
+        ],
+        "title": "ImportRequest",
+        "description": "Request body for importing an exit server configuration."
+      },
+      "InterfaceInfo": {
+        "properties": {
+          "public_key": {
+            "type": "string",
+            "title": "Public Key"
+          },
+          "listen_port": {
+            "type": "integer",
+            "title": "Listen Port"
+          },
+          "fwmark": {
+            "type": "integer",
+            "title": "Fwmark"
+          }
+        },
+        "type": "object",
+        "required": [
+          "public_key",
+          "listen_port",
+          "fwmark"
+        ],
+        "title": "InterfaceInfo",
+        "description": "WireGuard interface metadata."
+      },
+      "MultihopStatus": {
+        "properties": {
+          "enabled": {
+            "type": "boolean",
+            "title": "Enabled"
+          },
+          "active": {
+            "type": "string",
+            "title": "Active"
+          },
+          "exit": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ExitSummary"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "peer": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PeerStatus"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "type": "object",
+        "required": [
+          "enabled",
+          "active",
+          "exit",
+          "peer"
+        ],
+        "title": "MultihopStatus",
+        "description": "Current multihop state including active exit and live peer stats."
+      },
+      "NetworkStatus": {
+        "properties": {
+          "ipv4_subnet": {
+            "type": "string",
+            "title": "Ipv4 Subnet"
+          },
+          "ipv6_subnet": {
+            "type": "string",
+            "title": "Ipv6 Subnet"
+          },
+          "dns_v4": {
+            "$ref": "#/components/schemas/DnsDetail"
+          },
+          "dns_v6": {
+            "$ref": "#/components/schemas/DnsDetail"
+          },
+          "pool": {
+            "$ref": "#/components/schemas/PoolStats"
+          }
+        },
+        "type": "object",
+        "required": [
+          "ipv4_subnet",
+          "ipv6_subnet",
+          "dns_v4",
+          "dns_v6",
+          "pool"
+        ],
+        "title": "NetworkStatus",
+        "description": "Current network configuration including subnets, DNS, and pool stats."
+      },
+      "PeerInfo": {
+        "properties": {
+          "public_key": {
+            "type": "string",
+            "title": "Public Key"
+          },
+          "name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name"
+          },
+          "endpoint": {
+            "type": "string",
+            "title": "Endpoint"
+          },
+          "allowed_ips": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Allowed Ips"
+          },
+          "latest_handshake": {
+            "type": "integer",
+            "title": "Latest Handshake"
+          },
+          "rx_bytes": {
+            "type": "integer",
+            "title": "Rx Bytes"
+          },
+          "tx_bytes": {
+            "type": "integer",
+            "title": "Tx Bytes"
+          },
+          "keepalive": {
+            "type": "integer",
+            "title": "Keepalive"
+          }
+        },
+        "type": "object",
+        "required": [
+          "public_key",
+          "name",
+          "endpoint",
+          "allowed_ips",
+          "latest_handshake",
+          "rx_bytes",
+          "tx_bytes",
+          "keepalive"
+        ],
+        "title": "PeerInfo",
+        "description": "Live status of a single WireGuard peer from the kernel interface."
+      },
+      "PeerQuery": {
+        "properties": {
+          "name": {
+            "type": "string",
+            "maxLength": 64,
+            "minLength": 1,
+            "pattern": "^[a-zA-Z0-9_-]+$",
+            "title": "Name",
+            "description": "Client name to look up."
+          }
+        },
+        "type": "object",
+        "required": [
+          "name"
+        ],
+        "title": "PeerQuery",
+        "description": "Request body to look up a peer by client name."
+      },
+      "PeerStatus": {
+        "properties": {
+          "endpoint": {
+            "type": "string",
+            "title": "Endpoint"
+          },
+          "latest_handshake": {
+            "type": "integer",
+            "title": "Latest Handshake"
+          },
+          "rx_bytes": {
+            "type": "integer",
+            "title": "Rx Bytes"
+          },
+          "tx_bytes": {
+            "type": "integer",
+            "title": "Tx Bytes"
+          }
+        },
+        "type": "object",
+        "required": [
+          "endpoint",
+          "latest_handshake",
+          "rx_bytes",
+          "tx_bytes"
+        ],
+        "title": "PeerStatus",
+        "description": "Live WireGuard peer statistics for the active exit tunnel."
+      },
+      "PoolStats": {
+        "properties": {
+          "total": {
+            "type": "integer",
+            "title": "Total"
+          },
+          "assigned": {
+            "type": "integer",
+            "title": "Assigned"
+          },
+          "free": {
+            "type": "integer",
+            "title": "Free"
+          }
+        },
+        "type": "object",
+        "required": [
+          "total",
+          "assigned",
+          "free"
+        ],
+        "title": "PoolStats",
+        "description": "IP address pool utilization counters."
+      },
+      "RestoreResult": {
+        "properties": {
+          "timestamp": {
+            "type": "string",
+            "title": "Timestamp"
+          },
+          "wallet_clients": {
+            "type": "integer",
+            "title": "Wallet Clients"
+          },
+          "wallet_subnet": {
+            "type": "string",
+            "title": "Wallet Subnet"
+          },
+          "exit_count": {
+            "type": "integer",
+            "title": "Exit Count"
+          },
+          "exit_enabled": {
+            "type": "boolean",
+            "title": "Exit Enabled"
+          }
+        },
+        "type": "object",
+        "required": [
+          "timestamp",
+          "wallet_clients",
+          "wallet_subnet",
+          "exit_count",
+          "exit_enabled"
+        ],
+        "title": "RestoreResult",
+        "description": "Summary returned after a successful backup restore."
+      },
+      "RoutingRuleRecord": {
+        "properties": {
+          "id": {
+            "type": "integer",
+            "title": "Id"
+          },
+          "group_id": {
+            "type": "integer",
+            "title": "Group Id"
+          },
+          "rule_type": {
+            "type": "string",
+            "title": "Rule Type"
+          },
+          "from_network": {
+            "type": "string",
+            "title": "From Network"
+          },
+          "to_network": {
+            "type": "string",
+            "title": "To Network"
+          },
+          "table_name": {
+            "type": "string",
+            "title": "Table Name"
+          },
+          "table_id": {
+            "type": "integer",
+            "title": "Table Id"
+          },
+          "priority": {
+            "type": "integer",
+            "title": "Priority"
+          },
+          "destination": {
+            "type": "string",
+            "title": "Destination"
+          },
+          "device": {
+            "type": "string",
+            "title": "Device"
+          },
+          "applied": {
+            "type": "boolean",
+            "title": "Applied"
+          },
+          "created_at": {
+            "type": "integer",
+            "title": "Created At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "group_id",
+          "rule_type",
+          "from_network",
+          "to_network",
+          "table_name",
+          "table_id",
+          "priority",
+          "destination",
+          "device",
+          "applied",
+          "created_at"
+        ],
+        "title": "RoutingRuleRecord",
+        "description": "An IP routing/policy rule managed by a firewall group."
+      },
+      "ValidatePoolResponse": {
+        "properties": {
+          "valid": {
+            "type": "boolean",
+            "title": "Valid"
+          },
+          "errors": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Errors"
+          }
+        },
+        "type": "object",
+        "required": [
+          "valid",
+          "errors"
+        ],
+        "title": "ValidatePoolResponse",
+        "description": "Pool integrity validation result."
+      },
+      "ValidationError": {
+        "properties": {
+          "loc": {
+            "items": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "integer"
+                }
+              ]
+            },
+            "type": "array",
+            "title": "Location"
+          },
+          "msg": {
+            "type": "string",
+            "title": "Message"
+          },
+          "type": {
+            "type": "string",
+            "title": "Error Type"
+          },
+          "input": {
+            "title": "Input"
+          },
+          "ctx": {
+            "type": "object",
+            "title": "Context"
+          }
+        },
+        "type": "object",
+        "required": [
+          "loc",
+          "msg",
+          "type"
+        ],
+        "title": "ValidationError"
+      },
+      "WireGuardStatus": {
+        "properties": {
+          "interface": {
+            "$ref": "#/components/schemas/InterfaceInfo"
+          },
+          "peers": {
+            "items": {
+              "$ref": "#/components/schemas/PeerInfo"
+            },
+            "type": "array",
+            "title": "Peers"
+          },
+          "total_peers": {
+            "type": "integer",
+            "title": "Total Peers"
+          }
+        },
+        "type": "object",
+        "required": [
+          "interface",
+          "peers",
+          "total_peers"
+        ],
+        "title": "WireGuardStatus",
+        "description": "Full WireGuard interface status including all peers."
+      }
+    }
+  }
+}

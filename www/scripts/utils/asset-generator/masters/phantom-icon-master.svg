@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg id="Phantom_Master_Icon" data-name="Phantom Master Icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 436 463" class="phantom-logo phantom-icon">
+  <defs>
+    <style>
+      .shield {
+        fill: #24245a;
+      }
+      .ghost {
+        fill: #ffffff;
+      }
+      .eyes {
+        fill: #24245a;
+      }
+    </style>
+  </defs>
+
+  <!-- SYMBOL GROUP -->
+  <g id="Symbol" class="phantom-symbol">
+    <path id="Shield" class="shield" d="M218.1,16.63C117.85,46.55,31.8,69,24.33,76.48c0,97.27,18.71,276.83,193.78,379.33,175.08-102.5,193.78-282.07,193.78-379.33-7.48-7.48-93.52-29.93-193.78-59.85h0Z"/>
+    <path id="Ghost" class="ghost" d="M218.1,69c-66.59,0-118.96,52.37-118.96,118.96v139.16l41.15-41.15,41.15,41.15,36.67-41.15,36.67,41.15,41.15-41.15,41.15,41.15v-139.16c0-66.59-52.37-118.96-118.96-118.96Z"/>
+    <circle id="Left_Eye" class="eyes" cx="173.96" cy="166.26" r="28.06"/>
+    <circle id="Right_Eye" class="eyes" cx="262.26" cy="166.26" r="28.06" transform="translate(56.13 398.5) rotate(-80.78)"/>
+  </g>
+</svg>

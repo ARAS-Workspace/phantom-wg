@@ -1,0 +1,185 @@
+import BalanceScale from '@shared/components/visualization/BalanceScale';
+import FormulaInfo from '@shared/components/visualization/FormulaInfo';
+import Mermaid from '@shared/components/visualization/Mermaid';
+import TeraziPoolSimulator from '../../shared/components/TeraziPoolSimulator';
+import { InlineNotification } from '@carbon/react';
+
+export const teraziFormulas = [
+  {
+    formula: '∀i ∈ [2, n−2] : v4_net[i] ↔ v6_net[i]',
+    title: 'Pairing Rule',
+    symbols: [
+      { symbol: '∀', description: 'for all (universal quantifier)' },
+      { symbol: 'i ∈ [2, n−2]', description: 'index range of usable slots' },
+      { symbol: '2', description: 'first usable slot (0 = network address, 1 = server/gateway skipped)' },
+      { symbol: 'n−2', description: 'last usable slot (n−1 = broadcast skipped)' },
+      { symbol: 'v4_net[i] ↔ v6_net[i]', description: 'IPv4 address at index i is paired with IPv6 address at the same index i' },
+    ],
+  },
+  {
+    formula: '|Assigned_IPv4| ≡ |Assigned_IPv6|',
+    title: 'Symmetry Result',
+    symbols: [
+      { symbol: '|...|', description: 'count (cardinality)' },
+      { symbol: '≡', description: 'identically equal' },
+    ],
+    summary: 'The number of assigned IPv4 addresses always equals the number of assigned IPv6 addresses. Assigning one always assigns the other.',
+  },
+];
+
+# Balance System (Terazi)
+
+***Terazi*** is the balancing mechanism that deterministically pairs the pool of IPv4 and IPv6 addresses.
+
+<BalanceScale />
+
+<FormulaInfo formulas={teraziFormulas} />
+
+---
+
+## How It Works?
+
+***Terazi*** manages both protocol families through a single coordinate system: **index**.
+
+When a subnet is created, IPv4 and IPv6 addresses are locked to each other through this index:
+
+```text
+index 0   →  10.8.0.0        ↔  fd00:70:68::0    (network address, reserved)
+index 1   →  10.8.0.1        ↔  fd00:70:68::1    (server / gateway, reserved)
+index 2   →  10.8.0.2        ↔  fd00:70:68::2    (1st client)
+index 3   →  10.8.0.3        ↔  fd00:70:68::3    (2nd client)
+index 4   →  10.8.0.4        ↔  fd00:70:68::4    (3rd client)
+  ...
+index n   →  10.8.0.n        ↔  fd00:70:68::n    (nth client)
+  ...
+index n-1 →  10.8.0.255      ↔  fd00:70:68::ff   (broadcast, reserved)
+```
+
+The essence of the structure is this: **IPv4 capacity is taken as the base, and IPv6 shapes itself accordingly.** When the prefix length changes, both protocols are resized simultaneously and symmetry is preserved under all conditions.
+
+<Mermaid chart={`flowchart LR
+  subgraph V4["IPv4 — 10.8.0.0/24"]
+    direction TB
+    A2["10.8.0.2"]
+    A3["10.8.0.3"]
+    A4["10.8.0.4"]
+    An["..."]
+  end
+  subgraph V6["IPv6 — fd00:70:68::/120"]
+    direction TB
+    B2["fd00:70:68::2"]
+    B3["fd00:70:68::3"]
+    B4["fd00:70:68::4"]
+    Bn["..."]
+  end
+  A2 <-->|"index 2"| B2
+  A3 <-->|"index 3"| B3
+  A4 <-->|"index 4"| B4
+  An <-->|"index n"| Bn
+`} />
+
+---
+
+## Prefix Conversion
+
+Reference implementation — `phantom_daemon/base/wallet/wallet.py`:
+
+```python
+def _calculate_terazi(ipv4_subnet: str) -> tuple[str, str, int, int]:
+    """Calculate matching IPv6 subnet from IPv4 subnet.
+
+    Returns (ipv4_str, ipv6_str, capacity, host_bits).
+    capacity = usable client slots (total - network - broadcast - server).
+    """
+    v4_net = ipaddress.ip_network(ipv4_subnet, strict=False)
+    host_bits = 32 - v4_net.prefixlen
+    v6_prefix = 128 - host_bits
+    v6_net = ipaddress.ip_network(f"fd00:70:68::/{v6_prefix}")
+    capacity = v4_net.num_addresses - 3  # network + broadcast + server
+    return str(v4_net), str(v6_net), capacity, host_bits
+```
+
+Both protocols share the same host bit count. The IPv4 prefix directly determines the IPv6 prefix — two lines of conversion, guaranteed symmetry across two pools:
+
+<Mermaid chart={`flowchart
+  A["/24 — IPv4"] -->|"32 − 24 = 8 host bits"| B["/120 — IPv6"]
+  B -->|"2⁸ − 3 = 253 slots"| C["253 client capacity"]
+`} />
+
+---
+
+## Pool Structure
+
+Addresses are pre-populated in the database (`wallet.db` → `users` table). Each row is an IPv4/IPv6 pair.
+Empty slots wait as `<null>`. When a client is assigned, keys, name and timestamps are filled in.
+
+<TeraziPoolSimulator />
+
+---
+
+## What Happens on CIDR Change?
+
+When the CIDR prefix is changed, the pool is rebuilt from scratch. Client identities (keys, name, UUID) are preserved.
+
+<InlineNotification
+  kind="warning"
+  title="IP addresses may change."
+  subtitle="Clients are re-assigned sequentially from index 2 in their original creation order — any gaps from revoked clients are closed. If there are no gaps and the subnet base is unchanged, addresses may be preserved; however, this is not guaranteed. All WireGuard configurations must be re-exported."
+  hideCloseButton
+  lowContrast
+/>
+
+<Mermaid chart={`sequenceDiagram
+  participant Admin
+  participant Daemon
+  participant DB
+
+  Admin->>Daemon: POST /api/core/network/cidr {prefix: 22}
+  Daemon->>DB: Backup client data
+  Daemon->>DB: Delete all rows
+  Daemon->>DB: Create new pool (/22)
+  Daemon->>DB: Re-assign clients in order
+  Daemon-->>Admin: {ipv4_subnet, ipv6_subnet, pool}
+`} />
+
+---
+
+## Validation
+
+The `GET /api/core/network/validate` endpoint verifies the pool's Terazi symmetry and structural integrity. Successful response:
+
+```json
+{
+  "ok": true,
+  "data": {
+    "valid": true,
+    "errors": []
+  }
+}
+```
+
+If a Terazi index mismatch or address gap is detected, `valid: false` is returned with an error list:
+
+```json
+{
+  "ok": true,
+  "data": {
+    "valid": false,
+    "errors": [
+      "Row 50: terazi mismatch v4_index=50 v6_index=51",
+      "Row 100: IPv4 gap 10.8.0.100 -> 10.8.0.102"
+    ]
+  }
+}
+```
+
+<Mermaid chart={`flowchart TD
+  A["GET /api/core/network/validate"] --> B{Checks}
+  B --> C["Row count == capacity?"]
+  B --> D["IPv4 addresses sequential?"]
+  B --> E["v4_index == v6_index? (Terazi)"]
+  B --> F["Formats valid?"]
+  C & D & E & F --> G{Result}
+  G -->|"All checks passed"| H["valid: true, errors: []"]
+  G -->|"At least one error"| I["valid: false, errors: [...]"]
+`} />

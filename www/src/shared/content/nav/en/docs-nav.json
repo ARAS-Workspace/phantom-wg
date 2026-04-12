@@ -1,0 +1,31 @@
+{
+  "headerNav": [
+    { "label": "Homepage", "href": "/" },
+    { "label": "Documentation", "href": "/docs" },
+    { "label": "GitHub", "href": "https://github.com/ARAS-Workspace/phantom-wg", "external": true }
+  ],
+  "sideNav": [
+    { "label": "Introduction", "href": "/docs" },
+    {
+      "label": "Architecture",
+      "defaultExpanded": true,
+      "children": [
+        { "label": "System Architecture", "href": "/docs/architecture" },
+        { "label": "Database Schema", "href": "/docs/architecture/database" },
+        { "label": "Bridge Structures", "href": "/docs/architecture/bridge" },
+        { "label": "Terazi Pool", "href": "/docs/architecture/terazi" },
+        { "label": "Multihop", "href": "/docs/architecture/multihop" },
+        { "label": "Backup", "href": "/docs/architecture/backup" }
+      ]
+    },
+    { "label": "API Reference", "href": "/docs/api" },
+    {
+      "label": "Tools",
+      "defaultExpanded": true,
+      "children": [
+        { "label": "My IP Address", "href": "/docs/tools/ip" },
+        { "label": "DNS Leak Test", "href": "/docs/tools/dns" }
+      ]
+    }
+  ]
+}

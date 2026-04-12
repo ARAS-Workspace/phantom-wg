@@ -1,0 +1,12 @@
+@use '@carbon/react/scss/spacing' as spacing;
+@use '@carbon/react/scss/breakpoint' as bp;
+
+// Carbon SideNav width = 16rem (256px)
+.docs-content {
+  flex: 1;
+
+  @include bp.breakpoint-up(lg) {
+    margin-left: 16rem;
+    transition: margin-left 0.11s cubic-bezier(0.2, 0, 1, 0.9);
+  }
+}

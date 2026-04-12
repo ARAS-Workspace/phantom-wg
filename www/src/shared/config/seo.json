@@ -1,0 +1,18 @@
+{
+  "name": "Phantom-WG",
+  "title": "Phantom-WG",
+  "description": "Temel VPN yönetiminin ötesinde; sansüre dayanıklı bağlantılar, çok katmanlı şifreleme ve gelişmiş gizlilik senaryoları sunar.",
+  "url": "https://www.phantom.tc",
+  "locale": "tr_TR",
+  "author": {
+    "name": "Riza Emre ARAS",
+    "url": "https://www.aras.tc"
+  },
+  "social": {
+    "twitter": null,
+    "linkedin": null,
+    "github": "https://github.com/ARAS-Workspace/phantom-wg"
+  },
+  "defaultImage": "/assets/images/og-image.png",
+  "logo": "/assets/images/logo.png"
+}

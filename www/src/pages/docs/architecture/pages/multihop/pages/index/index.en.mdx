@@ -1,0 +1,107 @@
+import Mermaid from '@shared/components/visualization/Mermaid';
+import { InlineNotification } from '@carbon/react';
+
+# Multihop
+
+Multihop routes client traffic through an **exit server** instead of sending it directly to the internet. The daemon runs two WireGuard interfaces: one serves clients (`wg_phantom_main`), the other connects to the exit tunnel (`wg_phantom_exit`). Firewall rules handle the traffic forwarding between them.
+
+---
+
+## Topology
+
+<Mermaid chart={`flowchart TD
+  subgraph Clients["Clients"]
+    C1["Client 1"]
+    C2["Client 2"]
+    Cn["Client N"]
+  end
+  subgraph Daemon["Phantom Daemon"]
+    WG_MAIN["wg_phantom_main\n:51820/udp"]
+    FW["Firewall\n(forward + masquerade)"]
+    WG_EXIT["wg_phantom_exit"]
+  end
+  subgraph Exit["Exit Server"]
+    ES["WireGuard Peer\n10.0.2.1"]
+  end
+  C1 & C2 & Cn -->|"WireGuard"| WG_MAIN
+  WG_MAIN -->|"forward"| FW
+  FW -->|"masquerade"| WG_EXIT
+  WG_EXIT -->|"WireGuard tunnel"| ES
+  ES -->|"Internet"| I["Internet"]
+`} />
+
+---
+
+## Traffic Flow
+
+When a packet from a client reaches the daemon, firewall rules take over:
+
+<Mermaid chart={`sequenceDiagram
+  participant C as Client
+  participant M as wg_phantom_main
+  participant FW as Firewall (nftables)
+  participant E as wg_phantom_exit
+  participant X as Exit Server
+
+  C->>M: Encrypted packet (WireGuard)
+  M->>FW: Decrypted packet
+  FW->>FW: forward: main→exit (accept)
+  FW->>FW: postrouting: masquerade (SNAT)
+  FW->>E: Forwarded packet
+  E->>X: Encrypted packet (WireGuard tunnel)
+  X-->>E: Response
+  E-->>FW: Decrypted response
+  FW-->>FW: forward: exit→main (established/related)
+  FW-->>M: Response packet
+  M-->>C: Encrypted response
+`} />
+
+---
+
+## Firewall Rules
+
+When multihop is enabled, the `multihop-exit` preset is applied. There are three main rule groups:
+
+### Policy Routing
+
+Table 200 (`mh`) is created. Traffic from the client subnet is directed to this table:
+
+<Mermaid chart={`flowchart TD
+  A["Source: client subnet\n(e.g. 10.8.0.0/24)"] -->|"policy rule"| T["Table 200 (mh)"]
+  T --> R1["10.8.0.0/24 → wg_phantom_main\n(local VPN traffic)"]
+  T --> R2["default → wg_phantom_exit\n(all other traffic)"]
+`} />
+
+### Forward Rules
+
+```text
+main → exit :  accept                       (all client traffic passes through)
+exit → main :  accept (established/related)  (only response traffic returns)
+```
+
+### Masquerade
+
+```text
+postrouting :  source=client subnet, out=wg_phantom_exit → masquerade
+```
+
+Client IPs appear to the exit server as the daemon's tunnel address (SNAT).
+
+---
+
+## Lifecycle
+
+<Mermaid chart={`flowchart TD
+  S["Start"] --> D
+  D["Disabled\nwg_phantom_exit GONE\nfirewall preset removed"]
+  D -->|"enable (select exit)"| E["Enabled\nwg_phantom_exit UP\nfirewall preset active\n1s status polling"]
+  E -->|"disable"| D
+`} />
+
+<InlineNotification
+  kind="info"
+  title="Safe transition."
+  subtitle="To switch to a different exit server, the current connection must be disabled first. This design prevents partial state."
+  hideCloseButton
+  lowContrast
+/>

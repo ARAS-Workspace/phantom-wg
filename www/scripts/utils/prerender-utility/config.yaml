@@ -1,0 +1,24 @@
+production_url: https://www.phantom.tc
+preview_port: 5175
+default_locale: en
+default_theme: white
+locales:
+  - en
+  - tr
+themes:
+  - white
+  - g100
+
+# Sitemap Settings
+exclude_from_sitemap: []
+
+# Playwright Settings
+playwright:
+  headless: true
+  concurrency: 5
+
+# Page Rendering Timeouts (in seconds)
+page_load_timeout: 30
+wait_for_ready_timeout: 15
+network_idle_timeout: 10
+additional_wait: 2

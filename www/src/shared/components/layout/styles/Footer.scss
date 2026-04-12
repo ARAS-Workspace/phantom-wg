@@ -1,0 +1,72 @@
+@use '@carbon/react/scss/spacing' as spacing;
+@use '@carbon/react/scss/type/index' as type;
+@use '@carbon/react/scss/breakpoint' as bp;
+
+.footer {
+  background: var(--cds-layer-01);
+  transition: background 0.25s ease;
+  position: relative;
+  z-index: 8001;
+
+  @include bp.breakpoint-down(lg) {
+    z-index: 7999;
+  }
+}
+
+.footer-separator {
+  width: 100%;
+  height: 1px;
+  background: var(--cds-border-subtle);
+}
+
+.footer-grid {
+  padding: spacing.$spacing-05 0;
+  align-items: center;
+}
+
+.footer-logo-column {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  @include bp.breakpoint-down(md) {
+    margin-bottom: spacing.$spacing-05;
+  }
+}
+
+.footer-content-column {
+  display: flex;
+  flex-direction: column;
+
+  @include bp.breakpoint-down(md) {
+    align-items: center;
+    text-align: center;
+  }
+}
+
+.footer-copyright-text {
+  @include type.type-style('label-01');
+  color: var(--cds-text-secondary);
+  margin: 0 0 spacing.$spacing-02 0;
+}
+
+.footer-trademark {
+  @include type.type-style('helper-text-01');
+  color: var(--cds-text-disabled);
+  margin: 0 0 spacing.$spacing-02 0;
+  line-height: 1.5;
+}
+
+.footer-trademark-notice {
+  @include type.type-style('helper-text-01');
+  color: var(--cds-text-disabled);
+  margin: 0 0 spacing.$spacing-02 0;
+  line-height: 1.5;
+}
+
+.footer-copyright-additional {
+  @include type.type-style('helper-text-01');
+  color: var(--cds-text-disabled);
+  margin: 0;
+  line-height: 1.5;
+}

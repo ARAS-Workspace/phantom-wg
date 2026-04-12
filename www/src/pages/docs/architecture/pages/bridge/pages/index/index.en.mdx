@@ -1,0 +1,198 @@
+import Mermaid from '@shared/components/visualization/Mermaid';
+import { InlineNotification } from '@carbon/react';
+
+# Bridge Structures
+
+The daemon performs system-level operations through native bridge structures. The Python layer manages business logic, while bridge structures communicate directly with the kernel. Both bridges are loaded as `.so` shared libraries via `ctypes` FFI.
+
+<Mermaid chart={`flowchart
+  D["Phantom Daemon\\n(Python)"]
+  D -->|"ctypes FFI"| WGB["wireguard-go-bridge\\n(Go · .so)"]
+  D -->|"ctypes FFI"| FWB["firewall-bridge\\n(Rust · .so)"]
+  WGB -->|"tun.CreateTUN"| TUN["/dev/net/tun\\nWireGuard interfaces"]
+  FWB -->|"nftables API"| NFT["nftables\\nKernel rules"]
+`} />
+
+| Bridge                  | Language | Responsibility                                                              |
+|-------------------------|----------|-----------------------------------------------------------------------------|
+| **wireguard-go-bridge** | Go       | WireGuard userspace, TUN interface creation, peer management, UAPI protocol |
+| **firewall-bridge**     | Rust     | nftables rule groups, routing policy, atomic rule application               |
+
+---
+
+## wireguard-go-bridge
+
+Provides the WireGuard userspace implementation. A separate bridge instance is created for each interface.
+
+### Loading
+
+```python
+from wireguard_go_bridge import WireGuardBridge
+
+bridge = WireGuardBridge(ifname="wg_phantom_main", mtu=1420, db_path="/var/lib/phantom/state/db/wireguard/wg_phantom_main/device.db")
+```
+
+### Lifecycle
+
+<Mermaid chart={`flowchart
+  A["WireGuardBridge()"] --> B["up()"]
+  B --> C["ipc_set / ipc_get"]
+  C --> D["down()"]
+  D --> E["close()"]
+`} />
+
+### IPC Configuration Format (UAPI)
+
+```text
+private_key={hex}
+listen_port={int}
+replace_peers=true
+public_key={hex}
+preshared_key={hex}
+allowed_ip={ipv4}/32
+allowed_ip={ipv6}/128
+persistent_keepalive_interval={int}
+```
+
+### Key Generation
+
+```python
+from wireguard_go_bridge.keys import generate_private_key, derive_public_key, generate_preshared_key
+
+private = generate_private_key()       # Curve25519 (hex)
+public  = derive_public_key(private)   # Public key (hex)
+psk     = generate_preshared_key()     # PSK (hex)
+```
+
+### Exception Types
+
+| Exception           | Description                  |
+|---------------------|------------------------------|
+| `BridgeError`       | Base error class             |
+| `TunCreateError`    | TUN interface creation error |
+| `DeviceCreateError` | Device creation error        |
+| `IpcError`          | IPC communication error      |
+| `DeviceUpError`     | Interface activation error   |
+| `DeviceDownError`   | Interface deactivation error |
+
+---
+
+## firewall-bridge
+
+Provides nftables rule management. Supports group-based rule organization, atomic application, and a preset system.
+
+### Loading
+
+```python
+from firewall_bridge import FirewallBridge
+
+bridge = FirewallBridge(db_path="/var/lib/phantom/state/db/firewall.db")
+```
+
+### Lifecycle
+
+<Mermaid chart={`flowchart
+  A["FirewallBridge()"] --> B["start()"]
+  B --> C["create_group / add_rule"]
+  C --> D["stop()"]
+  D --> E["close()"]
+`} />
+
+### Preset System
+
+Presets are defined in YAML format and support variable interpolation:
+
+#### core.yaml
+
+```yaml
+name: core
+priority: 50
+type: system
+metadata:
+  description: "Core VPN firewall — listen port, forwarding, masquerade"
+
+rules:
+  # wg-listen
+  - chain: input
+    action: accept
+    proto: udp
+    dport: "{listen_port}"
+
+  # established-in
+  - chain: input
+    action: accept
+    state: "established,related"
+
+  # wg-forward-in
+  - chain: forward
+    action: accept
+    in_iface: "{wg_interface}"
+
+  # wg-forward-out
+  - chain: forward
+    action: accept
+    out_iface: "{wg_interface}"
+    state: "established,related"
+
+  # vpn-masquerade
+  - chain: postrouting
+    action: masquerade
+    source: "{ipv4_subnet}"
+```
+
+#### multihop-exit.yaml
+
+```yaml
+name: multihop-exit
+priority: 80
+type: system
+metadata:
+  description: "Multihop exit routing — main VPN to exit tunnel"
+
+table:
+  - ensure: {id: 200, name: mh}
+  - policy: {from: "{ipv4_subnet}", table: mh, priority: 100}
+  - route: {destination: "{ipv4_subnet}", device: "{wg_interface}", table: mh}
+  - route: {destination: default, device: "{wg_interface_exit}", table: mh}
+
+rules:
+  # main → exit forwarding
+  - chain: forward
+    action: accept
+    in_iface: "{wg_interface}"
+    out_iface: "{wg_interface_exit}"
+
+  # exit → main return traffic
+  - chain: forward
+    action: accept
+    in_iface: "{wg_interface_exit}"
+    out_iface: "{wg_interface}"
+    state: "established,related"
+
+  # exit masquerade
+  - chain: postrouting
+    action: masquerade
+    source: "{ipv4_subnet}"
+    out_iface: "{wg_interface_exit}"
+```
+
+### Exception Types
+
+| Exception               | Description                 |
+|-------------------------|-----------------------------|
+| `BridgeError`           | Base error class            |
+| `NftablesError`         | nftables operation error    |
+| `NetlinkError`          | Netlink communication error |
+| `InvalidParamError`     | Invalid parameter           |
+| `PermissionDeniedError` | Permission denied           |
+| `GroupNotFoundError`    | Group not found             |
+| `RuleNotFoundError`     | Rule not found              |
+| `PresetValidationError` | Preset validation error     |
+
+<InlineNotification
+    kind="info"
+    title="Runtime State"
+    subtitle="Both bridge structures persist their state in SQLite databases (device.db, firewall.db). This data reflects OS/kernel state and is not included in backups."
+    hideCloseButton
+    lowContrast
+/>

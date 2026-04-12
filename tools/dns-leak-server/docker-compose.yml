@@ -1,0 +1,21 @@
+services:
+  server:
+    build:
+      context: ./server
+      network: host
+    container_name: dns-leak-server
+    restart: unless-stopped
+    network_mode: host
+    env_file: .env
+    secrets:
+      - shared_secret
+      - tls_cert
+      - tls_key
+
+secrets:
+  shared_secret:
+    file: ./secrets/shared_secret
+  tls_cert:
+    file: ./secrets/certs/tls_cert
+  tls_key:
+    file: ./secrets/certs/tls_key

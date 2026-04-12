@@ -1,0 +1,10 @@
+{
+  "seo": {
+    "title": "Backup & Restore",
+    "description": "Phantom-WG backup and restore mechanism. Tar archive structure, export/import flow, validation layers"
+  },
+  "kv": {
+    "datePublished": "18/03/2026 00:00",
+    "dateModified": "18/03/2026 00:00"
+  }
+}

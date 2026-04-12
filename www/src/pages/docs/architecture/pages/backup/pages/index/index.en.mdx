@@ -1,0 +1,119 @@
+import Mermaid from '@shared/components/visualization/Mermaid';
+import BackupSimulator from '../../shared/components/BackupSimulator';
+import { InlineNotification } from '@carbon/react';
+
+# Backup & Restore
+
+***Phantom-WG*** provides the ability to back up databases containing user-portable values and exports them into a portable `.tar` archive. The archive consists of three files:
+
+```text
+phantom-backup-{timestamp}.tar
+  ├── wallet.db         (client pool, base configurations)
+  ├── exit.db           (exit tunnel configurations, multihop)
+  └── manifest.json     (metadata: version, timestamp, summary)
+```
+
+---
+
+## Manifest
+
+```json
+{
+  "version": "1.0",
+  "timestamp": "2026-03-18T10:23:45.123456+00:00",
+  "wallet": {
+    "clients": 12,
+    "subnet": "10.8.0.0/24",
+    "pool_total": 253,
+    "pool_assigned": 12
+  },
+  "exit_store": {
+    "exits": 2,
+    "enabled": false,
+    "active_exit": ""
+  }
+}
+```
+
+---
+
+## Export
+
+<Mermaid chart={`sequenceDiagram
+  participant R as Request (UDS)
+  participant D as phantom-daemon
+
+  R->>D: POST /backup/export
+  D->>D: SQLite Online Backup API
+  D->>D: Reset exit state
+  D->>D: Build manifest
+  D->>D: Create tar archive
+  D-->>R: FileResponse (.tar)
+`} />
+
+<InlineNotification
+    kind="info"
+    title="WAL-Safe Export"
+    subtitle="SQLite Online Backup API is used. Exports can be performed safely while the daemon is running — no database locks are acquired."
+    hideCloseButton
+    lowContrast
+/>
+
+---
+
+## Import
+
+<Mermaid chart={`sequenceDiagram
+  participant R as Request (UDS)
+  participant D as phantom-daemon
+
+  R->>D: POST /backup/import (multipart)
+  D->>D: Teardown multihop if active
+  D->>D: Tar validation
+  D->>D: PRAGMA integrity_check
+  D->>D: Schema validation
+  D->>D: SQLite Online Backup API (restore)
+  D->>D: WireGuard re-sync
+  D-->>R: RestoreResult
+`} />
+
+---
+
+## Preview
+
+Before import, manifest data is displayed to the user:
+
+<BackupSimulator />
+
+---
+
+## Validation Layers
+
+The backup file goes through two-stage validation before reaching the daemon — first on the SPA side, then on the daemon side:
+
+### Browser-Side Validation (SPA)
+
+| Check         | Rule                                            |
+|---------------|-------------------------------------------------|
+| Extension     | `.tar`                                          |
+| Size          | Max 64 MB                                       |
+| Tar structure | `wallet.db`, `exit.db`, `manifest.json` present |
+| Manifest      | Valid JSON, `version: "1.0"`                    |
+
+### Server-Side Validation (Daemon)
+
+| Check                  | Rule                                                                    |
+|------------------------|-------------------------------------------------------------------------|
+| Tar whitelist          | Only `wallet.db`, `exit.db`, `manifest.json` — extra files are rejected |
+| Path traversal         | Paths like `../../` are blocked                                         |
+| Manifest version       | Invalid version is rejected                                             |
+| PRAGMA integrity_check | Integrity check for both databases                                      |
+| Schema validation      | Required tables and columns are verified                                |
+
+<InlineNotification
+    kind="warning"
+    title="Import replaces all existing state."
+    subtitle="The import operation completely replaces wallet.db and exit.db. WireGuard state is automatically re-synced after the operation. If an active multihop connection exists, it is torn down first."
+    hideCloseButton
+    lowContrast
+/>

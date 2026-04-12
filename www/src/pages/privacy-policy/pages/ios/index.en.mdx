@@ -1,0 +1,65 @@
+# Privacy Policy — Phantom-WG iOS
+
+**Effective date: April 9, 2026**
+
+Phantom-WG iOS ("the App") is a WireGuard VPN client developed by Rıza Emre ARAS. This privacy policy explains how the App handles your data.
+
+## Summary
+
+**The App does not collect, store, or transmit any personal data.** There are no accounts, no analytics, no telemetry, no crash reporting, and no third-party SDKs.
+
+## Data Handling
+
+### What the App Stores
+
+- **Tunnel configurations** (WireGuard private keys, server addresses, DNS settings) are stored exclusively in the iOS Keychain on your device. These are never transmitted to Phantom-WG infrastructure or any third party.
+- **Language preference** (English or Turkish) is stored in local UserDefaults on your device.
+
+### What the App Does NOT Collect
+
+- No personal information (name, email, phone number, etc.)
+- No device identifiers (IDFA, IDFV, serial number, etc.)
+- No usage analytics or behavioral data
+- No crash reports or diagnostic data
+- No location data
+- No browsing history or DNS queries
+- No network traffic logs
+
+### Network Connections
+
+The App connects **only** to the VPN server addresses specified in your imported configuration files. These are servers you own and operate. The App does not contact any Phantom-WG servers, update servers, analytics endpoints, or any other remote service.
+
+In Ghost Mode, the App additionally connects to a wstunnel server address specified in your configuration. This is also a server you own and operate.
+
+### Third-Party Code
+
+The App includes the following open-source components:
+
+- **WireGuardKit** — WireGuard protocol implementation ([wireguard.com](https://www.wireguard.com))
+- **wstunnel** — WebSocket tunnel for Ghost Mode ([github.com/ARAS-Workspace/wstunnel](https://github.com/ARAS-Workspace/wstunnel))
+
+Neither of these components collect or transmit any data independently.
+
+### Privacy Manifest
+
+The App includes an Apple Privacy Manifest (`PrivacyInfo.xcprivacy`) that declares no tracked data types and no required reason APIs beyond those needed for VPN functionality.
+
+## Open Source
+
+The complete source code of the App is publicly available and auditable:
+
+- **iOS client:** [github.com/ARAS-Workspace/phantom-wg/tree/app/ios](https://github.com/ARAS-Workspace/phantom-wg/tree/app/ios)
+- **Server components:** [github.com/ARAS-Workspace/phantom-wg](https://github.com/ARAS-Workspace/phantom-wg)
+- **Documentation:** [phantom.tc/docs](https://www.phantom.tc/docs)
+
+## Changes to This Policy
+
+If this policy is updated, the changes will be reflected on this page with an updated effective date. The App does not have a mechanism to notify users of policy changes because it does not collect contact information.
+
+## Contact
+
+If you have questions about this privacy policy, contact:
+
+**Rıza Emre ARAS**
+Email: r.emrearas@proton.me
+Website: [phantom.tc](https://www.phantom.tc)

@@ -1,0 +1,31 @@
+{
+  "headerNav": [
+    { "label": "Anasayfa", "href": "/" },
+    { "label": "Dokümantasyon", "href": "/docs" },
+    { "label": "GitHub", "href": "https://github.com/ARAS-Workspace/phantom-wg", "external": true }
+  ],
+  "sideNav": [
+    { "label": "Giriş", "href": "/docs" },
+    {
+      "label": "Mimari",
+      "defaultExpanded": true,
+      "children": [
+        { "label": "Sistem Mimarisi", "href": "/docs/architecture" },
+        { "label": "Veritabanı Yapısı", "href": "/docs/architecture/database" },
+        { "label": "Bridge Yapıları", "href": "/docs/architecture/bridge" },
+        { "label": "Terazi Havuzu", "href": "/docs/architecture/terazi" },
+        { "label": "Multihop", "href": "/docs/architecture/multihop" },
+        { "label": "Yedekleme", "href": "/docs/architecture/backup" }
+      ]
+    },
+    { "label": "API Referansı", "href": "/docs/api" },
+    {
+      "label": "Araçlar",
+      "defaultExpanded": true,
+      "children": [
+        { "label": "IP Adresim", "href": "/docs/tools/ip" },
+        { "label": "DNS Sızıntı Testi", "href": "/docs/tools/dns" }
+      ]
+    }
+  ]
+}

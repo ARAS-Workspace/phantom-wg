@@ -1,0 +1,214 @@
+@use '@carbon/styles/scss/components/button';
+@use '@carbon/react/scss/spacing' as spacing;
+@use '@carbon/react/scss/type/index' as type;
+@use '@carbon/react/scss/breakpoint' as bp;
+
+// Landing Content — flex container so Hero fills remaining viewport space
+.landing-content.cds--content {
+  display: flex;
+  flex-direction: column;
+}
+
+.hero-section {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  background: linear-gradient(135deg,
+    var(--cds-layer-01) 0%,
+    var(--cds-layer-accent-01) 100%
+  );
+  padding: spacing.$spacing-07 0;
+  position: relative;
+  overflow: hidden;
+  transition: background 0.25s ease;
+
+  // Prevent excessive stretch on very tall monitors (4K / ultrawide)
+  max-height: calc(100vh - 12rem);
+
+  @include bp.breakpoint-down(md) {
+    flex: none;
+    max-height: none;
+    padding: spacing.$spacing-08 0;
+  }
+}
+
+.hero-grid {
+  width: 100%;
+  position: relative;
+  z-index: 1;
+}
+
+.hero-content {
+  padding: spacing.$spacing-05 0;
+  animation: fadeInUp 0.8s ease-out;
+
+  // Icon sits on top on tablet/mobile — center content below it
+  @include bp.breakpoint-down(xlg) {
+    text-align: center;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+  }
+}
+
+@keyframes fadeInUp {
+  from { opacity: 0; transform: translateY(20px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.hero-title {
+  @include type.type-style('heading-06');
+  font-weight: 700;
+  line-height: 1.1;
+  color: var(--cds-text-primary);
+  margin: 0 0 spacing.$spacing-03 0;
+
+  @include bp.breakpoint-down(md) {
+    @include type.type-style('heading-05');
+  }
+}
+
+.hero-subtitle {
+  @include type.type-style('heading-03');
+  color: var(--cds-text-secondary);
+  margin: 0 0 spacing.$spacing-07 0;
+
+  @include bp.breakpoint-down(md) {
+    @include type.type-style('heading-02');
+  }
+}
+
+.hero-description {
+  @include type.type-style('body-long-02');
+  line-height: 1.6;
+  color: var(--cds-text-secondary);
+  max-width: 42rem;
+  margin-bottom: spacing.$spacing-08;
+
+  @include bp.breakpoint-down(md) {
+    @include type.type-style('body-long-01');
+  }
+}
+
+// Version tiles
+.hero-versions {
+  display: flex;
+  gap: spacing.$spacing-05;
+  flex-wrap: wrap;
+  margin-top: spacing.$spacing-06;
+
+  @include bp.breakpoint-down(xlg) {
+    justify-content: center;
+    width: 100%;
+  }
+
+  @include bp.breakpoint-down(md) {
+    flex-direction: column;
+    align-items: center;
+  }
+}
+
+.hero-version-tile {
+  min-width: 14rem;
+  flex: 1;
+  max-width: 20rem;
+  transition: transform 0.15s ease, background 0.15s ease;
+  border: 1px solid var(--cds-border-subtle);
+
+  &:hover {
+    border-color: var(--cds-border-strong);
+    background: var(--cds-layer-hover-01);
+  }
+
+  // Tablet: stretch tiles to fill available width
+  @include bp.breakpoint-between(md, xlg) {
+    min-width: 0;
+    max-width: none;
+  }
+
+  @include bp.breakpoint-down(md) {
+    min-width: 0;
+    max-width: 100%;
+    width: 100%;
+  }
+
+  &:active {
+    transform: scale(0.98);
+  }
+}
+
+.hero-version-tile__content {
+  display: flex;
+  align-items: center;
+  gap: spacing.$spacing-04;
+}
+
+.hero-version-tile__icon {
+  flex-shrink: 0;
+  color: var(--cds-icon-primary);
+}
+
+.hero-version-tile__text {
+  flex: 1;
+  min-width: 0;
+}
+
+.hero-version-tile__title {
+  @include type.type-style('heading-compact-01');
+  color: var(--cds-text-primary);
+  margin: 0 0 spacing.$spacing-02 0;
+}
+
+.hero-version-tile__desc {
+  @include type.type-style('body-compact-01');
+  color: var(--cds-text-secondary);
+  margin: 0;
+}
+
+.hero-version-tile__arrow {
+  flex-shrink: 0;
+  color: var(--cds-link-primary);
+}
+
+.hero-visual {
+  position: relative;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: auto;
+}
+
+// PhantomIcon in hero — proportional sizing per breakpoint
+.hero-visual-image {
+  width: clamp(180px, 45vw, 280px);
+  height: auto;
+  display: block;
+  position: relative;
+  z-index: 1;
+
+  path, circle {
+    transition: fill 0.25s ease;
+  }
+
+  // Desktop: icon sits beside text, more room available
+  @include bp.breakpoint-up(xlg) {
+    width: clamp(260px, 22vw, 360px);
+  }
+}
+
+.hero-visual-column {
+  margin-bottom: spacing.$spacing-08;
+  order: -1;
+
+  @include bp.breakpoint-down(sm) {
+    margin-bottom: spacing.$spacing-06;
+  }
+
+  @include bp.breakpoint-up(xlg) {
+    order: 1;
+    margin-bottom: 0;
+    padding-left: spacing.$spacing-07;
+  }
+}

@@ -1,0 +1,196 @@
+import Mermaid from '@shared/components/visualization/Mermaid';
+import AsciinemaPlayer from '@shared/components/visualization/AsciinemaPlayer';
+import { InlineNotification } from '@carbon/react';
+
+# Phantom-WG
+
+***Phantom-WG***, kendi sunucunuzda WireGuard VPN altyapısı kurmanızı ve yönetmenizi sağlayan modüler bir araçtır. Temel VPN yönetiminin ötesinde; sansüre dayanıklı bağlantılar, çok katmanlı şifreleme ve gelişmiş gizlilik senaryoları sunar.
+
+***Phantom-WG Modern***, bu vizyonun container-native implementasyonudur. Tüm bileşenler Docker yapısı içerisinde çalışır ve host sistemden izole edilir:
+
+- **Userspace WireGuard** — Go FFI bridge ile container-scoped TUN device. Kernel modülü gerektirmez, host'un network namespace'ine dokunmaz.
+- **nftables netlink FFI** — Rust backend doğrudan kernel ile konuşur. Subprocess çağrısı yoktur, firewall kuralları programatik olarak yönetilir.
+- **SQLite State Persistence** — Tüm state SQLite veritabanlarında tutulur. Crash sonrası daemon restart yeterlidir — kernel state DB'den yeniden oluşturulur.
+- **Dual-Stack IPv6** — Host'ta IPv6 olmasa bile container içinde IPv6 subnet atanır, tünel içinde trafik taşınabilir.
+- **Container İzolasyonu** — `NET_ADMIN` + `NET_RAW` yeterlidir. WireGuard arayüzleri container namespace içerisinde yaşar. `SYS_ADMIN`, `privileged` veya `host` network mode gibi host güvenliğini zayıflatan konfigürasyonlar kullanılmaz.
+
+---
+
+## Topoloji
+
+Üç container, Docker Compose ile yönetilir. Yönetim trafiği TLS + JWT kimlik doğrulamadan geçer, WireGuard trafiği doğrudan daemon'a ulaşır.
+
+<Mermaid chart={`flowchart
+    A[Internet] -->|"HTTPS :443"| B[nginx]
+    B --> C[auth-service]
+    C <-->|"UDS"| D[daemon]
+    A -->|"WireGuard :51820/udp"| D
+`} />
+
+| Bileşen          | Görev                                                                                                |
+|------------------|------------------------------------------------------------------------------------------------------|
+| **nginx**        | TLS sonlandırma, React SPA (Statik Derlenmiş Dosyalar), Reverse Proxy Yapılandırması                 |
+| **auth-service** | Kapsamlı Kimlik Doğrulama (Authentication) Sistemi, UDS üzerinden daemon'a API proxy                 |
+| **daemon**       | Userspace WireGuard (Go FFI), nftables firewall (Rust FFI), İstemci ve Tünel yönetimi, Veritabanları |
+
+---
+
+## Temel Özellikler
+
+### Bridge Mimarisi
+
+Daemon, sistem düzeyindeki işlemleri iki native bridge aracılığıyla gerçekleştirir. Python iş mantığını yönetir, bridge'ler kernel ile doğrudan iletişim kurar.
+
+<Mermaid chart={`graph
+    D["Daemon (Python)"] -->|"ctypes FFI"| WG["wireguard-go-bridge (Go)"]
+    D -->|"ctypes FFI"| FW["firewall-bridge (Rust)"]
+    WG --> TUN["TUN device"]
+    FW --> NFT["nftables kernel"]
+`} />
+
+| Bridge                  | Dil  | Sorumluluk                                              |
+|-------------------------|------|---------------------------------------------------------|
+| **wireguard-go-bridge** | Go   | Userspace WireGuard, TUN device, IPC state persistence  |
+| **firewall-bridge**     | Rust | nftables kural grupları, policy routing, preset sistemi |
+
+### Multihop Exit Routing
+
+Trafiğinizi harici bir WireGuard VPN sunucusu üzerinden aktarmak için exit tünelinizi tanımlayabilirsiniz. IPv4 ve IPv6 tünelleri eş zamanlı olarak desteklenir.
+
+<Mermaid chart={`flowchart LR
+    C[Client] -->|"WireGuard"| M["wg_main"] -->|"forward + masquerade"| E["wg_exit"] --> X[Exit Server]
+`} />
+
+### IPv6 Dual-Stack
+
+IPv6 desteği tüm katmanlarda — firewall kuralları, policy routing, masquerade ve multihop preset'leri `family: 10` (AF_INET6) ile çalışır. Host'ta IPv6 adresi olmadan da container içinden IPv6 tünel trafiği taşınabilir.
+
+### Crash Recovery
+
+Servis başlatıldığında kernel state (nftables kuralları, routing policy'leri) SQLite durum veritabanlarından yeniden oluşturulur. Beklenmeyen kapanma sonrası veri kaybı yaşanmaz.
+
+---
+
+## Kurulum
+
+**Gereksinimler:** Docker Engine 20.10+, Docker Compose v2, bash.
+
+```bash
+curl -sSL get.phantom.tc | bash
+```
+
+<AsciinemaPlayer src="/assets/phantom-wg-install.cast" cols={160} />
+
+### Yapılandırma
+
+```bash
+cd phantom-wg
+
+# İlk kurulum
+./tools/prod.sh setup
+
+# Veya özel subnet ile (bkz. https://www.phantom.tc/docs/architecture/terazi)
+# ./tools/prod.sh setup --terazi-ipv4-subnet=10.9.0.0/24
+
+# Endpoint yapılandırması
+IPV4=$(curl -4 -sSL https://get.phantom.tc/ip)
+IPV6=$(curl -6 -sSL https://get.phantom.tc/ip)
+sed -i "s/^WIREGUARD_ENDPOINT_V4=.*/WIREGUARD_ENDPOINT_V4=${IPV4}/" .env.daemon
+sed -i "s/^WIREGUARD_ENDPOINT_V6=.*/WIREGUARD_ENDPOINT_V6=${IPV6}/" .env.daemon
+
+# Başlatma
+./tools/prod.sh up
+```
+
+**Erişim:**
+- Kontrol Paneli: `https://<sunucu-ip>`
+- WireGuard: UDP port `51820`
+- Admin şifresi: `cat container-data/secrets/production/.admin_password`
+
+#### VPN İçinden Erişim
+
+VPN'e bağlıyken kontrol paneline erişmek için nginx container'ın Docker network adresini kullanabilirsiniz:
+
+```bash
+docker inspect phantom-nginx --format '{{range .NetworkSettings.Networks}}IPv4: {{.IPAddress}} | IPv6: {{.GlobalIPv6Address}}{{end}}'
+```
+
+Tünel içerisinden `https://<IPv4>` veya `https://[<IPv6>]` adresi ile erişilebilir. Dilerseniz `docker-compose.yml` dosyasından `ports: "443:443"` satırını kaldırarak kontrol panelini yalnızca VPN tüneli üzerinden erişilebilir hale getirebilirsiniz.
+
+---
+
+## Yönetim
+
+Yönetim için `./tools/prod.sh` konumunda kullanışlı bir araç bulunur.
+
+| Komut                   | Açıklama                                        |
+|-------------------------|-------------------------------------------------|
+| `setup`                               | Tam Kurulum                                      |
+| `setup --terazi-ipv4-subnet=SUBNET`   | Özel subnet ile kurulum (ör. `10.9.0.0/24`)    |
+| `up`                    | Başlat                                          |
+| `down`                  | Durdur                                          |
+| `restart [service]`     | Yeniden Başlat (Tümü veya Belirli Servis)       |
+| `build`                 | İmaj Derle                                      |
+| `rebuild`               | Sıfırdan İmaj Derle (no-cache)                  |
+| `update`                | Güncelle (git pull + restart)                   |
+| `update --skip-compose` | Güncelle (docker-compose.yml hariç tut)         |
+| `logs [service]`        | Log Takibi (Tümü veya Belirli Servis)           |
+| `status`                | Docker Compose Durumu                           |
+| `show-versions`         | Bileşen Versiyonları (Daemon, Vendor Paketleri) |
+| `shell [service]`       | Shell (varsayılan: daemon)                      |
+| `exec <svc> <cmd>`      | Komut Çalıştır                                  |
+| `hard-reset`            | Tüm Veriyi Sil                                  |
+
+### Kurulum
+
+`setup` komutu ilk kurulumda gerekli tüm bileşenleri oluşturur:
+
+1. `.env.daemon` ve `.env.auth-service` dosyalarını `.example` şablonlarından oluşturur.
+2. WireGuard sunucu anahtar çifti üretir. (Curve25519 — `wg_private_key`, `wg_public_key`)
+3. Auth-Service için bootstrap döngüsü:
+   - Ed25519 imzalama anahtar çifti üretir. (`auth_signing_key`, `auth_verify_key`)
+   - Auth veritabanını oluşturur. (`auth.db` — kullanıcılar, oturumlar, TOTP, audit log)
+   - Admin hesabı oluşturur. (Argon2id hash ile şifrelenen 32 karakterlik rastgele şifre)
+4. Nginx için self-signed TLS sertifikası üretir. (`tls_cert`, `tls_key`)
+
+Tüm bu işlemler container içerisinde gerçekleşir — host tarafında ek bir bağımlılık veya araç kurulumu gerekmez.
+
+Terazi, IP havuzunu oluşturmak için bir base subnet'e ihtiyaç duyar. Varsayılan `10.8.0.0/24` olup `--terazi-ipv4-subnet` argümanı ile kurulumda özelleştirilebilir. Bu değer yalnızca `wallet.db` oluşturulurken kullanılır — veritabanı oluştuktan sonra subnet burada saklanır ve argümana tekrar ihtiyaç duyulmaz. Detaylar için [Terazi dokümantasyonuna](https://www.phantom.tc/docs/architecture/terazi) bakın.
+
+<InlineNotification
+  kind="info"
+  title="Gizli Anahtarlar"
+  subtitle="Gizli anahtarlar container-data/secrets/production/ altında saklanır. Admin şifresi aynı dizindeki .admin_password dosyasına yazılır — giriş yaptıktan sonra güvenle kaldırabilirsiniz."
+  hideCloseButton
+  lowContrast
+/>
+
+### Güncelleme
+
+```bash
+./tools/prod.sh update                 # git pull + restart
+./tools/prod.sh update --skip-compose  # Compose dosyasını koru
+```
+
+<InlineNotification
+  kind="info"
+  title="Compose Koruması"
+  subtitle="docker-compose.yml üzerinde bir yapılandırma değişikliği yaptıysanız ve güncellemeleri almak istiyorsanız --skip-compose kullanın."
+  hideCloseButton
+  lowContrast
+/>
+
+Tekrardan container derlemesi gerektirecek paket bağımlılıkları değişikliklerinde (Dockerfile, requirements.txt):
+
+```bash
+./tools/prod.sh rebuild
+./tools/prod.sh up
+```
+
+<InlineNotification
+  kind="info"
+  title="Build ve Update Farkı"
+  subtitle="Dockerfile'lar yalnızca yapının çalışması için gereken sistem bağımlılıklarını sağlar. Kod güncellemeleri update komutuyla alınır — rebuild yalnızca bu bağımlılıklar değiştiğinde gereklidir."
+  hideCloseButton
+  lowContrast
+/>

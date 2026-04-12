@@ -1,0 +1,65 @@
+name: Deploy phantom-check
+
+on:
+  push:
+    branches:
+      - press-kit
+    paths:
+      - 'workers/check/**'
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    name: Deploy to Cloudflare Workers
+    runs-on: self-hosted
+    permissions:
+      contents: read
+      deployments: write
+
+    steps:
+      - name: Harden runner
+        uses: step-security/harden-runner@58077d3c7e43986b6b15fba718e8ea69e387dfcc # v2.15.1
+        with:
+          egress-policy: audit
+
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+
+      - name: Setup Node.js
+        uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # v6.3.0
+        with:
+          node-version: '24'
+          cache: ''
+
+      - name: Create .env
+        working-directory: workers/check
+        run: |
+          cat > .env << EOF
+          #  █████╗ ██████╗  █████╗ ███████╗
+          # ██╔══██╗██╔══██╗██╔══██╗██╔════╝
+          # ███████║██████╔╝███████║███████╗
+          # ██╔══██║██╔══██╗██╔══██║╚════██║
+          # ██║  ██║██║  ██║██║  ██║███████║
+          # ╚═╝  ╚═╝╚═╝  ╚═╝╚═╝  ╚═╝╚══════╝
+
+          # Cloudflare Authentication for Wrangler CLI
+          CLOUDFLARE_API_TOKEN=${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID=${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          EOF
+
+      - name: Install dependencies
+        working-directory: workers/check
+        run: npm ci
+
+      - name: Deploy to Cloudflare Workers
+        working-directory: workers/check
+        run: npm run deploy
+
+      - name: Cleanup
+        if: always()
+        working-directory: workers/check
+        run: |
+          rm -f .env
+          rm -rf node_modules

@@ -1,0 +1,118 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="30 78 920 144">
+  <defs>
+    <style>
+      :root {
+        --primary-color: #10B981; /* Ana renk - dilediğiniz rengi buraya yazın */
+        --secondary-color: #374151; /* İkincil renk */
+        --bg-color: #1F2937; /* Arka plan rengi */
+        --text-color: #9CA3AF; /* Metin rengi */
+      }
+
+      .line { stroke: var(--secondary-color); stroke-width: 2; fill: none; stroke-dasharray: 5,5; }
+      .node-bg { fill: var(--bg-color); }
+      .node-border { stroke: var(--secondary-color); stroke-width: 2; fill: none; }
+      .node-active { stroke: var(--primary-color); }
+      .text { fill: var(--text-color); font-family:monospace; font-size: 12px; font-weight: 600; }
+      .text-small { fill: var(--text-color); font-family:monospace; font-size: 10px; font-weight: 400; }
+      .icon { fill: var(--text-color); }
+      .icon-active { fill: var(--primary-color); }
+
+      /* Packet Animation */
+      @keyframes travel {
+        0% { offset-distance: 0%; opacity: 1; }
+        95% { opacity: 1; }
+        100% { offset-distance: 100%; opacity: 0; }
+      }
+
+      .packet {
+        offset-path: path('M 100 150 L 300 150 L 500 150 L 700 150 L 900 150');
+        animation: travel 6s ease-in-out infinite;
+        fill: var(--primary-color);
+      }
+    </style>
+  </defs>
+
+  <!-- Connection Lines -->
+  <line class="line" x1="100" y1="150" x2="300" y2="150"/>
+  <line class="line" x1="300" y1="150" x2="500" y2="150"/>
+  <line class="line" x1="500" y1="150" x2="700" y2="150"/>
+  <line class="line" x1="700" y1="150" x2="900" y2="150"/>
+
+  <!-- Nodes -->
+
+  <!-- User Node -->
+  <g transform="translate(100, 150)">
+    <circle class="node-bg" r="30"/>
+    <circle class="node-border" r="30"/>
+    <path class="icon" d="M 0,-10 A 10,10 0 0,1 0,10 A 10,10 0 0,1 0,-10 M 0,-5 A 5,5 0 0,1 0,5 A 5,5 0 0,1 0,-5"/>
+    <text class="text" y="50" text-anchor="middle">You</text>
+    <text class="text-small" y="62" text-anchor="middle">(Client)</text>
+  </g>
+
+  <!-- Wstunnel Client -->
+  <g transform="translate(300, 150)">
+    <circle class="node-bg" r="35"/>
+    <circle class="node-active" r="35"/>
+    <!-- Tunnel Icon -->
+    <rect class="icon-active" x="-15" y="-8" width="30" height="16" rx="8" fill="none" stroke-width="2"/>
+    <circle class="icon-active" cx="-8" cy="0" r="4"/>
+    <circle class="icon-active" cx="8" cy="0" r="4"/>
+    <path class="icon-active" d="M -4,0 L 4,0" stroke-width="2"/>
+    <text class="text" y="55" text-anchor="middle">Wstunnel</text>
+    <text class="text-small" y="67" text-anchor="middle">Client :443</text>
+  </g>
+
+  <!-- Phantom Server (Combined) -->
+  <g transform="translate(500, 150)">
+    <!-- Larger background for combined server -->
+    <rect class="node-bg" x="-60" y="-40" width="120" height="80" rx="40"/>
+    <rect class="node-active" x="-60" y="-40" width="120" height="80" rx="40" fill="none"/>
+
+    <!-- Ghost Icon (top) -->
+    <g transform="translate(0, -15)">
+      <path class="icon-active" d="M 0,-15 Q -12,-15 -12,-5 L -12,10 L -6,4 L 0,10 L 6,4 L 12,10 L 12,-5 Q 12,-15 0,-15" transform="scale(0.8)"/>
+      <circle class="icon-active" cx="-4" cy="-2" r="1.5" transform="scale(0.8)"/>
+      <circle class="icon-active" cx="4" cy="-2" r="1.5" transform="scale(0.8)"/>
+    </g>
+
+    <!-- Divider Line -->
+    <line x1="-40" y1="0" x2="40" y2="0" stroke="var(--secondary-color)" stroke-width="1" opacity="0.5"/>
+
+    <!-- Shield/Lock Icon (bottom) - Wstunnel güvenli bağlantı -->
+    <g transform="translate(0, 15)">
+      <!-- Shield shape -->
+      <path class="icon-active" d="M 0,-10 L -8,-6 L -8,2 Q -8,10 0,12 Q 8,10 8,2 L 8,-6 Z" fill="none" stroke-width="2"/>
+      <!-- Lock inside -->
+      <rect class="icon-active" x="-4" y="-2" width="8" height="6" rx="1" fill="none" stroke-width="1.5"/>
+      <path class="icon-active" d="M -2,-2 L -2,-4 Q -2,-6 0,-6 Q 2,-6 2,-4 L 2,-2" fill="none" stroke-width="1.5"/>
+    </g>
+
+    <text class="text" y="55" text-anchor="middle">Phantom</text>
+    <text class="text-small" y="67" text-anchor="middle">WireGuard Server</text>
+  </g>
+
+  <!-- Exit Node -->
+  <g transform="translate(700, 150)">
+    <circle class="node-bg" r="35"/>
+    <circle class="node-active" r="35"/>
+    <!-- Server Icon -->
+    <rect class="icon-active" x="-10" y="-12" width="20" height="6" rx="1"/>
+    <rect class="icon-active" x="-10" y="-4" width="20" height="6" rx="1"/>
+    <rect class="icon-active" x="-10" y="4" width="20" height="6" rx="1"/>
+    <text class="text" y="60" text-anchor="middle">Exit Node</text>
+  </g>
+
+  <!-- Internet -->
+  <g transform="translate(900, 150)">
+    <circle class="node-bg" r="30"/>
+    <circle class="node-border" r="30"/>
+    <!-- Globe Icon -->
+    <circle class="icon" r="12" fill="none" stroke="var(--text-color)" stroke-width="2"/>
+    <ellipse class="icon" cx="0" cy="0" rx="4" ry="12" fill="none" stroke="var(--text-color)" stroke-width="1.5"/>
+    <line class="icon" x1="-12" y1="0" x2="12" y2="0" stroke="var(--text-color)" stroke-width="1.5"/>
+    <text class="text" y="50" text-anchor="middle">Internet</text>
+  </g>
+
+  <!-- Traveling Packet -->
+  <circle class="packet" r="6"/>
+</svg>

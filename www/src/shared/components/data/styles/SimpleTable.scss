@@ -1,0 +1,6 @@
+@use '@carbon/styles/scss/components/data-table';
+@use '@carbon/styles/scss/spacing' as sp;
+
+.simple-table {
+  margin-bottom: sp.$spacing-05;
+}

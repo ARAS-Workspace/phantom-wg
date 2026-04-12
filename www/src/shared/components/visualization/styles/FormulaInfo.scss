@@ -1,0 +1,118 @@
+@use '@carbon/react/scss/spacing' as spacing;
+
+.formula-info {
+  display: flex;
+  flex-direction: column;
+  gap: spacing.$spacing-03;
+  margin: spacing.$spacing-05 0;
+}
+
+// ── Row (clickable) ─────────────────────────────────────────────
+
+.formula-info__row {
+  display: flex;
+  align-items: center;
+  gap: spacing.$spacing-03;
+  padding: spacing.$spacing-03 spacing.$spacing-04;
+  background: var(--cds-layer-01);
+  border: 1px solid var(--cds-border-subtle);
+  border-left: 3px solid var(--cds-border-interactive);
+  border-radius: 4px;
+  cursor: pointer;
+  transition: background 0.15s ease;
+  width: 100%;
+  text-align: left;
+
+  &:hover {
+    background: var(--cds-layer-hover);
+  }
+
+  &--open {
+    border-bottom-left-radius: 0;
+    border-bottom-right-radius: 0;
+    border-bottom-color: transparent;
+  }
+}
+
+.formula-info__formula {
+  font-family: 'IBM Plex Mono', 'Courier New', monospace;
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--cds-text-primary);
+  flex: 1;
+  min-width: 0;
+  word-break: break-all;
+}
+
+.formula-info__icon {
+  flex-shrink: 0;
+  color: var(--cds-icon-secondary);
+  transition: color 0.15s ease;
+
+  .formula-info__row:hover & {
+    color: var(--cds-icon-primary);
+  }
+
+  .formula-info__row--open & {
+    color: var(--cds-link-primary);
+  }
+}
+
+// ── Detail panel (inline, no popover) ───────────────────────────
+
+.formula-info__detail {
+  padding: spacing.$spacing-04 spacing.$spacing-05;
+  background: var(--cds-layer-02);
+  border: 1px solid var(--cds-border-subtle);
+  border-top: none;
+  border-left: 3px solid var(--cds-border-interactive);
+  border-bottom-left-radius: 4px;
+  border-bottom-right-radius: 4px;
+  animation: formulaSlideDown 0.2s ease;
+}
+
+.formula-info__title {
+  font-size: 0.8125rem;
+  font-weight: 700;
+  color: var(--cds-text-primary);
+  margin: 0 0 spacing.$spacing-03 0;
+}
+
+.formula-info__list {
+  margin: 0 0 spacing.$spacing-03 spacing.$spacing-05;
+  padding: 0;
+
+  li {
+    font-size: 0.8125rem;
+    color: var(--cds-text-secondary);
+    margin-bottom: spacing.$spacing-02;
+    line-height: 1.5;
+
+    code {
+      font-family: 'IBM Plex Mono', 'Courier New', monospace;
+      font-weight: 700;
+      color: var(--cds-text-primary);
+    }
+  }
+}
+
+.formula-info__summary {
+  font-size: 0.8125rem;
+  color: var(--cds-text-secondary);
+  margin: 0;
+  line-height: 1.5;
+  font-style: italic;
+}
+
+// ── Animation ───────────────────────────────────────────────────
+
+@keyframes formulaSlideDown {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}

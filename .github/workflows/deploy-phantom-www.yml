@@ -1,0 +1,99 @@
+name: Deploy phantom-www
+
+on:
+  push:
+    branches:
+      - press-kit
+    paths:
+      - 'www/**'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  deployments: write
+
+jobs:
+  deploy:
+    name: Build and Deploy
+    runs-on: self-hosted
+    steps:
+      - name: Harden runner
+        uses: step-security/harden-runner@58077d3c7e43986b6b15fba718e8ea69e387dfcc # v2.15.1
+        with:
+          egress-policy: audit
+
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+
+      - name: Setup Node.js
+        uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # v6.3.0
+        with:
+          node-version: '24'
+          cache: 'npm'
+          cache-dependency-path: www/package-lock.json
+
+      - name: Create .env.cf
+        working-directory: www
+        run: |
+          cat > .env.cf << EOF
+          #  █████╗ ██████╗  █████╗ ███████╗
+          # ██╔══██╗██╔══██╗██╔══██╗██╔════╝
+          # ███████║██████╔╝███████║███████╗
+          # ██╔══██║██╔══██╗██╔══██║╚════██║
+          # ██║  ██║██║  ██║██║  ██║███████║
+          # ╚═╝  ╚═╝╚═╝  ╚═╝╚═╝  ╚═╝╚══════╝
+
+          # Cloudflare Authentication for Wrangler CLI
+          CLOUDFLARE_API_TOKEN=${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID=${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          EOF
+
+      - name: Create .env.production
+        working-directory: www
+        run: |
+          cat > .env.production << EOF
+          VITE_PHANTOM_CHECK_ENDPOINT=https://check.phantom.tc
+          VITE_PHANTOM_CHECK_TURNSTILE_SITE_KEY=${{ secrets.PHANTOM_CHECK_TURNSTILE_SITE_KEY }}
+          EOF
+
+      - name: Install dependencies
+        run: npm ci
+        working-directory: www
+
+      - name: Generate development certificate
+        run: node scripts/generate_development_certificate.js
+        working-directory: www
+
+      - name: Install Playwright Chromium
+        run: npx playwright install chromium
+        working-directory: www
+
+      - name: Build and prerender
+        run: npm run prod
+        working-directory: www
+
+      - name: Deploy to Cloudflare Pages
+        run: npm run deploy
+        working-directory: www
+
+      - name: Generate timestamp
+        if: success()
+        id: timestamp
+        run: echo "value=$(date +'%Y%m%d-%H%M%S')" >> $GITHUB_OUTPUT
+
+      - name: Upload dist artifact
+        if: success()
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
+        with:
+          name: phantom-www-dist-${{ steps.timestamp.outputs.value }}
+          path: www/dist/
+          retention-days: 14
+
+      - name: Cleanup
+        if: always()
+        working-directory: www
+        run: |
+          rm -f .env.cf .env.production
+          rm -rf dist node_modules

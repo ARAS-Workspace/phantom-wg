@@ -1,0 +1,31 @@
+#  █████╗ ██████╗  █████╗ ███████╗
+# ██╔══██╗██╔══██╗██╔══██╗██╔════╝
+# ███████║██████╔╝███████║███████╗
+# ██╔══██║██╔══██╗██╔══██║╚════██║
+# ██║  ██║██║  ██║██║  ██║███████║
+# ╚═╝  ╚═╝╚═╝  ╚═╝╚═╝  ╚═╝╚══════╝
+
+# Dependencies
+node_modules/
+npm-debug.log*
+
+# Build outputs
+dist/
+build/
+.vite/
+*.local
+
+# IDE
+.idea/
+.claude/
+.playwright-mcp/
+
+# Private
+private/
+
+# OS files
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+*~

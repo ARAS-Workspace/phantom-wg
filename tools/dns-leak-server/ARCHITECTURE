@@ -1,0 +1,178 @@
+DNS Leak Server — Architecture
+================================
+
+A self-contained DNS leak testing service. Clients resolve
+HMAC-signed subdomains; the server captures which DNS resolver
+made the query and returns it via HTTPS in the same request.
+
+
+Query Flow
+----------
+
+    Client (browser)
+      │
+      │  fetch("https://{random}-{hmac}-{ts}.dns-leak-server.phantom.tc/")
+      │
+      ▼
+    Browser DNS Resolver
+      │
+      │  UDP :53 — "What is {random}-{hmac}-{ts}.dns-leak-server.phantom.tc?"
+      │
+      ▼
+    DNS Leak Server (Go, UDP :53)
+      │  1. Parse: random, hmac, timestamp
+      │  2. Verify timestamp (TTL window, default 30s)
+      │  3. Verify HMAC(random + timestamp, shared_secret)
+      │  4. Capture resolver IP (who asked)
+      │  5. Store in memory: cache[random] = resolver_ip
+      │  6. Respond with A record → server's own IP
+      │
+      ▼
+    Browser connects to server IP
+      │
+      │  HTTPS :443 — GET /
+      │  Host: {random}-{hmac}-{ts}.dns-leak-server.phantom.tc
+      │
+      ▼
+    DNS Leak Server (Go, HTTPS :443)
+      │  1. Parse random from Host header
+      │  2. LoadAndDelete(random) from cache
+      │  3. Return JSON: {"resolver_ip": "8.8.8.8"}
+      │
+      ▼
+    Client receives resolver IP directly
+
+
+Subdomain Format
+----------------
+
+    {random}-{hmac}-{timestamp}.dns-leak-server.phantom.tc
+
+    random    16 hex chars, unique per query
+    hmac      HMAC-SHA256(random + timestamp, shared_secret)[:16]
+    timestamp Unix seconds (stateless expiry)
+
+    Single subdomain level — wildcard TLS cert matches.
+    Dash-separated — parsed by splitting on "-".
+
+
+Token Security
+--------------
+
+    Worker generates:  random + timestamp → HMAC → subdomain
+    DNS server verifies: HMAC + timestamp window
+    No valid subdomain can be forged without shared_secret.
+    Expired tokens rejected without state lookup.
+
+
+Container Architecture
+----------------------
+
+    docker-compose.yml
+    ├── dns-leak-server (Go binary)
+    │     network_mode: host
+    │     UDP :53  — DNS handler (HMAC verify + resolver capture)
+    │     TCP :443 — HTTPS handler (resolver IP response)
+    │     env_file: .env
+    │     secrets: shared_secret, tls_cert, tls_key
+    │
+    └── Secrets (Docker secrets from files)
+          /run/secrets/shared_secret
+          /run/secrets/tls_cert
+          /run/secrets/tls_key
+
+
+Zone Infrastructure
+-------------------
+
+    DNS server also handles zone queries for delegation:
+
+    SOA   dns-leak-server.phantom.tc  → ns-leak-1.phantom.tc
+    NS    dns-leak-server.phantom.tc  → ns-leak-1.phantom.tc
+    CAA   dns-leak-server.phantom.tc  → issue "letsencrypt.org"
+
+    Non-matching queries receive REFUSED.
+
+
+ACME Certificate Issuance
+-------------------------
+
+    acme/ directory contains a minimal Go DNS server + certbot
+    for wildcard certificate issuance via DNS-01 challenge.
+
+    tools/prod.sh setup:
+      1. Generates shared_secret (openssl rand -hex 32)
+      2. Stops main DNS server (frees port 53)
+      3. Runs ACME container:
+         - Go DNS server handles _acme-challenge TXT + CAA + SOA
+         - Certbot requests *.dns-leak-server.phantom.tc
+         - Certificate saved to secrets/certs/
+      4. Outputs tls_cert + tls_key
+
+    tools/prod.sh renew-cert:
+      Same flow, for renewal (cron: every 60 days).
+
+
+File Structure
+--------------
+
+    dns-leak-server/
+    ├── server/
+    │   ├── main.go          DNS + HTTPS server
+    │   ├── Dockerfile       Multi-stage Go build
+    │   ├── go.mod
+    │   └── go.sum
+    ├── acme/
+    │   ├── main.go          ACME DNS-01 challenge server
+    │   ├── Dockerfile       Go build + certbot
+    │   ├── entrypoint.sh    Orchestrates DNS + certbot
+    │   ├── auth-hook.sh     Certbot manual auth hook
+    │   ├── go.mod
+    │   └── go.sum
+    ├── secrets/
+    │   ├── .gitkeep         shared_secret goes here
+    │   └── certs/
+    │       └── .gitkeep     tls_cert + tls_key go here
+    ├── tools/
+    │   └── prod.sh          setup, up, down, rebuild, renew-cert, logs, status
+    ├── docker-compose.yml
+    ├── .env.example         DNS_ZONE, NS_HOST, SERVER_IPV4/V6, TOKEN_TTL, ACME_EMAIL
+    ├── DNS_RECORDS          Cloudflare DNS configuration reference
+    └── ARCHITECTURE         This file
+
+
+Cloudflare DNS Records
+----------------------
+
+    dns-leak-server.phantom.tc    NS      ns-leak-1.phantom.tc
+    ns-leak-1.phantom.tc          A       <server IPv4>
+    ns-leak-1.phantom.tc          AAAA    <server IPv6>
+
+    All records: DNS only (no proxy).
+
+
+Worker Integration (check.phantom.tc)
+-------------------------------------
+
+    Cloudflare Worker generates HMAC-signed subdomains:
+
+    POST /dns/start (with Turnstile token)
+      → Returns array of subdomains
+
+    Client fetches each subdomain:
+      → DNS resolve captures resolver IP
+      → HTTPS response returns it immediately
+
+    No KV, no polling, no server-to-worker communication.
+    Results flow directly: DNS server → HTTPS → client.
+
+
+Environment Variables (.env)
+----------------------------
+
+    DNS_ZONE        Zone name (dns-leak-server.phantom.tc)
+    NS_HOST         NS hostname (ns-leak-1.phantom.tc)
+    SERVER_IPV4     Server public IPv4 (returned as A record)
+    SERVER_IPV6     Server public IPv6 (returned as AAAA record)
+    TOKEN_TTL       HMAC token expiry in seconds (default: 30)
+    ACME_EMAIL      Let's Encrypt registration email

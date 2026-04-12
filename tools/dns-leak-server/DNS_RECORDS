@@ -1,0 +1,10 @@
+Cloudflare DNS Records for dns-leak-server
+
+Zone: phantom.tc
+
+NS delegation:
+  dns-leak-server.phantom.tc    NS    ns-leak-1.phantom.tc
+
+Glue records:
+  ns-leak-1.phantom.tc          A     <server IPv4>
+  ns-leak-1.phantom.tc          AAAA  <server IPv6>

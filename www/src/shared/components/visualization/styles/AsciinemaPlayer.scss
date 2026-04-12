@@ -1,0 +1,16 @@
+@use '@carbon/react/scss/spacing' as sp;
+
+.asciinema-player-wrapper {
+  margin-bottom: sp.$spacing-07;
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.asciinema-player-skeleton {
+  min-height: 400px;
+}
+
+.asciinema-player-skeleton__inner {
+  width: 100%;
+  height: 400px;
+}

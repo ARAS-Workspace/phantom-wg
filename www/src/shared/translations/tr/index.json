@@ -1,0 +1,173 @@
+{
+  "_meta": {
+    "code": "tr",
+    "nativeName": "Türkçe",
+    "flag": "/assets/flags/tr.svg"
+  },
+  "header": {
+    "appName": "Phantom-WG",
+    "darkMode": "Koyu tema",
+    "lightMode": "Açık tema"
+  },
+  "language": {
+    "switchTo": "English"
+  },
+  "loadingSpinner": {
+    "loading": "Yükleniyor...",
+    "pageLoading": "Sayfa yükleniyor..."
+  },
+  "common": {
+    "loading": "Yükleniyor...",
+    "error": "Bir hata oluştu"
+  },
+  "footer": {
+    "copyright": {
+      "text": "© 2025 Rıza Emre ARAS - Tüm hakları saklıdır.",
+      "trademark": "WireGuard® Jason A. Donenfeld'in tescilli ticari markasıdır.",
+      "trademarkNotice": "Bu proje; Jason A. Donenfeld, ZX2C4 veya Edge Security ile herhangi bir şekilde bağlantılı, ortaklı, yetkili veya onaylı değildir.",
+      "additionalText": "ARAS Workspace - <a href='https://github.com/ARAS-Workspace/phantom-wg' target='_blank' rel='noopener noreferrer'>@ARAS-Workspace/phantom-wg</a>"
+    }
+  },
+  "dinoGame": {
+    "startMessage": "Başlamak için tıkla veya Yukarı ok tuşu",
+    "gameOver": "Oyun Bitti",
+    "restartMessage": "Tekrar denemek için tıkla",
+    "score": "Puan"
+  },
+  "errorPages": {
+    "notFound": {
+      "code": "404",
+      "title": "Sayfa Bulunamadı",
+      "description": "Aradığınız sayfa mevcut değil veya taşınmış olabilir.",
+      "backHome": "Anasayfa",
+      "goBack": "Geri Dön"
+    },
+    "serverError": {
+      "code": "503",
+      "title": "Hizmet Kullanılamıyor",
+      "description": "Sunucu geçici olarak kullanılamıyor. Lütfen daha sonra tekrar deneyin.",
+      "backHome": "Anasayfa",
+      "reload": "Yenile"
+    },
+    "generic": {
+      "code": "Hata",
+      "title": "Bir şeyler ters gitti",
+      "defaultMessage": "Beklenmeyen bir hata oluştu.",
+      "technicalDetails": "Teknik Detaylar"
+    }
+  },
+  "mermaid": {
+    "loading": {
+      "title": "Diyagram Yükleniyor",
+      "subtitle": "Lütfen bekleyin..."
+    },
+    "error": {
+      "title": "Diyagram Yüklenemedi",
+      "subtitle": "Diyagram render edilirken bir hata oluştu",
+      "containerNotReady": "Diyagram konteyneri hazır değil",
+      "emptyContent": "Boş diyagram içeriği",
+      "svgNotFound": "SVG elementi bulunamadı",
+      "svgEmpty": "SVG içeriği boş",
+      "renderFailed": "Diyagram render edilemedi",
+      "syntaxError": "Diyagram sözdizimi hatalı. Lütfen kontrol edin.",
+      "unsupportedType": "Desteklenmeyen diyagram türü veya komut.",
+      "helpTitle": "Mermaid diyagram sözdizimini kontrol edin. Yaygın hatalar",
+      "commonErrors": {
+        "arrows": "Eksik veya hatalı ok işaretleri",
+        "specialChars": "Düğüm adlarında özel karakterler",
+        "indentation": "Hatalı girintileme veya boşluk kullanımı",
+        "unsupported": "Desteklenmeyen diyagram türü"
+      },
+      "codeTitle": "Diyagram Kodu",
+      "retry": "Tekrar Dene",
+      "copyCode": "Kodu Kopyala"
+    },
+    "controls": {
+      "zoomIn": "Yakınlaştır",
+      "zoomOut": "Uzaklaştır",
+      "resetZoom": "Sıfırla",
+      "fullscreen": "Tam Ekran",
+      "copyCode": "Kodu Kopyala",
+      "download": "SVG İndir",
+      "refresh": "Yenile"
+    },
+    "modal": {
+      "close": "Kapat"
+    }
+  },
+  "documentation": {
+    "poolSimulator": {
+      "assign": "İstemci Ekle",
+      "revoke": "İstemci Kaldır",
+      "cidrSim": "CIDR Değişikliği",
+      "assigned": "atanmış",
+      "free": "boş",
+      "caption": "Simüle wallet.db users tablosu — alt ağ",
+      "slots": "kullanılabilir slot",
+      "phaseBackup": "İstemciler yedekleniyor",
+      "phaseClear": "Havuz temizleniyor",
+      "phaseRebuild": "Yeni alt ağla yeniden oluşturuluyor",
+      "phaseReassign": "İstemciler yeniden atanıyor",
+      "phaseDone": "Tamamlandı",
+      "cinemaStart": "CIDR değişikliği simülasyonu başladı",
+      "cinemaStage": "Aşama",
+      "cinemaFillStart": "Havuz kapasiteye dolduruluyor",
+      "cinemaFull": "Havuz dolu — CIDR genişlemesi tetikleniyor",
+      "cinemaSubnet": "Sahneleme alt ağı",
+      "cinemaAddClients": "demo istemci eklendi",
+      "cinemaBackedUp": "istemci yedeklendi",
+      "cinemaCleared": "Havuz temizlendi",
+      "cinemaNewSubnet": "Yeni havuz hazır —",
+      "cinemaRestore": "Orijinal durumunuz geri yükleniyor",
+      "cinemaDone": "Bitti — durumunuz geri yüklendi"
+    }
+  },
+  "tools": {
+    "ipCheck": {
+      "title": "IP Adresim",
+      "description": "Genel IP adresiniz ve bağlantı detaylarınız.",
+      "loading": "IP adresiniz tespit ediliyor...",
+      "error": "IP adresiniz tespit edilemedi.",
+      "field": "Anahtar",
+      "value": "Değer",
+      "ip": "IP Adresi",
+      "location": "Konum",
+      "isp": "İSS",
+      "asn": "ASN"
+    },
+    "dnsLeak": {
+      "title": "DNS Sızıntı Testi",
+      "description": "DNS sorgularınızın VPN tüneliniz dışına sızıp sızmadığını kontrol edin.",
+      "startButton": "Testi Başlat",
+      "resetButton": "Sıfırla",
+      "resolving": "DNS sorguları çözümleniyor...",
+      "enriching": "Çözümleyici detayları alınıyor...",
+      "error": "Test başarısız oldu. Lütfen tekrar deneyin.",
+      "errorTurnstile": "Doğrulama başarısız oldu. Sayfayı yenileyip tekrar deneyin.",
+      "errorGenerate": "Test başlatılamadı. Lütfen tekrar deneyin.",
+      "errorNoResolvers": "DNS çözümleyici tespit edilemedi. Bağlantınızı kontrol edin.",
+      "errorNetwork": "Ağ hatası. Bağlantınızı kontrol edip tekrar deneyin.",
+      "ip": "Çözümleyici IP",
+      "location": "Konum",
+      "isp": "İSS",
+      "asn": "ASN",
+      "received": "alındı",
+      "of": "/"
+    }
+  },
+  "apiDoc": {
+    "error": "API spesifikasyonu yüklenemedi.",
+    "version": "Sürüm",
+    "parameters": "Parametreler",
+    "name": "Ad",
+    "location": "Konum",
+    "type": "Tür",
+    "required": "Zorunlu",
+    "description": "Açıklama",
+    "requestBody": "İstek Gövdesi",
+    "responses": "Yanıtlar",
+    "noParameters": "Parametre yok",
+    "noResponse": "Yanıt gövdesi yok",
+    "endpoints": "uç nokta"
+  }
+}

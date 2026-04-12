@@ -1,0 +1,10 @@
+{
+  "seo": {
+    "title": "Multihop",
+    "description": "Discover the Multihop architecture that creates a double VPN layer by routing your traffic through an external WireGuard server."
+  },
+  "kv": {
+    "datePublished": "16/03/2025 00:00",
+    "dateModified": "16/03/2025 00:00"
+  }
+}

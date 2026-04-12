@@ -1,0 +1,143 @@
+{
+  "_meta": {
+    "code": "en",
+    "nativeName": "English",
+    "flag": "/assets/flags/en.svg"
+  },
+  "header": {
+    "appName": "Phantom-WG",
+    "darkMode": "Dark mode",
+    "lightMode": "Light mode"
+  },
+  "language": {
+    "switchTo": "Türkçe"
+  },
+  "loadingSpinner": {
+    "loading": "Loading...",
+    "pageLoading": "Loading page..."
+  },
+  "common": {
+    "loading": "Loading...",
+    "error": "An error occurred"
+  },
+  "footer": {
+    "copyright": {
+      "text": "© 2025 Rıza Emre ARAS - All Rights Reserved.",
+      "trademark": "WireGuard® is a registered trademark of Jason A. Donenfeld.",
+      "trademarkNotice": "This project is not affiliated, associated, authorized, endorsed by, or in any way officially connected with Jason A. Donenfeld, ZX2C4 or Edge Security.",
+      "additionalText": "ARAS Workspace - <a href='https://github.com/ARAS-Workspace/phantom-wg' target='_blank' rel='noopener noreferrer'>@ARAS-Workspace/phantom-wg</a>"
+    }
+  },
+  "dinoGame": {
+    "startMessage": "Click or press Up arrow to start",
+    "gameOver": "Game Over",
+    "restartMessage": "Click to try again",
+    "score": "Score"
+  },
+  "errorPages": {
+    "notFound": {
+      "code": "404",
+      "title": "Page Not Found",
+      "description": "The page you are looking for does not exist or may have been moved.",
+      "backHome": "Home",
+      "goBack": "Go Back"
+    },
+    "serverError": {
+      "code": "503",
+      "title": "Service Unavailable",
+      "description": "The server is temporarily unavailable. Please try again later.",
+      "backHome": "Home",
+      "reload": "Reload"
+    },
+    "generic": {
+      "code": "Error",
+      "title": "Something went wrong",
+      "defaultMessage": "An unexpected error occurred.",
+      "technicalDetails": "Technical Details"
+    }
+  },
+  "mermaid": {
+    "loading": { "title": "Loading Diagram", "subtitle": "Please wait..." },
+    "error": {
+      "title": "Diagram Failed to Load",
+      "subtitle": "An error occurred while rendering the diagram",
+      "containerNotReady": "Diagram container is not ready",
+      "emptyContent": "Empty diagram content",
+      "svgNotFound": "SVG element not found",
+      "svgEmpty": "SVG content is empty",
+      "renderFailed": "Failed to render diagram",
+      "syntaxError": "Diagram syntax error. Please check.",
+      "unsupportedType": "Unsupported diagram type or command.",
+      "helpTitle": "Check Mermaid diagram syntax. Common errors",
+      "commonErrors": { "arrows": "Missing or incorrect arrow notation", "specialChars": "Special characters in node names", "indentation": "Incorrect indentation or spacing", "unsupported": "Unsupported diagram type" },
+      "codeTitle": "Diagram Code",
+      "retry": "Try Again",
+      "copyCode": "Copy Code"
+    },
+    "controls": { "zoomIn": "Zoom In", "zoomOut": "Zoom Out", "resetZoom": "Reset", "fullscreen": "Fullscreen", "copyCode": "Copy Code", "download": "Download SVG", "refresh": "Refresh" },
+    "modal": { "close": "Close" }
+  },
+  "documentation": {
+    "poolSimulator": {
+      "assign": "Add Client", "revoke": "Revoke Client", "cidrSim": "CIDR Change",
+      "assigned": "assigned", "free": "free",
+      "caption": "Simulated wallet.db users table — subnet", "slots": "usable slots",
+      "phaseBackup": "Backing up clients", "phaseClear": "Clearing pool",
+      "phaseRebuild": "Rebuilding with new subnet", "phaseReassign": "Reassigning clients",
+      "phaseDone": "Complete", "cinemaStart": "CIDR change simulation started", "cinemaStage": "Stage",
+      "cinemaFillStart": "Filling pool to capacity", "cinemaFull": "Pool full — triggering CIDR expansion",
+      "cinemaSubnet": "Staging subnet", "cinemaAddClients": "demo clients added",
+      "cinemaBackedUp": "clients backed up", "cinemaCleared": "Pool cleared",
+      "cinemaNewSubnet": "New pool ready —", "cinemaRestore": "Restoring your original state",
+      "cinemaDone": "Done — your state has been restored"
+    }
+  },
+  "tools": {
+    "ipCheck": {
+      "title": "My IP Address",
+      "description": "Your public IP address and connection details.",
+      "loading": "Detecting your IP address...",
+      "error": "Could not detect your IP address.",
+      "field": "Field",
+      "value": "Value",
+      "ip": "IP Address",
+      "location": "Location",
+      "isp": "ISP",
+      "asn": "ASN"
+    },
+    "dnsLeak": {
+      "title": "DNS Leak Test",
+      "description": "Check if your DNS queries are leaking outside your VPN tunnel.",
+      "startButton": "Start Test",
+      "resetButton": "Reset",
+      "resolving": "Resolving DNS queries...",
+      "enriching": "Looking up resolver details...",
+      "error": "Test failed. Please try again.",
+      "errorTurnstile": "Verification failed. Please refresh and try again.",
+      "errorGenerate": "Could not start the test. Please try again.",
+      "errorNoResolvers": "No DNS resolvers were detected. Please check your connection.",
+      "errorNetwork": "Network error. Please check your connection and try again.",
+      "ip": "Resolver IP",
+      "location": "Location",
+      "isp": "ISP",
+      "asn": "ASN",
+      "received": "received",
+      "of": "of"
+    }
+  },
+  "apiDoc": {
+    "error": "Failed to load API specification.",
+    "version": "Version",
+    "parameters": "Parameters",
+    "name": "Name",
+    "location": "Location",
+    "type": "Type",
+    "required": "Required",
+    "description": "Description",
+    "requestBody": "Request Body",
+    "responses": "Responses",
+    "noParameters": "No parameters",
+    "noResponse": "No response body",
+    "endpoints": "endpoints"
+  }
+}

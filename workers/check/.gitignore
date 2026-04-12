@@ -1,0 +1,20 @@
+# Environment variables
+.env
+.dev.vars
+
+# Dependencies
+node_modules/
+
+# Wrangler
+.wrangler/
+worker-configuration.d.ts
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db

@@ -1,0 +1,170 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later
+/**
+ *  █████╗ ██████╗  █████╗ ███████╗
+ * ██╔══██╗██╔══██╗██╔══██╗██╔════╝
+ * ███████║██████╔╝███████║███████╗
+ * ██╔══██║██╔══██╗██╔══██║╚════██║
+ * ██║  ██║██║  ██║██║  ██║███████║
+ * ╚═╝  ╚═╝╚═╝  ╚═╝╚═╝  ╚═╝╚══════╝
+ *
+ * Copyright (C) 2025 Rıza Emre ARAS <r.emrearas@proton.me>
+ *
+ * This file is part of ARTEK Homepage.
+ *
+ * ARTEK Homepage is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Affero General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+ * GNU Affero General Public License for more details.
+ *
+ * You should have received a copy of the GNU Affero General Public License
+ * along with this program. If not, see <https://www.gnu.org/licenses/>.
+ */
+
+// ===================================
+// COMPONENT CSS IMPORTS
+// ===================================
+// Import Carbon component styles needed for Error
+@use '@carbon/react/scss/components/button';
+
+// ===================================
+// UTILITY IMPORTS
+// ===================================
+@use '@carbon/react/scss/spacing' as spacing;
+@use '@carbon/react/scss/breakpoint' as breakpoint;
+
+// Layout
+.error-page-container {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 100vh;
+  padding: spacing.$spacing-05;
+}
+
+.error-page-content {
+  max-width: 42rem;
+  text-align: center;
+}
+
+// Visual Elements
+.error-icon-wrapper {
+  display: inline-block;
+  margin-bottom: spacing.$spacing-06;
+
+  svg {
+    width: 6rem !important;
+    height: 6rem !important;
+  }
+
+  &--server {
+    svg {
+      color: var(--cds-support-error);
+    }
+  }
+}
+
+.error-icon {
+  color: var(--cds-icon-primary);
+  opacity: 0.9;
+
+  &--server {
+    color: var(--cds-support-error);
+    opacity: 1;
+  }
+}
+
+// Typography
+.error-code {
+  font-size: 5rem;
+  font-weight: 700;
+  margin-bottom: spacing.$spacing-03;
+  color: var(--cds-text-primary);
+}
+
+.error-title {
+  font-size: 1.5rem;
+  font-weight: 500;
+  margin-bottom: spacing.$spacing-05;
+  color: var(--cds-text-primary);
+}
+
+.error-description {
+  margin-bottom: spacing.$spacing-07;
+  color: var(--cds-text-secondary);
+}
+
+// Game Area
+.error-game-area {
+  margin-block: spacing.$spacing-07;
+  padding: spacing.$spacing-05;
+}
+
+// Actions
+.error-actions {
+  display: flex;
+  gap: spacing.$spacing-05;
+  justify-content: center;
+  flex-wrap: wrap;
+}
+
+// Developer Details
+.error-details {
+  margin-top: spacing.$spacing-07;
+  padding: spacing.$spacing-05;
+  background: var(--cds-layer-02);
+  border: 1px solid var(--cds-border-subtle-01);
+  border-radius: 4px;
+  text-align: left;
+
+  summary {
+    cursor: pointer;
+    color: var(--cds-text-secondary);
+    margin-bottom: spacing.$spacing-03;
+
+    &:hover {
+      color: var(--cds-text-primary);
+    }
+  }
+}
+
+.error-stack {
+  margin: 0;
+  padding: spacing.$spacing-05;
+  background: var(--cds-background);
+  border-radius: 2px;
+  overflow-x: auto;
+  color: var(--cds-text-error);
+  white-space: pre-wrap;
+  word-break: break-all;
+}
+
+// Responsive Breakpoints
+@include breakpoint.breakpoint-down(md) {
+  .error-code {
+    font-size: 3rem;
+  }
+
+  .error-title {
+    font-size: 1.25rem;
+  }
+
+  .error-icon-wrapper {
+    svg {
+      width: 4.5rem !important;
+      height: 4.5rem !important;
+    }
+  }
+
+  .error-actions {
+    flex-direction: column;
+
+    button {
+      width: 100%;
+    }
+  }
+}

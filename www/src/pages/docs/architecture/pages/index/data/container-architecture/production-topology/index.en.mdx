@@ -1,0 +1,34 @@
+import Mermaid from '@shared/components/visualization/Mermaid';
+import {InlineNotification} from "@carbon/react";
+
+***Production Topology*** consists of three containers orchestrated via Docker Compose. The primary objective of this architecture is to securely forward queries to the ***Daemon***.
+
+<Mermaid chart={`flowchart
+    A[Internet] -->|"HTTPS :443 TLS"| B[phantom-nginx]
+    B -->|"/auth/*  /api/*"| C[phantom-auth]
+    C <-->|"UNIX socket\\ndaemon.sock"| D[phantom-daemon]
+
+    A -->|"WireGuard\\nUDP 51820"| D
+`} />
+
+There are two distinct traffic paths that reach the ***Daemon***.
+
+<Mermaid chart={`flowchart LR
+  A[":443 HTTPS"] --> N["nginx"] --> AS["auth-service"] --> D["phantom-daemon"]
+  B[":51820 UDP"] --> D
+`} />
+
+
+**Management Traffic (User Interaction)** (`:443`): Internet → phantom-nginx → phantom-auth → phantom-daemon
+
+**VPN Traffic** (`:51820/udp`): WireGuard clients connect directly to phantom-daemon.
+
+The UDS socket (`daemon.sock`) is shared with phantom-auth via a Docker named volume.
+
+<InlineNotification
+    kind="info"
+    title="Flexible Configuration"
+    subtitle="The port values specified for internal and external communication are configurable. However, this requires additional configuration and environment variable adjustments."
+    hideCloseButton
+    lowContrast
+/>

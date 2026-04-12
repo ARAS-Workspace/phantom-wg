@@ -1,0 +1,428 @@
+@use '@carbon/react/scss/components/button';
+@use '@carbon/react/scss/components/modal';
+@use '@carbon/react/scss/components/notification';
+@use '@carbon/react/scss/components/loading';
+
+@use '@carbon/react/scss/breakpoint' as bp;
+@use '@carbon/react/scss/theme' as theme;
+@use '@carbon/react/scss/spacing' as spacing;
+@use '@carbon/react/scss/config' as config;
+
+.mermaid-wrapper {
+  margin: spacing.$spacing-07 0;
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
+
+  * {
+    box-sizing: border-box;
+  }
+  svg, .mermaid-container, .mermaid-tile {
+    max-width: 100%;
+  }
+
+  @include bp.breakpoint-down(md) {
+    margin: spacing.$spacing-05 0;
+  }
+
+  @include bp.breakpoint-down(sm) {
+    margin: spacing.$spacing-04 0;
+  }
+}
+
+.mermaid-tile {
+  padding: 0;
+  background: transparent;
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  border: none;
+  box-shadow: none;
+  width: 100%;
+}
+
+.mermaid-controls {
+  flex-shrink: 0;
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: spacing.$spacing-03 spacing.$spacing-05;
+  background: transparent;
+  border-bottom: none;
+  margin-bottom: spacing.$spacing-03;
+
+  &__separator {
+    width: 1px;
+    height: 24px;
+    background: var(--cds-border-subtle);
+    margin: 0 spacing.$spacing-03;
+  }
+
+  &__zoom-level {
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: var(--cds-text-secondary);
+    margin-left: spacing.$spacing-03;
+    padding: spacing.$spacing-02 spacing.$spacing-03;
+    background: transparent;
+    border-radius: 4px;
+  }
+
+  .#{config.$prefix}--btn-set {
+    display: flex;
+    align-items: center;
+    gap: spacing.$spacing-02;
+  }
+
+  @include bp.breakpoint-down(sm) {
+    padding: spacing.$spacing-02 spacing.$spacing-03;
+    margin-bottom: 0;
+
+    .#{config.$prefix}--btn--icon-only {
+      padding: spacing.$spacing-01;
+      width: 32px;
+      height: 32px;
+    }
+  }
+}
+
+.mermaid-container-wrapper {
+  flex: 1;
+  overflow: visible;
+  min-height: 200px;
+  position: relative;
+  padding: spacing.$spacing-06;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  background: transparent;
+  user-select: none;
+  touch-action: none;
+
+  @include bp.breakpoint-down(md) {
+    min-height: 200px;
+    padding: spacing.$spacing-05;
+  }
+
+  @include bp.breakpoint-down(sm) {
+    min-height: 150px;
+    padding: 0 spacing.$spacing-03;
+  }
+
+  &::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+
+  &::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  &::-webkit-scrollbar-thumb {
+    background: var(--cds-border-subtle);
+    border-radius: 4px;
+
+    &:hover {
+      background: var(--cds-text-secondary);
+    }
+  }
+}
+
+.mermaid-container {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+
+  svg {
+    display: block;
+    margin: 0 auto;
+
+    @include bp.breakpoint-down(sm) {
+      transform: scale(0.65);
+      margin-top: -50px;
+    }
+    @include bp.breakpoint-up(md) {
+      transform: scale(0.98);
+    }
+    @include bp.breakpoint-up(lg) {
+      transform: scale(0.98);
+      transform-origin: center;
+    }
+  }
+}
+
+.mermaid-container text,
+.mermaid-fullscreen-modal text {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans", Helvetica, Arial, sans-serif !important;
+  transition: fill 0.2s ease;
+
+  [data-carbon-theme='white'] & {
+    fill: var(--cds-text-primary) !important;
+  }
+
+  [data-carbon-theme='g90'] &,
+  [data-carbon-theme='g100'] & {
+    fill: var(--cds-text-primary) !important;
+  }
+}
+
+.mermaid-loading-container {
+  width: 100%;
+  margin-bottom: spacing.$spacing-06;
+
+  .#{config.$prefix}--inline-notification {
+    max-width: 100%;
+    min-width: 0;
+    margin-top: spacing.$spacing-05;
+    margin-bottom: spacing.$spacing-05;
+
+    @include bp.breakpoint-down(sm) {
+      margin-bottom: spacing.$spacing-03;
+    }
+  }
+}
+
+.mermaid-loading-details {
+  width: 100%;
+  padding: spacing.$spacing-05;
+  background: var(--cds-layer-01);
+  border-radius: 4px;
+  margin-top: spacing.$spacing-04;
+  min-height: 200px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  @include bp.breakpoint-down(sm) {
+    padding: spacing.$spacing-03;
+    margin-top: spacing.$spacing-03;
+    min-height: 150px;
+  }
+
+  .mermaid-loading-center {
+    text-align: center;
+
+    .#{config.$prefix}--inline-loading {
+      transform: scale(1);
+      margin: 0;
+      padding: 0;
+
+      @include bp.breakpoint-down(sm) {
+        transform: scale(1.5);
+      }
+
+      &__text {
+        font-size: 1.125rem;
+        font-weight: 500;
+        text-align: center;
+        display: block;
+        margin-top: spacing.$spacing-05;
+        color: var(--cds-text-primary);
+
+        @include bp.breakpoint-down(sm) {
+          font-size: 1rem;
+          margin-top: spacing.$spacing-04;
+        }
+      }
+    }
+  }
+}
+
+.mermaid-error-container {
+  width: 100%;
+
+  .#{config.$prefix}--inline-notification {
+    max-width: 100%;
+    min-width: 0;
+    margin-bottom: spacing.$spacing-05;
+
+    @include bp.breakpoint-down(sm) {
+      margin-bottom: spacing.$spacing-03;
+    }
+  }
+}
+
+.mermaid-error-details {
+  width: 100%;
+  padding: spacing.$spacing-05;
+  background: var(--cds-layer-01);
+  border-radius: 4px;
+  margin-top: spacing.$spacing-04;
+
+  @include bp.breakpoint-down(sm) {
+    padding: spacing.$spacing-03;
+    margin-top: spacing.$spacing-03;
+  }
+
+  .mermaid-error-message {
+    font-weight: 600;
+    color: var(--cds-text-error);
+    margin-bottom: spacing.$spacing-04;
+    word-break: break-word;
+
+    @include bp.breakpoint-down(sm) {
+      font-size: 0.875rem;
+      margin-bottom: spacing.$spacing-03;
+    }
+  }
+
+  .mermaid-error-help {
+    color: var(--cds-text-secondary);
+    margin-bottom: spacing.$spacing-03;
+    font-size: 0.875rem;
+    word-break: break-word;
+
+    @include bp.breakpoint-down(sm) {
+      font-size: 0.8125rem;
+    }
+  }
+
+  .mermaid-error-list {
+    margin-left: spacing.$spacing-05;
+    margin-bottom: spacing.$spacing-04;
+
+    @include bp.breakpoint-down(sm) {
+      margin-left: spacing.$spacing-04;
+      margin-bottom: spacing.$spacing-03;
+    }
+
+    li {
+      color: var(--cds-text-secondary);
+      font-size: 0.875rem;
+      margin-bottom: spacing.$spacing-02;
+      word-break: break-word;
+
+      @include bp.breakpoint-down(sm) {
+        font-size: 0.8125rem;
+      }
+    }
+  }
+
+  .mermaid-error-code {
+    margin: spacing.$spacing-04 0;
+
+    @include bp.breakpoint-down(sm) {
+      margin: spacing.$spacing-03 0;
+    }
+
+    summary {
+      cursor: pointer;
+      color: var(--cds-link-primary);
+      font-size: 0.875rem;
+      font-weight: 500;
+      margin-bottom: spacing.$spacing-03;
+
+      &:hover {
+        color: var(--cds-link-primary-hover);
+      }
+
+      @include bp.breakpoint-down(sm) {
+        font-size: 0.8125rem;
+      }
+    }
+
+    pre {
+      background: var(--cds-layer-02);
+      border: 1px solid var(--cds-border-subtle);
+      border-radius: 4px;
+      padding: spacing.$spacing-04;
+      overflow-x: auto;
+      font-size: 0.75rem;
+      color: var(--cds-text-secondary);
+      max-height: 200px;
+      white-space: pre-wrap;
+      word-break: break-word;
+
+      @include bp.breakpoint-down(sm) {
+        padding: spacing.$spacing-03;
+        font-size: 0.6875rem;
+        max-height: 150px;
+      }
+    }
+  }
+
+  .mermaid-error-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: spacing.$spacing-03;
+    margin-top: spacing.$spacing-05;
+
+    @include bp.breakpoint-down(sm) {
+      flex-direction: column;
+      gap: spacing.$spacing-02;
+      margin-top: spacing.$spacing-03;
+
+      .#{config.$prefix}--btn {
+        width: 100%;
+      }
+    }
+  }
+}
+
+.mermaid-fullscreen-modal {
+  .#{config.$prefix}--modal-container {
+    width: 100vw !important;
+    height: 100vh !important;
+    max-width: 100vw !important;
+    max-height: 100vh !important;
+    margin: 0 !important;
+    position: fixed !important;
+    top: 0 !important;
+    left: 0 !important;
+    transform: none !important;
+  }
+
+  .#{config.$prefix}--modal-header {
+    display: none !important;
+  }
+
+  .#{config.$prefix}--modal-content {
+    width: 100%;
+    height: calc(100vh - 64px);
+    padding: spacing.$spacing-05;
+    margin: 0;
+    overflow: hidden;
+    background: var(--cds-background);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+
+    @include bp.breakpoint-down(md) {
+      padding: spacing.$spacing-03;
+    }
+
+    @include bp.breakpoint-down(sm) {
+      padding: spacing.$spacing-02;
+    }
+  }
+
+  .#{config.$prefix}--modal-footer {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    background: var(--cds-layer-01);
+    border-top: 1px solid var(--cds-border-subtle);
+  }
+
+  svg {
+    max-width: 90vw;
+    max-height: calc(90vh - 64px);
+    width: auto;
+    height: auto;
+    display: block;
+  }
+}
+
+.#{config.$prefix}--modal.is-visible {
+  background-color: rgba(0, 0, 0, 0.95);
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}

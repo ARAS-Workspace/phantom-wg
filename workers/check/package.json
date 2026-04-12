@@ -1,0 +1,19 @@
+{
+  "name": "phantom-check",
+  "version": "1.0.0",
+  "description": "Phantom-WG — Check Worker (check.phantom.tc)",
+  "scripts": {
+    "dev": "dotenv -- wrangler dev",
+    "deploy": "dotenv -- wrangler deploy",
+    "tail": "dotenv -- wrangler tail",
+    "types": "wrangler types"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "4.20260317.1",
+    "typescript": "5.9.3",
+    "wrangler": "4.75.0"
+  },
+  "dependencies": {
+    "dotenv-cli": "11.0.0"
+  }
+}

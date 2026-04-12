@@ -1,0 +1,83 @@
+@use '@carbon/react/scss/spacing' as spacing;
+@use '@carbon/react/scss/breakpoint' as bp;
+
+// ── Container ─────────────────────────────────────────────────────
+
+.balance-scale {
+  display: flex;
+  justify-content: center;
+  margin-bottom: spacing.$spacing-06;
+}
+
+.balance-scale__svg {
+  max-width: 100%;
+  height: auto;
+}
+
+// ── Guide lines ──────────────────────────────────────────────────
+
+.balance-scale__guide {
+  stroke: var(--cds-border-strong);
+  stroke-width: 3;
+  stroke-dasharray: 3 3;
+  fill: none;
+}
+
+// ── Arm ──────────────────────────────────────────────────────────
+
+.balance-scale__arm {
+  stroke: var(--cds-border-strong);
+  stroke-width: 2;
+  stroke-dasharray: 3 3;
+  fill: var(--cds-border-strong);
+}
+
+// ── Strings ──────────────────────────────────────────────────────
+
+.balance-scale__string {
+  stroke: var(--cds-border-strong);
+  stroke-width: 2;
+  stroke-dasharray: 2 2;
+  fill: none;
+}
+
+// ── Pans ─────────────────────────────────────────────────────────
+
+.balance-scale__pan {
+  stroke-width: 2;
+}
+
+.balance-scale__pan--left {
+  stroke: var(--cds-support-info);
+  fill: var(--cds-highlight);
+}
+
+.balance-scale__pan--right {
+  stroke: var(--cds-support-success);
+  fill: var(--cds-notification-background-success);
+}
+
+// ── Icon inside pans ─────────────────────────────────────────────
+
+.balance-scale__icon {
+  fill: var(--cds-icon-primary);
+}
+
+// ── Labels ───────────────────────────────────────────────────────
+
+.balance-scale__label {
+  font-family: 'IBM Plex Mono', 'Courier New', monospace;
+  font-size: 0.75rem;
+  font-weight: 600;
+  fill: var(--cds-text-secondary);
+  letter-spacing: 0.08em;
+}
+
+// ── Responsive ───────────────────────────────────────────────────
+
+@include bp.breakpoint-down(sm) {
+  .balance-scale__svg {
+    width: 280px;
+    height: auto;
+  }
+}

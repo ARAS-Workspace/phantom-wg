@@ -1,0 +1,39 @@
+/**
+ * Carbon Design System Configuration
+ */
+
+@use '@carbon/styles/scss/config' with (
+  $font-path: '~@ibm/plex',
+  $css--font-face: true,
+  $use-per-family-plex: true,
+  $use-akamai-cdn: false,
+  $font-display: optional
+);
+
+@forward '@carbon/styles/scss/spacing';
+@forward '@carbon/styles/scss/colors' hide $white;
+@forward '@carbon/styles/scss/motion';
+@forward '@carbon/styles/scss/type';
+@forward '@carbon/styles/scss/themes';
+@forward '@carbon/styles/scss/theme';
+@use '@carbon/styles/scss/reset';
+@forward '@carbon/styles/scss/fonts';
+@forward '@carbon/styles/scss/grid';
+@forward '@carbon/styles/scss/layer';
+@forward '@carbon/styles/scss/layout';
+@forward '@carbon/styles/scss/zone';
+
+// Component styles (all Carbon React components)
+@use '@carbon/react';
+
+// App root — sticky footer via flexbox
+.app {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+}
+
+// Carbon Content — fill remaining space so footer stays at bottom
+.cds--content {
+  flex: 1;
+}

@@ -1,0 +1,107 @@
+import Mermaid from '@shared/components/visualization/Mermaid';
+import { InlineNotification } from '@carbon/react';
+
+# Multihop
+
+Multihop, istemci trafiğini doğrudan internete çıkarmak yerine bir **exit sunucusu** üzerinden yönlendirir. Daemon iki WireGuard arayüzü çalıştırır: biri istemcilere hizmet verir (`wg_phantom_main`), diğeri exit tüneline bağlanır (`wg_phantom_exit`). Aradaki trafik aktarımını firewall kuralları sağlar.
+
+---
+
+## Topoloji
+
+<Mermaid chart={`flowchart TD
+  subgraph Clients["İstemciler"]
+    C1["İstemci 1"]
+    C2["İstemci 2"]
+    Cn["İstemci N"]
+  end
+  subgraph Daemon["Phantom Daemon"]
+    WG_MAIN["wg_phantom_main\n:51820/udp"]
+    FW["Firewall\n(forward + masquerade)"]
+    WG_EXIT["wg_phantom_exit"]
+  end
+  subgraph Exit["Exit Sunucusu"]
+    ES["WireGuard Peer\n10.0.2.1"]
+  end
+  C1 & C2 & Cn -->|"WireGuard"| WG_MAIN
+  WG_MAIN -->|"forward"| FW
+  FW -->|"masquerade"| WG_EXIT
+  WG_EXIT -->|"WireGuard tünel"| ES
+  ES -->|"İnternet"| I["Internet"]
+`} />
+
+---
+
+## Trafik Akışı
+
+İstemciden gelen bir paket daemon'a ulaştığında firewall kuralları devreye girer:
+
+<Mermaid chart={`sequenceDiagram
+  participant C as İstemci
+  participant M as wg_phantom_main
+  participant FW as Firewall (nftables)
+  participant E as wg_phantom_exit
+  participant X as Exit Sunucusu
+
+  C->>M: Şifreli paket (WireGuard)
+  M->>FW: Çözülmüş paket
+  FW->>FW: forward: main→exit (accept)
+  FW->>FW: postrouting: masquerade (SNAT)
+  FW->>E: Yönlendirilmiş paket
+  E->>X: Şifreli paket (WireGuard tünel)
+  X-->>E: Yanıt
+  E-->>FW: Çözülmüş yanıt
+  FW-->>FW: forward: exit→main (established/related)
+  FW-->>M: Yanıt paketi
+  M-->>C: Şifreli yanıt
+`} />
+
+---
+
+## Firewall Kuralları
+
+Multihop etkinleştirildiğinde `multihop-exit` preset'i uygulanır. Üç temel kural grubu vardır:
+
+### Yönlendirme (Policy Routing)
+
+Tablo 200 (`mh`) oluşturulur. İstemci alt ağından gelen trafik bu tabloya yönlendirilir:
+
+<Mermaid chart={`flowchart TD
+  A["Kaynak: istemci alt ağı\n(ör. 10.8.0.0/24)"] -->|"policy rule"| T["Tablo 200 (mh)"]
+  T --> R1["10.8.0.0/24 → wg_phantom_main\n(yerel VPN trafiği)"]
+  T --> R2["default → wg_phantom_exit\n(diğer tüm trafik)"]
+`} />
+
+### Forward Kuralları
+
+```text
+main → exit :  accept                       (tüm istemci trafiği geçer)
+exit → main :  accept (established/related)  (sadece yanıt trafiği döner)
+```
+
+### Masquerade
+
+```text
+postrouting :  kaynak=istemci alt ağı, çıkış=wg_phantom_exit → masquerade
+```
+
+İstemci IP'leri exit sunucusuna daemon'ın tünel adresi olarak görünür (SNAT).
+
+---
+
+## Yaşam Döngüsü
+
+<Mermaid chart={`flowchart TD
+  S["Başlangıç"] --> D
+  D["Devre Dışı\nwg_phantom_exit YOK\nfirewall preset kaldırıldı"]
+  D -->|"enable (exit seç)"| E["Etkin\nwg_phantom_exit UP\nfirewall preset aktif\n1s durum yoklaması"]
+  E -->|"disable"| D
+`} />
+
+<InlineNotification
+  kind="info"
+  title="Güvenli geçiş."
+  subtitle="Farklı bir exit sunucusuna geçmek için önce mevcut bağlantı devre dışı bırakılmalıdır. Bu tasarım, kısmi durum oluşumunu önler."
+  hideCloseButton
+  lowContrast
+/>

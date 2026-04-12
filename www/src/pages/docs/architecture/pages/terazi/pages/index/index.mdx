@@ -1,0 +1,185 @@
+import BalanceScale from '@shared/components/visualization/BalanceScale';
+import FormulaInfo from '@shared/components/visualization/FormulaInfo';
+import Mermaid from '@shared/components/visualization/Mermaid';
+import TeraziPoolSimulator from '../../shared/components/TeraziPoolSimulator';
+import { InlineNotification } from '@carbon/react';
+
+export const teraziFormulas = [
+  {
+    formula: '∀i ∈ [2, n−2] : v4_net[i] ↔ v6_net[i]',
+    title: 'Eşleme Kuralı',
+    symbols: [
+      { symbol: '∀', description: 'her biri için (evrensel niceleyici)' },
+      { symbol: 'i ∈ [2, n−2]', description: "kullanılabilir slot'ların index aralığı" },
+      { symbol: '2', description: 'ilk kullanılabilir slot (0 = ağ adresi, 1 = sunucu/gateway atlanır)' },
+      { symbol: 'n−2', description: 'son kullanılabilir slot (n−1 = broadcast atlanır)' },
+      { symbol: 'v4_net[i] ↔ v6_net[i]', description: "i index'indeki IPv4 adresi, aynı i index'indeki IPv6 adresiyle eşlenir" },
+    ],
+  },
+  {
+    formula: '|Assigned_IPv4| ≡ |Assigned_IPv6|',
+    title: 'Simetri Sonucu',
+    symbols: [
+      { symbol: '|...|', description: 'sayısı (kardinalite)' },
+      { symbol: '≡', description: 'özdeş olarak eşittir' },
+    ],
+    summary: 'Atanmış IPv4 adreslerinin sayısı her zaman atanmış IPv6 adreslerinin sayısına eşittir. Birini atamak her zaman diğerini de atar.',
+  },
+];
+
+# Terazi Sistemi
+
+***Terazi***, IPv4 ve IPv6 adreslerinden oluşan havuzu deterministik olarak eşleyen dengeleme mekanizmasıdır.
+
+<BalanceScale />
+
+<FormulaInfo formulas={teraziFormulas} />
+
+---
+
+## Nasıl Çalışır?
+
+***Terazi***, her iki protokol ailesini tek bir koordinat sistemi üzerinden yönetir: **index**.
+
+Alt ağ oluşturulduğunda IPv4 ve IPv6 adresleri bu indeks üzerinden birbirine kilitlenir:
+
+```text
+index 0   →  10.8.0.0        ↔  fd00:70:68::0    (ağ adresi, rezerve)
+index 1   →  10.8.0.1        ↔  fd00:70:68::1    (sunucu / gateway, rezerve)
+index 2   →  10.8.0.2        ↔  fd00:70:68::2    (1. istemci)
+index 3   →  10.8.0.3        ↔  fd00:70:68::3    (2. istemci)
+index 4   →  10.8.0.4        ↔  fd00:70:68::4    (3. istemci)
+  ...
+index n   →  10.8.0.n        ↔  fd00:70:68::n    (n-1. istemci)
+  ...
+index n-1 →  10.8.0.255      ↔  fd00:70:68::ff   (broadcast, rezerve)
+```
+
+Yapının özü şudur: **IPv4 kapasitesi baz alınır, IPv6 kendini buna göre şekillendirir.** Prefix uzunluğu değiştiğinde her iki protokol aynı anda yeniden boyutlanır ve simetri her koşulda korunur.
+
+<Mermaid chart={`flowchart LR
+  subgraph V4["IPv4 — 10.8.0.0/24"]
+    direction TB
+    A2["10.8.0.2"]
+    A3["10.8.0.3"]
+    A4["10.8.0.4"]
+    An["..."]
+  end
+  subgraph V6["IPv6 — fd00:70:68::/120"]
+    direction TB
+    B2["fd00:70:68::2"]
+    B3["fd00:70:68::3"]
+    B4["fd00:70:68::4"]
+    Bn["..."]
+  end
+  A2 <-->|"index 2"| B2
+  A3 <-->|"index 3"| B3
+  A4 <-->|"index 4"| B4
+  An <-->|"index n"| Bn
+`} />
+
+---
+
+## Prefix Dönüşümü
+
+Referans implementasyon — `phantom_daemon/base/wallet/wallet.py`:
+
+```python
+def _calculate_terazi(ipv4_subnet: str) -> tuple[str, str, int, int]:
+    """Calculate matching IPv6 subnet from IPv4 subnet.
+
+    Returns (ipv4_str, ipv6_str, capacity, host_bits).
+    capacity = usable client slots (total - network - broadcast - server).
+    """
+    v4_net = ipaddress.ip_network(ipv4_subnet, strict=False)
+    host_bits = 32 - v4_net.prefixlen
+    v6_prefix = 128 - host_bits
+    v6_net = ipaddress.ip_network(f"fd00:70:68::/{v6_prefix}")
+    capacity = v4_net.num_addresses - 3  # network + broadcast + server
+    return str(v4_net), str(v6_net), capacity, host_bits
+```
+
+Her iki protokol aynı host bit sayısını paylaşır. IPv4 prefix'i, IPv6 prefix'ini doğrudan belirler — iki satırlık bir dönüşüm, iki havuzun simetrisini garanti eder:
+
+<Mermaid chart={`flowchart
+  A["/24 — IPv4"] -->|"32 − 24 = 8 host bit"| B["/120 — IPv6"]
+  B -->|"2⁸ − 3 = 253 slot"| C["253 istemci kapasitesi"]
+`} />
+
+---
+
+## Havuz Yapısı
+
+Adresler veritabanında önceden oluşturulur (`wallet.db` → `users` tablosu). Her satır bir IPv4/IPv6 çiftidir.
+Boş slot'lar `<null>` olarak bekler. İstemci atandığında anahtar, isim ve zaman damgası doldurulur.
+
+<TeraziPoolSimulator />
+
+---
+
+## CIDR Değişikliğinde Ne Olur?
+
+CIDR prefix değiştirildiğinde havuz sıfırdan yeniden oluşturulur. İstemci kimlikleri (anahtar, isim, UUID) korunur.
+
+<InlineNotification
+  kind="warning"
+  title="IP adresleri değişebilir."
+  subtitle="İstemciler oluşturulma sırasına göre index 2'den itibaren ardışık olarak yeniden atanır — aradaki boşluklar kapanır. Boşluk yoksa ve subnet tabanı aynıysa adresler korunabilir; ancak bu garanti edilmez. Tüm WireGuard yapılandırmalarının yeniden dışa aktarılması gerekir."
+  hideCloseButton
+  lowContrast
+/>
+
+<Mermaid chart={`sequenceDiagram
+  participant Admin
+  participant Daemon
+  participant DB
+
+  Admin->>Daemon: POST /api/core/network/cidr {prefix: 22}
+  Daemon->>DB: İstemci verilerini yedekle
+  Daemon->>DB: Tüm satırları sil
+  Daemon->>DB: Yeni havuzu oluştur (/22)
+  Daemon->>DB: İstemcileri sırayla yeniden ata
+  Daemon-->>Admin: {ipv4_subnet, ipv6_subnet, pool}
+`} />
+
+---
+
+## Doğrulama
+
+`GET /api/core/network/validate` uç noktası havuzun terazi simetrisini ve yapısal bütünlüğünü doğrular. Başarılı yanıt:
+
+```json
+{
+  "ok": true,
+  "data": {
+    "valid": true,
+    "errors": []
+  }
+}
+```
+
+Terazi index uyumsuzluğu veya adres boşluğu tespit edilirse `valid: false` ve hata listesi döner:
+
+```json
+{
+  "ok": true,
+  "data": {
+    "valid": false,
+    "errors": [
+      "Row 50: terazi mismatch v4_index=50 v6_index=51",
+      "Row 100: IPv4 gap 10.8.0.100 -> 10.8.0.102"
+    ]
+  }
+}
+```
+
+<Mermaid chart={`flowchart TD
+  A["GET /api/core/network/validate"] --> B{Kontroller}
+  B --> C["Satır sayısı == kapasite?"]
+  B --> D["IPv4 adresleri ardışık mı?"]
+  B --> E["v4_index == v6_index? (Terazi)"]
+  B --> F["Format geçerli mi?"]
+  C & D & E & F --> G{Sonuç}
+  G -->|"Tüm kontroller geçti"| H["valid: true, errors: []"]
+  G -->|"En az bir hata"| I["valid: false, errors: [...]"]
+`} />

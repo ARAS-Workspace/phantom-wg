@@ -1,0 +1,33 @@
+@use '@carbon/react/scss/spacing' as spacing;
+
+// ── Skeleton ──────────────────────────────────────────────────────
+
+.code-highlight__skeleton {
+  margin: spacing.$spacing-05 0;
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+// ── Highlighted output ────────────────────────────────────────────
+
+.code-highlight {
+  margin: spacing.$spacing-05 0;
+  border-radius: 4px;
+  overflow: hidden;
+  font-size: 0.875rem;
+
+  // Shiki wraps output in <pre><code>
+  pre {
+    margin: 0;
+    padding: spacing.$spacing-05;
+    overflow-x: auto;
+    border-radius: 4px;
+
+    code {
+      font-family: 'IBM Plex Mono', 'Courier New', monospace;
+      font-size: 0.875rem;
+      line-height: 1.6;
+      background: transparent;
+    }
+  }
+}

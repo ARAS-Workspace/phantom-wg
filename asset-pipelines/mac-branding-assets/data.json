@@ -1,0 +1,17 @@
+[
+  {
+    "title": "Ghost Mode",
+    "description": "Invisible traffic routing",
+    "screenshot": "screenshots/1.png"
+  },
+  {
+    "title": "Tunnel Dashboard",
+    "description": "Real-time connection status",
+    "screenshot": "screenshots/2.png"
+  },
+  {
+    "title": "Configuration",
+    "description": "Import and manage tunnels",
+    "screenshot": "screenshots/3.png"
+  }
+]

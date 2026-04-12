@@ -1,0 +1,85 @@
+dns-leak-server — Setup Guide
+
+Prerequisites
+─────────────
+  - Debian/Ubuntu host
+  - Root or sudo access
+  - Domain with NS delegation to this server
+
+Host Dependencies
+─────────────────
+  apt-get update
+  apt-get install -y openssl
+
+  curl -fsSL https://get.docker.com -o get-docker.sh
+  sh get-docker.sh
+
+  # Free port 53 (if systemd-resolved is running)
+  systemctl stop systemd-resolved
+  systemctl disable systemd-resolved
+  rm -f /etc/resolv.conf
+  echo "nameserver 1.1.1.1" > /etc/resolv.conf
+  chattr +i /etc/resolv.conf
+
+DNS Records (Cloudflare)
+────────────────────────
+  dns-leak-server.phantom.tc    NS      ns-leak-1.phantom.tc
+  ns-leak-1.phantom.tc          A       <SERVER_IPV4>
+  ns-leak-1.phantom.tc          AAAA    <SERVER_IPV6>
+
+Configuration
+─────────────
+  cp .env.example .env
+
+  # Edit .env:
+  #   DNS_ZONE=dns-leak-server.phantom.tc
+  #   NS_HOST=ns-leak-1.phantom.tc
+  #   SERVER_IPV4=<your ipv4>
+  #   SERVER_IPV6=<your ipv6>
+  #   TOKEN_TTL=30
+  #   ACME_EMAIL=<your email>
+
+Setup
+─────
+  tools/prod.sh setup
+
+  This will:
+    1. Generate shared secret (secrets/shared_secret)
+    2. Build ACME container
+    3. Issue wildcard TLS certificate via Let's Encrypt DNS-01
+    4. Store certificate in secrets/certs/
+
+Start
+─────
+  tools/prod.sh up
+
+Management
+──────────
+  tools/prod.sh up          Start
+  tools/prod.sh down        Stop
+  tools/prod.sh restart     Restart
+  tools/prod.sh rebuild     Build from scratch
+  tools/prod.sh logs        Follow logs
+  tools/prod.sh status      Show status
+  tools/prod.sh shell       Open shell in container
+  tools/prod.sh exec <cmd>  Execute command in container
+
+Certificate Renewal
+───────────────────
+  tools/prod.sh renew-cert
+
+  Auto-renewal via cron (monthly, 1st day at 03:00):
+    apt-get install -y cron
+    systemctl enable cron
+    systemctl start cron
+    crontab -e
+    # Add:
+    0 3 1 * * /opt/dns-leak-server/tools/prod.sh renew-cert >> /var/log/dns-leak-cert-renew.log 2>&1
+
+Verify
+──────
+  # DNS response
+  dig @<SERVER_IPV4> test-test-0000000000.dns-leak-server.phantom.tc A
+
+  # HTTPS response (use valid HMAC token from worker)
+  curl -s https://<token>.dns-leak-server.phantom.tc/

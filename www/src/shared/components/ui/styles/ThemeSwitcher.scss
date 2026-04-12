@@ -1,0 +1,23 @@
+.theme-switcher {
+  svg {
+    transition: transform 0.3s ease;
+  }
+
+  &:hover:not(.theme-transitioning) svg {
+    transform: rotate(20deg);
+  }
+
+  &.theme-transitioning {
+    pointer-events: none;
+
+    .spinner-icon {
+      animation: theme-spin 0.8s linear infinite;
+    }
+  }
+}
+
+@keyframes theme-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}

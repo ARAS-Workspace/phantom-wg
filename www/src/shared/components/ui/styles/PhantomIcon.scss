@@ -1,0 +1,11 @@
+// Midnight Phantom (light / white theme)
+.phantom-icon__shield { fill: #24245a; }
+.phantom-icon__ghost  { fill: #ffffff; }
+.phantom-icon__eyes   { fill: #24245a; }
+
+// Stellar Silver (dark / g100 theme)
+[data-carbon-theme='g100'] {
+  .phantom-icon__shield { fill: #E5E7EB; }
+  .phantom-icon__ghost  { fill: #1F2937; }
+  .phantom-icon__eyes   { fill: #E5E7EB; }
+}

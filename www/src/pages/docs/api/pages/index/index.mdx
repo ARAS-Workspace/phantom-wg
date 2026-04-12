@@ -1,0 +1,32 @@
+import OpenApiDoc from '../../shared/components/OpenApiDoc';
+import Mermaid from '@shared/components/visualization/Mermaid';
+import { InlineNotification } from '@carbon/react';
+
+# API Referansı
+
+***Phantom Daemon***'un Unix Domain Socket (UDS) üzerinden sunduğu uç noktaların teknik referansıdır. Üretim ortamında ***Auth Service*** proxy katmanı aracılığıyla erişilir.
+
+<Mermaid chart={`flowchart
+  B["İstemci"] -->|"HTTPS :443"| N["nginx"]
+  N -->|"/auth/*"| A["Auth Service"]
+  N -->|"/api/*"| A
+  A -->|"UDS"| D["Phantom Daemon"]
+`} />
+
+<InlineNotification
+  kind="info"
+  title="Modüler Mimari"
+  subtitle="Phantom Daemon sistemde asıl işi yapan parçadır. UDS üzerinden haberleşebildiğiniz sürece, bu yapıyı kendi senaryonuza göre farklı bir proxy veya kimlik doğrulama katmanıyla rahatlıkla kullanabilirsiniz."
+  hideCloseButton
+  lowContrast
+/>
+
+---
+
+## Daemon OpenAPI Reference
+
+<Mermaid chart={`flowchart
+  Q["Request"] -->|"UDS · daemon.sock"| D["Phantom Daemon"]
+`} />
+
+<OpenApiDoc />

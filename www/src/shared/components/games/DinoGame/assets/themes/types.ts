@@ -1,0 +1,1 @@
+export type ThemeName = 'error' | 'dpi' | 'under-construction';

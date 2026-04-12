@@ -1,0 +1,2 @@
+export const CHECK_ENDPOINT = import.meta.env.VITE_PHANTOM_CHECK_ENDPOINT || 'http://localhost:8787';
+export const TURNSTILE_SITE_KEY = import.meta.env.VITE_PHANTOM_CHECK_TURNSTILE_SITE_KEY || '1x00000000000000000000AA';

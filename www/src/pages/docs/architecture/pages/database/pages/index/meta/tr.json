@@ -1,0 +1,10 @@
+{
+  "seo": {
+    "title": "Veritabanı Yapısı",
+    "description": "Phantom-WG veritabanı şemaları. wallet.db, exit.db, device.db ve firewall.db yapıları."
+  },
+  "kv": {
+    "datePublished": "18/03/2026 00:00",
+    "dateModified": "18/03/2026 00:00"
+  }
+}
