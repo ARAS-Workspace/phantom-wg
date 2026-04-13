@@ -9,9 +9,6 @@
 # Node.js dependencies
 node_modules/
 
-# Output
-output/
-
 # Logs
 npm-debug.log*
 yarn-debug.log*

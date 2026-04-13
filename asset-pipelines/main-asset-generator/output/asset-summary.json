@@ -1,0 +1,45 @@
+{
+  "generated": "2026-04-13T13:21:31.879Z",
+  "svgFiles": {
+    "generated": 24,
+    "skipped": 0
+  },
+  "icons": {
+    "generated": 392,
+    "failed": 0,
+    "formats": [
+      "png",
+      "webp",
+      "avif"
+    ],
+    "categories": [
+      "favicons",
+      "ios",
+      "android"
+    ]
+  },
+  "logos": {
+    "generated": 192,
+    "failed": 0,
+    "formats": [
+      "png",
+      "webp",
+      "avif"
+    ],
+    "types": [
+      "horizontal",
+      "vertical"
+    ]
+  },
+  "themes": [
+    "midnight-phantom",
+    "quantum-blue",
+    "forest-stealth",
+    "dark-matter",
+    "void-black",
+    "crimson-phantom",
+    "mystic-purple",
+    "stellar-silver"
+  ],
+  "outputDirectory": "./output"
+}
