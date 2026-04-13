@@ -1,17 +1,42 @@
 [
   {
+    "title": "Phantom-WG Mac",
+    "description": "Your Server, Your Network, Your Privacy",
+    "screenshot": "screenshots/home.png"
+  },
+  {
+    "title": "Ecosystem Overview",
+    "description": "Server and client, all in one",
+    "screenshot": "screenshots/ecosystem-overview.png"
+  },
+  {
+    "title": "Direct WireGuard",
+    "description": "Direct connection without Ghost layer",
+    "screenshot": "screenshots/import-configuration-direct-wireguard.png"
+  },
+  {
     "title": "Ghost Mode",
-    "description": "Invisible traffic routing",
-    "screenshot": "screenshots/1.png"
+    "description": "Import a tunnel and connect invisibly",
+    "screenshot": "screenshots/import-configuration-ghost-mode.png"
   },
   {
-    "title": "Tunnel Dashboard",
-    "description": "Real-time connection status",
-    "screenshot": "screenshots/2.png"
+    "title": "Ready to Connect",
+    "description": "Your tunnels, one tap away",
+    "screenshot": "screenshots/ready-to-connect.png"
   },
   {
-    "title": "Configuration",
-    "description": "Import and manage tunnels",
-    "screenshot": "screenshots/3.png"
+    "title": "Connected",
+    "description": "Live transfer stats at a glance",
+    "screenshot": "screenshots/connected.png"
+  },
+  {
+    "title": "Ghost Mode Active",
+    "description": "Powered by Phantom-Frontmatter",
+    "screenshot": "screenshots/ghost-mode-active.png"
+  },
+  {
+    "title": "Connection Log",
+    "description": "Real-time handshake and tunnel activity",
+    "screenshot": "screenshots/connection-log.png"
   }
 ]

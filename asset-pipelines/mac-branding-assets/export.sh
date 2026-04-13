@@ -18,10 +18,10 @@ DATA="$ROOT_DIR/data.json"
 OUTPUT_DIR="$ROOT_DIR/output"
 
 SIZES=(
-    "5320:3540:full"
-    "2660:1770:hero"
-    "1920:1278:web"
-    "1200:798:social"
+    "5320:3540"
+    "2660:1770"
+    "1920:1278"
+    "1200:798"
 )
 
 if [ ! -f "$TEMPLATE" ]; then
@@ -64,10 +64,12 @@ for i in $(seq 0 $((TOTAL - 1))); do
     SLIDE_DIR="$OUTPUT_DIR/slide-${SLIDE_NUM}"
     mkdir -p "$SLIDE_DIR"
 
+    PSD_FILE="$SLIDE_DIR/exported.psd"
+
     SIZE_JSX=""
     for SIZE_ENTRY in "${SIZES[@]}"; do
-        IFS=':' read -r SW SH SUFFIX <<< "$SIZE_ENTRY"
-        OUT_FILE="$SLIDE_DIR/${SUFFIX}-${SW}x${SH}.png"
+        IFS=':' read -r SW SH <<< "$SIZE_ENTRY"
+        OUT_FILE="$SLIDE_DIR/exported-${SW}x${SH}.png"
         SIZE_JSX="${SIZE_JSX}sizes.push({w:${SW}, h:${SH}, path:'${OUT_FILE}'});"$'\n'
     done
 
@@ -140,6 +142,9 @@ if (bezelLayer) {
     soDoc.close();
 }
 
+// Save layered PSD
+doc.saveAs(new File("$PSD_FILE"), new PhotoshopSaveOptions(), true, Extension.LOWERCASE);
+
 // Export at multiple sizes
 var sizes = [];
 $SIZE_JSX
@@ -191,9 +196,10 @@ echo "════════════════════════�
 EXPORTED=$(find "$OUTPUT_DIR" -name "*.png" -type f | wc -l | tr -d ' ')
 echo "  Done. $EXPORTED files → output/"
 echo ""
-echo "  Sizes per slide:"
+echo "  Per slide:"
+echo "    exported.psd"
 for SIZE_ENTRY in "${SIZES[@]}"; do
-    IFS=':' read -r SW SH SUFFIX <<< "$SIZE_ENTRY"
-    echo "    ${SUFFIX}: ${SW}×${SH}"
+    IFS=':' read -r SW SH <<< "$SIZE_ENTRY"
+    echo "    exported-${SW}x${SH}.png"
 done
 echo "═══════════════════════════════════════════"
