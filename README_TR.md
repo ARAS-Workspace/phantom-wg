@@ -204,7 +204,9 @@ Yönetim için `./tools/prod.sh` konumunda kullanışlı bir araç bulunur.
 | `build`                             | İmaj Derle                                      |
 | `rebuild`                           | Sıfırdan İmaj Derle (no-cache)                  |
 | `update`                            | Güncelle (git pull + restart)                   |
-| `update --skip-compose`             | Güncelle (docker-compose.yml hariç tut)         |
+| `update --skip-compose`             | Güncelle (docker-compose.yml tek seferlik koru) |
+| `compose-lock`                      | docker-compose.yml kalıcı kilitle               |
+| `compose-unlock`                    | docker-compose.yml kilidini kaldır              |
 | `logs [service]`                    | Log Takibi (Tümü veya Belirli Servis)           |
 | `status`                            | Docker Compose Durumu                           |
 | `show-versions`                     | Bileşen Versiyonları (Daemon, Vendor Paketleri) |
@@ -231,25 +233,45 @@ Terazi, IP havuzunu oluşturmak için bir base subnet'e ihtiyaç duyar. Varsayı
 > [!TIP]
 > Gizli anahtarlar `container-data/secrets/production/` altında saklanır. Admin şifresi aynı dizindeki `.admin_password` dosyasına yazılır — giriş yaptıktan sonra güvenle kaldırabilirsiniz.
 
-### Güncelleme
+### Güncelleme Mekanizması
+
+> [!IMPORTANT]
+> Güncelleme mekanizması git üzerinden çalışır. Kurulum alanınızı `git clone` ile veya aynı işi yapan [`get.phantom.tc`](https://get.phantom.tc) servisi ile oluşturmanız gerekir.
+
+Daemon ve auth-service kaynak kodları container'lara read-only olarak mount edilir (`phantom_daemon:/app/phantom_daemon:ro`, `services/auth-service:/app/auth-service:ro`). Dockerfile'lar yalnızca sistem bağımlılıklarını (Python, runtime paketleri) sağlar — uygulama kodu image içinde değildir. Bu yapı sayesinde:
+
+- **Hızlı güncelleme**: `git pull` + `restart` yeterlidir, image rebuild gerekmez
+- **Hızlı rollback**: `git checkout <önceki-versiyon>` + `restart` ile anında geri dönüş
+- **Build bağımsızlığı**: Kod değişiklikleri container build sürecini tetiklemez
 
 ```bash
 ./tools/prod.sh update                 # git pull + restart
-./tools/prod.sh update --skip-compose  # Compose dosyasını koru
 ```
 
-> [!TIP]
-> `docker-compose.yml` üzerinde bir yapılandırma değişikliği yaptıysanız ve güncellemeleri almak istiyorsanız `--skip-compose` kullanın.
+#### Compose Lock
 
-Tekrardan container derlemesi gerektirecek paket bağımlılıkları değişikliklerinde (Dockerfile, requirements.txt):
+`docker-compose.yml` üzerinde port, volume veya environment değişikliği yaptıysanız, güncellemelerin bu dosyayı ezme riski vardır. Compose lock bu dosyayı git güncellemelerinden korur:
+
+```bash
+./tools/prod.sh compose-lock           # Kalıcı kilitle
+./tools/prod.sh update                 # docker-compose.yml korunur
+./tools/prod.sh compose-unlock         # Kilidi kaldır
+```
+
+Tek seferlik koruma için:
+
+```bash
+./tools/prod.sh update --skip-compose  # Bu güncelleme için docker-compose.yml korunur
+```
+
+#### Rebuild
+
+Sistem bağımlılıkları değiştiğinde (Dockerfile, requirements.txt) image rebuild gerekir:
 
 ```bash
 ./tools/prod.sh rebuild
 ./tools/prod.sh up
 ```
-
-> [!TIP]
-> Dockerfile'lar yalnızca yapının çalışması için gereken sistem bağımlılıklarını sağlar. Kod güncellemeleri `update` komutuyla alınır — `rebuild` yalnızca bu bağımlılıklar değiştiğinde (container yapılarında tekrar derleme gereken güncellemelerde) gereklidir.
 
 ---
 
@@ -272,40 +294,68 @@ Aktif geliştirme [`dev/daemon`](https://github.com/ARAS-Workspace/phantom-wg/tr
 
 ---
 
-## Phantom-WG Retro
+## Phantom-Frontmatter
 
-<img alt="Phantom-WG Retro" src="https://raw.githubusercontent.com/ARAS-Workspace/phantom-wg/press-kit/assets/phantom-retro-banner.png">
+Phantom-WG Modern sunucunuzun önüne yerleştirilen WSS/TLS tünel katmanı. TCP 443 üzerinden wstunnel bağlantıları kabul eder ve trafiği backend sunucuya iletir. Ağ gözlemcileri yalnızca standart HTTPS trafiği görür.
 
-Gelişmiş gizlilik özellikleri ve yalnızca sistem servisleri ile çalışan bir çözüm arıyorsanız [Phantom-WG Retro](https://github.com/ARAS-Workspace/phantom-wg/tree/retro) sürümü ilginizi çekebilir.
+![Frontmatter Flow](https://raw.githubusercontent.com/ARAS-Workspace/phantom-wg/press-kit/assets/connection-flow-frontmatter.svg)
 
-### MultiGhost - Maksimum Gizlilik
+### Gereksinimler
 
-Ghost ve Multihop modüllerini birlikte kullanarak en yüksek düzeyde gizlilik ve sansür
-direnci elde edin. Bağlantınız HTTPS olarak maskelenir ve çift VPN katmanı üzerinden
-yönlendirilir.
+Phantom-Frontmatter, Phantom-WG Modern sunucusundan ayrı ve bağımsız bir bare-metal sunucuya kurulur.
 
-![MultiGhost Flow](https://raw.githubusercontent.com/ARAS-Workspace/phantom-wg/press-kit/assets/connection-flow-multighost.svg)
+| Gereksinim      | Detay                                                   |
+|-----------------|---------------------------------------------------------|
+| İşletim Sistemi | Debian 12 / 13, Ubuntu 22.04 / 24.04                    |
+| Erişim          | Root (sudo)                                             |
+| Backend         | Erişilebilir bir Phantom-WG Modern sunucusu (UDP 51820) |
 
-**Etkinleştirme:**
+### Kurulum
+
+Güncel sürüm: [frontmatter-v1.0.0](https://github.com/ARAS-Workspace/phantom-wg/releases/tag/frontmatter-v1.0.0)
+
 ```bash
-# 1. Ghost Mode'u etkinleştir
-phantom-api ghost enable domain="cdn.example.com"
+wget https://github.com/ARAS-Workspace/phantom-wg/releases/download/frontmatter-v1.0.0/phantom-wg-frontmatter-v1.0.0.zip
+unzip phantom-wg-frontmatter-v1.0.0.zip
+cd phantom-wg-frontmatter-v1.0.0
+sudo ./frontmatter-install.sh
+```
 
-# 2. Harici VPN'i içe aktar
-phantom-api multihop import_vpn_config config_path="/path/to/vpn.conf"
+### Yapılandırma
 
-# 3. Multihop'u etkinleştir
-phantom-api multihop enable_multihop exit_name="vpn-exit"
+```bash
+# Backend sunucuyu tanımla (IPv4 veya IPv6)
+sudo frontmatter-api setup init backend=<BACKEND_IP[:PORT]>
+
+# Veri yolunu başlat
+sudo frontmatter-api ghost start
+
+# Durumu doğrula
+sudo frontmatter-api ghost status
+
+# İstemci yapılandırma bloğu
+sudo frontmatter-api ghost client_config
+
+# İstemci bağlantı komutu (standalone wstunnel)
+sudo frontmatter-api ghost client_command
+```
+
+### Let's Encrypt (Opsiyonel)
+
+```bash
+sudo frontmatter-api ghost stop
+sudo frontmatter-certbot front.example.com
+sudo frontmatter-api ghost start
 ```
 
 ### Keşfet
 
-|    | Kaynak        | Bağlantı                                                                       |
-|----|---------------|--------------------------------------------------------------------------------|
-| 🌐 | Ana Sayfa     | [www.phantom.tc](https://www.phantom.tc)                                       |
-| 📖 | Dokümantasyon | [retro-docs.phantom.tc](https://retro-docs.phantom.tc)                         |
-| 💻 | Kaynak Kod    | [GitHub Repository](https://github.com/ARAS-Workspace/phantom-wg/tree/retro)   |
-| 🍎 | Mac Client    | [v1.0.0](https://github.com/ARAS-Workspace/phantom-wg/releases/tag/mac-v1.0.0) |
+| Kaynak          | Bağlantı                                                                                         |
+|-----------------|--------------------------------------------------------------------------------------------------|
+| Kurulum Rehberi | [SETUP](https://github.com/ARAS-Workspace/phantom-wg/blob/frontmatter/SETUP)                     |
+| Mimari          | [ARCHITECTURE](https://github.com/ARAS-Workspace/phantom-wg/blob/frontmatter/ARCHITECTURE)       |
+| Mimari (TR)     | [ARCHITECTURE_TR](https://github.com/ARAS-Workspace/phantom-wg/blob/frontmatter/ARCHITECTURE_TR) |
+| Kaynak Kod      | [GitHub](https://github.com/ARAS-Workspace/phantom-wg/tree/frontmatter)                          |
 
 ---
 

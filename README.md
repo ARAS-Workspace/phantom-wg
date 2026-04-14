@@ -193,23 +193,25 @@ See `.example` files for all available options.
 
 A convenient tool is available at `./tools/prod.sh` for management.
 
-| Command                               | Description                                    |
-|---------------------------------------|------------------------------------------------|
-| `setup`                               | Full Setup                                     |
-| `setup --terazi-ipv4-subnet=SUBNET`   | Setup with custom subnet (e.g. `10.9.0.0/24`) |
-| `up`                                  | Start                                          |
-| `down`                  | Stop                                         |
-| `restart [service]`     | Restart (All or Specific Service)            |
-| `build`                 | Build Images                                 |
-| `rebuild`               | Build Images from Scratch (no-cache)         |
-| `update`                | Update (git pull + restart)                  |
-| `update --skip-compose` | Update (exclude docker-compose.yml)          |
-| `logs [service]`        | Log Tracking (All or Specific Service)       |
-| `status`                | Docker Compose Status                        |
-| `show-versions`         | Component Versions (Daemon, Vendor Packages) |
-| `shell [service]`       | Shell (default: daemon)                      |
-| `exec <svc> <cmd>`      | Execute Command                              |
-| `hard-reset`            | Delete All Data                              |
+| Command                             | Description                                   |
+|-------------------------------------|-----------------------------------------------|
+| `setup`                             | Full Setup                                    |
+| `setup --terazi-ipv4-subnet=SUBNET` | Setup with custom subnet (e.g. `10.9.0.0/24`) |
+| `up`                                | Start                                         |
+| `down`                              | Stop                                          |
+| `restart [service]`                 | Restart (All or Specific Service)             |
+| `build`                             | Build Images                                  |
+| `rebuild`                           | Build Images from Scratch (no-cache)          |
+| `update`                            | Update (git pull + restart)                   |
+| `update --skip-compose`             | Update (one-shot docker-compose.yml preserve) |
+| `compose-lock`                      | Permanently lock docker-compose.yml           |
+| `compose-unlock`                    | Unlock docker-compose.yml                     |
+| `logs [service]`                    | Log Tracking (All or Specific Service)        |
+| `status`                            | Docker Compose Status                         |
+| `show-versions`                     | Component Versions (Daemon, Vendor Packages)  |
+| `shell [service]`                   | Shell (default: daemon)                       |
+| `exec <svc> <cmd>`                  | Execute Command                               |
+| `hard-reset`                        | Delete All Data                               |
 
 ### Setup
 
@@ -230,25 +232,45 @@ Terazi requires a base subnet to create the IP pool. The default is `10.8.0.0/24
 > [!TIP]
 > Secret keys are stored under `container-data/secrets/production/`. The admin password is written to `.admin_password` in the same directory — you can safely remove it after logging in.
 
-### Updating
+### Update Mechanism
+
+> [!IMPORTANT]
+> The update mechanism operates via git. You must create your installation directory using `git clone` or the [`get.phantom.tc`](https://get.phantom.tc) installer service.
+
+The daemon and auth-service source code is mounted read-only into containers (`phantom_daemon:/app/phantom_daemon:ro`, `services/auth-service:/app/auth-service:ro`). Dockerfiles provide only system dependencies (Python, runtime packages) — application code is not baked into the image. This enables:
+
+- **Fast updates**: `git pull` + `restart` is sufficient, no image rebuild required
+- **Fast rollback**: `git checkout <previous-version>` + `restart` for immediate rollback
+- **Build independence**: Code changes do not trigger a container build cycle
 
 ```bash
 ./tools/prod.sh update                 # git pull + restart
-./tools/prod.sh update --skip-compose  # Preserve compose file
 ```
 
-> [!TIP]
-> If you have made configuration changes to `docker-compose.yml` and want to receive updates, use `--skip-compose`.
+#### Compose Lock
 
-For package dependency changes that require container recompilation (Dockerfile, requirements.txt):
+If you have modified `docker-compose.yml` (ports, volumes, environment), updates may overwrite your changes. Compose lock protects this file from git updates:
+
+```bash
+./tools/prod.sh compose-lock           # Permanently lock
+./tools/prod.sh update                 # docker-compose.yml is preserved
+./tools/prod.sh compose-unlock         # Release the lock
+```
+
+For one-shot protection:
+
+```bash
+./tools/prod.sh update --skip-compose  # Preserve docker-compose.yml for this update only
+```
+
+#### Rebuild
+
+When system dependencies change (Dockerfile, requirements.txt), an image rebuild is required:
 
 ```bash
 ./tools/prod.sh rebuild
 ./tools/prod.sh up
 ```
-
-> [!TIP]
-> Dockerfiles only provide the system dependencies needed for the stack to run. Code updates are received with the `update` command — `rebuild` is only required when these dependencies change (in updates requiring container recompilation).
 
 ---
 
@@ -271,38 +293,68 @@ Active development takes place on the [`dev/daemon`](https://github.com/ARAS-Wor
 
 ---
 
-## Phantom-WG Retro
+## Phantom-Frontmatter
 
-<img alt="Phantom-WG Retro" src="https://raw.githubusercontent.com/ARAS-Workspace/phantom-wg/press-kit/assets/phantom-retro-banner.png">
+A WSS/TLS tunnel layer placed in front of your Phantom-WG Modern server. Accepts wstunnel connections on TCP 443 and forwards traffic to the backend server. Network observers see only standard HTTPS traffic.
 
-If you are looking for advanced privacy features and a solution that runs solely on system services, [Phantom-WG Retro](https://github.com/ARAS-Workspace/phantom-wg/tree/retro) may interest you.
+![Frontmatter Flow](https://raw.githubusercontent.com/ARAS-Workspace/phantom-wg/press-kit/assets/connection-flow-frontmatter.svg)
 
-### MultiGhost - Maximum Privacy
+### Requirements
 
-Achieve the highest level of privacy and censorship resistance by using Ghost and Multihop modules together. Your connection is masked as HTTPS and routed through a double VPN layer.
+Phantom-Frontmatter is installed on a separate, dedicated bare-metal server from the Phantom-WG Modern backend.
 
-![MultiGhost Flow](https://raw.githubusercontent.com/ARAS-Workspace/phantom-wg/press-kit/assets/connection-flow-multighost.svg)
+| Requirement      | Detail                                           |
+|------------------|--------------------------------------------------|
+| Operating System | Debian 12 / 13, Ubuntu 22.04 / 24.04             |
+| Access           | Root (sudo)                                      |
+| Backend          | A reachable Phantom-WG Modern server (UDP 51820) |
 
-**Activation:**
+### Installation
+
+Latest release: [frontmatter-v1.0.0](https://github.com/ARAS-Workspace/phantom-wg/releases/tag/frontmatter-v1.0.0)
+
 ```bash
-# 1. Enable Ghost Mode
-phantom-api ghost enable domain="cdn.example.com"
+wget https://github.com/ARAS-Workspace/phantom-wg/releases/download/frontmatter-v1.0.0/phantom-wg-frontmatter-v1.0.0.zip
+unzip phantom-wg-frontmatter-v1.0.0.zip
+cd phantom-wg-frontmatter-v1.0.0
+sudo ./frontmatter-install.sh
+```
 
-# 2. Import external VPN
-phantom-api multihop import_vpn_config config_path="/path/to/vpn.conf"
+### Configuration
 
-# 3. Enable Multihop
-phantom-api multihop enable_multihop exit_name="vpn-exit"
+```bash
+# Define the backend server (IPv4 or IPv6)
+sudo frontmatter-api setup init backend=<BACKEND_IP[:PORT]>
+
+# Bring the data path up
+sudo frontmatter-api ghost start
+
+# Verify
+sudo frontmatter-api ghost status
+
+# Client configuration block
+sudo frontmatter-api ghost client_config
+
+# Client connection command (standalone wstunnel)
+sudo frontmatter-api ghost client_command
+```
+
+### Let's Encrypt (Optional)
+
+```bash
+sudo frontmatter-api ghost stop
+sudo frontmatter-certbot front.example.com
+sudo frontmatter-api ghost start
 ```
 
 ### Explore
 
-|    | Resource      | Link                                                                           |
-|----|---------------|--------------------------------------------------------------------------------|
-| 🌐 | Homepage      | [www.phantom.tc](https://www.phantom.tc)                                       |
-| 📖 | Documentation | [retro-docs.phantom.tc](https://retro-docs.phantom.tc)                         |
-| 💻 | Source Code   | [GitHub Repository](https://github.com/ARAS-Workspace/phantom-wg/tree/retro)   |
-| 🍎 | Mac Client    | [v1.0.0](https://github.com/ARAS-Workspace/phantom-wg/releases/tag/mac-v1.0.0) |
+| Resource          | Link                                                                                             |
+|-------------------|--------------------------------------------------------------------------------------------------|
+| Setup Guide       | [SETUP](https://github.com/ARAS-Workspace/phantom-wg/blob/frontmatter/SETUP)                     |
+| Architecture      | [ARCHITECTURE](https://github.com/ARAS-Workspace/phantom-wg/blob/frontmatter/ARCHITECTURE)       |
+| Architecture (TR) | [ARCHITECTURE_TR](https://github.com/ARAS-Workspace/phantom-wg/blob/frontmatter/ARCHITECTURE_TR) |
+| Source Code       | [GitHub](https://github.com/ARAS-Workspace/phantom-wg/tree/frontmatter)                          |
 
 ---
 
