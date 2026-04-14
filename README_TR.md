@@ -235,7 +235,7 @@ Terazi, IP havuzunu oluşturmak için bir base subnet'e ihtiyaç duyar. Varsayı
 
 ### Güncelleme Mekanizması
 
-Daemon kaynak kodu container'lara read-only olarak mount edilir (`phantom_daemon:/app/phantom_daemon:ro`). Dockerfile'lar yalnızca sistem bağımlılıklarını (Python, runtime paketleri) sağlar — uygulama kodu image içinde değildir. Bu yapı sayesinde:
+Daemon ve auth-service kaynak kodları container'lara read-only olarak mount edilir (`phantom_daemon:/app/phantom_daemon:ro`, `services/auth-service:/app/auth-service:ro`). Dockerfile'lar yalnızca sistem bağımlılıklarını (Python, runtime paketleri) sağlar — uygulama kodu image içinde değildir. Bu yapı sayesinde:
 
 - **Hızlı güncelleme**: `git pull` + `restart` yeterlidir, image rebuild gerekmez
 - **Hızlı rollback**: `git checkout <önceki-versiyon>` + `restart` ile anında geri dönüş
