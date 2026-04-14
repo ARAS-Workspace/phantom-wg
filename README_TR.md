@@ -235,6 +235,9 @@ Terazi, IP havuzunu oluşturmak için bir base subnet'e ihtiyaç duyar. Varsayı
 
 ### Güncelleme Mekanizması
 
+> [!IMPORTANT]
+> Güncelleme mekanizması git üzerinden çalışır. Kurulum alanınızı `git clone` ile veya aynı işi yapan [`get.phantom.tc`](https://get.phantom.tc) servisi ile oluşturmanız gerekir.
+
 Daemon ve auth-service kaynak kodları container'lara read-only olarak mount edilir (`phantom_daemon:/app/phantom_daemon:ro`, `services/auth-service:/app/auth-service:ro`). Dockerfile'lar yalnızca sistem bağımlılıklarını (Python, runtime paketleri) sağlar — uygulama kodu image içinde değildir. Bu yapı sayesinde:
 
 - **Hızlı güncelleme**: `git pull` + `restart` yeterlidir, image rebuild gerekmez

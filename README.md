@@ -234,6 +234,9 @@ Terazi requires a base subnet to create the IP pool. The default is `10.8.0.0/24
 
 ### Update Mechanism
 
+> [!IMPORTANT]
+> The update mechanism operates via git. You must create your installation directory using `git clone` or the [`get.phantom.tc`](https://get.phantom.tc) installer service.
+
 The daemon and auth-service source code is mounted read-only into containers (`phantom_daemon:/app/phantom_daemon:ro`, `services/auth-service:/app/auth-service:ro`). Dockerfiles provide only system dependencies (Python, runtime packages) — application code is not baked into the image. This enables:
 
 - **Fast updates**: `git pull` + `restart` is sufficient, no image rebuild required
