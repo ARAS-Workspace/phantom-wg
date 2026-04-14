@@ -1,0 +1,82 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="30 78 920 160">
+  <defs>
+    <style>
+      :root {
+        --primary-color: #10B981;
+        --secondary-color: #374151;
+        --bg-color: #1F2937;
+        --text-color: #9CA3AF;
+      }
+
+      .line { stroke: var(--secondary-color); stroke-width: 2; fill: none; stroke-dasharray: 5,5; }
+      .node-bg { fill: var(--bg-color); }
+      .node-border { stroke: var(--secondary-color); stroke-width: 2; fill: none; }
+      .node-active { stroke: var(--primary-color); }
+      .text { fill: var(--text-color); font-family:monospace; font-size: 12px; font-weight: 600; }
+      .text-small { fill: var(--text-color); font-family:monospace; font-size: 10px; font-weight: 400; }
+      .icon { fill: var(--text-color); }
+      .icon-active { fill: var(--primary-color); }
+
+      @keyframes travel {
+        0% { offset-distance: 0%; opacity: 1; }
+        95% { opacity: 1; }
+        100% { offset-distance: 100%; opacity: 0; }
+      }
+
+      .packet {
+        offset-path: path('M 100 150 L 370 150 L 630 150 L 900 150');
+        animation: travel 5s ease-in-out infinite;
+        fill: var(--primary-color);
+      }
+    </style>
+  </defs>
+
+  <!-- Connection Lines -->
+  <line class="line" x1="100" y1="150" x2="370" y2="150"/>
+  <line class="line" x1="370" y1="150" x2="630" y2="150"/>
+  <line class="line" x1="630" y1="150" x2="900" y2="150"/>
+
+  <!-- You -->
+  <g transform="translate(100, 150)">
+    <circle class="node-bg" r="30"/>
+    <circle class="node-border" r="30"/>
+    <path class="icon" d="M 0,-10 A 10,10 0 0,1 0,10 A 10,10 0 0,1 0,-10 M 0,-5 A 5,5 0 0,1 0,5 A 5,5 0 0,1 0,-5"/>
+    <text class="text" y="50" text-anchor="middle">You</text>
+  </g>
+
+  <!-- Phantom-Frontmatter (Ghost icon, circle) -->
+  <g transform="translate(370, 150)">
+    <circle class="node-bg" r="35"/>
+    <circle class="node-active" r="35"/>
+    <!-- Ghost Icon -->
+    <path class="icon-active" d="M 0,-15 Q -12,-15 -12,-5 L -12,10 L -6,4 L 0,10 L 6,4 L 12,10 L 12,-5 Q 12,-15 0,-15"/>
+    <circle class="icon-active" cx="-4" cy="-2" r="1.5"/>
+    <circle class="icon-active" cx="4" cy="-2" r="1.5"/>
+    <text class="text" y="60" text-anchor="middle">Phantom-Frontmatter Server</text>
+    <text class="text-small" y="72" text-anchor="middle">wstunnel :443</text>
+  </g>
+
+  <!-- Phantom-WG Modern (shield icon, circle) -->
+  <g transform="translate(630, 150)">
+    <circle class="node-bg" r="35"/>
+    <circle class="node-active" r="35"/>
+    <!-- Shield Icon -->
+    <path class="icon-active" d="M 0,-14 L -11,-8 L -11,3 Q -11,14 0,17 Q 11,14 11,3 L 11,-8 Z" fill="none" stroke-width="2"/>
+    <rect class="icon-active" x="-5" y="-3" width="10" height="8" rx="1.5" fill="none" stroke-width="1.5"/>
+    <path class="icon-active" d="M -3,-3 L -3,-6 Q -3,-9 0,-9 Q 3,-9 3,-6 L 3,-3" fill="none" stroke-width="1.5"/>
+    <text class="text" y="60" text-anchor="middle">Phantom-WG Modern Server</text>
+  </g>
+
+  <!-- Internet -->
+  <g transform="translate(900, 150)">
+    <circle class="node-bg" r="30"/>
+    <circle class="node-border" r="30"/>
+    <circle class="icon" r="12" fill="none" stroke="var(--text-color)" stroke-width="2"/>
+    <ellipse class="icon" cx="0" cy="0" rx="4" ry="12" fill="none" stroke="var(--text-color)" stroke-width="1.5"/>
+    <line class="icon" x1="-12" y1="0" x2="12" y2="0" stroke="var(--text-color)" stroke-width="1.5"/>
+    <text class="text" y="50" text-anchor="middle">Internet</text>
+  </g>
+
+  <!-- Traveling Packet -->
+  <circle class="packet" r="6"/>
+</svg>
