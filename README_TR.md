@@ -204,7 +204,9 @@ Yönetim için `./tools/prod.sh` konumunda kullanışlı bir araç bulunur.
 | `build`                             | İmaj Derle                                      |
 | `rebuild`                           | Sıfırdan İmaj Derle (no-cache)                  |
 | `update`                            | Güncelle (git pull + restart)                   |
-| `update --skip-compose`             | Güncelle (docker-compose.yml hariç tut)         |
+| `update --skip-compose`             | Güncelle (docker-compose.yml tek seferlik koru) |
+| `compose-lock`                      | docker-compose.yml kalıcı kilitle               |
+| `compose-unlock`                    | docker-compose.yml kilidini kaldır              |
 | `logs [service]`                    | Log Takibi (Tümü veya Belirli Servis)           |
 | `status`                            | Docker Compose Durumu                           |
 | `show-versions`                     | Bileşen Versiyonları (Daemon, Vendor Paketleri) |
@@ -231,25 +233,42 @@ Terazi, IP havuzunu oluşturmak için bir base subnet'e ihtiyaç duyar. Varsayı
 > [!TIP]
 > Gizli anahtarlar `container-data/secrets/production/` altında saklanır. Admin şifresi aynı dizindeki `.admin_password` dosyasına yazılır — giriş yaptıktan sonra güvenle kaldırabilirsiniz.
 
-### Güncelleme
+### Güncelleme Mekanizması
+
+Daemon kaynak kodu container'lara read-only olarak mount edilir (`phantom_daemon:/app/phantom_daemon:ro`). Dockerfile'lar yalnızca sistem bağımlılıklarını (Python, runtime paketleri) sağlar — uygulama kodu image içinde değildir. Bu yapı sayesinde:
+
+- **Hızlı güncelleme**: `git pull` + `restart` yeterlidir, image rebuild gerekmez
+- **Hızlı rollback**: `git checkout <önceki-versiyon>` + `restart` ile anında geri dönüş
+- **Build bağımsızlığı**: Kod değişiklikleri container build sürecini tetiklemez
 
 ```bash
 ./tools/prod.sh update                 # git pull + restart
-./tools/prod.sh update --skip-compose  # Compose dosyasını koru
 ```
 
-> [!TIP]
-> `docker-compose.yml` üzerinde bir yapılandırma değişikliği yaptıysanız ve güncellemeleri almak istiyorsanız `--skip-compose` kullanın.
+#### Compose Lock
 
-Tekrardan container derlemesi gerektirecek paket bağımlılıkları değişikliklerinde (Dockerfile, requirements.txt):
+`docker-compose.yml` üzerinde port, volume veya environment değişikliği yaptıysanız, güncellemelerin bu dosyayı ezme riski vardır. Compose lock bu dosyayı git güncellemelerinden korur:
+
+```bash
+./tools/prod.sh compose-lock           # Kalıcı kilitle
+./tools/prod.sh update                 # docker-compose.yml korunur
+./tools/prod.sh compose-unlock         # Kilidi kaldır
+```
+
+Tek seferlik koruma için:
+
+```bash
+./tools/prod.sh update --skip-compose  # Bu güncelleme için docker-compose.yml korunur
+```
+
+#### Rebuild
+
+Sistem bağımlılıkları değiştiğinde (Dockerfile, requirements.txt) image rebuild gerekir:
 
 ```bash
 ./tools/prod.sh rebuild
 ./tools/prod.sh up
 ```
-
-> [!TIP]
-> Dockerfile'lar yalnızca yapının çalışması için gereken sistem bağımlılıklarını sağlar. Kod güncellemeleri `update` komutuyla alınır — `rebuild` yalnızca bu bağımlılıklar değiştiğinde (container yapılarında tekrar derleme gereken güncellemelerde) gereklidir.
 
 ---
 
