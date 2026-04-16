@@ -204,9 +204,8 @@ Yönetim için `./tools/prod.sh` konumunda kullanışlı bir araç bulunur.
 | `build`                             | İmaj Derle                                      |
 | `rebuild`                           | Sıfırdan İmaj Derle (no-cache)                  |
 | `update`                            | Güncelle (git pull + restart)                   |
-| `update --skip-compose`             | Güncelle (docker-compose.yml tek seferlik koru) |
-| `compose-lock`                      | docker-compose.yml kalıcı kilitle               |
-| `compose-unlock`                    | docker-compose.yml kilidini kaldır              |
+| `compose lock`                      | docker-compose.yml kalıcı kilitle               |
+| `compose unlock`                    | docker-compose.yml kilidini kaldır              |
 | `logs [service]`                    | Log Takibi (Tümü veya Belirli Servis)           |
 | `status`                            | Docker Compose Durumu                           |
 | `show-versions`                     | Bileşen Versiyonları (Daemon, Vendor Paketleri) |
@@ -253,15 +252,9 @@ Daemon ve auth-service kaynak kodları container'lara read-only olarak mount edi
 `docker-compose.yml` üzerinde port, volume veya environment değişikliği yaptıysanız, güncellemelerin bu dosyayı ezme riski vardır. Compose lock bu dosyayı git güncellemelerinden korur:
 
 ```bash
-./tools/prod.sh compose-lock           # Kalıcı kilitle
+./tools/prod.sh compose lock           # Kalıcı kilitle
 ./tools/prod.sh update                 # docker-compose.yml korunur
-./tools/prod.sh compose-unlock         # Kilidi kaldır
-```
-
-Tek seferlik koruma için:
-
-```bash
-./tools/prod.sh update --skip-compose  # Bu güncelleme için docker-compose.yml korunur
+./tools/prod.sh compose unlock         # Kilidi kaldır
 ```
 
 #### Rebuild

@@ -203,9 +203,8 @@ A convenient tool is available at `./tools/prod.sh` for management.
 | `build`                             | Build Images                                  |
 | `rebuild`                           | Build Images from Scratch (no-cache)          |
 | `update`                            | Update (git pull + restart)                   |
-| `update --skip-compose`             | Update (one-shot docker-compose.yml preserve) |
-| `compose-lock`                      | Permanently lock docker-compose.yml           |
-| `compose-unlock`                    | Unlock docker-compose.yml                     |
+| `compose lock`                      | Permanently lock docker-compose.yml           |
+| `compose unlock`                    | Unlock docker-compose.yml                     |
 | `logs [service]`                    | Log Tracking (All or Specific Service)        |
 | `status`                            | Docker Compose Status                         |
 | `show-versions`                     | Component Versions (Daemon, Vendor Packages)  |
@@ -252,15 +251,9 @@ The daemon and auth-service source code is mounted read-only into containers (`p
 If you have modified `docker-compose.yml` (ports, volumes, environment), updates may overwrite your changes. Compose lock protects this file from git updates:
 
 ```bash
-./tools/prod.sh compose-lock           # Permanently lock
+./tools/prod.sh compose lock           # Permanently lock
 ./tools/prod.sh update                 # docker-compose.yml is preserved
-./tools/prod.sh compose-unlock         # Release the lock
-```
-
-For one-shot protection:
-
-```bash
-./tools/prod.sh update --skip-compose  # Preserve docker-compose.yml for this update only
+./tools/prod.sh compose unlock         # Release the lock
 ```
 
 #### Rebuild
