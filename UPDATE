@@ -1,0 +1,87 @@
+Phantom-WG Modern — Update Guide
+==================================
+
+Standard Update:
+  ./tools/prod.sh update
+
+  This pulls the latest code from upstream and restarts all services.
+  Environment files (.env.daemon, .env.auth-service) are always preserved.
+
+  Alternatively:
+    git pull
+    ./tools/prod.sh restart
+
+Compose Lock:
+  If you have modified docker-compose.yml locally (custom ports,
+  resource limits, extra volumes), protect your changes with compose lock:
+
+    ./tools/prod.sh compose lock
+
+  Once locked, every future update preserves your local docker-compose.yml.
+  The lock persists across sessions — set it once and forget it.
+
+    ./tools/prod.sh compose status    Check if locked
+    ./tools/prod.sh compose unlock    Release to pull upstream changes
+
+  How it works:
+    Compose lock uses git update-index --assume-unchanged to tell git
+    to ignore local changes to docker-compose.yml during pull.
+
+Dependency Updates:
+  If requirements.txt or the Dockerfile changed after an update:
+
+    ./tools/prod.sh rebuild
+    ./tools/prod.sh restart
+
+  This rebuilds the Docker image from scratch with new dependencies.
+
+Version Check:
+  ./tools/prod.sh show-versions
+
+  Shows the current daemon version and bridge versions running
+  inside the container.
+
+Rollback:
+  To roll back to a previous version:
+
+    git fetch --tags
+    git checkout v1.0.7
+    ./tools/prod.sh restart
+
+  If the Dockerfile may have changed between versions, rebuild first:
+
+    git checkout v1.0.7
+    ./tools/prod.sh rebuild
+    ./tools/prod.sh restart
+
+  This creates a detached HEAD state — you are pinned to that tag.
+  To resume receiving updates, switch back to main:
+
+    git checkout main
+    ./tools/prod.sh update
+
+  Environment files and runtime data are unaffected by rollback.
+
+Hard Reset:
+  ./tools/prod.sh hard-reset
+
+  Destroys ALL data: secrets, auth database, client databases,
+  and Docker volumes. Requires typing 'yes' to confirm.
+
+  After hard reset, run setup again:
+    ./tools/prod.sh setup
+
+What Gets Preserved on Update:
+  .env.daemon                Always preserved (not tracked by git)
+  .env.auth-service          Always preserved (not tracked by git)
+  docker-compose.yml         Preserved only when compose lock is active
+  container-data/            Always preserved (runtime data, not in git)
+
+What Gets Updated:
+  phantom_daemon/            Daemon source code
+  services/auth-service/     Auth service source
+  services/react-spa/dist/   Web dashboard build
+  services/nginx/            Reverse proxy config
+  tools/                     Production CLI and libraries
+  Dockerfile                 Image definition
+  requirements.txt           Python dependencies

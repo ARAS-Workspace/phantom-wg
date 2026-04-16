@@ -73,7 +73,11 @@ _bootstrap_env() {
 }
 
 _is_compose_locked() {
-    git ls-files -v docker-compose.yml 2>/dev/null | grep -q '^S'
+    # assume-unchanged: git ls-files -v shows lowercase 'h' when set.
+    # skip-worktree ('S') is broken in blob:none partial clones —
+    # the flag is set but git ignores it. assume-unchanged works
+    # reliably in both normal and sparse/partial clones.
+    git ls-files -v docker-compose.yml 2>/dev/null | grep -q '^h'
 }
 
 cmd_compose() {
@@ -85,7 +89,7 @@ cmd_compose() {
                 echo "  Compose already locked."
                 return 0
             fi
-            git update-index --skip-worktree docker-compose.yml
+            git update-index --assume-unchanged docker-compose.yml
             green "Compose locked."
             echo "  Future 'prod.sh update' calls will preserve local docker-compose.yml changes."
             echo "  Run 'prod.sh compose unlock' to release."
@@ -95,7 +99,7 @@ cmd_compose() {
                 echo "  Compose already unlocked."
                 return 0
             fi
-            git update-index --no-skip-worktree docker-compose.yml
+            git update-index --no-assume-unchanged docker-compose.yml
             green "Compose unlocked."
             echo "  Next 'prod.sh update' will pull upstream docker-compose.yml."
             ;;
@@ -190,14 +194,14 @@ cmd_update() {
 
     # One-shot legacy skip (doesn't persist)
     if [[ "$legacy_skip" == true && "$locked" == false ]]; then
-        git update-index --skip-worktree docker-compose.yml
+        git update-index --assume-unchanged docker-compose.yml
         echo "  One-shot skip applied to docker-compose.yml."
     fi
 
-    git pull
+    git pull origin main
 
     if [[ "$legacy_skip" == true && "$locked" == false ]]; then
-        git update-index --no-skip-worktree docker-compose.yml
+        git update-index --no-assume-unchanged docker-compose.yml
     fi
 
     bold "Restarting stack..."

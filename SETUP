@@ -5,6 +5,7 @@ Prerequisites:
   - Docker Engine 20.10+
   - Docker Compose v2
   - bash
+  - git (required for update mechanism and compose lock)
 
 Directory Structure:
   phantom-wg/
@@ -14,20 +15,18 @@ Directory Structure:
   ├── .env.auth-service.example   Auth service environment template
   ├── requirements.txt            Python dependencies (pinned, hashed)
   ├── SETUP                       This file
+  ├── UPDATE                      Update and maintenance guide
   ├── LICENSE                     AGPL-3.0
   ├── THIRD_PARTY_LICENSES        Dependency licenses
-  ├── SEMVER.md                  Versioning strategy
   ├── phantom_daemon/             Daemon source
   ├── services/
   │   ├── auth-service/           Authentication service
   │   ├── nginx/                  TLS reverse proxy config
   │   └── react-spa/dist/         Web dashboard (pre-built)
-  ├── tools/
-  │   ├── prod.sh                 Production CLI
-  │   ├── prod.vars               Environment variables
-  │   └── lib/                    Shell libraries
-  └── .github/
-      └── scripts/release.sh      Release trigger
+  └── tools/
+      ├── prod.sh                 Production CLI
+      ├── prod.vars               Environment variables
+      └── lib/                    Shell libraries
 
 Quick Start:
   1. Setup (first time only):
@@ -73,12 +72,17 @@ Commands:
   ./tools/prod.sh build            Build images
   ./tools/prod.sh rebuild          Rebuild images from scratch (no-cache)
   ./tools/prod.sh update           Pull latest + restart
-  ./tools/prod.sh update --skip-compose  Pull but preserve local compose changes
+  ./tools/prod.sh show-versions    Show daemon + bridge versions
   ./tools/prod.sh logs             Follow logs
   ./tools/prod.sh status           Container status
   ./tools/prod.sh shell [service]  Open shell (default: daemon)
   ./tools/prod.sh exec <svc> <cmd> Execute command in service
   ./tools/prod.sh hard-reset       Wipe ALL data (destructive)
+
+  Compose Lock:
+  ./tools/prod.sh compose lock     Preserve local docker-compose.yml on update
+  ./tools/prod.sh compose unlock   Release lock to pull upstream changes
+  ./tools/prod.sh compose status   Show current lock state
 
 Ports:
   443/tcp     HTTPS (nginx → auth-service → daemon)
@@ -98,14 +102,11 @@ TLS Certificate:
     container-data/secrets/production/tls_key
 
 Updating:
-  ./tools/prod.sh update
+  See the UPDATE file for the full update and maintenance guide.
 
-  If docker-compose.yml has local changes (e.g. custom ports):
-    ./tools/prod.sh update --skip-compose
+  Quick reference:
+    ./tools/prod.sh update
 
-  If dependencies changed (requirements.txt, Dockerfile):
-    ./tools/prod.sh rebuild
-    ./tools/prod.sh restart
-
-  Environment files (.env.daemon, .env.auth-service) are preserved
-  across updates.
+  If you have local docker-compose.yml changes, lock them first:
+    ./tools/prod.sh compose lock
+    ./tools/prod.sh update
