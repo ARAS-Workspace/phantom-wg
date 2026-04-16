@@ -1,6 +1,6 @@
 import React from 'react';
 import { Grid, Column, ClickableTile } from '@carbon/react';
-import { ArrowRight, ContainerServices, BareMetalServer } from '@carbon/icons-react';
+import { ArrowRight, Rocket, Documentation } from '@carbon/icons-react';
 import type { CarbonIconType } from '@carbon/icons-react';
 import PhantomIcon from './PhantomIcon';
 import './styles/Hero.scss';
@@ -14,8 +14,8 @@ export interface VersionTile {
 }
 
 const ICON_MAP: Record<string, CarbonIconType> = {
-  'container': ContainerServices,
-  'bare-metal': BareMetalServer,
+  'rocket': Rocket,
+  'documentation': Documentation,
 };
 
 export interface HeroContent {

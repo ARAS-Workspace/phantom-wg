@@ -4,17 +4,16 @@
   "description": "Phantom-WG is a modular tool for setting up and managing WireGuard VPN infrastructure on your own server. Beyond basic VPN management, it provides censorship-resistant connections, multi-layer encryption, and advanced privacy scenarios.",
   "versions": [
     {
-      "title": "Phantom-WG Modern",
-      "description": "Native Container Architecture",
-      "href": "/docs",
-      "icon": "container"
+      "title": "Installation",
+      "description": "Setup & Configuration",
+      "href": "/docs/installation-update",
+      "icon": "rocket"
     },
     {
-      "title": "Phantom-WG Retro",
-      "description": "Bare Metal & Advanced Privacy",
-      "href": "https://retro.phantom.tc",
-      "external": true,
-      "icon": "bare-metal"
+      "title": "Documentation",
+      "description": "Architecture & Features",
+      "href": "/docs",
+      "icon": "documentation"
     }
   ]
 }
