@@ -1,0 +1,149 @@
+import AsciinemaPlayer from '@shared/components/visualization/AsciinemaPlayer';
+import { InlineNotification } from '@carbon/react';
+
+# Installation & Update
+
+## Installation
+
+**Prerequisites:** Docker Engine 20.10+, Docker Compose v2, bash, git.
+
+```bash
+curl -sSL get.phantom.tc | bash
+```
+
+<AsciinemaPlayer src="/assets/phantom-wg-install.cast" cols={160} />
+
+### Configuration
+
+```bash
+cd phantom-wg
+
+# First-time setup
+./tools/prod.sh setup
+
+# Or with a custom subnet (see https://www.phantom.tc/docs/architecture/terazi)
+# ./tools/prod.sh setup --terazi-ipv4-subnet=10.9.0.0/24
+
+# Endpoint configuration
+IPV4=$(curl -4 -sSL https://get.phantom.tc/ip)
+IPV6=$(curl -6 -sSL https://get.phantom.tc/ip)
+sed -i "s/^WIREGUARD_ENDPOINT_V4=.*/WIREGUARD_ENDPOINT_V4=${IPV4}/" .env.daemon
+sed -i "s/^WIREGUARD_ENDPOINT_V6=.*/WIREGUARD_ENDPOINT_V6=${IPV6}/" .env.daemon
+
+# Start
+./tools/prod.sh up
+```
+
+**Access:**
+- Dashboard: `https://<server-ip>`
+- WireGuard: UDP port `51820`
+- Admin password: `cat container-data/secrets/production/.admin_password`
+
+#### Access from VPN
+
+To access the dashboard while connected to the VPN, use the nginx container's Docker network address:
+
+```bash
+docker inspect phantom-nginx --format '{{range .NetworkSettings.Networks}}IPv4: {{.IPAddress}} | IPv6: {{.GlobalIPv6Address}}{{end}}'
+```
+
+Accessible via `https://<IPv4>` or `https://[<IPv6>]` through the tunnel. You can also remove the `ports: "443:443"` line from `docker-compose.yml` to make the dashboard accessible only through the VPN tunnel.
+
+---
+
+## Management
+
+A convenient tool is available at `./tools/prod.sh` for management.
+
+| Command                             | Description                                   |
+|-------------------------------------|-----------------------------------------------|
+| `setup`                             | Full Setup                                    |
+| `setup --terazi-ipv4-subnet=SUBNET` | Setup with custom subnet (e.g. `10.9.0.0/24`) |
+| `up`                                | Start                                         |
+| `down`                              | Stop                                          |
+| `restart [service]`                 | Restart (All or Specific Service)             |
+| `build`                             | Build Images                                  |
+| `rebuild`                           | Build Images from Scratch (no-cache)          |
+| `update`                            | Update (git pull + restart)                   |
+| `compose lock`                      | Permanently lock docker-compose.yml           |
+| `compose unlock`                    | Unlock docker-compose.yml                     |
+| `compose status`                    | Show current lock state                       |
+| `logs [service]`                    | Log Tracking (All or Specific Service)        |
+| `status`                            | Docker Compose Status                         |
+| `show-versions`                     | Component Versions (Daemon, Vendor Packages)  |
+| `shell [service]`                   | Shell (default: daemon)                       |
+| `exec <svc> <cmd>`                  | Execute Command                               |
+| `hard-reset`                        | Delete All Data                               |
+
+### Setup
+
+The `setup` command creates all required components during first-time installation:
+
+1. Creates `.env.daemon` and `.env.auth-service` files from `.example` templates.
+2. Generates WireGuard server key pair. (Curve25519 — `wg_private_key`, `wg_public_key`)
+3. Auth-Service bootstrap cycle:
+   - Generates Ed25519 signing key pair. (`auth_signing_key`, `auth_verify_key`)
+   - Creates auth database. (`auth.db` — users, sessions, TOTP, audit log)
+   - Creates admin account. (32-character random password encrypted with Argon2id hash)
+4. Generates self-signed TLS certificate for nginx. (`tls_cert`, `tls_key`)
+
+All of these operations take place within the container — no additional dependencies or tools need to be installed on the host.
+
+Terazi requires a base subnet to create the IP pool. The default is `10.8.0.0/24` and can be customized at setup with the `--terazi-ipv4-subnet` argument. This value is only used when `wallet.db` is created — once the database exists, the subnet is stored there and the argument is no longer needed. See the [Terazi documentation](https://www.phantom.tc/docs/architecture/terazi) for details.
+
+<InlineNotification
+  kind="info"
+  title="Secret Keys"
+  subtitle="Secret keys are stored under container-data/secrets/production/. The admin password is written to .admin_password in the same directory — you can safely remove it after logging in."
+  hideCloseButton
+  lowContrast
+/>
+
+---
+
+## Update Mechanism
+
+<InlineNotification
+  kind="warning"
+  title="Git Prerequisite"
+  subtitle="The update mechanism operates via git. You must create your installation directory using git clone or the get.phantom.tc installer service."
+  hideCloseButton
+  lowContrast
+/>
+
+The daemon and auth-service source code is mounted read-only into containers (`phantom_daemon:/app/phantom_daemon:ro`, `services/auth-service:/app/auth-service:ro`). Dockerfiles provide only system dependencies (Python, runtime packages) — application code is not baked into the image. This enables:
+
+- **Fast updates**: `git pull` + `restart` is sufficient, no image rebuild required
+- **Fast rollback**: `git checkout <previous-version>` + `restart` for immediate rollback
+- **Build independence**: Code changes do not trigger a container build cycle
+
+```bash
+./tools/prod.sh update                 # git pull + restart
+```
+
+### Compose Lock
+
+If you have modified `docker-compose.yml` (ports, volumes, environment), updates may overwrite your changes. Compose lock protects this file from git updates:
+
+```bash
+./tools/prod.sh compose lock           # Permanently lock
+./tools/prod.sh update                 # docker-compose.yml is preserved
+./tools/prod.sh compose unlock         # Release the lock
+```
+
+### Rebuild
+
+When system dependencies change (Dockerfile, requirements.txt), an image rebuild is required:
+
+```bash
+./tools/prod.sh rebuild
+./tools/prod.sh up
+```
+
+<InlineNotification
+  kind="info"
+  title="Build vs Update"
+  subtitle="Dockerfiles only provide the system dependencies needed for the stack to run. Code updates are received with the update command — rebuild is only required when these dependencies change."
+  hideCloseButton
+  lowContrast
+/>

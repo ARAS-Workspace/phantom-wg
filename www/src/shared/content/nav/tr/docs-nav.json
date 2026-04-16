@@ -6,6 +6,7 @@
   ],
   "sideNav": [
     { "label": "Giriş", "href": "/docs" },
+    { "label": "Kurulum ve Güncelleme", "href": "/docs/installation-update" },
     {
       "label": "Mimari",
       "defaultExpanded": true,

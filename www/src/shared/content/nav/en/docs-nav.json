@@ -6,6 +6,7 @@
   ],
   "sideNav": [
     { "label": "Introduction", "href": "/docs" },
+    { "label": "Installation & Update", "href": "/docs/installation-update" },
     {
       "label": "Architecture",
       "defaultExpanded": true,
