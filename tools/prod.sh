@@ -26,6 +26,7 @@ source "$TOOLS_DIR/lib/keys.sh"
 source "$TOOLS_DIR/lib/auth.sh"
 source "$TOOLS_DIR/lib/tls.sh"
 source "$TOOLS_DIR/lib/compose.sh"
+source "$TOOLS_DIR/lib/certbot.sh"
 
 # ── Production-specific ─────────────────────────────────────────
 
@@ -248,6 +249,7 @@ Usage: ./tools/prod.sh <command>
     gen-keys            Generate WireGuard keypair
     setup-auth          Bootstrap auth service
     setup-tls           Generate self-signed TLS certificate
+    certbot <domain>    Obtain Let's Encrypt TLS certificate
 
   Stack:
     build               Build production images
@@ -285,6 +287,7 @@ case "${1:-help}" in
     gen-keys)   shift; cmd_gen_keys "$@" ;;
     setup-auth) shift; cmd_setup_auth "$@" ;;
     setup-tls)  shift; cmd_setup_tls "$@" ;;
+    certbot)    shift; cmd_certbot "$@" ;;
 
     build)      cmd_build ;;
     rebuild)    cmd_rebuild ;;

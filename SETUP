@@ -77,6 +77,7 @@ Commands:
   ./tools/prod.sh status           Container status
   ./tools/prod.sh shell [service]  Open shell (default: daemon)
   ./tools/prod.sh exec <svc> <cmd> Execute command in service
+  ./tools/prod.sh certbot <domain> Obtain Let's Encrypt TLS certificate
   ./tools/prod.sh hard-reset       Wipe ALL data (destructive)
 
   Compose Lock:
@@ -100,6 +101,10 @@ TLS Certificate:
   replace the files before starting the stack:
     container-data/secrets/production/tls_cert
     container-data/secrets/production/tls_key
+
+  Let's Encrypt (optional):
+    ./tools/prod.sh certbot <domain>
+    ./tools/prod.sh restart nginx
 
 Updating:
   See the UPDATE file for the full update and maintenance guide.
