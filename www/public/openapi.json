@@ -2,7 +2,7 @@
   "openapi": "3.1.0",
   "info": {
     "title": "phantom-daemon",
-    "version": "1.0.9"
+    "version": "1.1.0"
   },
   "paths": {
     "/api/core/backup/export": {

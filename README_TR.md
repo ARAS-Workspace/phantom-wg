@@ -208,6 +208,7 @@ Yönetim için `./tools/prod.sh` konumunda kullanışlı bir araç bulunur.
 | `compose unlock`                    | docker-compose.yml kilidini kaldır              |
 | `logs [service]`                    | Log Takibi (Tümü veya Belirli Servis)           |
 | `status`                            | Docker Compose Durumu                           |
+| `certbot <domain>`                  | Let's Encrypt TLS sertifikası al                |
 | `show-versions`                     | Bileşen Versiyonları (Daemon, Vendor Paketleri) |
 | `shell [service]`                   | Shell (varsayılan: daemon)                      |
 | `exec <svc> <cmd>`                  | Komut Çalıştır                                  |
@@ -265,6 +266,17 @@ Sistem bağımlılıkları değiştiğinde (Dockerfile, requirements.txt) image 
 ./tools/prod.sh rebuild
 ./tools/prod.sh up
 ```
+
+#### Let's Encrypt (Opsiyonel)
+
+Varsayılan self-signed sertifika, Let's Encrypt sertifikası ile değiştirilebilir. HTTP-01 standalone challenge kullanır — domain'in A kaydı sunucuyu işaret etmeli ve 80 portu müsait olmalıdır.
+
+```bash
+./tools/prod.sh certbot <domain>
+./tools/prod.sh restart nginx
+```
+
+Sertifika dosyaları `container-data/secrets/production/tls_cert` ve `tls_key` olarak yazılır. Yenileme idempotent'tir — sertifika süresine yaklaşınca aynı komutu tekrar çalıştırın.
 
 ---
 
