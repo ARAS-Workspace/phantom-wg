@@ -207,6 +207,7 @@ A convenient tool is available at `./tools/prod.sh` for management.
 | `compose unlock`                    | Unlock docker-compose.yml                     |
 | `logs [service]`                    | Log Tracking (All or Specific Service)        |
 | `status`                            | Docker Compose Status                         |
+| `certbot <domain>`                  | Obtain Let's Encrypt TLS certificate          |
 | `show-versions`                     | Component Versions (Daemon, Vendor Packages)  |
 | `shell [service]`                   | Shell (default: daemon)                       |
 | `exec <svc> <cmd>`                  | Execute Command                               |
@@ -264,6 +265,17 @@ When system dependencies change (Dockerfile, requirements.txt), an image rebuild
 ./tools/prod.sh rebuild
 ./tools/prod.sh up
 ```
+
+#### Let's Encrypt (Optional)
+
+The default self-signed certificate can be replaced with a Let's Encrypt certificate. Uses HTTP-01 standalone challenge — the domain must have an A record pointing to the server and port 80 must be available.
+
+```bash
+./tools/prod.sh certbot <domain>
+./tools/prod.sh restart nginx
+```
+
+Certificate files are written to `container-data/secrets/production/tls_cert` and `tls_key`. Renewal is idempotent — run the same command again when the certificate is near expiry.
 
 ---
 
