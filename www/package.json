@@ -21,6 +21,7 @@
     "@carbon/icons-react": "11.76.0",
     "@carbon/react": "1.102.0",
     "@carbon/styles": "1.101.0",
+    "@cloudflare/stream-react": "1.9.3",
     "@ibm/plex-mono": "1.1.0",
     "@ibm/plex-sans": "1.1.0",
     "@ibm/plex-serif": "1.1.0",

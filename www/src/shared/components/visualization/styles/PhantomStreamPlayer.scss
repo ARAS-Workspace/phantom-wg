@@ -1,0 +1,57 @@
+@use '@carbon/react/scss/spacing' as sp;
+@use '@carbon/react/scss/breakpoint' as bp;
+
+.phantom-stream-player {
+  position: relative;
+  width: 100%;
+  margin: sp.$spacing-07 0;
+  border-radius: 8px;
+  overflow: hidden;
+  background: #000;
+
+  &__aspect {
+    position: relative;
+    width: 100%;
+    overflow: hidden;
+    /* aspect-ratio is applied inline via the `style` prop. */
+  }
+
+  &__inner {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+
+    /*
+     * @cloudflare/stream-react renders an internal wrapper + iframe. We pin
+     * both to fill our aspect-ratio box so the embed respects the prop
+     * instead of the library's hard-coded 16:9 padding container.
+     */
+    & > div,
+    & > div > iframe,
+    & iframe {
+      position: absolute !important;
+      inset: 0;
+      width: 100% !important;
+      height: 100% !important;
+      border: 0;
+    }
+  }
+
+  &__skeleton {
+    position: absolute !important;
+    inset: 0;
+    width: 100% !important;
+    height: 100% !important;
+    border-radius: 0 !important;
+  }
+
+  @include bp.breakpoint-down(md) {
+    margin: sp.$spacing-05 0;
+    border-radius: 4px;
+  }
+
+  @include bp.breakpoint-down(sm) {
+    margin: sp.$spacing-04 0;
+  }
+}

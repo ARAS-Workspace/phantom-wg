@@ -1,0 +1,7 @@
+node_modules/
+
+# Secrets directory: contents ignored, but the dir is kept via .gitkeep
+# and .env.example is committed as a template.
+secrets/*
+!secrets/.gitkeep
+!secrets/.env.example

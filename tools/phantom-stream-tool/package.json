@@ -1,0 +1,24 @@
+{
+  "name": "phantom-stream-tool",
+  "version": "0.1.0",
+  "description": "Cloudflare Stream ops CLI for Phantom-WG — upload/list/info/delete videos, returns UUID or JSON.",
+  "type": "module",
+  "bin": {
+    "phantom-stream-tool": "./bin/phantom-stream-tool.js"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "start": "node bin/phantom-stream-tool.js",
+    "link-global": "npm link"
+  },
+  "dependencies": {
+    "commander": "12.1.0",
+    "dotenv": "16.4.5",
+    "ora": "8.1.0",
+    "picocolors": "1.0.1"
+  },
+  "private": true,
+  "author": "Rıza Emre ARAS <r.emrearas@proton.me>"
+}
