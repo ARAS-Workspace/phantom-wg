@@ -1,0 +1,5 @@
+Project.logicx/**
+!Project.logicx/Media/
+!Project.logicx/Media/**
+*Project.logicx/Media/**/.DS_Store
+*Project.logicx/Media/**/Thumbs.db
