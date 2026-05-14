@@ -5,49 +5,79 @@ III. Presto agitato. Edited for Mac App Presentation tutorial timing
 (~1:25 duration). Source MIDI: Mutopia Project piece ID 276
 (`moonlight3.mid`).
 
+## Routing Topology
+
+```
+Track 1 (up)         ─┐
+Track 2 (down)        ├─► Bus 1 ─► Piano Bus ─┬─► Stereo Out ─► Master
+Track 3 (transition) ─┘         (no inserts)  │  (Mastering Assistant)
+                                              │
+                          post-fader send     │
+                              −12 dB          │
+                                 │            │
+                                 ▼            │
+                          Bus 2 ─► Reverb ────┘
+                                  (ChromaVerb)
+```
+
+Three Software Instrument tracks (Splice INSTRUMENT) carry only pan and
+volume. All tonal, dynamic, and spatial processing is consolidated:
+reverb on a dedicated aux, final stage on the stereo output. The Piano
+Bus collects the three tracks and currently carries no inserts.
+
 ## Source Layer — Splice INSTRUMENT
 
 Plugin: Splice INSTRUMENT (AU)
-Preset: Intimate Grand Piano — **Dynamic**
+Preset: Intimate Grand Piano — Dynamic
+
+Hammers and Tightness are voiced per register; all other parameters are
+identical across the three tracks.
 
 | Parameter | Track 1 (up) | Track 2 (down) | Track 3 (transition) |
 |-----------|--------------|----------------|----------------------|
 | Preset    | Dynamic      | Dynamic        | Dynamic              |
 | Reverb    | 20%          | 20%            | 20%                  |
 | Tightness | 20%          | 35%            | 35%                  |
-| Hammers   | 50%          | 50%            | 50%                  |
+| Hammers   | 20%          | 30%            | 30%                  |
 | Pedal     | 50%          | 50%            | 50%                  |
 | Dynamics  | 65%          | 65%            | 65%                  |
 
+Track 3 (transition) is a short connecting passage and follows the
+Track 2 (down) voicing.
+
 ## Track-Level Mixing
+
+Tracks carry pan and volume only — no Channel EQ, no Compressor, no
+insert effects. All three route to Bus 1 (Piano Bus).
 
 | Parameter | Track 1 (up) | Track 2 (down) | Track 3 (transition) |
 |-----------|--------------|----------------|----------------------|
 | Pan       | −15 (left)   | +15 (right)    | −15 (left)           |
-| Volume    | −5 dB        | −7 dB          | −5 dB                |
+| Volume    | −6 dB        | −8 dB          | −6 dB                |
+| Output    | Bus 1        | Bus 1          | Bus 1                |
 
-## Track-Level Channel EQ
+## Piano Bus (Bus 1)
 
-| Band                | Track 1 (up)             | Track 2 (down)           | Track 3 (transition)     |
-|---------------------|--------------------------|--------------------------|--------------------------|
-| Band 1 (HP)         | Deactive                 | 60 Hz, 18 dB/Oct, Q 0.71 | 60 Hz, 18 dB/Oct, Q 0.71 |
-| Band 4 (parametric) | Deactive                 | 250 Hz, −1.5 dB, Q 1.00  | 250 Hz, −1.5 dB, Q 1.00  |
-| Band 6 (parametric) | 4000 Hz, −2.5 dB, Q 1.20 | Deactive                 | Deactive                 |
-| Other bands         | Deactive                 | Deactive                 | Deactive                 |
+Summing bus for the three instrument tracks. No inserts — an A/B check
+confirmed bus compression was not required for this material (the
+Dynamic preset plus the source MIDI velocity range is already
+controlled enough for a music-bed role).
 
-## Track-Level Compressor
+| Parameter             | Value                  |
+|-----------------------|------------------------|
+| Input                 | Bus 1 (Track 1, 2, 3)  |
+| Inserts               | None                   |
+| Send → Bus 2 (Reverb) | −12 dB, post-fader     |
+| Output                | Stereo Out             |
 
-Preset: Studio VCA (base preset, custom values)
+## Reverb Aux (Bus 2)
 
-| Parameter | Track 1 (up) | Track 2 (down) | Track 3 (transition) |
-|-----------|--------------|----------------|----------------------|
-| Ratio     | 2.5:1        | 2.9:1          | 2.9:1                |
-| Threshold | −5.0 dB      | −4.0 dB        | −4.0 dB              |
-| Attack    | 30 ms        | 10 ms          | 10 ms                |
+Single ChromaVerb instance, fed by the post-fader send from the Piano
+Bus. Fully wet — the dry signal reaches Stereo Out via the Piano Bus.
+The −12 dB send level sets the wet/dry ratio (25% linear ≈ −12 dB);
+post-fader routing keeps that ratio constant under volume changes.
 
-## Track-Level ChromaVerb
-
-Preset: Chamber (applied identically to all three tracks)
+Preset: Chamber
 
 | Parameter | Value  |
 |-----------|--------|
@@ -57,75 +87,27 @@ Preset: Chamber (applied identically to all three tracks)
 | Decay     | 1.00 s |
 | Distance  | 20%    |
 | Pre-delay | 12 ms  |
-| Dry       | 100%   |
-| Wet       | 25%    |
+| Dry       | 0%     |
+| Wet       | 100%   |
 
-## Master Bus Plugin Chain
+Aux output: Stereo Out.
 
-Signal flow: DeEsser 2 → Multipressor → Mastering Assistant → Limiter (Legacy)
+## Master Bus — Stereo Out
 
-### DeEsser 2
+Single plugin: Mastering Assistant (analyzed). Auto EQ is pulled back
+from the analyzed default of 100% to 25% — at full strength the curve
+boosted the 2–5 kHz region and scooped the low mids, working against
+the source-level voicing; 25% applies gentle polish only.
 
-| Parameter     | Value    |
-|---------------|----------|
-| Frequency     | 4500 Hz  |
-| Threshold     | −12 dB   |
-| Max Reduction | 4 dB     |
-| Mode          | Relative |
-| Range         | Split    |
-| Filter        | Type 2   |
+| Parameter             | Value        |
+|-----------------------|--------------|
+| Character             | Transparent  |
+| Auto EQ               | 25%          |
+| Loudness Compensation | ON           |
+| True Peak ceiling     | −1.0 dBTP    |
+| Measured loudness     | ~−13.7 LUFS  |
 
-### Multipressor (4-Band Multiband Compressor)
-
-Active band: Band 3 only (2500-6600 Hz). Bands 1, 2, 4 disabled.
-
-**Band 3 Compressor:**
-
-| Parameter       | Value  |
-|-----------------|--------|
-| Compr Threshold | −18 dB |
-| Compr Ratio     | 3      |
-| Peak/RMS        | 4 ms   |
-| Attack          | 2 ms   |
-| Release         | 82 ms  |
-| Gain Make-up    | +1 dB  |
-
-**Band 3 Expander (inactive, pass-through):**
-
-| Parameter       | Value  |
-|-----------------|--------|
-| Expnd Threshold | −60 dB |
-| Expnd Ratio     | 1      |
-| Expnd Reduction | 0 dB   |
-
-**Output section:**
-
-| Parameter | Value |
-|-----------|-------|
-| Auto Gain | OFF   |
-| Lookahead | 5 ms  |
-| Out       | 0 dB  |
-
-### Mastering Assistant
-
-| Parameter             | Value       |
-|-----------------------|-------------|
-| Character             | Transparent |
-| Custom EQ             | 100%        |
-| Loudness              | +0.10 dB    |
-| Loudness Compensation | **OFF**     |
-| Excite                | OFF         |
-
-### Limiter (Legacy Mode)
-
-| Parameter    | Value  |
-|--------------|--------|
-| Mode         | Legacy |
-| Soft Knee    | ON     |
-| Gain         | 0 dB   |
-| Release      | 49 ms  |
-| Output Level | −1 dB  |
-| Lookahead    | 10 ms  |
+Output: Master.
 
 ## Project Settings
 
