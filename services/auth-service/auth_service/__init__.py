@@ -13,7 +13,7 @@ WireGuard® is a registered trademark of Jason A. Donenfeld.
 Phantom Auth Service — Ed25519 signed JWT + Argon2id + SQLite.
 """
 
-__version__ = "1.1.1"
+__version__ = "1.1.2"
 __author__ = "Rıza Emre ARAS"
 __email__ = "r.emrearas@proton.me"
 __license__ = "AGPL-3.0"
