@@ -28,7 +28,7 @@
     "@mdx-js/react": "3.1.1",
     "@mdx-js/rollup": "3.1.1",
     "asciinema-player": "3.15.1",
-    "mermaid": "11.13.0",
+    "mermaid": "11.15.0",
     "react": "19.2.4",
     "react-dom": "19.2.4",
     "react-router-dom": "7.13.1",
