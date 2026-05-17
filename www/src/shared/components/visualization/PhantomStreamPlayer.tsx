@@ -94,6 +94,11 @@ const PhantomStreamPlayerCore: React.FC<PhantomStreamPlayerProps> = ({
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [StreamComp, setStreamComp] = useState<React.ComponentType<any> | null>(null);
 
+  // Stream buffers asynchronously after the iframe mounts. We keep the
+  // skeleton overlay on top until the player signals it has enough data to
+  // play — otherwise the user stares at a black letterbox.
+  const [videoReady, setVideoReady] = useState(false);
+
   useEffect(() => {
     let cancelled = false;
     import('@cloudflare/stream-react').then((mod) => {
@@ -115,9 +120,6 @@ const PhantomStreamPlayerCore: React.FC<PhantomStreamPlayerProps> = ({
       aria-label={title}
     >
       <div className="phantom-stream-player__aspect" style={{ aspectRatio }}>
-        {!StreamComp && (
-          <SkeletonPlaceholder className="phantom-stream-player__skeleton" />
-        )}
         {StreamComp && (
           <div className="phantom-stream-player__inner">
             <StreamComp
@@ -138,8 +140,12 @@ const PhantomStreamPlayerCore: React.FC<PhantomStreamPlayerProps> = ({
               height="100%"
               width="100%"
               title={title}
+              onCanPlay={() => setVideoReady(true)}
             />
           </div>
+        )}
+        {(!StreamComp || !videoReady) && (
+          <SkeletonPlaceholder className="phantom-stream-player__skeleton" />
         )}
       </div>
     </div>
