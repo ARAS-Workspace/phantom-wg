@@ -11,6 +11,7 @@ import {
   WarningHex,
   Locked,
   SecurityServices,
+  Apple
 } from '@carbon/icons-react';
 import type { CarbonIconType } from '@carbon/icons-react';
 import type { ThemeName } from './types';
@@ -35,6 +36,12 @@ const DPI_ICONS: ThemeIcons = {
   clouds: [Locked, SecurityServices, CloudIcon],
 };
 
+const DPI_MAC_ICONS: ThemeIcons = {
+  dino: Apple,
+  obstacles: [Firewall, ViewFilled, WarningHex],
+  clouds: [Locked, SecurityServices, CloudIcon],
+};
+
 const UNDER_CONSTRUCTION_ICONS: ThemeIcons = {
   dino: Running,
   obstacles: [Construction, TrafficCone, Building],
@@ -45,6 +52,8 @@ export function getThemeIcons(theme: ThemeName): ThemeIcons {
   switch (theme) {
     case 'dpi':
       return DPI_ICONS;
+    case 'dpi-mac':
+      return DPI_MAC_ICONS;
     case 'under-construction':
       return UNDER_CONSTRUCTION_ICONS;
     case 'error':
