@@ -1,7 +1,28 @@
 @use '@carbon/styles/scss/components/tabs';
 @use '@carbon/react/scss/spacing' as spacing;
+@use '@carbon/react/scss/type' as type;
 @use '@carbon/react/scss/breakpoint' as bp;
 
 .content-tabs {
-  // Custom styles can be added here if needed
+  &__panel,
+  &__prerender {
+    ul, ol {
+      @include type.type-style('body-01');
+      color: var(--cds-text-secondary);
+      margin-bottom: spacing.$spacing-05;
+      padding-left: spacing.$spacing-07;
+    }
+
+    ul {
+      list-style-type: disc;
+    }
+
+    ol {
+      list-style-type: decimal;
+    }
+
+    li {
+      margin-bottom: spacing.$spacing-03;
+    }
+  }
 }

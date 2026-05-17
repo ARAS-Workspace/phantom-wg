@@ -1,0 +1,9 @@
+*Import a config and start your tunnel*
+
+Tüneli başlatmak için bir WireGuard `.conf` dosyasının içeriği veya bu `.conf` dosyasının `[Wstunnel]` bölümü ile genişletilmiş hali içe aktarılır.
+Uygulama iki bağlantı modunu aynı arayüz altında yönetir:
+
+- **Standalone WireGuard** — Klasik WireGuard tünel bağlantısı
+- **wstunnel + WireGuard** — wstunnel katmanı içinde taşınan WireGuard tünel bağlantısı
+
+Mod, içe aktarılan yapılandırma dosyasının tanımına göre belirlenir; iki mod arasında ayrı bir uygulama veya yapılandırma gerekmez.

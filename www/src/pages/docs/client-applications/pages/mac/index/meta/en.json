@@ -1,0 +1,10 @@
+{
+  "seo": {
+    "title": "Mac Client Application",
+    "description": "Native macOS client for Phantom-WG. Supports Ghost Mode (wstunnel + WireGuard), Standalone WireGuard, and Split-Tunneling."
+  },
+  "kv": {
+    "datePublished": "17/05/2026 00:00",
+    "dateModified": "17/05/2026 00:00"
+  }
+}

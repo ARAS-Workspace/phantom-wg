@@ -1,0 +1,22 @@
+import { InlineNotification } from '@carbon/react';
+
+*Approve three system extensions to begin*
+
+Phantom-WG Mac handles the application's network operations through three system extensions:
+
+| Extension            | Role                                                                                            |
+|----------------------|-------------------------------------------------------------------------------------------------|
+| `PhantomTunnel`      | Tunnel connection — Ghost Mode (wstunnel + WireGuard) or Standalone WireGuard.                  |
+| `PhantomSplitTunnel` | Transparent Proxy for per-app traffic routing.                                                  |
+| `PhantomDNSProxy`    | DNS Proxy that pins DNS queries to the physical interface or the network interface you select.  |
+
+On first launch, macOS asks for a separate approval for each extension. The Extension Gate screen waits until all three extensions are active.
+If any one is missing, the main interface stays closed and step-by-step guidance is presented to complete the missing extension.
+
+<InlineNotification
+    kind="info"
+    title="Removing Extensions"
+    subtitle="Before deleting the app, use the 'Uninstall System Extensions' action from the settings menu to disable all three extensions in a single step."
+    hideCloseButton
+    lowContrast
+/>

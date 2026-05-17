@@ -8,6 +8,14 @@
     { "label": "Introduction", "href": "/docs" },
     { "label": "Installation & Update", "href": "/docs/installation-update" },
     {
+      "label": "Client Applications",
+      "defaultExpanded": true,
+      "children": [
+        {"label":  "Mac", "href": "/docs/client-applications/mac"},
+        {"label":  "iOS", "href": "https://testflight.apple.com/join/5Kt55AXd", "external": true}
+      ]
+    },
+    {
       "label": "Architecture",
       "defaultExpanded": true,
       "children": [

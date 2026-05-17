@@ -1,0 +1,10 @@
+{
+  "seo": {
+    "title": "Mac İstemci Uygulaması",
+    "description": "Phantom-WG için yerel macOS istemcisi. Ghost Mode (wstunnel + WireGuard), Standalone WireGuard ve Split-Tunneling destekli."
+  },
+  "kv": {
+    "datePublished": "17/05/2026 00:00",
+    "dateModified": "17/05/2026 00:00"
+  }
+}

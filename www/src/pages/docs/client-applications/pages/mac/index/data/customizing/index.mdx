@@ -1,0 +1,7 @@
+*Route selected apps outside the tunnel*
+
+Split-Tunneling, seçtiğiniz uygulamaların trafiğini tüneli atlatarak doğrudan fiziksel arayüzünüzden veya seçtiğiniz ağ arayüzü üzerinden çıkarır. Bir uygulamayı bypass listesine eklediğinizde hem ağ akışı hem de DNS sorguları aynı arayüze sabitlenir; tünel devrede kalmaya devam eder, kalan trafik VPN üzerinden akar.
+
+Seçilen arayüz erişilemez duruma geldiğinde — örneğin Wi-Fi düştüğünde veya bağlı ağ değiştiğinde — bypass listesindeki uygulamaların akışı sessizce tünele kaydırılmak yerine reddedilir. Bu davranış, kullanıcının tercih ettiği çıkış yolunun korunmasını sağlar ve istem dışı sızıntıların önüne geçer.
+
+Bypass listesine ek olarak, macOS'in sistem genelindeki yerel DNS çözümleyicisi de aynı akışa dahil edilebilir. Bu sayede yerel olarak çalışan tüm uygulamaların hostname çözümlemeleri seçilen ağ arayüzü üzerinden yürür.

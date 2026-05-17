@@ -12,6 +12,7 @@ const HomePage = lazy(() => import('@pages/home/pages/index/LandingPage'));
 // ── Documentation pages ───────────────────────────────────────────
 const DocsHomePage      = lazy(() => import('@pages/docs/home/pages/index/HomePage'));
 const InstallUpdatePage = lazy(() => import('@pages/docs/installation-update/InstallationUpdatePage'));
+const MacPage = lazy(() => import('@pages/docs/client-applications/pages/mac/index/MacPage'));
 const ApiPage           = lazy(() => import('@pages/docs/api/pages/index/ApiPage'));
 const ArchitecturePage  = lazy(() => import('@pages/docs/architecture/pages/index/ArchitecturePage'));
 const TeraziPage        = lazy(() => import('@pages/docs/architecture/pages/terazi/pages/index/TeraziPage'));
@@ -54,6 +55,10 @@ const router = createBrowserRouter([
       {
         path: 'installation-update',
         element: <InstallUpdatePage />,
+      },
+      {
+        path: 'client-applications/mac',
+        element: <MacPage />,
       },
       {
         path: 'api',

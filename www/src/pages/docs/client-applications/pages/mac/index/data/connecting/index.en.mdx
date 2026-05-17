@@ -1,0 +1,9 @@
+*Import a config and start your tunnel*
+
+To start a tunnel, the contents of a WireGuard `.conf` file — or that same `.conf` extended with a `[Wstunnel]` section — are imported.
+The app manages both connection modes under the same interface:
+
+- **Standalone WireGuard** — Classic WireGuard tunnel connection
+- **wstunnel + WireGuard** — WireGuard tunnel connection carried within a wstunnel layer
+
+The mode is determined by the imported configuration file; no separate app or setup is required to switch between the two.

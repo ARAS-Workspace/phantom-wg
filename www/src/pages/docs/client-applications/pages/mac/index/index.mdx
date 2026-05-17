@@ -1,0 +1,68 @@
+import PhantomStreamPlayer from '@shared/components/visualization/PhantomStreamPlayer';
+import ContentTabs from '@shared/components/content/ContentTabs';
+import SettingUp from './data/setting-up/index.mdx';
+import Connecting from './data/connecting/index.mdx';
+import Customizing from './data/customizing/index.mdx';
+
+# Mac İstemci Uygulaması
+
+<PhantomStreamPlayer
+  uuid="28a76e4baa2a2a806140d0dd4d4b419e"
+  title="Phantom-WG Mac Product Tour"
+/>
+
+---
+
+## Bir Bakışta
+
+<ContentTabs contained={false} tabs={[
+  { label: 'Setting Up', content: SettingUp },
+  { label: 'Connecting', content: Connecting },
+  { label: 'Customizing', content: Customizing }
+]} />
+
+---
+
+## Sistem Gereksinimleri
+
+- macOS 14 (Sonoma) veya üzeri
+- Apple Silicon (arm64) veya Intel (x86_64)
+
+---
+
+## İndirme
+
+### Homebrew (önerilen)
+
+```bash
+brew install --cask ARAS-Workspace/tap/phantom-wg-mac
+```
+
+Cask, imzalı `.app` dosyasını `/Applications` altına yerleştirir. Üç sistem uzantısı ilk açılışta macOS izin akışı üzerinden etkinleştirilir.
+
+### Doğrudan İndirme
+
+`.dmg` dosyalarına [mac-v1.3.0 release](https://github.com/ARAS-Workspace/phantom-wg/releases/tag/mac-v1.3.0) sayfasından erişilebilir:
+
+- `Phantom-WG-MacOS-1.3.0-arm64.dmg` — Apple Silicon
+- `Phantom-WG-MacOS-1.3.0-x86_64.dmg` — Intel
+
+Sürüm derlemesi, imzalama ve notarizasyon adımları GitHub Actions üzerinde [mac-release.yml](https://github.com/ARAS-Workspace/phantom-wg/actions/workflows/mac-release.yml) ile yürütülür.
+
+---
+
+## Mimari ve Kaynak Kod
+
+| Kaynak              | Bağlantı                                                                                                 |
+|---------------------|----------------------------------------------------------------------------------------------------------|
+| Geliştirme Branch'i | [app/mac](https://github.com/ARAS-Workspace/phantom-wg/tree/app/mac)                                     |
+| ADR Dökümanları     | [app/mac/Documentation/ADR](https://github.com/ARAS-Workspace/phantom-wg/tree/app/mac/Documentation/ADR) |
+
+---
+
+## Referanslar
+
+- [Phantom-WG Mac Product Tour-HD 1080p.mov](https://github.com/ARAS-Workspace/phantom-wg/blob/press-kit/asset-pipelines/mac-app-product-tour/Phantom-WG%20Mac%20Product%20Tour-HD%201080p.mov)
+- [3rd Movement Cut for Mac App Presentation Production Sheet](https://github.com/ARAS-Workspace/phantom-wg/blob/press-kit/asset-pipelines/tutorial-music/projects/moonlight-sonata/3rd%20Movement%20Cut%20for%20Mac%20App%20Presentation.md)
+- [3rd Movement Cut for Mac App Presentation Render Output](https://github.com/ARAS-Workspace/phantom-wg/blob/press-kit/asset-pipelines/tutorial-music/projects/moonlight-sonata/output/3rd%20Movement%20Cut%20for%20Mac%20App%20Presentation.wav)
+

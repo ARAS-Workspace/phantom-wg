@@ -1,0 +1,22 @@
+import { InlineNotification } from '@carbon/react';
+
+*Approve three system extensions to begin*
+
+Phantom-WG Mac, uygulama üzerindeki ağ operasyonlarını üç sistem uzantısında ele alır.
+
+| Uzantı               | Rol                                                                                 |
+|----------------------|-------------------------------------------------------------------------------------|
+| `PhantomTunnel`      | Tünel bağlantısı — Ghost Mode (wstunnel + WireGuard) veya Standalone WireGuard.     |
+| `PhantomSplitTunnel` | Uygulama bazlı trafik akışı için Transparent Proxy.                                 |
+| `PhantomDNSProxy`    | DNS sorgularını fiziksel arayüze veya seçtiğiniz ağ arayüzüne sabitleyen DNS Proxy. |
+
+İlk açılışta macOS, her bir uzantı için ayrı bir onay ister. Extension Gate ekranı bu üç uzantının da etkin olmasını bekler.
+Herhangi biri eksik kaldığında ana arayüz açılmaz ve eksik uzantıyı tamamlamak için adım adım yönlendirme sunulur.
+
+<InlineNotification
+    kind="info"
+    title="Uzantıları Kaldırma"
+    subtitle="Uygulamayı silmeden önce ayarlar menüsündeki 'Sistem Uzantısını Kaldır' eylemini kullanarak üç uzantıyı tek adımda devre dışı bırakın."
+    hideCloseButton
+    lowContrast
+/>

@@ -8,6 +8,14 @@
     { "label": "Giriş", "href": "/docs" },
     { "label": "Kurulum ve Güncelleme", "href": "/docs/installation-update" },
     {
+      "label": "İstemci Uygulamaları",
+      "defaultExpanded": true,
+      "children": [
+        {"label":  "Mac", "href": "/docs/client-applications/mac"},
+        {"label":  "iOS", "href": "https://testflight.apple.com/join/5Kt55AXd", "external": true}
+      ]
+    },
+    {
       "label": "Mimari",
       "defaultExpanded": true,
       "children": [
