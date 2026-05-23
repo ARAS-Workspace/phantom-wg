@@ -2,8 +2,7 @@
 
 Derived asset from Beethoven Piano Sonata No. 14 "Moonlight" Op. 27 No. 2,
 III. Presto agitato. Edited for Mac App Presentation tutorial timing
-(~2:15 duration). Source MIDI: Mutopia Project piece ID 276
-(`moonlight3.mid`).
+(~2:15 duration).
 
 ## Routing Topology
 
