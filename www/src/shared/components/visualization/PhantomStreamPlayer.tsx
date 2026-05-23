@@ -1,4 +1,4 @@
-import React, { lazy, Suspense, useEffect, useState } from 'react';
+import React, { lazy, Suspense, useEffect, useRef, useState } from 'react';
 import { SkeletonPlaceholder } from '@carbon/react';
 import { useTheme } from '@shared/hooks/useTheme';
 import { useIsClient } from '@shared/hooks/useIsClient';
@@ -109,6 +109,55 @@ const PhantomStreamPlayerCore: React.FC<PhantomStreamPlayerProps> = ({
     };
   }, []);
 
+  // Imperative handle from @cloudflare/stream-react (HTMLVideoElement-shaped).
+  // MDX modules can't share refs across pages, so chapter cues travel via
+  // window events — any CueLink / ChapterStrip on the page can drive us.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const streamRef = useRef<any>(null);
+
+  // CF Stream keeps the poster up until playback starts; the first cue
+  // also auto-plays so the user sees the chapter they asked for. Once
+  // the user has played at least once, later cues only seek and leave
+  // their play/pause state alone.
+  const hasStartedRef = useRef(false);
+
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const seconds = (e as CustomEvent).detail?.seconds;
+      if (typeof seconds === 'number' && streamRef.current) {
+        try {
+          streamRef.current.currentTime = seconds;
+          if (!hasStartedRef.current) {
+            const result = streamRef.current.play?.();
+            if (result?.catch) {
+              result.catch(() => {
+                // Sound autoplay refused — retry muted so the poster
+                // at least clears and frames appear.
+                try {
+                  streamRef.current.muted = true;
+                  streamRef.current.play?.();
+                } catch {
+                  /* give up silently */
+                }
+              });
+            }
+          }
+        } catch {
+          /* player not ready yet */
+        }
+      }
+    };
+    window.addEventListener('phantom-stream:cue', handler);
+    return () => window.removeEventListener('phantom-stream:cue', handler);
+  }, []);
+
+  const handleTimeUpdate = () => {
+    const t = streamRef.current?.currentTime ?? 0;
+    window.dispatchEvent(
+      new CustomEvent('phantom-stream:time', { detail: { currentTime: t } }),
+    );
+  };
+
   const themeColors = THEME_COLORS[theme] ?? THEME_COLORS.white;
   const resolvedPrimary = primaryColor ?? themeColors.primary;
   const resolvedLetterbox = letterboxColor ?? themeColors.letterbox;
@@ -140,7 +189,10 @@ const PhantomStreamPlayerCore: React.FC<PhantomStreamPlayerProps> = ({
               height="100%"
               width="100%"
               title={title}
+              streamRef={streamRef}
               onCanPlay={() => setVideoReady(true)}
+              onPlay={() => { hasStartedRef.current = true; }}
+              onTimeUpdate={handleTimeUpdate}
             />
           </div>
         )}
