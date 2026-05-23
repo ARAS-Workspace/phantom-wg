@@ -1,0 +1,17 @@
+*Get the app onto your Mac*
+
+`Phantom-WG Mac` uygulamasını *iki* yoldan *Mac* cihazınıza yükleyebilirsiniz.
+
+- **Homebrew Cask** (önerilen) — Tek komut ve kolay güncelleme
+- **Doğrudan `.dmg`** — `arm64` Apple Silicon için, `x86_64` Intel için ayrı paketler.
+
+```bash
+brew install --cask ARAS-Workspace/tap/phantom-wg-mac
+```
+
+İmzalı `.app` `/Applications` altına yerleşir; ilk açılışta macOS Gatekeeper imzayı doğrular. `.dmg` paketlerine [mac-v1.3.0 release](https://github.com/ARAS-Workspace/phantom-wg/releases/tag/mac-v1.3.0) sayfasından erişilebilir. Derleme, imzalama ve notarizasyon adımları GitHub Actions üzerinde [mac-release.yml](https://github.com/ARAS-Workspace/phantom-wg/actions/workflows/mac-release.yml) ile yürütülür.
+
+### Sistem Gereksinimleri
+
+- macOS 14 (Sonoma) veya üzeri
+- Apple Silicon (arm64) veya Intel (x86_64)

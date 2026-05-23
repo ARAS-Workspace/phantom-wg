@@ -1,7 +1,7 @@
 *Route selected apps outside the tunnel*
 
-Split-Tunneling routes the traffic of the apps you select directly out through your physical interface or the network interface you choose, bypassing the tunnel. When you add an app to the bypass list, both its network flows and its DNS queries are pinned to that interface; the tunnel stays active and the remaining traffic continues to flow through the VPN.
+Split-Tunneling routes the traffic of apps you add to the list outside the tunnel:
 
-When the selected interface becomes unreachable — for example, when Wi-Fi drops or the connected network changes — flows from apps in the bypass list are rejected rather than silently rerouted through the tunnel. This behavior preserves the exit path the user has chosen and prevents unintended leaks.
-
-In addition to the bypass list, the system-wide local DNS resolver on macOS can be included in the same flow. This way, hostname resolutions for locally running apps are also carried over the selected network interface.
+- **Bypass Routing** — Selected apps exit directly through your physical interface or the network interface you choose; the tunnel stays active and remaining traffic continues through the VPN.
+- **Strict Mode** — If the selected interface becomes unreachable, flows from bypassed apps are rejected — never silently rerouted back through the tunnel.
+- **mDNSResponder inclusion** — Adding it to the same list carries local name resolution over the selected interface too.

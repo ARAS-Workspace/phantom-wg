@@ -1,0 +1,17 @@
+*Get the app onto your Mac*
+
+You can install `Phantom-WG Mac` on your *Mac* in *two* ways.
+
+- **Homebrew Cask** (recommended) — Single command and easy updates
+- **Direct `.dmg`** — `arm64` for Apple Silicon, `x86_64` for Intel, as separate packages.
+
+```bash
+brew install --cask ARAS-Workspace/tap/phantom-wg-mac
+```
+
+The signed `.app` is placed into `/Applications`; on first launch macOS Gatekeeper verifies the signature. `.dmg` packages are available from the [mac-v1.3.0 release](https://github.com/ARAS-Workspace/phantom-wg/releases/tag/mac-v1.3.0) page. Build, signing, and notarization run on GitHub Actions via [mac-release.yml](https://github.com/ARAS-Workspace/phantom-wg/actions/workflows/mac-release.yml).
+
+### System Requirements
+
+- macOS 14 (Sonoma) or later
+- Apple Silicon (arm64) or Intel (x86_64)

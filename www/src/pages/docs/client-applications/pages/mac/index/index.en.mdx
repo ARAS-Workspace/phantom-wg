@@ -1,6 +1,8 @@
 import PhantomStreamPlayer from '@shared/components/visualization/PhantomStreamPlayer';
+import ChapterStrip from '@shared/components/visualization/ChapterStrip';
 import ContentTabs from '@shared/components/content/ContentTabs';
 import DinoGame from '@shared/components/games/DinoGame';
+import Installation from './data/installation/index.en.mdx';
 import SettingUp from './data/setting-up/index.en.mdx';
 import Connecting from './data/connecting/index.en.mdx';
 import Customizing from './data/customizing/index.en.mdx';
@@ -12,11 +14,23 @@ import Customizing from './data/customizing/index.en.mdx';
   title="Phantom-WG Mac Quickstart"
 />
 
+<ChapterStrip
+  duration={149.45}
+  chapters={[
+    { slug: 'intro', label: 'Intro', start: 0 },
+    { slug: 'installation', label: 'Installation', start: 11.7 },
+    { slug: 'setting-up', label: 'Setting Up', start: 28.9 },
+    { slug: 'connecting', label: 'Connecting', start: 74.6 },
+    { slug: 'customizing', label: 'Customizing', start: 111.1 },
+  ]}
+/>
+
 ---
 
 ## At a Glance
 
 <ContentTabs contained={false} tabs={[
+  { label: 'Installation', content: Installation },
   { label: 'Setting Up', content: SettingUp },
   { label: 'Connecting', content: Connecting },
   { label: 'Customizing', content: Customizing }
@@ -25,33 +39,6 @@ import Customizing from './data/customizing/index.en.mdx';
 ---
 
 <DinoGame.Lazy theme="dpi-mac" />
-
----
-## System Requirements
-
-- macOS 14 (Sonoma) or later
-- Apple Silicon (arm64) or Intel (x86_64)
-
----
-
-## Download
-
-### Homebrew (recommended)
-
-```bash
-brew install --cask ARAS-Workspace/tap/phantom-wg-mac
-```
-
-The cask places the signed `.app` into `/Applications`. The three system extensions are activated on first launch through the macOS approval flow.
-
-### Direct Download
-
-`.dmg` files are available from the [mac-v1.3.0 release](https://github.com/ARAS-Workspace/phantom-wg/releases/tag/mac-v1.3.0) page:
-
-- `Phantom-WG-MacOS-1.3.0-arm64.dmg` — Apple Silicon
-- `Phantom-WG-MacOS-1.3.0-x86_64.dmg` — Intel
-
-Release build, signing, and notarization steps run on GitHub Actions via [mac-release.yml](https://github.com/ARAS-Workspace/phantom-wg/actions/workflows/mac-release.yml).
 
 ---
 
@@ -63,11 +50,5 @@ Release build, signing, and notarization steps run on GitHub Actions via [mac-re
 | ADR Documents      | [app/mac/Documentation/ADR](https://github.com/ARAS-Workspace/phantom-wg/tree/app/mac/Documentation/ADR) |
 
 ---
-
-## References
-
-- [Phantom-WG Mac Product Tour-HD 1080p.mov](https://github.com/ARAS-Workspace/phantom-wg/blob/press-kit/asset-pipelines/mac-app-product-tour/Phantom-WG%20Mac%20Product%20Tour-HD%201080p.mov)
-- [3rd Movement Cut for Mac App Presentation Production Sheet](https://github.com/ARAS-Workspace/phantom-wg/blob/press-kit/asset-pipelines/tutorial-music/projects/moonlight-sonata/3rd%20Movement%20Cut%20for%20Mac%20App%20Presentation.md)
-- [3rd Movement Cut for Mac App Presentation Render Output](https://github.com/ARAS-Workspace/phantom-wg/blob/press-kit/asset-pipelines/tutorial-music/projects/moonlight-sonata/output/3rd%20Movement%20Cut%20for%20Mac%20App%20Presentation.wav)
 
 *See [DISCLOSURE.md](https://github.com/ARAS-Workspace/phantom-wg/blob/press-kit/asset-pipelines/tutorial-music/projects/DISCLOSURE.md) for tutorial music licensing and attribution details.*
