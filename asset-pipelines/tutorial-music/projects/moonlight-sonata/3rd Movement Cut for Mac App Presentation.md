@@ -2,28 +2,28 @@
 
 Derived asset from Beethoven Piano Sonata No. 14 "Moonlight" Op. 27 No. 2,
 III. Presto agitato. Edited for Mac App Presentation tutorial timing
-(~1:25 duration). Source MIDI: Mutopia Project piece ID 276
+(~2:15 duration). Source MIDI: Mutopia Project piece ID 276
 (`moonlight3.mid`).
 
 ## Routing Topology
 
 ```
-Track 1 (up)         ─┐
-Track 2 (down)        ├─► Bus 1 ─► Piano Bus ─┬─► Stereo Out ─► Master
-Track 3 (transition) ─┘         (no inserts)  │  (Mastering Assistant)
-                                              │
-                          post-fader send     │
-                              −12 dB          │
-                                 │            │
-                                 ▼            │
-                          Bus 2 ─► Reverb ────┘
-                                  (ChromaVerb)
+Track 1 (up)   ─┐
+Track 2 (down) ─┴─► Bus 1 ─► Piano Bus ─┬─► Stereo Out ─► Master
+                          (no inserts)  │  (Mastering Assistant)
+                                        │
+                        post-fader send │
+                            −12 dB      │
+                               │        │
+                               ▼        │
+                        Bus 2 ─► Reverb ┘
+                                (ChromaVerb)
 ```
 
-Three Software Instrument tracks (Splice INSTRUMENT) carry only pan and
+Two Software Instrument tracks (Splice INSTRUMENT) carry only pan and
 volume. All tonal, dynamic, and spatial processing is consolidated:
 reverb on a dedicated aux, final stage on the stereo output. The Piano
-Bus collects the three tracks and currently carries no inserts.
+Bus collects both tracks and currently carries no inserts.
 
 ## Source Layer — Splice INSTRUMENT
 
@@ -31,44 +31,41 @@ Plugin: Splice INSTRUMENT (AU)
 Preset: Intimate Grand Piano — Dynamic
 
 Hammers and Tightness are voiced per register; all other parameters are
-identical across the three tracks.
+identical across both tracks.
 
-| Parameter | Track 1 (up) | Track 2 (down) | Track 3 (transition) |
-|-----------|--------------|----------------|----------------------|
-| Preset    | Dynamic      | Dynamic        | Dynamic              |
-| Reverb    | 20%          | 20%            | 20%                  |
-| Tightness | 20%          | 35%            | 35%                  |
-| Hammers   | 20%          | 30%            | 30%                  |
-| Pedal     | 50%          | 50%            | 50%                  |
-| Dynamics  | 65%          | 65%            | 65%                  |
-
-Track 3 (transition) is a short connecting passage and follows the
-Track 2 (down) voicing.
+| Parameter | Track 1 (up) | Track 2 (down) |
+|-----------|--------------|----------------|
+| Preset    | Dynamic      | Dynamic        |
+| Reverb    | 20%          | 20%            |
+| Tightness | 20%          | 35%            |
+| Hammers   | 20%          | 30%            |
+| Pedal     | 50%          | 50%            |
+| Dynamics  | 65%          | 65%            |
 
 ## Track-Level Mixing
 
 Tracks carry pan and volume only — no Channel EQ, no Compressor, no
-insert effects. All three route to Bus 1 (Piano Bus).
+insert effects. Both route to Bus 1 (Piano Bus).
 
-| Parameter | Track 1 (up) | Track 2 (down) | Track 3 (transition) |
-|-----------|--------------|----------------|----------------------|
-| Pan       | −15 (left)   | +15 (right)    | −15 (left)           |
-| Volume    | −6 dB        | −8 dB          | −6 dB                |
-| Output    | Bus 1        | Bus 1          | Bus 1                |
+| Parameter | Track 1 (up) | Track 2 (down) |
+|-----------|--------------|----------------|
+| Pan       | −15 (left)   | +15 (right)    |
+| Volume    | −6 dB        | −8 dB          |
+| Output    | Bus 1        | Bus 1          |
 
 ## Piano Bus (Bus 1)
 
-Summing bus for the three instrument tracks. No inserts — an A/B check
+Summing bus for both instrument tracks. No inserts — an A/B check
 confirmed bus compression was not required for this material (the
 Dynamic preset plus the source MIDI velocity range is already
 controlled enough for a music-bed role).
 
-| Parameter             | Value                  |
-|-----------------------|------------------------|
-| Input                 | Bus 1 (Track 1, 2, 3)  |
-| Inserts               | None                   |
-| Send → Bus 2 (Reverb) | −12 dB, post-fader     |
-| Output                | Stereo Out             |
+| Parameter             | Value               |
+|-----------------------|---------------------|
+| Input                 | Bus 1 (Track 1, 2)  |
+| Inserts               | None                |
+| Send → Bus 2 (Reverb) | −12 dB, post-fader  |
+| Output                | Stereo Out          |
 
 ## Reverb Aux (Bus 2)
 
@@ -115,5 +112,5 @@ Output: Master.
 |----------------|-----------------------------|
 | Tempo          | 160 BPM                     |
 | Time Signature | 2/2                         |
-| Total Duration | ~1:25                       |
+| Total Duration | ~2:15                       |
 | Output Format  | WAV, 48 kHz, 24-bit, stereo |
