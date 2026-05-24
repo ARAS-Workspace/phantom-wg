@@ -7,12 +7,12 @@
   margin: sp.$spacing-07 0;
   border-radius: 8px;
   overflow: hidden;
-  background: #000;
 
   &__aspect {
     position: relative;
     width: 100%;
     overflow: hidden;
+    background: #000;
     /* aspect-ratio is applied inline via the `style` prop. */
   }
 

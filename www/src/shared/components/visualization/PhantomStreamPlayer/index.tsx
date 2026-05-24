@@ -3,9 +3,16 @@ import { SkeletonPlaceholder } from '@carbon/react';
 import { useTheme } from '@shared/hooks/useTheme';
 import { useIsClient } from '@shared/hooks/useIsClient';
 import { useLocale } from '@shared/hooks';
-import './styles/PhantomStreamPlayer.scss';
+import type { Chapter } from '@shared/types/chapters';
+import ChapterStrip from './ChapterStrip';
+import './PhantomStreamPlayer.scss';
 
 // ── Types ────────────────────────────────────────────────────────
+
+interface ChapterStripConfig {
+  /** Ordered list of chapters covering the timeline. */
+  chapters: Chapter[];
+}
 
 interface PhantomStreamPlayerProps {
   /** Cloudflare Stream video UUID (phantom-stream-tool upload output). */
@@ -39,6 +46,14 @@ interface PhantomStreamPlayerProps {
   title?: string;
   /** Additional class name for the outer wrapper. */
   className?: string;
+  /**
+   * If present, a chapter strip is rendered under the player; clicking a
+   * segment seeks the embed (auto-playing on the first cue so the poster
+   * lifts). Each player owns its own strip — multiple players on a page
+   * stay independent. Total duration is pulled from the player itself
+   * once metadata loads.
+   */
+  chapterStrip?: ChapterStripConfig;
 }
 
 // ── Theme-aware defaults ─────────────────────────────────────────
@@ -84,6 +99,7 @@ const PhantomStreamPlayerCore: React.FC<PhantomStreamPlayerProps> = ({
   aspectRatio = '16 / 9',
   title,
   className = '',
+  chapterStrip,
 }) => {
   const { theme } = useTheme();
   const { locale } = useLocale();
@@ -99,19 +115,14 @@ const PhantomStreamPlayerCore: React.FC<PhantomStreamPlayerProps> = ({
   // play — otherwise the user stares at a black letterbox.
   const [videoReady, setVideoReady] = useState(false);
 
-  useEffect(() => {
-    let cancelled = false;
-    import('@cloudflare/stream-react').then((mod) => {
-      if (!cancelled) setStreamComp(() => mod.Stream);
-    });
-    return () => {
-      cancelled = true;
-    };
-  }, []);
+  // Drives the chapter strip's "currently playing" highlight.
+  const [currentTime, setCurrentTime] = useState(0);
+
+  // Pulled from the player once metadata loads; the chapter strip
+  // waits for this before rendering segment widths.
+  const [duration, setDuration] = useState(0);
 
   // Imperative handle from @cloudflare/stream-react (HTMLVideoElement-shaped).
-  // MDX modules can't share refs across pages, so chapter cues travel via
-  // window events — any CueLink / ChapterStrip on the page can drive us.
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const streamRef = useRef<any>(null);
 
@@ -122,40 +133,48 @@ const PhantomStreamPlayerCore: React.FC<PhantomStreamPlayerProps> = ({
   const hasStartedRef = useRef(false);
 
   useEffect(() => {
-    const handler = (e: Event) => {
-      const seconds = (e as CustomEvent).detail?.seconds;
-      if (typeof seconds === 'number' && streamRef.current) {
-        try {
-          streamRef.current.currentTime = seconds;
-          if (!hasStartedRef.current) {
-            const result = streamRef.current.play?.();
-            if (result?.catch) {
-              result.catch(() => {
-                // Sound autoplay refused — retry muted so the poster
-                // at least clears and frames appear.
-                try {
-                  streamRef.current.muted = true;
-                  streamRef.current.play?.();
-                } catch {
-                  /* give up silently */
-                }
-              });
-            }
-          }
-        } catch {
-          /* player not ready yet */
-        }
-      }
+    let cancelled = false;
+    import('@cloudflare/stream-react').then((mod) => {
+      if (!cancelled) setStreamComp(() => mod.Stream);
+    });
+    return () => {
+      cancelled = true;
     };
-    window.addEventListener('phantom-stream:cue', handler);
-    return () => window.removeEventListener('phantom-stream:cue', handler);
   }, []);
 
+  const cueTo = (seconds: number) => {
+    if (!Number.isFinite(seconds) || !streamRef.current) return;
+    try {
+      streamRef.current.currentTime = seconds;
+      if (!hasStartedRef.current) {
+        const result = streamRef.current.play?.();
+        if (result?.catch) {
+          result.catch(() => {
+            // Sound autoplay refused — retry muted so the poster
+            // at least clears and frames appear.
+            try {
+              streamRef.current.muted = true;
+              streamRef.current.play?.();
+            } catch {
+              /* give up silently */
+            }
+          });
+        }
+      }
+    } catch {
+      /* player not ready yet */
+    }
+  };
+
   const handleTimeUpdate = () => {
-    const t = streamRef.current?.currentTime ?? 0;
-    window.dispatchEvent(
-      new CustomEvent('phantom-stream:time', { detail: { currentTime: t } }),
-    );
+    setCurrentTime(streamRef.current?.currentTime ?? 0);
+  };
+
+  const handleCanPlay = () => {
+    setVideoReady(true);
+    // canPlay guarantees metadata is loaded, so the imperative handle's
+    // duration is now valid.
+    setDuration(streamRef.current?.duration ?? 0);
   };
 
   const themeColors = THEME_COLORS[theme] ?? THEME_COLORS.white;
@@ -190,7 +209,7 @@ const PhantomStreamPlayerCore: React.FC<PhantomStreamPlayerProps> = ({
               width="100%"
               title={title}
               streamRef={streamRef}
-              onCanPlay={() => setVideoReady(true)}
+              onCanPlay={handleCanPlay}
               onPlay={() => { hasStartedRef.current = true; }}
               onTimeUpdate={handleTimeUpdate}
             />
@@ -200,6 +219,14 @@ const PhantomStreamPlayerCore: React.FC<PhantomStreamPlayerProps> = ({
           <SkeletonPlaceholder className="phantom-stream-player__skeleton" />
         )}
       </div>
+      {chapterStrip && duration > 0 && (
+        <ChapterStrip
+          chapters={chapterStrip.chapters}
+          duration={duration}
+          currentTime={currentTime}
+          onCue={cueTo}
+        />
+      )}
     </div>
   );
 };

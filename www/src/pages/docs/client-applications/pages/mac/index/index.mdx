@@ -1,5 +1,4 @@
 import PhantomStreamPlayer from '@shared/components/visualization/PhantomStreamPlayer';
-import ChapterStrip from '@shared/components/visualization/ChapterStrip';
 import ContentTabs from '@shared/components/content/ContentTabs';
 import DinoGame from '@shared/components/games/DinoGame';
 import Installation from './data/installation/index.mdx';
@@ -12,17 +11,15 @@ import Customizing from './data/customizing/index.mdx';
 <PhantomStreamPlayer
   uuid="1904ae937d556f65359938a3721c5367"
   title="Phantom-WG Mac Quickstart"
-/>
-
-<ChapterStrip
-  duration={149.45}
-  chapters={[
-    { slug: 'intro', label: 'Intro', start: 0 },
-    { slug: 'installation', label: 'Installation', start: 11.7 },
-    { slug: 'setting-up', label: 'Setting Up', start: 28.9 },
-    { slug: 'connecting', label: 'Connecting', start: 74.6 },
-    { slug: 'customizing', label: 'Customizing', start: 111.1 },
-  ]}
+  chapterStrip={{
+    chapters: [
+      { slug: 'intro', label: 'Intro', start: 0 },
+      { slug: 'installation', label: 'Installation', start: 11.7 },
+      { slug: 'setting-up', label: 'Setting Up', start: 28.9 },
+      { slug: 'connecting', label: 'Connecting', start: 74.6 },
+      { slug: 'customizing', label: 'Customizing', start: 111.1 },
+    ]
+  }}
 />
 
 ---
