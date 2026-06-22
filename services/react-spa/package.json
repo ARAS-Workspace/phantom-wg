@@ -27,7 +27,6 @@
     "remark-frontmatter": "5.0.0",
     "remark-gfm": "4.0.1",
     "remark-mdx-frontmatter": "5.2.0",
-    "shiki": "4.0.2",
     "swr": "2.4.1"
   },
   "devDependencies": {

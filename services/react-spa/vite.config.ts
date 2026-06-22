@@ -57,9 +57,6 @@ export default defineConfig(({ mode }) => {
         },
       },
     },
-    optimizeDeps: {
-      exclude: ['shiki'],
-    },
     build: {
       sourcemap: false,
       cssCodeSplit: true,
