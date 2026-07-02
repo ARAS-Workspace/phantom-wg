@@ -1,0 +1,82 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="1921" height="1081" viewBox="0 0 1921 1081">
+  <defs>
+    <style>
+      .cls-1 {
+        fill: #202a37;
+      }
+
+      .cls-2 {
+        fill: #262626;
+        stroke: #231f20;
+        stroke-miterlimit: 10;
+      }
+
+      .cls-3 {
+        fill: #e6e7eb;
+      }
+
+      .cls-4 {
+        fill: none;
+        stroke: #7accc4;
+        stroke-miterlimit: 50;
+        stroke-width: 10px;
+      }
+
+      .cls-4, .cls-5 {
+        opacity: .75;
+      }
+
+      .cls-6 {
+        letter-spacing: -.6em;
+      }
+
+      .cls-7 {
+        font-size: 48px;
+      }
+
+      .cls-7, .cls-8 {
+        fill: #7accc4;
+        font-family: IBMPlexMono, 'IBM Plex Mono';
+      }
+
+      .cls-8 {
+        font-size: 100px;
+      }
+    </style>
+  </defs>
+  <g id="Background">
+    <rect id="Background-2" data-name="Background" class="cls-2" x=".5" y=".5" width="1920" height="1080"/>
+  </g>
+  <g id="Scene">
+    <g id="Symbol" class="cls-5">
+      <path id="Shield" class="cls-3" d="M1562.2,332.25c-124.16,37.06-230.74,64.86-239.99,74.13,0,120.47,23.17,342.86,240,469.81,216.84-126.95,240-349.35,240-469.81-9.26-9.26-115.83-37.07-240-74.13h-.01Z"/>
+      <path id="Ghost" class="cls-1" d="M1562.2,397.11c-82.47,0-147.33,64.86-147.33,147.33v172.35l50.97-50.97,50.97,50.97,45.42-50.97,45.42,50.97,50.97-50.97,50.97,50.97v-172.35c0-82.47-64.86-147.33-147.33-147.33h-.02Z"/>
+      <circle id="Left_Eye" data-name="Left Eye" class="cls-3" cx="1507.53" cy="517.57" r="34.75"/>
+      <circle id="Right_Eye" data-name="Right Eye" class="cls-3" cx="1616.9" cy="517.58" r="34.75"/>
+    </g>
+    <text id="Title" class="cls-8" transform="translate(78.31 213.86)"><tspan x="0" y="0">Hetzner Server Provisioning</tspan></text>
+  </g>
+  <g id="Steps">
+    <g id="_05_Console_DNS" data-name="05 Console + DNS">
+      <polyline id="_05_Console_DNS_Check" data-name="05 Console + DNS Check" class="cls-4" points="873.04 806.68 908.64 839.87 964.63 773.8"/>
+      <text id="_05_Console_DNS_Text" data-name="05 Console + DNS Text" class="cls-7" transform="translate(86.31 831.61)"><tspan x="0" y="0">05 Console + DNS </tspan></text>
+    </g>
+    <g id="_4" data-name="4">
+      <polyline id="_04_Verify_via_CLI_Check" data-name="04 Verify via CLI Check" class="cls-4" points="873.04 705.37 908.64 738.56 964.63 672.49"/>
+      <text id="_04_Verify_via_CLI_Text" data-name="04 Verify via CLI Text" class="cls-7" transform="translate(86.31 730.29)"><tspan x="0" y="0" xml:space="preserve">04 Verify via CLI   </tspan></text>
+    </g>
+    <g id="_3" data-name="3">
+      <polyline id="_03_Create_the_Servers_Check" data-name="03 Create the Servers Check" class="cls-4" points="873.04 604.05 908.64 637.25 964.63 571.18"/>
+      <text id="_03_Create_the_Servers_Text" data-name="03 Create the Servers Text" class="cls-7" transform="translate(86.31 628.98)"><tspan x="0" y="0">03 Create the Servers </tspan></text>
+    </g>
+    <g id="_2" data-name="2">
+      <polyline id="_02_Write_cloud-init.yaml_Check" data-name="02 Write cloud-init.yaml Check" class="cls-4" points="873.04 502.74 908.64 535.94 964.63 469.87"/>
+      <text id="_02_Write_cloud-init.yaml_Text" data-name="02 Write cloud-init.yaml Text" class="cls-7" transform="translate(86.31 527.67)"><tspan x="0" y="0">02 Write cloud-init.yaml </tspan><tspan class="cls-6" x="720" y="0">	</tspan></text>
+    </g>
+    <g id="_1" data-name="1">
+      <polyline id="_01_Generate_SSH_Key_Check" data-name="01 Generate SSH Key Check" class="cls-4" points="873.04 401.43 908.64 434.63 964.63 368.56"/>
+      <text id="_01_Generate_SSH_Key_Text" data-name="01 Generate SSH Key Text" class="cls-7" transform="translate(86.81 426.36)"><tspan x="0" y="0">01 Generate SSH Key </tspan></text>
+    </g>
+  </g>
+</svg>

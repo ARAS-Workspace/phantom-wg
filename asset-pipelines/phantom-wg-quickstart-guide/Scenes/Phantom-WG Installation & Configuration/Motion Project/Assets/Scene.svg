@@ -1,0 +1,66 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="1921" height="1081" viewBox="0 0 1921 1081">
+  <defs>
+    <style>
+      .cls-1 {
+        fill: #202a37;
+      }
+
+      .cls-2 {
+        fill: #262626;
+        stroke: #231f20;
+        stroke-miterlimit: 10;
+      }
+
+      .cls-3 {
+        fill: #e6e7eb;
+      }
+
+      .cls-4 {
+        fill: none;
+        stroke: #7accc4;
+        stroke-miterlimit: 50;
+        stroke-width: 10px;
+      }
+
+      .cls-4, .cls-5 {
+        opacity: .75;
+      }
+
+      .cls-6 {
+        font-size: 100px;
+      }
+
+      .cls-6, .cls-7 {
+        fill: #7accc4;
+        font-family: IBMPlexMono, 'IBM Plex Mono';
+      }
+
+      .cls-7 {
+        font-size: 72px;
+      }
+    </style>
+  </defs>
+  <g id="Background">
+    <rect id="Background-2" data-name="Background" class="cls-2" x=".5" y=".5" width="1920" height="1080"/>
+  </g>
+  <g id="Scene">
+    <g id="Symbol" class="cls-5">
+      <path id="Shield" class="cls-3" d="M1540.37,279.8c-124.16,37.06-230.74,64.86-239.99,74.13,0,120.47,23.17,342.86,240,469.81,216.84-126.95,240-349.35,240-469.81-9.26-9.26-115.83-37.07-240-74.13h-.01Z"/>
+      <path id="Ghost" class="cls-1" d="M1540.37,344.66c-82.47,0-147.33,64.86-147.33,147.33v172.35l50.97-50.97,50.97,50.97,45.42-50.97,45.42,50.97,50.97-50.97,50.97,50.97v-172.35c0-82.47-64.86-147.33-147.33-147.33h-.02Z"/>
+      <circle id="Left_Eye" data-name="Left Eye" class="cls-3" cx="1485.71" cy="465.12" r="34.75"/>
+      <circle id="Right_Eye" data-name="Right Eye" class="cls-3" cx="1595.07" cy="465.13" r="34.75"/>
+    </g>
+    <text id="Title" class="cls-6" transform="translate(93.85 207.44)"><tspan x="0" y="0">Phantom-WG</tspan></text>
+  </g>
+  <g id="Scene-2" data-name="Scene">
+    <g id="Configuration">
+      <polyline id="Check" class="cls-4" points="889.59 619.89 925.19 653.08 981.18 587.01"/>
+      <text id="Text" class="cls-7" transform="translate(102.85 644.82)"><tspan x="0" y="0">Configuration</tspan></text>
+    </g>
+    <g id="Installation">
+      <polyline id="Check-2" data-name="Check" class="cls-4" points="889.59 518.58 925.19 551.77 981.18 485.7"/>
+      <text id="Text-2" data-name="Text" class="cls-7" transform="translate(103.35 543.5)"><tspan x="0" y="0">Installation</tspan></text>
+    </g>
+  </g>
+</svg>
