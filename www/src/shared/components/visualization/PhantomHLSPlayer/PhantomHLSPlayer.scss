@@ -12,29 +12,30 @@
     position: relative;
     width: 100%;
     overflow: hidden;
-    /* Letterbox colour is theme-driven via the CSS var set on the root. */
     background: var(--phantom-hls-letterbox, #000);
     /* aspect-ratio is applied inline via the `style` prop. */
   }
 
-  &__inner {
+  /* The Vidstack player fills the aspect box. Vidstack ships its own
+     internal styles (theme.css + video layout); we only pin its size and
+     hand it the brand accent via CSS vars below. */
+  &__vds {
     position: absolute;
     inset: 0;
     width: 100%;
     height: 100%;
+
+    /* ── Brand theming via Vidstack CSS variables ──────────────────
+       Vidstack's default layout exposes 150+ vars. These map the key
+       ones to the Phantom palette. Adjust to taste; unset vars fall
+       back to Vidstack defaults. */
+    --video-brand: var(--cds-interactive, #4589ff);          /* accent (scrubber, spinner) */
+    --media-brand: var(--cds-interactive, #4589ff);
+    --video-controls-color: #f4f4f4;                          /* control icons/text */
+    --media-font-family: var(--cds-body-01-font-family, inherit);
+    --video-border-radius: 0;
   }
 
-  &__video {
-    position: absolute;
-    inset: 0;
-    width: 100%;
-    height: 100%;
-    /* `contain` keeps the whole 16:9 frame visible inside the box even if
-       the wrapper aspect-ratio differs, letterboxing with the bg colour. */
-    object-fit: contain;
-    background: var(--phantom-hls-letterbox, #000);
-    border: 0;
-  }
 
   &__skeleton {
     position: absolute !important;
@@ -42,7 +43,7 @@
     width: 100% !important;
     height: 100% !important;
     border-radius: 0 !important;
-    z-index: 1;
+    z-index: 2;
   }
 
   @include bp.breakpoint-down(md) {
