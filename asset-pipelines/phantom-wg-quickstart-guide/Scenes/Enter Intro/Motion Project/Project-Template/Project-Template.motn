@@ -1,8 +1,8 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE ozxmlscene>
-<ozml version="5.14">
+<ozml version="5.15">
 
-<displayversion>6.2</displayversion>
+<displayversion>6.3</displayversion>
 
 <factory id="1" uuid="044beba5ad3211d7ac9b000393833f6a">
 	<description>Style</description>
@@ -181,7 +181,7 @@
 	<cameraType>0</cameraType>
 	<cameraName>Active Camera</cameraName>
 	<mirrorHMD>0</mirrorHMD>
-	<panZoom camera="0" zoom="0.5" panX="562.19821166992188" panY="84.044342041015625" mode="1" centered="0"/>
+	<panZoom camera="0" zoom="0.5" panX="562.19821166992188" panY="38.102195739746094" mode="1" centered="0"/>
 </viewer>
 
 <projectPanel>
@@ -218,7 +218,7 @@
 	<displayEffects>1</displayEffects>
 	<videoVerticalZoom>1.5555555555555556</videoVerticalZoom>
 	<audioVerticalZoom>1.5555555555555556</audioVerticalZoom>
-	<displayRange in="-217541386 1205078125 3 0" out="10180520567 1000000000 3 0"/>
+	<displayRange in="-391574469 1205078125 3 0" out="18324936999 1000000000 3 0"/>
 </timeline>
 
 <curveeditor>
@@ -226,13 +226,17 @@
 	<snapping>0</snapping>
 	<displayAudioWaveform>0</displayAudioWaveform>
 	<lockKeyframesInTime>0</lockKeyframesInTime>
-	<displayRange in="-217541386 1205078125 3 0" out="10180520567 1000000000 3 0"/>
-	<currentviewvolume originx="-0.18052056666450567" originy="-62.5" width="10.361041134000001" height="125"/>
+	<displayRange in="-391574469 1205078125 3 0" out="18324936999 1000000000 3 0"/>
+	<currentviewvolume originx="-0.32493699858670988" originy="-62.5" width="18.649873998" height="125"/>
 	<snapshotChannels>0</snapshotChannels>
 </curveeditor>
 
 <inspector>
 	<collapseState id="./1/100" state="1"/>
+	<collapseState id="./1/100/101" state="1"/>
+	<collapseState id="./1/100/105" state="1"/>
+	<collapseState id="./1/100/107" state="0"/>
+	<collapseState id="./1/100/109" state="0"/>
 	<collapseState id="./1/200" state="1"/>
 	<collapseState id="./1/344" state="1"/>
 </inspector>
@@ -241,7 +245,7 @@
 	<sceneSettings>
 		<width>1920</width>
 		<height>1080</height>
-		<duration>300</duration>
+		<duration>540</duration>
 		<shouldOverrideFCDuration>0</shouldOverrideFCDuration>
 		<frameRate>30</frameRate>
 		<NTSC>0</NTSC>
@@ -249,7 +253,7 @@
 		<workingGamut>0</workingGamut>
 		<viewGamut>-1</viewGamut>
 		<optimizeForDisplay>0</optimizeForDisplay>
-		<backgroundColor red="0.1490196139" green="0.1490196139" blue="0.1490196139" alpha="1"/>
+		<backgroundColor red="0.08627451211" green="0.08627451211" blue="0.08627451211" alpha="1"/>
 		<audioChannels>2</audioChannels>
 		<audioBitsPerSample>32</audioBitsPerSample>
 		<fieldRenderingMode>0</fieldRenderingMode>
@@ -272,7 +276,7 @@
 		<version>1</version>
 		<locationMode>0</locationMode>
 		<resolutionMode>3</resolutionMode>
-		<colorMode>2</colorMode>
+		<colorMode>0</colorMode>
 		<colorSpace>0</colorSpace>
 		<colorSpaceUserSetting>3</colorSpaceUserSetting>
 		<premultiplyAlpha>1</premultiplyAlpha>
@@ -285,18 +289,18 @@
 		<motionBlurMode>0</motionBlurMode>
 		<frameBlendingMode>0</frameBlendingMode>
 		<camera>0</camera>
-		<lightingMode>0</lightingMode>
-		<shadowsMode>0</shadowsMode>
-		<reflectionsMode>0</reflectionsMode>
-		<depthOfFieldMode>0</depthOfFieldMode>
+		<lightingMode>1</lightingMode>
+		<shadowsMode>1</shadowsMode>
+		<reflectionsMode>1</reflectionsMode>
+		<depthOfFieldMode>1</depthOfFieldMode>
 	</exportSettings>
 	<publishSettings>
 		<version>2</version>
 	</publishSettings>
 	<currentFrame>1515520 153600 1 0</currentFrame>
-	<activeLayer>1825769725</activeLayer>
-	<timeRange offset="0 1 1 0" duration="1536000 153600 1 0"/>
-	<playRange offset="0 153600 1 0" duration="1536000 153600 1 0"/>
+	<activeLayer>1825769745</activeLayer>
+	<timeRange offset="0 1 1 0" duration="2764800 153600 1 0"/>
+	<playRange offset="0 153600 1 0" duration="2764800 153600 1 0"/>
 	<flags>1</flags>
 	<audioTracks>7</audioTracks>
 	<timemarkerset/>
@@ -339,8 +343,8 @@
 					<previewWidth>0</previewWidth>
 					<previewHeight>0</previewHeight>
 					<presetName>Normal</presetName>
-					<timing in="0 153600 1 0" out="38438528 3840000 1 0" offset="0 153600 1 0"/>
-					<baseFlags>8657043504</baseFlags>
+					<timing in="609280 153600 1 0" out="53632000 3840000 1 0" offset="609280 153600 1 0"/>
+					<baseFlags>8657043568</baseFlags>
 					<foldFlags>786432</foldFlags>
 					<parameter name="Font" id="83" flags="12884906000">
 						<font>Orbitron-Medium</font>
@@ -388,9 +392,9 @@
 				<styleRun style="1825770159" offset="0" length="40"/>
 				<aspectRatio>1</aspectRatio>
 				<flags>0</flags>
-				<timing in="0 153600 1 0" out="38438528 3840000 1 0" offset="0 153600 1 0"/>
+				<timing in="609280 153600 1 0" out="53632000 3840000 1 0" offset="609280 153600 1 0"/>
 				<foldFlags>0</foldFlags>
-				<baseFlags>34078736</baseFlags>
+				<baseFlags>34078800</baseFlags>
 				<parameter name="Properties" id="1" flags="8589938704">
 					<parameter name="Transform" id="100" flags="8589938704">
 						<parameter name="Position" id="101" flags="8589938704">
@@ -442,7 +446,7 @@
 						<parameter name="Align to Path" id="333" flags="8589934610" default="1" value="1"/>
 					</parameter>
 					<parameter name="Basic" id="2000" flags="12884938770" factoryID="0">
-						<parameter name="Substance" id="1825771148" flags="12884906002" factoryID="0">
+						<parameter name="Substance" id="1998674846" flags="12884906002" factoryID="0">
 							<parameter name="Color" id="1" flags="4295004162">
 								<foldFlags>15</foldFlags>
 							</parameter>
@@ -453,7 +457,7 @@
 			</scenenode>
 			<aspectRatio>1</aspectRatio>
 			<flags>0</flags>
-			<timing in="0 153600 1 0" out="38438528 3840000 1 0" offset="0 153600 1 0"/>
+			<timing in="609280 153600 1 0" out="53632000 3840000 1 0" offset="609280 153600 1 0"/>
 			<foldFlags>1</foldFlags>
 			<baseFlags>524368</baseFlags>
 			<parameter name="Properties" id="1" flags="8589938704">
@@ -517,9 +521,9 @@
 				<isShapeStyle>0</isShapeStyle>
 				<aspectRatio>1</aspectRatio>
 				<flags>0</flags>
-				<timing in="0 153600 1 0" out="38310400 3840000 1 0" offset="0 153600 1 0"/>
+				<timing in="609280 153600 1 0" out="53632000 3840000 1 0" offset="609280 153600 1 0"/>
 				<foldFlags>0</foldFlags>
-				<baseFlags>524304</baseFlags>
+				<baseFlags>524368</baseFlags>
 				<parameter name="Properties" id="1" flags="8589938704">
 					<parameter name="Transform" id="100" flags="8589938704">
 						<parameter name="Position" id="101" flags="8589938704">
@@ -748,9 +752,9 @@
 					<isShapeStyle>0</isShapeStyle>
 					<aspectRatio>1</aspectRatio>
 					<flags>8</flags>
-					<timing in="0 153600 1 0" out="38310400 3840000 1 0" offset="0 153600 1 0"/>
+					<timing in="609280 153600 1 0" out="53632000 3840000 1 0" offset="609280 153600 1 0"/>
 					<foldFlags>0</foldFlags>
-					<baseFlags>16</baseFlags>
+					<baseFlags>80</baseFlags>
 					<parameter name="Properties" id="1" flags="8589938704">
 						<parameter name="Lighting" id="230" flags="8589938706">
 							<foldFlags>15</foldFlags>
@@ -979,9 +983,9 @@
 				</mask>
 				<aspectRatio>1</aspectRatio>
 				<flags>0</flags>
-				<timing in="0 153600 1 0" out="38310400 3840000 1 0" offset="0 153600 1 0"/>
+				<timing in="609280 153600 1 0" out="53632000 3840000 1 0" offset="609280 153600 1 0"/>
 				<foldFlags>1</foldFlags>
-				<baseFlags>524304</baseFlags>
+				<baseFlags>524368</baseFlags>
 				<parameter name="Properties" id="1" flags="8589938704">
 					<parameter name="Transform" id="100" flags="8589938704">
 						<parameter name="Position" id="101" flags="8589938704">
@@ -1278,9 +1282,9 @@
 				<isShapeStyle>0</isShapeStyle>
 				<aspectRatio>1</aspectRatio>
 				<flags>0</flags>
-				<timing in="0 153600 1 0" out="38310400 3840000 1 0" offset="0 153600 1 0"/>
+				<timing in="609280 153600 1 0" out="53632000 3840000 1 0" offset="609280 153600 1 0"/>
 				<foldFlags>0</foldFlags>
-				<baseFlags>524304</baseFlags>
+				<baseFlags>524368</baseFlags>
 				<parameter name="Properties" id="1" flags="8589938704">
 					<parameter name="Transform" id="100" flags="8589938704">
 						<parameter name="Position" id="101" flags="8589938704">
@@ -1457,9 +1461,9 @@
 				<isShapeStyle>0</isShapeStyle>
 				<aspectRatio>1</aspectRatio>
 				<flags>0</flags>
-				<timing in="0 153600 1 0" out="38310400 3840000 1 0" offset="0 153600 1 0"/>
+				<timing in="609280 153600 1 0" out="53632000 3840000 1 0" offset="609280 153600 1 0"/>
 				<foldFlags>0</foldFlags>
-				<baseFlags>524304</baseFlags>
+				<baseFlags>524368</baseFlags>
 				<parameter name="Properties" id="1" flags="8589938704">
 					<parameter name="Transform" id="100" flags="8589938704">
 						<parameter name="Position" id="101" flags="8589938704">
@@ -1658,9 +1662,9 @@
 					<isShapeStyle>0</isShapeStyle>
 					<aspectRatio>1</aspectRatio>
 					<flags>8</flags>
-					<timing in="0 153600 1 0" out="38310400 3840000 1 0" offset="0 153600 1 0"/>
+					<timing in="609280 153600 1 0" out="53632000 3840000 1 0" offset="609280 153600 1 0"/>
 					<foldFlags>0</foldFlags>
-					<baseFlags>16</baseFlags>
+					<baseFlags>80</baseFlags>
 					<parameter name="Properties" id="1" flags="8589938704">
 						<parameter name="Lighting" id="230" flags="8589938706">
 							<foldFlags>15</foldFlags>
@@ -1837,9 +1841,9 @@
 				</mask>
 				<aspectRatio>1</aspectRatio>
 				<flags>0</flags>
-				<timing in="0 153600 1 0" out="38310400 3840000 1 0" offset="0 153600 1 0"/>
+				<timing in="609280 153600 1 0" out="53632000 3840000 1 0" offset="609280 153600 1 0"/>
 				<foldFlags>1</foldFlags>
-				<baseFlags>524304</baseFlags>
+				<baseFlags>524368</baseFlags>
 				<parameter name="Properties" id="1" flags="8589938704">
 					<parameter name="Transform" id="100" flags="8589938704">
 						<parameter name="Position" id="101" flags="8589938704">
@@ -2106,9 +2110,9 @@
 				<isShapeStyle>0</isShapeStyle>
 				<aspectRatio>1</aspectRatio>
 				<flags>0</flags>
-				<timing in="0 153600 1 0" out="38310400 3840000 1 0" offset="0 153600 1 0"/>
+				<timing in="609280 153600 1 0" out="53632000 3840000 1 0" offset="609280 153600 1 0"/>
 				<foldFlags>0</foldFlags>
-				<baseFlags>524304</baseFlags>
+				<baseFlags>524368</baseFlags>
 				<parameter name="Properties" id="1" flags="8589938704">
 					<parameter name="Transform" id="100" flags="8589938704">
 						<parameter name="Position" id="101" flags="8589938704">
@@ -2327,9 +2331,9 @@
 					<isShapeStyle>0</isShapeStyle>
 					<aspectRatio>1</aspectRatio>
 					<flags>8</flags>
-					<timing in="0 153600 1 0" out="38310400 3840000 1 0" offset="0 153600 1 0"/>
+					<timing in="609280 153600 1 0" out="53632000 3840000 1 0" offset="609280 153600 1 0"/>
 					<foldFlags>0</foldFlags>
-					<baseFlags>16</baseFlags>
+					<baseFlags>80</baseFlags>
 					<parameter name="Properties" id="1" flags="8589938704">
 						<parameter name="Lighting" id="230" flags="8589938706">
 							<foldFlags>15</foldFlags>
@@ -2558,9 +2562,9 @@
 				</mask>
 				<aspectRatio>1</aspectRatio>
 				<flags>0</flags>
-				<timing in="0 153600 1 0" out="38310400 3840000 1 0" offset="0 153600 1 0"/>
+				<timing in="609280 153600 1 0" out="53632000 3840000 1 0" offset="609280 153600 1 0"/>
 				<foldFlags>1</foldFlags>
-				<baseFlags>524304</baseFlags>
+				<baseFlags>524368</baseFlags>
 				<parameter name="Properties" id="1" flags="8589938704">
 					<parameter name="Transform" id="100" flags="8589938704">
 						<parameter name="Position" id="101" flags="8589938704">
@@ -2805,7 +2809,7 @@
 			</scenenode>
 			<aspectRatio>1</aspectRatio>
 			<flags>0</flags>
-			<timing in="0 153600 1 0" out="38310400 3840000 1 0" offset="0 153600 1 0"/>
+			<timing in="609280 153600 1 0" out="53632000 3840000 1 0" offset="609280 153600 1 0"/>
 			<foldFlags>1</foldFlags>
 			<baseFlags>524368</baseFlags>
 			<parameter name="Properties" id="1" flags="8589938704">
@@ -2869,15 +2873,45 @@
 				<isShapeStyle>0</isShapeStyle>
 				<aspectRatio>1</aspectRatio>
 				<flags>0</flags>
-				<timing in="0 153600 1 0" out="38310400 3840000 1 0" offset="0 153600 1 0"/>
+				<timing in="609280 153600 1 0" out="53632000 3840000 1 0" offset="609280 153600 1 0"/>
 				<foldFlags>0</foldFlags>
-				<baseFlags>524304</baseFlags>
+				<baseFlags>524368</baseFlags>
 				<parameter name="Properties" id="1" flags="8589938704">
 					<parameter name="Transform" id="100" flags="8589938704">
 						<parameter name="Position" id="101" flags="8589938704">
-							<foldFlags>15</foldFlags>
+							<foldFlags>11</foldFlags>
 							<parameter name="X" id="1" flags="8589934608" default="0" value="35.379973999999997"/>
-							<parameter name="Y" id="2" flags="8589934608" default="0" value="148.11000100000001"/>
+							<parameter name="Y" id="2" flags="8589934608" default="0" value="148.11000000000001"/>
+						</parameter>
+						<parameter name="Scale" id="105" flags="8589938704">
+							<foldFlags>11</foldFlags>
+							<parameter name="Y" id="2" flags="8589934608">
+								<curve type="1" default="1" value="1">
+									<numberOfKeypoints>3</numberOfKeypoints>
+									<keypoint interpolation="1" flags="0">
+										<time>998400 153600 1 0</time>
+										<value>1</value>
+										<outputTangentTime>0.04444444444444446</outputTangentTime>
+										<outputTangentValue>-0.26666666666666655</outputTangentValue>
+									</keypoint>
+									<keypoint interpolation="1" flags="0">
+										<time>1018880 153600 1 0</time>
+										<value>0</value>
+										<inputTangentTime>-0.044444444672876407</inputTangentTime>
+										<inputTangentValue>0.26666666803725847</inputTangentValue>
+										<outputTangentTime>0.044444444333333312</outputTangentTime>
+										<outputTangentValue>0.26666666600000016</outputTangentValue>
+									</keypoint>
+									<keypoint interpolation="1" flags="1">
+										<time>1039360 153600 1 0</time>
+										<value>1</value>
+										<inputTangentTime>-0.044444444444444439</inputTangentTime>
+										<inputTangentValue>-0.26666666666666672</inputTangentValue>
+										<outputTangentTime>0.34444444444444433</outputTangentTime>
+										<outputTangentValue>0</outputTangentValue>
+									</keypoint>
+								</curve>
+							</parameter>
 						</parameter>
 					</parameter>
 					<parameter name="Lighting" id="230" flags="8589938706">
@@ -3018,15 +3052,45 @@
 				<isShapeStyle>0</isShapeStyle>
 				<aspectRatio>1</aspectRatio>
 				<flags>0</flags>
-				<timing in="0 153600 1 0" out="38310400 3840000 1 0" offset="0 153600 1 0"/>
+				<timing in="609280 153600 1 0" out="53632000 3840000 1 0" offset="609280 153600 1 0"/>
 				<foldFlags>0</foldFlags>
-				<baseFlags>524304</baseFlags>
+				<baseFlags>524368</baseFlags>
 				<parameter name="Properties" id="1" flags="8589938704">
 					<parameter name="Transform" id="100" flags="8589938704">
 						<parameter name="Position" id="101" flags="8589938704">
-							<foldFlags>15</foldFlags>
+							<foldFlags>11</foldFlags>
 							<parameter name="X" id="1" flags="8589934608" default="0" value="-38.809998"/>
-							<parameter name="Y" id="2" flags="8589934608" default="0" value="148.11000100000001"/>
+							<parameter name="Y" id="2" flags="8589934608" default="0" value="148.11000000000001"/>
+						</parameter>
+						<parameter name="Scale" id="105" flags="8589938704">
+							<foldFlags>11</foldFlags>
+							<parameter name="Y" id="2" flags="8589934608">
+								<curve type="1" default="1" value="1">
+									<numberOfKeypoints>3</numberOfKeypoints>
+									<keypoint interpolation="1" flags="0">
+										<time>998400 153600 1 0</time>
+										<value>1</value>
+										<outputTangentTime>0.04444444444444446</outputTangentTime>
+										<outputTangentValue>-0.26666666666666655</outputTangentValue>
+									</keypoint>
+									<keypoint interpolation="1" flags="0">
+										<time>1018880 153600 1 0</time>
+										<value>0</value>
+										<inputTangentTime>-0.044444444672876407</inputTangentTime>
+										<inputTangentValue>0.26666666803725847</inputTangentValue>
+										<outputTangentTime>0.044444444333333312</outputTangentTime>
+										<outputTangentValue>0.26666666600000016</outputTangentValue>
+									</keypoint>
+									<keypoint interpolation="1" flags="1">
+										<time>1039360 153600 1 0</time>
+										<value>1</value>
+										<inputTangentTime>-0.044444444444444439</inputTangentTime>
+										<inputTangentValue>-0.26666666666666672</inputTangentValue>
+										<outputTangentTime>0.34444444444444433</outputTangentTime>
+										<outputTangentValue>0</outputTangentValue>
+									</keypoint>
+								</curve>
+							</parameter>
 						</parameter>
 					</parameter>
 					<parameter name="Lighting" id="230" flags="8589938706">
@@ -3167,9 +3231,9 @@
 				<isShapeStyle>0</isShapeStyle>
 				<aspectRatio>1</aspectRatio>
 				<flags>0</flags>
-				<timing in="0 153600 1 0" out="38310400 3840000 1 0" offset="0 153600 1 0"/>
+				<timing in="609280 153600 1 0" out="53632000 3840000 1 0" offset="609280 153600 1 0"/>
 				<foldFlags>0</foldFlags>
-				<baseFlags>524304</baseFlags>
+				<baseFlags>524368</baseFlags>
 				<parameter name="Properties" id="1" flags="8589938704">
 					<parameter name="Transform" id="100" flags="8589938704">
 						<parameter name="Position" id="101" flags="8589938704">
@@ -3370,9 +3434,9 @@
 			</scenenode>
 			<aspectRatio>1</aspectRatio>
 			<flags>0</flags>
-			<timing in="0 153600 1 0" out="38310400 3840000 1 0" offset="0 153600 1 0"/>
-			<foldFlags>1</foldFlags>
-			<baseFlags>524304</baseFlags>
+			<timing in="609280 153600 1 0" out="53632000 3840000 1 0" offset="609280 153600 1 0"/>
+			<foldFlags>0</foldFlags>
+			<baseFlags>524368</baseFlags>
 			<parameter name="Properties" id="1" flags="8589938704">
 				<parameter name="Transform" id="100" flags="8589938704">
 					<parameter name="Position" id="101" flags="8589938704">
@@ -3387,13 +3451,13 @@
 								<numberOfKeypoints>4</numberOfKeypoints>
 								<keypoint interpolation="1" flags="0">
 									<time>0 153600 1 0</time>
-									<value>0.40000000000000002</value>
+									<value>0.59999999999999998</value>
 									<outputTangentTime>0.14444444444444443</outputTangentTime>
 									<outputTangentValue>0</outputTangentValue>
 								</keypoint>
 								<keypoint interpolation="1" flags="0">
 									<time>66560 153600 1 0</time>
-									<value>0.40000000000000002</value>
+									<value>0.59999999999999998</value>
 									<inputTangentTime>-0.14444444444444443</inputTangentTime>
 									<inputTangentValue>0</inputTangentValue>
 									<outputTangentTime>0.011111111111111112</outputTangentTime>
@@ -3401,7 +3465,7 @@
 								</keypoint>
 								<keypoint interpolation="1" flags="0">
 									<time>71680 153600 1 0</time>
-									<value>0.40000000000000002</value>
+									<value>0.59999999999999998</value>
 									<inputTangentTime>-0.011111111111111112</inputTangentTime>
 									<inputTangentValue>0</inputTangentValue>
 									<outputTangentTime>0.5</outputTangentTime>
@@ -3422,13 +3486,13 @@
 								<numberOfKeypoints>4</numberOfKeypoints>
 								<keypoint interpolation="1" flags="0">
 									<time>0 153600 1 0</time>
-									<value>0.40000000000000002</value>
+									<value>0.59999999999999998</value>
 									<outputTangentTime>0.14444444444444443</outputTangentTime>
 									<outputTangentValue>0</outputTangentValue>
 								</keypoint>
 								<keypoint interpolation="1" flags="0">
 									<time>66560 153600 1 0</time>
-									<value>0.40000000000000002</value>
+									<value>0.59999999999999998</value>
 									<inputTangentTime>-0.14444444444444443</inputTangentTime>
 									<inputTangentValue>0</inputTangentValue>
 									<outputTangentTime>0.011111111111111112</outputTangentTime>
@@ -3436,7 +3500,7 @@
 								</keypoint>
 								<keypoint interpolation="1" flags="0">
 									<time>71680 153600 1 0</time>
-									<value>0.40000000000000002</value>
+									<value>0.59999999999999998</value>
 									<inputTangentTime>-0.011111111111111112</inputTangentTime>
 									<inputTangentValue>0</inputTangentValue>
 									<outputTangentTime>0.5</outputTangentTime>
@@ -3457,13 +3521,13 @@
 								<numberOfKeypoints>4</numberOfKeypoints>
 								<keypoint interpolation="1" flags="0">
 									<time>0 153600 1 0</time>
-									<value>0.40000000000000002</value>
+									<value>0.59999999999999998</value>
 									<outputTangentTime>0.14444444444444443</outputTangentTime>
 									<outputTangentValue>0</outputTangentValue>
 								</keypoint>
 								<keypoint interpolation="1" flags="0">
 									<time>66560 153600 1 0</time>
-									<value>0.40000000000000002</value>
+									<value>0.59999999999999998</value>
 									<inputTangentTime>-0.14444444444444443</inputTangentTime>
 									<inputTangentValue>0</inputTangentValue>
 									<outputTangentTime>0.011111111111111112</outputTangentTime>
@@ -3471,7 +3535,7 @@
 								</keypoint>
 								<keypoint interpolation="1" flags="0">
 									<time>71680 153600 1 0</time>
-									<value>0.40000000000000002</value>
+									<value>0.59999999999999998</value>
 									<inputTangentTime>-0.011111111111111112</inputTangentTime>
 									<inputTangentValue>0</inputTangentValue>
 									<outputTangentTime>0.5</outputTangentTime>
@@ -3511,7 +3575,7 @@
 							</keypoint>
 							<keypoint interpolation="1" flags="0">
 								<time>71680 153600 1 0</time>
-								<value>0.20000000000000001</value>
+								<value>1</value>
 								<inputTangentTime>-0.011111111111111112</inputTangentTime>
 								<inputTangentValue>-0.066666666666666666</inputTangentValue>
 								<outputTangentTime>0.5</outputTangentTime>
@@ -3556,13 +3620,13 @@
 			<isShapeStyle>0</isShapeStyle>
 			<aspectRatio>1</aspectRatio>
 			<flags>0</flags>
-			<timing in="0 153600 1 0" out="38310400 3840000 1 0" offset="0 153600 1 0"/>
+			<timing in="609280 153600 1 0" out="53632000 3840000 1 0" offset="609280 153600 1 0"/>
 			<foldFlags>0</foldFlags>
 			<baseFlags>524368</baseFlags>
 			<parameter name="Properties" id="1" flags="8589938704">
 				<parameter name="Transform" id="100" flags="8589938704">
 					<parameter name="Position" id="101" flags="8589938704">
-						<foldFlags>15</foldFlags>
+						<foldFlags>11</foldFlags>
 						<parameter name="X" id="1" flags="8589934608" default="0" value="-1.7200009999999999"/>
 						<parameter name="Y" id="2" flags="8589934608" default="0" value="89.319976999999994"/>
 					</parameter>
@@ -3781,8 +3845,8 @@
 				</parameter>
 			</parameter>
 			<behavior name="Write On" id="1825770797" factoryID="17">
-				<timing in="327680 153600 1 0" out="13952000 3840000 1 0" offset="327680 153600 1 0"/>
-				<baseFlags>8589934608</baseFlags>
+				<timing in="936960 153600 1 0" out="29184000 3840000 1 0" offset="936960 153600 1 0"/>
+				<baseFlags>8589934672</baseFlags>
 				<parameter name="Custom Speed" id="205" flags="8589967376">
 					<curve type="1" default="0" value="0" round="0">
 						<numberOfKeypoints>2</numberOfKeypoints>
@@ -3808,9 +3872,9 @@
 		</scenenode>
 		<aspectRatio>1</aspectRatio>
 		<flags>0</flags>
-		<timing in="0 153600 1 0" out="38438528 3840000 1 0" offset="0 120000 1 0"/>
+		<timing in="609280 153600 1 0" out="53632000 3840000 1 0" offset="609280 153600 1 0"/>
 		<foldFlags>0</foldFlags>
-		<baseFlags>524304</baseFlags>
+		<baseFlags>524368</baseFlags>
 		<parameter name="Properties" id="1" flags="8589938704">
 			<parameter name="Transform" id="100" flags="8589938704">
 				<parameter name="Scale" id="105" flags="8589938704">
@@ -3848,9 +3912,9 @@
 	<audio name="Audio Layer" id="1825770802">
 		<audioTrack name="Project-VO" id="1825771191">
 			<flags>0</flags>
-			<timing in="916480 153600 1 0" out="7523312 768000 1 0" offset="906240 153600 1 0"/>
+			<timing in="1520640 153600 1 0" out="10544112 768000 1 0" offset="1510400 153600 1 0"/>
 			<foldFlags>16384</foldFlags>
-			<baseFlags>524304</baseFlags>
+			<baseFlags>524368</baseFlags>
 			<parameter name="Properties" id="1" flags="8589938704">
 				<parameter name="Media" id="104" flags="77309476880" default="0" value="1825771190"/>
 				<parameter name="Retime Value" id="109" flags="8590065682">
@@ -3885,9 +3949,9 @@
 		</audioTrack>
 		<audioTrack name="4" id="1825770878">
 			<flags>0</flags>
-			<timing in="522240 153600 1 0" out="547840 153600 1 0" offset="522240 153600 1 0"/>
+			<timing in="1131520 153600 1 0" out="1157120 153600 1 0" offset="1131520 153600 1 0"/>
 			<foldFlags>16384</foldFlags>
-			<baseFlags>524304</baseFlags>
+			<baseFlags>524368</baseFlags>
 			<parameter name="Properties" id="1" flags="8589938704">
 				<parameter name="Media" id="104" flags="77309476880" default="0" value="1825770877"/>
 				<parameter name="Retime Value" id="109" flags="8590065682">
@@ -3924,9 +3988,9 @@
 		</audioTrack>
 		<audioTrack name="3" id="1825770876">
 			<flags>0</flags>
-			<timing in="440320 153600 1 0" out="465920 153600 1 0" offset="440320 153600 1 0"/>
+			<timing in="1049600 153600 1 0" out="1075200 153600 1 0" offset="1049600 153600 1 0"/>
 			<foldFlags>16384</foldFlags>
-			<baseFlags>524304</baseFlags>
+			<baseFlags>524368</baseFlags>
 			<parameter name="Properties" id="1" flags="8589938704">
 				<parameter name="Media" id="104" flags="77309476880" default="0" value="1825770875"/>
 				<parameter name="Retime Value" id="109" flags="8590065682">
@@ -3963,9 +4027,9 @@
 		</audioTrack>
 		<audioTrack name="2" id="1825770874">
 			<flags>0</flags>
-			<timing in="363520 153600 1 0" out="389120 153600 1 0" offset="363520 153600 1 0"/>
+			<timing in="972800 153600 1 0" out="998400 153600 1 0" offset="972800 153600 1 0"/>
 			<foldFlags>16384</foldFlags>
-			<baseFlags>524304</baseFlags>
+			<baseFlags>524368</baseFlags>
 			<parameter name="Properties" id="1" flags="8589938704">
 				<parameter name="Media" id="104" flags="77309476880" default="0" value="1825770873"/>
 				<parameter name="Retime Value" id="109" flags="8590065682">
@@ -4002,9 +4066,9 @@
 		</audioTrack>
 		<audioTrack name="1" id="1825770872">
 			<flags>0</flags>
-			<timing in="327680 153600 1 0" out="353280 153600 1 0" offset="327680 153600 1 0"/>
+			<timing in="936960 153600 1 0" out="962560 153600 1 0" offset="936960 153600 1 0"/>
 			<foldFlags>16384</foldFlags>
-			<baseFlags>524304</baseFlags>
+			<baseFlags>524368</baseFlags>
 			<parameter name="Properties" id="1" flags="8589938704">
 				<parameter name="Media" id="104" flags="77309476880" default="0" value="1825770871"/>
 				<parameter name="Retime Value" id="109" flags="8590065682">
@@ -4041,13 +4105,13 @@
 		</audioTrack>
 		<audioTrack name="swell-opacity" id="1825770866">
 			<flags>0</flags>
-			<timing in="634880 153600 1 0" out="701440 153600 1 0" offset="583680 153600 1 0"/>
+			<timing in="1244160 153600 1 0" out="1310720 153600 1 0" offset="1192960 153600 1 0"/>
 			<foldFlags>16384</foldFlags>
 			<baseFlags>524368</baseFlags>
 			<parameter name="Properties" id="1" flags="8589938704">
 				<parameter name="Media" id="104" flags="77309476880" default="0" value="1825770865"/>
 				<parameter name="Retime Value" id="109" flags="8590065682">
-					<curve type="1" default="1" value="9" round="0" retimingExtrapolation="1">
+					<curve type="1" default="1" value="11" round="0" retimingExtrapolation="1">
 						<numberOfKeypoints>2</numberOfKeypoints>
 						<postExtrapolation>1</postExtrapolation>
 						<keypoint interpolation="1" flags="0">
@@ -4080,9 +4144,9 @@
 		</audioTrack>
 		<audioTrack name="177507__snapper4298__snap_6" id="1825770827">
 			<flags>0</flags>
-			<timing in="66560 153600 1 0" out="13547520 22579200 1 0" offset="66560 153600 1 0"/>
+			<timing in="680960 153600 1 0" out="103864320 22579200 1 0" offset="680960 153600 1 0"/>
 			<foldFlags>16384</foldFlags>
-			<baseFlags>524304</baseFlags>
+			<baseFlags>524368</baseFlags>
 			<parameter name="Properties" id="1" flags="8589938704">
 				<parameter name="Media" id="104" flags="77309476880" default="0" value="1825770826"/>
 				<parameter name="Retime Value" id="109" flags="8590065682">
@@ -4119,7 +4183,7 @@
 		</audioTrack>
 		<scenenode name="Output" id="1825770803" factoryID="12" version="5">
 			<flags>0</flags>
-			<timing in="0 1 1 0" out="7523312 768000 1 0" offset="0 1 1 0"/>
+			<timing in="0 1 1 0" out="10544112 768000 1 0" offset="0 1 1 0"/>
 			<foldFlags>0</foldFlags>
 			<baseFlags>524368</baseFlags>
 			<parameter name="Properties" id="1" flags="8589938704"/>
@@ -4128,7 +4192,7 @@
 			</parameter>
 		</scenenode>
 		<flags>0</flags>
-		<timing in="66560 153600 1 0" out="7523312 768000 1 0" offset="0 1 1 0"/>
+		<timing in="680960 153600 1 0" out="10544112 768000 1 0" offset="0 1 1 0"/>
 		<foldFlags>0</foldFlags>
 		<baseFlags>524368</baseFlags>
 		<parameter name="Properties" id="1" flags="8589938704"/>
