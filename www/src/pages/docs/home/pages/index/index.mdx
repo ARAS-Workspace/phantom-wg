@@ -1,4 +1,5 @@
 import Mermaid from '@shared/components/visualization/Mermaid';
+import PhantomHLSPlayer from '@shared/components/visualization/PhantomHLSPlayer';
 
 # Phantom-WG
 
@@ -11,6 +12,22 @@ import Mermaid from '@shared/components/visualization/Mermaid';
 - **SQLite State Persistence** — Tüm state SQLite veritabanlarında tutulur. Crash sonrası daemon restart yeterlidir — kernel state DB'den yeniden oluşturulur.
 - **Dual-Stack IPv6** — Host'ta IPv6 olmasa bile container içinde IPv6 subnet atanır, tünel içinde trafik taşınabilir.
 - **Container İzolasyonu** — `NET_ADMIN` + `NET_RAW` yeterlidir. WireGuard arayüzleri container namespace içerisinde yaşar. `SYS_ADMIN`, `privileged` veya `host` network mode gibi host güvenliğini zayıflatan konfigürasyonlar kullanılmaz.
+
+---
+
+<PhantomHLSPlayer
+    src="https://media.phantom.tc/phantom-wg-quickstart-guide/master.m3u8"
+    poster="https://media.phantom.tc/phantom-wg-quickstart-guide/Poster.png"
+    chapterStrip={{
+        chapters: [
+            { slug: 'intro',        label: 'Introduction',                                     start: 0 },
+            { slug: 'topology',     label: 'Topology Overview',                                start: 14.9 },
+            { slug: 'hetzner',      label: 'Hetzner Server Provisioning',                      start: 68.33 },
+            { slug: 'installation', label: 'Phantom-WG Installation & Configuration',          start: 271.23 },
+            { slug: 'frontmatter',  label: 'Phantom-Frontmatter Installation & Configuration', start: 638.83 },
+        ],
+    }}
+/>
 
 ---
 

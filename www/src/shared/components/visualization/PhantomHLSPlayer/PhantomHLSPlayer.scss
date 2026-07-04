@@ -1,0 +1,56 @@
+@use '@carbon/react/scss/spacing' as sp;
+@use '@carbon/react/scss/breakpoint' as bp;
+
+.phantom-hls-player {
+  position: relative;
+  width: 100%;
+  margin: sp.$spacing-07 0;
+  border-radius: 8px;
+  overflow: hidden;
+
+  &__aspect {
+    position: relative;
+    width: 100%;
+    overflow: hidden;
+    /* Letterbox colour is theme-driven via the CSS var set on the root. */
+    background: var(--phantom-hls-letterbox, #000);
+    /* aspect-ratio is applied inline via the `style` prop. */
+  }
+
+  &__inner {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+  }
+
+  &__video {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    /* `contain` keeps the whole 16:9 frame visible inside the box even if
+       the wrapper aspect-ratio differs, letterboxing with the bg colour. */
+    object-fit: contain;
+    background: var(--phantom-hls-letterbox, #000);
+    border: 0;
+  }
+
+  &__skeleton {
+    position: absolute !important;
+    inset: 0;
+    width: 100% !important;
+    height: 100% !important;
+    border-radius: 0 !important;
+    z-index: 1;
+  }
+
+  @include bp.breakpoint-down(md) {
+    margin: sp.$spacing-05 0;
+    border-radius: 4px;
+  }
+
+  @include bp.breakpoint-down(sm) {
+    margin: sp.$spacing-04 0;
+  }
+}
