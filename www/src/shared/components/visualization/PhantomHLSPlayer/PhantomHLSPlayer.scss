@@ -17,23 +17,37 @@
   }
 
   /* The Vidstack player fills the aspect box. Vidstack ships its own
-     internal styles (theme.css + video layout); we only pin its size and
-     hand it the brand accent via CSS vars below. */
+     internal styles (theme.css + video layout) and owns its colors via
+     colorScheme; we only pin its size and a couple of structural vars. */
   &__vds {
     position: absolute;
     inset: 0;
     width: 100%;
     height: 100%;
 
-    /* ── Brand theming via Vidstack CSS variables ──────────────────
-       Vidstack's default layout exposes 150+ vars. These map the key
-       ones to the Phantom palette. Adjust to taste; unset vars fall
-       back to Vidstack defaults. */
-    --video-brand: var(--cds-interactive, #4589ff);          /* accent (scrubber, spinner) */
-    --media-brand: var(--cds-interactive, #4589ff);
-    --video-controls-color: #f4f4f4;                          /* control icons/text */
+    /* Structural overrides only. Colors are left entirely to Vidstack's
+       own colorScheme (bound to useTheme in index.tsx) — we don't
+       override the library's palette here, so light/dark theming stays
+       the library's responsibility. These two are layout/typography, not
+       color, so they don't fight colorScheme. */
     --media-font-family: var(--cds-body-01-font-family, inherit);
     --video-border-radius: 0;
+  }
+
+  /* Poster: behave exactly like the video — true to its own aspect,
+     shown as-is, never stretched or squished to the box. Vidstack puts
+     the `vds-poster` class directly on the <img> (not a wrapper), and
+     its default rule sets width/height 100% but no object-fit, so the
+     img falls back to the browser default (fill → stretch). object-fit:
+     contain pins the poster to its 16:9 ratio; if the box ever deviates
+     from 16:9 it letterboxes (same as the video) instead of distorting.
+     Poster and box are both 16:9, so the normal case is a perfect fit
+     with no bars. center keeps any letterbox symmetric. */
+  .vds-poster {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+    object-position: center;
   }
 
 

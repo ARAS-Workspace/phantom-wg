@@ -21,8 +21,8 @@ mkdir -p "$OUTDIR"
 
 # ---- GOP / segment ----
 FPS=30
-SEG_SECONDS=4
-GOP=$(( FPS * SEG_SECONDS ))   # 120
+SEG_SECONDS=1
+GOP=$(( FPS * SEG_SECONDS ))
 
 # ---- x264 quality settings (tuned for the grain already baked into the master) ----
 # aq-mode=3       : adaptive quantization, smarter bit allocation in dark regions
@@ -54,6 +54,7 @@ for entry in "${LADDER[@]}"; do
   rdir="$OUTDIR/$rname"
   mkdir -p "$rdir"
 
+  # shellcheck disable=SC2086
   ffmpeg -y -i "$INPUT" \
     -vf "scale=${res/x/:}:flags=lanczos" \
     -c:v libx264 \

@@ -18,12 +18,7 @@ import {
 import { useTheme } from '@shared/hooks/useTheme';
 import { useIsClient } from '@shared/hooks/useIsClient';
 import { useLocale } from '@shared/hooks';
-import ChapterStrip from './ChapterStrip';
-import {
-  type ChaptersData,
-  generateVTT,
-  getActiveStripItems,
-} from './chapters';
+import { type ChaptersData, generateVTT } from './chapters';
 
 // Vidstack styles — theme + the default video layout skin.
 import '@vidstack/react/player/styles/default/theme.css';
@@ -74,11 +69,10 @@ interface PhantomHLSPlayerProps {
   /** Additional class name for the outer wrapper. */
   className?: string;
   /**
-   * Two-tier chapters. Main chapters become the player's native VTT
-   * chapters (timeline + menu); each main chapter's sub-chapters drive
-   * the dynamic ChapterStrip below the player, switching as the playhead
-   * moves between main chapters. A main chapter with no sub-chapters
-   * shows itself as a single strip item.
+   * Chapters for the player's native chapter UI. A flat list of
+   * (title + start) becomes a WebVTT chapters track — timeline splits,
+   * settings-menu list, and active chapter title, all rendered by the
+   * player. Omit for a plain player with no chapter track.
    */
   chaptersData?: ChaptersData;
 }
@@ -102,54 +96,6 @@ const PlayerSkeleton: React.FC<{ aspectRatio: string; className?: string }> = ({
       </div>
     </div>
 );
-
-// ── Chapter strip bridge ─────────────────────────────────────────
-// Reads Vidstack media state (currentTime/duration) off the player ref
-// and feeds the existing custom ChapterStrip. Kept as a child so the
-// useMediaState hooks resolve against the player context/ref cleanly.
-
-// Feeds the existing ChapterStrip with the *active main chapter's*
-// sub-chapters, recomputed as the playhead moves. When a main chapter
-// has no sub-chapters, the strip shows that main chapter as a single
-// item (see getActiveStripItems). ChapterStrip itself is untouched.
-const ChapterStripBridge: React.FC<{
-  player: React.RefObject<MediaPlayerInstance | null>;
-  data: ChaptersData;
-  onCue: (seconds: number) => void;
-}> = ({ player, data, onCue }) => {
-  const currentTime = useMediaState('currentTime', player);
-  const duration = useMediaState('duration', player);
-
-  if (!duration) return null;
-
-  // Sub-chapters (or the single main-chapter fallback) for wherever the
-  // playhead currently is. The strip's own span math still uses the next
-  // sibling's start (and `duration` for the last item), so we pass the
-  // active main chapter's end as the strip duration for correct widths.
-  const items = getActiveStripItems(data, currentTime);
-
-  // Determine the active main chapter's end so the strip's last segment
-  // width is relative to the chapter, not the whole video.
-  let activeIndex = 0;
-  for (let i = 0; i < data.length; i++) {
-    if (currentTime >= data[i].start) activeIndex = i;
-    else break;
-  }
-  const stripEnd = data[activeIndex + 1]?.start ?? duration;
-
-  // ChapterStrip computes each segment width from (next.start - start)
-  // over `duration`. To scope widths to the active chapter, we hand it a
-  // duration equal to the chapter's end and items starting at their real
-  // times — the last item spans to the chapter end.
-  return (
-      <ChapterStrip
-          chapters={items}
-          duration={stripEnd}
-          currentTime={currentTime}
-          onCue={onCue}
-      />
-  );
-};
 
 // ── Core (client-only) ───────────────────────────────────────────
 
@@ -217,10 +163,6 @@ const PhantomHLSPlayerCore: React.FC<PhantomHLSPlayerProps> = ({
     };
   }, [chaptersData, duration]);
 
-  // The first cue also auto-plays so the user sees the chapter they asked
-  // for. Once playback has started, later cues only seek.
-  const hasStartedRef = useRef(false);
-
   // Apply the requested start position once the player is ready.
   useEffect(() => {
     if (startTime && canPlay && player.current && player.current.currentTime === 0) {
@@ -241,31 +183,16 @@ const PhantomHLSPlayerCore: React.FC<PhantomHLSPlayerProps> = ({
     }
   };
 
-  const cueTo = (seconds: number) => {
-    const p = player.current;
-    if (!Number.isFinite(seconds) || !p) return;
-    p.currentTime = seconds;
-    if (!hasStartedRef.current) {
-      const result = p.play();
-      if (result?.catch) {
-        result.catch(() => {
-          // Sound autoplay refused — retry muted so the poster lifts.
-          try {
-            p.muted = true;
-            void p.play().catch(() => {
-              /* give up silently */
-            });
-          } catch {
-            /* give up silently */
-          }
-        });
-      }
-    }
-  };
-
   const resolvedLetterbox =
       letterboxColor ?? THEME_LETTERBOX[theme] ?? THEME_LETTERBOX.white;
   const resolvedDefaultText = defaultTextTrack ?? locale;
+
+  // Map the app theme onto Vidstack's own color scheme. Vidstack applies
+  // its light/dark styles from this prop — same idea as Asciinema's
+  // `theme` option: hand the library the scheme, it restyles itself. No
+  // CSS-variable overrides needed. When `theme` changes, this prop
+  // changes and Vidstack re-applies its styles.
+  const colorScheme = theme === 'g100' ? 'dark' : 'light';
 
   return (
       <div
@@ -289,9 +216,6 @@ const PhantomHLSPlayerCore: React.FC<PhantomHLSPlayerProps> = ({
               loop={loop}
               playsInline
               onProviderChange={handleProviderChange}
-              onPlay={() => {
-                hasStartedRef.current = true;
-              }}
           >
             <MediaProvider>
               {poster && <Poster className="vds-poster" src={poster} alt={title ?? ''} />}
@@ -308,21 +232,13 @@ const PhantomHLSPlayerCore: React.FC<PhantomHLSPlayerProps> = ({
             </MediaProvider>
 
             {/* Polished, pre-built controls + buffering spinner. */}
-            <DefaultVideoLayout icons={defaultLayoutIcons} />
+            <DefaultVideoLayout icons={defaultLayoutIcons} colorScheme={colorScheme} />
           </MediaPlayer>
 
           {!canPlay && (
               <SkeletonPlaceholder className="phantom-hls-player__skeleton" />
           )}
         </div>
-
-        {chaptersData && chaptersData.length > 0 && (
-            <ChapterStripBridge
-                player={player}
-                data={chaptersData}
-                onCue={cueTo}
-            />
-        )}
       </div>
   );
 };

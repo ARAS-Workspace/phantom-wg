@@ -1,40 +1,54 @@
-// ── Two-tier chapter data ────────────────────────────────────────
-// Single source of truth: main chapters (→ player VTT) each holding
-// optional sub-chapters (→ dynamic ChapterStrip). Main-chapter times
-// live ONLY here, so the VTT and the strip can never drift.
+// ── Chapter data (player-native, VTT only) ───────────────────────
+// A flat list of main chapters. Each becomes a cue in a WebVTT
+// `chapters` track handed to the player, which renders them natively
+// (timeline splits + settings-menu list + active chapter title). No
+// custom strip — the player owns the entire chapter experience.
+//
+// Times are authored as FCP timecodes "HH:MM:SS:FF" (frame-accurate,
+// copy-paste straight from Final Cut) and converted to seconds without
+// rounding. The frame rate travels WITH the data (`fps`), since the
+// frame field (FF) is meaningless without it — falls back to DEFAULT_FPS.
 
-export interface SubChapter {
-  /** Sub-chapter label. */
+/** Default frame rate if a ChaptersData omits `fps`. */
+export const DEFAULT_FPS = 30;
+
+/** "HH:MM:SS:FF" timecode string (FF = frame, 0..fps-1). */
+export type Timecode = string;
+
+export interface Chapter {
+  /** Chapter label — shown in the player's native chapters UI. */
   title: string;
-  /** Start time in seconds. */
-  start: number;
+  /** Start timecode "HH:MM:SS:FF". */
+  start: Timecode;
 }
 
-export interface MainChapter {
-  /** Main-chapter label — shown in the player's native chapters. */
-  title: string;
-  /** Start time in seconds. */
-  start: number;
-  /** Sub-steps for this chapter. Empty → the strip shows the main
-   *  chapter itself as a single item. */
-  chapters: SubChapter[];
+/**
+ * The chapters payload. `fps` is the frame rate the timecodes were
+ * authored at (needed to interpret the FF field). Optional — omitted
+ * data is read at DEFAULT_FPS.
+ */
+export interface ChaptersData {
+  /** Frame rate for timecode → seconds conversion. Defaults to 30. */
+  fps?: number;
+  /** Ordered chapters. */
+  chapters: Chapter[];
 }
 
-export type ChaptersData = MainChapter[];
+// ── Timecode → seconds (frame-accurate, no rounding) ─────────────
+// "00:01:42:05" @ 30fps → 102 + 5/30 = 102.16666… (full precision).
 
-// Structurally matches the `Chapter` type that ChapterStrip consumes
-// ({ slug, label, start }). Kept as a local type so this module has no
-// dependency on the app's shared types; TypeScript structural typing
-// makes StripItem[] assignable to Chapter[] since the fields line up.
-export interface StripItem {
-  slug: string;
-  label: string;
-  start: number;
+export function timecodeToSeconds(tc: Timecode, fps: number): number {
+  const parts = tc.split(':').map(Number);
+  if (parts.length !== 4 || parts.some(Number.isNaN)) {
+    throw new Error(`Invalid timecode "${tc}" (expected "HH:MM:SS:FF")`);
+  }
+  const [h, m, s, f] = parts;
+  return h * 3600 + m * 60 + s + f / fps;
 }
 
-// ── Derivation 1: WebVTT for the player (from main chapters) ──────
-// Each cue runs from its start to the next main chapter's start; the
-// last cue runs to `duration` (known once the player has metadata).
+// ── WebVTT for the player's native chapters ──────────────────────
+// Each cue runs from its start to the next chapter's start; the last
+// cue runs to `duration` (known once the player has metadata).
 
 function toVTTTimestamp(seconds: number): string {
   const hh = Math.floor(seconds / 3600);
@@ -46,45 +60,17 @@ function toVTTTimestamp(seconds: number): string {
 }
 
 export function generateVTT(data: ChaptersData, duration: number): string {
+  const fps = data.fps ?? DEFAULT_FPS;
+  const chapters = data.chapters;
   const lines = ['WEBVTT', ''];
-  data.forEach((main, i) => {
-    const start = main.start;
-    const end = data[i + 1]?.start ?? duration;
+  chapters.forEach((ch, i) => {
+    const start = timecodeToSeconds(ch.start, fps);
+    const end = chapters[i + 1]
+      ? timecodeToSeconds(chapters[i + 1].start, fps)
+      : duration;
     lines.push(`${toVTTTimestamp(start)} --> ${toVTTTimestamp(end)}`);
-    lines.push(main.title);
+    lines.push(ch.title);
     lines.push('');
   });
   return lines.join('\n').trim();
-}
-
-// ── Derivation 2: strip items for the active main chapter ─────────
-// Given the playhead, find which main chapter we're in, then return
-// its sub-chapters as strip items. If it has none, return the main
-// chapter itself as a single item (strip is never empty).
-
-export function getActiveStripItems(
-  data: ChaptersData,
-  currentTime: number,
-): StripItem[] {
-  if (data.length === 0) return [];
-
-  // Find the active main chapter: last one whose start <= currentTime.
-  let activeIndex = 0;
-  for (let i = 0; i < data.length; i++) {
-    if (currentTime >= data[i].start) activeIndex = i;
-    else break;
-  }
-
-  const main = data[activeIndex];
-
-  if (main.chapters.length === 0) {
-    // No sub-chapters → show the main chapter as a single strip item.
-    return [{ slug: `main-${activeIndex}`, label: main.title, start: main.start }];
-  }
-
-  return main.chapters.map((sub, j) => ({
-    slug: `sub-${activeIndex}-${j}`,
-    label: sub.title,
-    start: sub.start,
-  }));
 }

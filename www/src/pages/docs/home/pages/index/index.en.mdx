@@ -15,49 +15,21 @@ import PhantomHLSPlayer from '@shared/components/visualization/PhantomHLSPlayer'
 
 ---
 
-export const CHAPTERS = [
-    {
-        title: 'Phantom-WG Intro',
-        start: 0,
-        chapters: [],
-    },
-    {
-        title: 'Topology Overview',
-        start: 14.9,
-        chapters: [],
-    },
-    {
-        title: 'Hetzner Server Provisioning',
-        start: 67.33,
-        chapters: [
-            { title: 'Generate SSH Key', start: 70.5 },
-            { title: 'Write cloud-init.yaml', start: 102.17 },
-            { title: 'Create the Servers', start: 131.67 },
-            { title: 'Verify via CLI', start: 171.83 },
-            { title: 'Console + DNS', start: 229.67 },
-        ],
-    },
-    {
-        title: 'Phantom-WG Installation & Configuration',
-        start: 271.23,
-        chapters: [
-            { title: 'Installation', start: 273.67 },
-            { title: 'Configuration', start: 455.5 },
-        ],
-    },
-    {
-        title: 'Phantom-Frontmatter Installation & Configuration',
-        start: 639.33,
-        chapters: [
-            { title: 'Installation', start: 641.33 },
-            { title: 'Configuration', start: 742.5 },
-        ],
-    },
-];
+export const CHAPTERS = {
+    fps: 30,
+    chapters: [
+        { title: 'Intro', start: '00:00:00:00' },
+        { title: 'Topology Overview', start: '00:00:14:27' },
+        { title: 'Hetzner Server Provisioning', start: '00:01:07:11' },
+        { title: 'Phantom-WG Installation & Configuration', start: '00:04:31:11' },
+        { title: 'Phantom-Frontmatter Installation & Configuration', start: '00:10:38:29' },
+        { title: 'Final', start: '00:14:16:05' }
+    ],
+};
 
 <PhantomHLSPlayer
-    src="https://media.phantom.tc/phantom-wg-quickstart-guide/master.m3u8"
-    poster="https://media.phantom.tc/phantom-wg-quickstart-guide/Poster.png"
+    src="https://media.phantom.tc/quickstart-guide/master.m3u8"
+    poster="https://media.phantom.tc/quickstart-guide/Poster.jpg"
     chaptersData={CHAPTERS}
 />
 
