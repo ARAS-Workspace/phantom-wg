@@ -1,3 +1,5 @@
+// noinspection DuplicatedCode
+
 import React from 'react';
 import type { Chapter } from '@shared/types/chapters';
 import './ChapterStrip.scss';
