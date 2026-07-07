@@ -1,4 +1,4 @@
-import PhantomStreamPlayer from '@shared/components/visualization/PhantomStreamPlayer';
+import PhantomHLSPlayer from '@shared/components/visualization/PhantomHLSPlayer';
 import ContentTabs from '@shared/components/content/ContentTabs';
 import DinoGame from '@shared/components/games/DinoGame';
 import Installation from './data/installation/index.en.mdx';
@@ -8,18 +8,9 @@ import Customizing from './data/customizing/index.en.mdx';
 
 # Mac Client Application
 
-<PhantomStreamPlayer
-  uuid="0751c560f9536db905c53a05cb947628"
-  title="Phantom-WG Mac Quickstart"
-  chapterStrip={{
-    chapters: [
-      { slug: 'intro', label: 'Intro', start: 0 },
-      { slug: 'installation', label: 'Installation', start: 11.7 },
-      { slug: 'setting-up', label: 'Setting Up', start: 28.9 },
-      { slug: 'connecting', label: 'Connecting', start: 74.6 },
-      { slug: 'customizing', label: 'Customizing', start: 111.1 },
-    ]
-  }}
+<PhantomHLSPlayer
+    src="https://media.phantom.tc/mac-app-product-tour/master.m3u8"
+    poster="https://media.phantom.tc/mac-app-product-tour/Poster.png"
 />
 
 ---
