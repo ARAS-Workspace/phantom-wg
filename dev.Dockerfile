@@ -1,4 +1,4 @@
-FROM python:3.12-slim
+FROM python:3.12.13-slim-trixie
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
     libsodium23 \
