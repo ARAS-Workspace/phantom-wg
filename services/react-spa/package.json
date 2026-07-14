@@ -23,7 +23,7 @@
     "qrcode.react": "4.2.0",
     "react": "19.2.4",
     "react-dom": "19.2.4",
-    "react-router-dom": "7.13.1",
+    "react-router-dom": "7.18.0",
     "remark-frontmatter": "5.0.0",
     "remark-gfm": "4.0.1",
     "remark-mdx-frontmatter": "5.2.0",
@@ -37,6 +37,6 @@
     "prettier": "3.8.1",
     "sass-embedded": "1.97.3",
     "typescript": "5.9.3",
-    "vite": "^6.4.2"
+    "vite": "6.4.3"
   }
 }
