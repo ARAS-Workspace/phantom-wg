@@ -72,6 +72,11 @@ Phantom-WG'de bir güvenlik açığı keşfettiyseniz, aşağıdaki kanallar üz
 
 ## PGP Public Key
 
+**Fingerprint:** `9F27 149D 11B3 651F E276  668E 92C7 9989 BA17 D56B`
+
+The same key signs every commit in this repository — verify authenticity with `git log --show-signature`.  
+Aynı anahtar bu depodaki her commit'i de imzalar — özgünlüğü `git log --show-signature` ile doğrulayabilirsiniz.
+
 ```
 -----BEGIN PGP PUBLIC KEY BLOCK-----
 
