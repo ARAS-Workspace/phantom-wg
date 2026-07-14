@@ -240,7 +240,7 @@ Terazi, IP havuzunu oluşturmak için bir base subnet'e ihtiyaç duyar. Varsayı
 
 Daemon ve auth-service kaynak kodları container'lara read-only olarak mount edilir (`phantom_daemon:/app/phantom_daemon:ro`, `services/auth-service:/app/auth-service:ro`). Dockerfile'lar yalnızca sistem bağımlılıklarını (Python, runtime paketleri) sağlar — uygulama kodu image içinde değildir. Bu yapı sayesinde:
 
-- **Hızlı güncelleme**: `git pull` + `restart` yeterlidir, image rebuild gerekmez
+- **Hızlı güncelleme**: `git pull` + `restart` yeterlidir, kod değişiklikleri için image rebuild gerekmez
 - **Hızlı rollback**: `git checkout <önceki-versiyon>` + `restart` ile anında geri dönüş
 - **Build bağımsızlığı**: Kod değişiklikleri container build sürecini tetiklemez
 
@@ -266,6 +266,9 @@ Sistem bağımlılıkları değiştiğinde (Dockerfile, requirements.txt) image 
 ./tools/prod.sh rebuild
 ./tools/prod.sh up
 ```
+
+> [!NOTE]
+> **v1.1.3** ve sonrasında `./tools/prod.sh update`, `Dockerfile` ve `requirements.txt` değişikliklerini otomatik algılayıp etkilenen servisi yeniden derler (`build` + `up`) — elle rebuild normalde gerekmez. Yukarıdaki komutu yalnızca **v1.1.2 veya öncesinden** yükseltirken tek seferlik bir adım olarak çalıştırın; o sürümlerin update mantığı bu otomatik algılamadan önceye dayanır.
 
 #### Let's Encrypt (Opsiyonel)
 

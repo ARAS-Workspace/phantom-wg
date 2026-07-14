@@ -114,7 +114,7 @@ Terazi requires a base subnet to create the IP pool. The default is `10.8.0.0/24
 
 The daemon and auth-service source code is mounted read-only into containers (`phantom_daemon:/app/phantom_daemon:ro`, `services/auth-service:/app/auth-service:ro`). Dockerfiles provide only system dependencies (Python, runtime packages) — application code is not baked into the image. This enables:
 
-- **Fast updates**: `git pull` + `restart` is sufficient, no image rebuild required
+- **Fast updates**: `git pull` + `restart` is sufficient, no image rebuild required for code changes
 - **Fast rollback**: `git checkout <previous-version>` + `restart` for immediate rollback
 - **Build independence**: Code changes do not trigger a container build cycle
 
@@ -145,6 +145,14 @@ When system dependencies change (Dockerfile, requirements.txt), an image rebuild
   kind="info"
   title="Build vs Update"
   subtitle="Dockerfiles only provide the system dependencies needed for the stack to run. Code updates are received with the update command — rebuild is only required when these dependencies change."
+  hideCloseButton
+  lowContrast
+/>
+
+<InlineNotification
+  kind="info"
+  title="Automatic rebuild (v1.1.3+)"
+  subtitle="From v1.1.3 onward, prod.sh update detects Dockerfile / requirements.txt changes and rebuilds the affected service automatically. The manual rebuild above is only a one-time step when upgrading from v1.1.2 or earlier, whose update logic predates this detection."
   hideCloseButton
   lowContrast
 />
