@@ -199,14 +199,37 @@ cmd_update() {
         echo "  One-shot skip applied to docker-compose.yml."
     fi
 
+    local before after
+    before=$(git rev-parse HEAD)
     git pull origin main
+    after=$(git rev-parse HEAD)
 
     if [[ "$legacy_skip" == true && "$locked" == false ]]; then
         git update-index --no-assume-unchanged docker-compose.yml
     fi
 
-    bold "Restarting stack..."
-    $COMPOSE restart
+    # Detect build-affecting changes between the pre-/post-pull HEADs.
+    # Source (phantom_daemon/, auth_service/) is bind-mounted, so a plain
+    # restart picks it up — but image-baked inputs (Dockerfile, requirements)
+    # need a rebuild + recreate to take effect. Rebuild only what changed.
+    local rebuild=()
+    if ! git diff --quiet "$before" "$after" -- Dockerfile requirements.txt; then
+        rebuild+=(daemon)
+    fi
+    if ! git diff --quiet "$before" "$after" -- \
+            services/auth-service/Dockerfile services/auth-service/requirements.txt; then
+        rebuild+=(auth-service)
+    fi
+
+    if [[ ${#rebuild[@]} -gt 0 ]]; then
+        bold "Build inputs changed (${rebuild[*]}) — rebuilding..."
+        $COMPOSE build "${rebuild[@]}"
+        bold "Recreating stack..."
+        $COMPOSE up -d
+    else
+        bold "Restarting stack..."
+        $COMPOSE restart
+    fi
     green "Update complete."
 }
 
@@ -294,7 +317,8 @@ case "${1:-help}" in
     up)
         _bootstrap_env; _check_secrets
         if [[ -f "${TOOLS_DIR}/../.terazi-subnet" ]]; then
-            export DEFAULT_IPV4_SUBNET="$(cat "${TOOLS_DIR}/../.terazi-subnet")"
+            DEFAULT_IPV4_SUBNET="$(cat "${TOOLS_DIR}/../.terazi-subnet")"
+            export DEFAULT_IPV4_SUBNET
             rm -f "${TOOLS_DIR}/../.terazi-subnet"
         fi
         cmd_up ;;
