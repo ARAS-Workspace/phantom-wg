@@ -9,7 +9,7 @@
 #   docker build -f dev.Dockerfile --build-arg TARGETARCH=arm64 -t phantom-daemon:dev-arm64 .
 # ──────────────────────────────────────────────────────────────────
 
-FROM python:3.12-slim AS base
+FROM python:3.12.13-slim-trixie AS base
 
 # ── Build args ───────────────────────────────────────────────────
 # TARGETARCH is auto-set by BuildKit (amd64 | arm64).

@@ -9,7 +9,7 @@
 # ──────────────────────────────────────────────────────────────────
 
 # ── Stage 1: vendor fetch ────────────────────────────────────────
-FROM python:3.12-slim AS vendor-fetch
+FROM python:3.12.13-slim-trixie AS vendor-fetch
 
 ARG TARGETARCH
 ARG VENDOR_URL=https://vendor.phantom.tc
@@ -40,14 +40,14 @@ RUN set -e; \
     done
 
 # ── Stage 2: python deps ────────────────────────────────────────
-FROM python:3.12-slim AS deps
+FROM python:3.12.13-slim-trixie AS deps
 
 WORKDIR /app
 COPY requirements.txt ./
 RUN pip install --no-cache-dir -r requirements.txt
 
 # ── Stage 3: runtime ────────────────────────────────────────────
-FROM python:3.12-slim AS runtime
+FROM python:3.12.13-slim-trixie AS runtime
 
 ARG VENDOR_DIR=/opt/phantom/vendor
 
