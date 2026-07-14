@@ -1,6 +1,6 @@
 # ──────────────────────────────────────────────────────────────────
 # WireGuard server keypair generation
-# Requires: DAEMON_IMAGE, DAEMON_DOCKERFILE, SECRETS_DIR
+# Requires: DAEMON_DOCKERFILE, SECRETS_DIR
 # ──────────────────────────────────────────────────────────────────
 
 cmd_gen_keys() {
@@ -17,14 +17,14 @@ cmd_gen_keys() {
         bold "Overwriting WG keys (--force)..."
     fi
 
-    if ! docker image inspect "$DAEMON_IMAGE" &>/dev/null; then
-        bold "Image $DAEMON_IMAGE not found. Building..."
-        docker build -t "$DAEMON_IMAGE" -f "$DAEMON_DOCKERFILE" .
+    if ! docker image inspect phantom-daemon:latest &>/dev/null; then
+        bold "Image phantom-daemon:latest not found. Building..."
+        docker build -t phantom-daemon:latest -f "$DAEMON_DOCKERFILE" .
     fi
 
     bold "Generating WireGuard keypair..."
     local keys
-    keys=$(docker run --rm "$DAEMON_IMAGE" python -c "
+    keys=$(docker run --rm phantom-daemon:latest python -c "
 from wireguard_go_bridge.keys import generate_private_key, derive_public_key
 priv = generate_private_key()
 pub = derive_public_key(priv)
