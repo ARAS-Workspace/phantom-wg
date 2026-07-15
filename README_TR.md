@@ -18,6 +18,9 @@
 
 </div>
 
+> [!TIP]
+> **Nereden başlayacağınızı mı arıyorsunuz?** [Hızlı Başlangıç Rehberi](https://www.phantom.tc/docs/quickstart-guide) ile sunucu hazırlama sürecinden **Phantom-WG** ve **Phantom-Frontmatter** kurulum ve konfigürasyonuna kadar bölümlü bir video eşliğinde uygulamalı olarak izleyin.
+
 ---
 
 ## Phantom-WG Modern Nedir?
