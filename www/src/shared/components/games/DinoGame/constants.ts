@@ -14,6 +14,16 @@ export const GAME_AREA = {
   HEIGHT: 200,
 };
 
+export const LOOP = {
+  // Physics are authored per-frame at 60 Hz. The loop advances the simulation in
+  // fixed STEP_MS increments (decoupled from display refresh) so speed is identical
+  // on 60/120/144 Hz monitors and on phones.
+  STEP_MS: 1000 / 60,
+  // Max catch-up steps per animation frame — prevents a backgrounded tab from
+  // fast-forwarding the game on return.
+  MAX_STEPS: 5,
+};
+
 export const DINO = {
   WIDTH: 48,
   HEIGHT: 48,

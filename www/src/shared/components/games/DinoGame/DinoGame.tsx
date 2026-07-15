@@ -7,7 +7,7 @@ import { useLocale } from '@shared/hooks';
 import { translate } from '@shared/translations';
 import { getThemeIcons, getVariantCounts } from './assets/themes/iconMap';
 import type { ThemeName } from './assets/themes';
-import { GAME_AREA } from './constants';
+import { GAME_AREA, LOOP } from './constants';
 import './styles/DinoGame.scss';
 
 export interface DinoGameProps {
@@ -43,8 +43,24 @@ const DinoGame: React.FC<DinoGameProps> = ({ theme = 'error' }) => {
   useEffect(() => {
     if (!gameEngine) return;
     let animationId: number;
-    const gameLoop = () => {
-      gameEngine.update();
+    // Fixed-timestep loop: advance physics in constant STEP_MS increments so the
+    // simulation runs at the same speed on any display refresh rate, then render
+    // once per animation frame from the latest state.
+    let last: number | null = null;
+    let acc = 0;
+    const gameLoop = (now: number) => {
+      if (last === null) last = now;
+      let delta = now - last;
+      last = now;
+      // Clamp so a long pause (e.g. backgrounded tab) can't fast-forward the game.
+      if (delta > LOOP.STEP_MS * LOOP.MAX_STEPS) delta = LOOP.STEP_MS * LOOP.MAX_STEPS;
+      acc += delta;
+      let steps = 0;
+      while (acc >= LOOP.STEP_MS && steps < LOOP.MAX_STEPS) {
+        gameEngine.update();
+        acc -= LOOP.STEP_MS;
+        steps++;
+      }
       setRenderState(gameEngine.getState());
       animationId = requestAnimationFrame(gameLoop);
     };
