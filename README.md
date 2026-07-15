@@ -18,6 +18,9 @@
 
 </div>
 
+> [!TIP]
+> **Looking for where to start?** Follow the [Quickstart Guide](https://www.phantom.tc/docs/quickstart-guide) hands-on — from server provisioning to installing and configuring **Phantom-WG** and **Phantom-Frontmatter** — alongside a chaptered video.
+
 ---
 
 ## What is Phantom-WG Modern?
