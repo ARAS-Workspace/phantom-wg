@@ -1,0 +1,30 @@
+{
+  "name": "agentic-data-builder",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "description": "Generate LLM-friendly markdown (llms.txt) from docs MDX sources",
+  "author": "Rıza Emre ARAS <r.emrearas@proton.me>",
+  "license": "AGPL-3.0-or-later",
+  "bin": {
+    "agentic-data-builder": "./bin/agentic-data-builder.js"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "start": "node bin/agentic-data-builder.js",
+    "link-global": "npm link"
+  },
+  "dependencies": {
+    "commander": "12.1.0",
+    "picocolors": "1.0.1",
+    "remark-frontmatter": "5.0.0",
+    "remark-gfm": "4.0.1",
+    "remark-mdx": "3.1.1",
+    "remark-parse": "11.0.0",
+    "remark-stringify": "11.0.0",
+    "unified": "11.0.5",
+    "unist-util-visit": "5.0.0"
+  }
+}

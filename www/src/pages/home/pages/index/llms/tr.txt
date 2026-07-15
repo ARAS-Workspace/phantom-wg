@@ -1,0 +1,33 @@
+> **Phantom-WG — machine-readable page content.**
+>
+> **EN:** Root site index (llms.txt) — a machine-readable map of the Phantom-WG documentation for LLM agents. Each entry links to that page's `llms.txt`. English is the default (the bare URL, or `?locale=en`); append `?locale=tr` for Turkish.
+>
+> **TR:** Kök site indeksi (llms.txt) — LLM ajanları için Phantom-WG dokümantasyonunun makine-okunur haritası. Her giriş ilgili sayfanın `llms.txt`'sine bağlanır. Varsayılan dil İngilizce (parametresiz URL veya `?locale=en`); Türkçe için `?locale=tr` ekleyin.
+
+**path:** / · **locale:** tr · **en:** https://www.phantom.tc/llms.txt?locale=en
+
+# Phantom-WG
+
+Kendinden barındırılan, WireGuard tabanlı VPN platformu: kendi sunucunuzda kendi WireGuard VPN altyapınızı kurun ve yönetin — sansüre dayanıklı bağlantılar, çok katmanlı şifreleme ve gelişmiş gizlilik senaryoları.
+
+**Buradan başlayın:**
+- [**Kurulum ve Güncelleme**](https://www.phantom.tc/docs/installation-update/llms.txt): Phantom-WG'yi sunucunuzda çalışır hale getirin, ardından güncel tutun.
+- [**Dokümantasyon**](https://www.phantom.tc/docs/llms.txt): tam teknik dokümantasyon ana sayfası.
+
+## Dokümantasyon
+- [Dokümantasyon Ana Sayfası](https://www.phantom.tc/docs/llms.txt): mimari, API referansı ve kurulum rehberleri.
+- [Kurulum ve Güncelleme](https://www.phantom.tc/docs/installation-update/llms.txt): kurulum, yapılandırma, yönetim komutları ve güncelleme mekanizması.
+- [API Referansı](https://www.phantom.tc/docs/api/llms.txt): Phantom Daemon'un Unix Domain Socket (UDS) üzerinden sunduğu uç noktalar; OpenAPI `/openapi.json` adresinde.
+- [Mac İstemci Uygulaması](https://www.phantom.tc/docs/client-applications/mac/llms.txt): yerel macOS istemcisi — Ghost Mode (wstunnel + WireGuard), standalone WireGuard, split-tunneling.
+
+## Mimari
+- [Sistem Mimarisi](https://www.phantom.tc/docs/architecture/llms.txt): üretim topolojisi, container yapısı, bridge mimarisi, istek yaşam döngüsü, veritabanları.
+- [Bridge Yapıları](https://www.phantom.tc/docs/architecture/bridge/llms.txt): wireguard-go-bridge + firewall-bridge FFI entegrasyonu, yaşam döngüsü, firewall preset sistemi.
+- [Veritabanı Yapısı](https://www.phantom.tc/docs/architecture/database/llms.txt): wallet.db, exit.db, device.db, firewall.db şemaları.
+- [Multihop](https://www.phantom.tc/docs/architecture/multihop/llms.txt): trafiği harici bir WireGuard sunucusu üzerinden yönlendiren çift-VPN katmanı.
+- [Yedekleme ve Geri Yükleme](https://www.phantom.tc/docs/architecture/backup/llms.txt): tar arşiv yapısı, dışa/içe aktarım akışı, doğrulama katmanları.
+- [Terazi Sistemi](https://www.phantom.tc/docs/architecture/terazi/llms.txt): deterministik IPv4/IPv6 adres eşleme — dual-stack havuzun nasıl oluşturulduğu, dengelendiği ve doğrulandığı.
+
+## Araçlar
+- [IP Adresim](https://www.phantom.tc/docs/tools/ip/llms.txt): genel IP adresinizi, konumunuzu, İSS ve ASN bilginizi görün; VPN çıkış IP'nizi doğrulayın.
+- [DNS Sızıntı Testi](https://www.phantom.tc/docs/tools/dns/llms.txt): sorgularınızı hangi çözümleyicilerin yanıtladığını göstererek DNS'in tünel dışına sızıp sızmadığını tespit edin.

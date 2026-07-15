@@ -1,0 +1,90 @@
+> **Phantom-WG — machine-readable page content.**
+>
+> **EN:** Auto-generated from this page's MDX source. Interactive components
+> (diagrams, players, API explorers, simulators) are replaced by their source
+> data or a short directive — read those as data pointers, not missing content.
+>
+> **TR:** Bu sayfanın MDX kaynağından otomatik üretildi. İnteraktif bileşenler
+> (diyagram, oynatıcı, API gezgini, simülasyon) kaynak verisiyle veya kısa bir
+> direktifle değiştirildi — eksik içerik değil, veri işaretçisi olarak okuyun.
+
+**path:** /docs · **locale:** tr · **en:** https://www.phantom.tc/docs/llms.txt?locale=en
+
+# Phantom-WG
+
+_**Phantom-WG**_, kendi sunucunuzda WireGuard VPN altyapısı kurmanızı ve yönetmenizi sağlayan modüler bir araçtır. Temel VPN yönetiminin ötesinde; sansüre dayanıklı bağlantılar, çok katmanlı şifreleme ve gelişmiş gizlilik senaryoları sunar.
+
+_**Phantom-WG Modern**_, bu vizyonun container-native implementasyonudur. Tüm bileşenler Docker yapısı içerisinde çalışır ve host sistemden izole edilir:
+
+- **Userspace WireGuard** — Go FFI bridge ile container-scoped TUN device. Kernel modülü gerektirmez, host'un network namespace'ine dokunmaz.
+- **nftables netlink FFI** — Rust backend doğrudan kernel ile konuşur. Subprocess çağrısı yoktur, firewall kuralları programatik olarak yönetilir.
+- **SQLite State Persistence** — Tüm state SQLite veritabanlarında tutulur. Crash sonrası daemon restart yeterlidir — kernel state DB'den yeniden oluşturulur.
+- **Dual-Stack IPv6** — Host'ta IPv6 olmasa bile container içinde IPv6 subnet atanır, tünel içinde trafik taşınabilir.
+- **Container İzolasyonu** — `NET_ADMIN` + `NET_RAW` yeterlidir. WireGuard arayüzleri container namespace içerisinde yaşar. `SYS_ADMIN`, `privileged` veya `host` network mode gibi host güvenliğini zayıflatan konfigürasyonlar kullanılmaz.
+
+---
+
+> **Video** · EN: an embedded video walkthrough — its content is shown in the recording, not as text · TR: gömülü video anlatımı — içerik metin olarak değil kayıt olarak gösterilir
+> src: `https://media.phantom.tc/quickstart-guide/master.m3u8`
+
+---
+
+## Topoloji
+
+Üç container, Docker Compose ile yönetilir. Yönetim trafiği TLS + JWT kimlik doğrulamadan geçer, WireGuard trafiği doğrudan daemon'a ulaşır.
+
+```mermaid
+flowchart
+  A[Internet] -->|"HTTPS :443"| B[nginx]
+  B --> C[auth-service]
+  C <-->|"UDS"| D[daemon]
+  A -->|"WireGuard :51820/udp"| D
+```
+
+| Bileşen          | Görev                                                                                                |
+| ---------------- | ---------------------------------------------------------------------------------------------------- |
+| **nginx**        | TLS sonlandırma, React SPA (Statik Derlenmiş Dosyalar), Reverse Proxy Yapılandırması                 |
+| **auth-service** | Kapsamlı Kimlik Doğrulama (Authentication) Sistemi, UDS üzerinden daemon'a API proxy                 |
+| **daemon**       | Userspace WireGuard (Go FFI), nftables firewall (Rust FFI), İstemci ve Tünel yönetimi, Veritabanları |
+
+---
+
+## Temel Özellikler
+
+### Bridge Mimarisi
+
+Daemon, sistem düzeyindeki işlemleri iki native bridge aracılığıyla gerçekleştirir. Python iş mantığını yönetir, bridge'ler kernel ile doğrudan iletişim kurar.
+
+```mermaid
+graph
+  D["Daemon (Python)"] -->|"ctypes FFI"| WG["wireguard-go-bridge (Go)"]
+  D -->|"ctypes FFI"| FW["firewall-bridge (Rust)"]
+  WG --> TUN["TUN device"]
+  FW --> NFT["nftables kernel"]
+```
+
+| Bridge                  | Dil  | Sorumluluk                                              |
+| ----------------------- | ---- | ------------------------------------------------------- |
+| **wireguard-go-bridge** | Go   | Userspace WireGuard, TUN device, IPC state persistence  |
+| **firewall-bridge**     | Rust | nftables kural grupları, policy routing, preset sistemi |
+
+### Multihop Exit Routing
+
+Trafiğinizi harici bir WireGuard VPN sunucusu üzerinden aktarmak için exit tünelinizi tanımlayabilirsiniz. IPv4 ve IPv6 tünelleri eş zamanlı olarak desteklenir.
+
+```mermaid
+flowchart LR
+  C[Client] -->|"WireGuard"| M["wg_main"] -->|"forward + masquerade"| E["wg_exit"] --> X[Exit Server]
+```
+
+### IPv6 Dual-Stack
+
+IPv6 desteği tüm katmanlarda — firewall kuralları, policy routing, masquerade ve multihop preset'leri `family: 10` (AF\_INET6) ile çalışır. Host'ta IPv6 adresi olmadan da container içinden IPv6 tünel trafiği taşınabilir.
+
+### Crash Recovery
+
+Servis başlatıldığında kernel state (nftables kuralları, routing policy'leri) SQLite durum veritabanlarından yeniden oluşturulur. Beklenmeyen kapanma sonrası veri kaybı yaşanmaz.
+
+---
+
+Kurulum, yapılandırma, yönetim komutları ve güncelleme mekanizması için [Kurulum ve Güncelleme](/docs/installation-update) sayfasına bakın.

@@ -13,7 +13,9 @@
     "cert": "node scripts/generate_development_certificate.js",
     "routes": "node scripts/build_routes.js",
     "prerender": "node scripts/utils/prerender-utility/prerender.js",
-    "prod": "npm run build && npm run routes && npm run prerender",
+    "generate-llms": "node scripts/generate-llms.js",
+    "llms": "node scripts/build-llms.js",
+    "prod": "npm run build && npm run routes && npm run prerender && npm run llms",
     "deploy": "dotenv -e .env.cf -- wrangler pages deploy dist --branch main",
     "deploy:preview": "dotenv -e .env.cf -- wrangler pages deploy dist --branch preview"
   },

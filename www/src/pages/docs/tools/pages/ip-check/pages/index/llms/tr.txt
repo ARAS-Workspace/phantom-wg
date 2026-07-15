@@ -1,0 +1,18 @@
+> **Phantom-WG — machine-readable page content.**
+>
+> **EN:** This page is an interactive tool; the summary below describes what it does. Run it live at the page URL.
+>
+> **TR:** Bu sayfa interaktif bir araçtır; aşağıdaki özet ne yaptığını anlatır. Canlı çalıştırmak için sayfa URL'ini kullanın.
+
+**path:** /docs/tools/ip · **locale:** tr · **en:** https://www.phantom.tc/docs/tools/ip/llms.txt?locale=en
+
+# IP Adresim
+
+Bağlantınızı internetin gördüğü şekilde — bir web sitesinin IP adresinizden okuyabileceği verileri — gösteren interaktif bir araç:
+
+- **Genel IP** — IPv4 ve IPv6 adresiniz
+- **Konum** — IP'nizden türetilen coğrafi konum
+- **İSS** — internet servis sağlayıcınız
+- **ASN** — ağınızın otonom sistem numarası
+
+Kendi adresinizi doğrulamak için — veya Phantom-WG'ye bağlandığınızda — gerçek IP'niz yerine tünelin çıkış IP'sinin gösterildiğini teyit etmek için kullanın.

@@ -1,0 +1,96 @@
+> **Phantom-WG — machine-readable page content.**
+>
+> **EN:** Auto-generated from this page's MDX source. Interactive components
+> (diagrams, players, API explorers, simulators) are replaced by their source
+> data or a short directive — read those as data pointers, not missing content.
+>
+> **TR:** Bu sayfanın MDX kaynağından otomatik üretildi. İnteraktif bileşenler
+> (diyagram, oynatıcı, API gezgini, simülasyon) kaynak verisiyle veya kısa bir
+> direktifle değiştirildi — eksik içerik değil, veri işaretçisi olarak okuyun.
+
+**path:** /docs/client-applications/mac · **locale:** en · **tr:** https://www.phantom.tc/docs/client-applications/mac/llms.txt?locale=tr
+
+# Mac Client Application
+
+> **Video** · EN: an embedded video walkthrough — its content is shown in the recording, not as text · TR: gömülü video anlatımı — içerik metin olarak değil kayıt olarak gösterilir
+> src: `https://media.phantom.tc/mac-quickstart/master.m3u8`
+
+---
+
+## At a Glance
+
+**Tab: Installation**
+
+_Get the app onto your Mac_
+
+You can install `Phantom-WG Mac` on your _Mac_ in _two_ ways.
+
+- **Homebrew Cask** (recommended) — Single command and easy updates
+- **Direct `.dmg`** — `arm64` for Apple Silicon, `x86_64` for Intel, as separate packages.
+
+```bash
+brew install --cask ARAS-Workspace/tap/phantom-wg-mac
+```
+
+The signed `.app` is placed into `/Applications`; on first launch macOS Gatekeeper verifies the signature. `.dmg` packages are available from the [mac-v1.3.0 release](https://github.com/ARAS-Workspace/phantom-wg/releases/tag/mac-v1.3.0) page. Build, signing, and notarization run on GitHub Actions via [mac-release.yml](https://github.com/ARAS-Workspace/phantom-wg/actions/workflows/mac-release.yml).
+
+### System Requirements
+
+- macOS 14 (Sonoma) or later
+- Apple Silicon (arm64) or Intel (x86\_64)
+
+---
+
+**Tab: Setting Up**
+
+_Approve three system extensions_
+
+Phantom-WG Mac runs network operations through three system extensions:
+
+- **`PhantomTunnel`** — Tunnel connection; runs Ghost Mode (wstunnel + WireGuard) or Standalone WireGuard.
+- **`PhantomSplitTunnel`** — Transparent Proxy for per-app routing.
+- **`PhantomDNSProxy`** — DNS Proxy that pins per-app DNS queries to the chosen network interface.
+
+On first launch macOS asks for a separate approval for each; the main interface stays closed until all three are active.
+
+---
+
+**Tab: Connecting**
+
+_Import a config and start your tunnel_
+
+To start a tunnel, a WireGuard `.conf` file is imported into the app. The mode is determined by the file's contents:
+
+- **Standalone WireGuard** — A classic `.conf` file starts the WireGuard tunnel directly.
+- **Ghost Mode (wstunnel + WireGuard)** — A `.conf` file with a `[Wstunnel]` section switches the app to Ghost mode; traffic is carried within a wstunnel layer.
+
+No separate app or toggle is needed to choose between modes — the configuration decides.
+
+---
+
+**Tab: Customizing**
+
+_Route selected apps outside the tunnel_
+
+Split-Tunneling routes the traffic of apps you add to the list outside the tunnel:
+
+- **Bypass Routing** — Selected apps exit directly through your physical interface or the network interface you choose; the tunnel stays active and remaining traffic continues through the VPN.
+- **Strict Mode** — If the selected interface becomes unreachable, flows from bypassed apps are rejected — never silently rerouted back through the tunnel.
+- **mDNSResponder inclusion** — Adding it to the same list carries local name resolution over the selected interface too.
+
+---
+
+> [Interactive] A playable mini-game (Chrome-dino style). Visual/interactive content with no textual equivalent.
+
+---
+
+## Architecture & Source
+
+| Resource           | Link                                                                                                     |
+| ------------------ | -------------------------------------------------------------------------------------------------------- |
+| Development Branch | [app/mac](https://github.com/ARAS-Workspace/phantom-wg/tree/app/mac)                                     |
+| ADR Documents      | [app/mac/Documentation/ADR](https://github.com/ARAS-Workspace/phantom-wg/tree/app/mac/Documentation/ADR) |
+
+---
+
+_See [DISCLOSURE.md](https://github.com/ARAS-Workspace/phantom-wg/blob/press-kit/asset-pipelines/tutorial-music/projects/DISCLOSURE.md) for tutorial music licensing and attribution details._

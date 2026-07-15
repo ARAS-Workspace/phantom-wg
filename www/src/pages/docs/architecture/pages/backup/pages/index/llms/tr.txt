@@ -1,0 +1,121 @@
+> **Phantom-WG — machine-readable page content.**
+>
+> **EN:** Auto-generated from this page's MDX source. Interactive components
+> (diagrams, players, API explorers, simulators) are replaced by their source
+> data or a short directive — read those as data pointers, not missing content.
+>
+> **TR:** Bu sayfanın MDX kaynağından otomatik üretildi. İnteraktif bileşenler
+> (diyagram, oynatıcı, API gezgini, simülasyon) kaynak verisiyle veya kısa bir
+> direktifle değiştirildi — eksik içerik değil, veri işaretçisi olarak okuyun.
+
+**path:** /docs/architecture/backup · **locale:** tr · **en:** https://www.phantom.tc/docs/architecture/backup/llms.txt?locale=en
+
+# Yedekleme ve Geri Yükleme
+
+_**Phantom-WG**_, kullanıcı tarafından taşınabilir değerleri içeren veritabanlarını yedekleme imkanı sunar ve taşınabilir `.tar` arşivine aktarır. Arşiv üç dosyadan oluşur:
+
+```text
+phantom-backup-{timestamp}.tar
+  ├── wallet.db         (istemci havuzu, temel yapılandırmalar)
+  ├── exit.db           (exit tünel yapılandırmaları, multihop)
+  └── manifest.json     (metadata: sürüm, zaman damgası, özet)
+```
+
+---
+
+## Manifest
+
+```json
+{
+  "version": "1.0",
+  "timestamp": "2026-03-18T10:23:45.123456+00:00",
+  "wallet": {
+    "clients": 12,
+    "subnet": "10.8.0.0/24",
+    "pool_total": 253,
+    "pool_assigned": 12
+  },
+  "exit_store": {
+    "exits": 2,
+    "enabled": false,
+    "active_exit": ""
+  }
+}
+```
+
+---
+
+## Dışa Aktarım (Export)
+
+```mermaid
+sequenceDiagram
+participant R as Request (UDS)
+participant D as phantom-daemon
+
+R->>D: POST /backup/export
+D->>D: SQLite Online Backup API
+D->>D: Exit durumunu sıfırla
+D->>D: Manifest oluştur
+D->>D: Tar arşivi oluştur
+D-->>R: FileResponse (.tar)
+```
+
+> [!NOTE]
+> **WAL-Safe Export**
+> SQLite Online Backup API kullanılır. Daemon çalışırken güvenle dışa aktarım yapılabilir — veritabanı kilidi oluşmaz.
+
+---
+
+## İçe Aktarım (Import)
+
+```mermaid
+sequenceDiagram
+participant R as Request (UDS)
+participant D as phantom-daemon
+
+R->>D: POST /backup/import (multipart)
+D->>D: Multihop varsa kapat
+D->>D: Tar doğrulama
+D->>D: PRAGMA integrity_check
+D->>D: Şema doğrulama
+D->>D: SQLite Online Backup API (geri yükleme)
+D->>D: WireGuard yeniden senkronizasyon
+D-->>R: RestoreResult
+```
+
+---
+
+## Önizleme
+
+İçe aktarım öncesinde manifest verileri kullanıcıya gösterilir:
+
+> [BackupSimulator] interactive component — see the live page.
+
+---
+
+## Doğrulama Katmanları
+
+Yedekleme dosyası daemon'a ulaşmadan önce SPA tarafında, ardından daemon tarafında olmak üzere iki aşamalı doğrulamadan geçer:
+
+### Tarayıcı Tarafı Doğrulama (SPA)
+
+| Kontrol    | Kural                                          |
+| ---------- | ---------------------------------------------- |
+| Uzantı     | `.tar`                                         |
+| Boyut      | Maks. 64 MB                                    |
+| Tar yapısı | `wallet.db`, `exit.db`, `manifest.json` mevcut |
+| Manifest   | Geçerli JSON, `version: "1.0"`                 |
+
+### Sunucu Tarafı Doğrulama (Daemon)
+
+| Kontrol                 | Kural                                                                     |
+| ----------------------- | ------------------------------------------------------------------------- |
+| Tar whitelist           | Yalnızca `wallet.db`, `exit.db`, `manifest.json` — fazla dosya reddedilir |
+| Path traversal          | `../../` gibi yollar engellenir                                           |
+| Manifest sürümü         | Geçersiz versiyon reddedilir                                              |
+| PRAGMA integrity\_check | Her iki veritabanı için bütünlük kontrolü                                 |
+| Şema doğrulama          | Gerekli tablolar ve sütunlar kontrol edilir                               |
+
+> [!WARNING]
+> **İçe aktarım mevcut durumu siler.**
+> İçe aktarım işlemi wallet.db ve exit.db'yi tamamen değiştirir. İşlem sonrası WireGuard durumu otomatik olarak yeniden senkronize edilir. Aktif multihop bağlantısı varsa önce kapatılır.

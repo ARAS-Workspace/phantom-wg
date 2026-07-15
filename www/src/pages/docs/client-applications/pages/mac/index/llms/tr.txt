@@ -1,0 +1,96 @@
+> **Phantom-WG — machine-readable page content.**
+>
+> **EN:** Auto-generated from this page's MDX source. Interactive components
+> (diagrams, players, API explorers, simulators) are replaced by their source
+> data or a short directive — read those as data pointers, not missing content.
+>
+> **TR:** Bu sayfanın MDX kaynağından otomatik üretildi. İnteraktif bileşenler
+> (diyagram, oynatıcı, API gezgini, simülasyon) kaynak verisiyle veya kısa bir
+> direktifle değiştirildi — eksik içerik değil, veri işaretçisi olarak okuyun.
+
+**path:** /docs/client-applications/mac · **locale:** tr · **en:** https://www.phantom.tc/docs/client-applications/mac/llms.txt?locale=en
+
+# Mac İstemci Uygulaması
+
+> **Video** · EN: an embedded video walkthrough — its content is shown in the recording, not as text · TR: gömülü video anlatımı — içerik metin olarak değil kayıt olarak gösterilir
+> src: `https://media.phantom.tc/mac-quickstart/master.m3u8`
+
+---
+
+## Bir Bakışta
+
+**Tab: Installation**
+
+_Get the app onto your Mac_
+
+`Phantom-WG Mac` uygulamasını _iki_ yoldan _Mac_ cihazınıza yükleyebilirsiniz.
+
+- **Homebrew Cask** (önerilen) — Tek komut ve kolay güncelleme
+- **Doğrudan `.dmg`** — `arm64` Apple Silicon için, `x86_64` Intel için ayrı paketler.
+
+```bash
+brew install --cask ARAS-Workspace/tap/phantom-wg-mac
+```
+
+İmzalı `.app` `/Applications` altına yerleşir; ilk açılışta macOS Gatekeeper imzayı doğrular. `.dmg` paketlerine [mac-v1.3.0 release](https://github.com/ARAS-Workspace/phantom-wg/releases/tag/mac-v1.3.0) sayfasından erişilebilir. Derleme, imzalama ve notarizasyon adımları GitHub Actions üzerinde [mac-release.yml](https://github.com/ARAS-Workspace/phantom-wg/actions/workflows/mac-release.yml) ile yürütülür.
+
+### Sistem Gereksinimleri
+
+- macOS 14 (Sonoma) veya üzeri
+- Apple Silicon (arm64) veya Intel (x86\_64)
+
+---
+
+**Tab: Setting Up**
+
+_Approve three system extensions_
+
+Phantom-WG Mac ağ operasyonlarını üç sistem uzantısı üzerinden yürütür:
+
+- **`PhantomTunnel`** — Tünel bağlantısı; Ghost Mode (wstunnel + WireGuard) veya Standalone WireGuard çalışır.
+- **`PhantomSplitTunnel`** — Uygulama bazlı yönlendirme için Transparent Proxy katmanı.
+- **`PhantomDNSProxy`** — DNS sorgularını seçilen ağ arayüzüne uygulama bazlı sabitleyen DNS Proxy.
+
+İlk açılışta macOS her uzantı için ayrı onay ister; üçü de aktif olana kadar ana arayüz açılmaz.
+
+---
+
+**Tab: Connecting**
+
+_Import a config and start your tunnel_
+
+Tüneli başlatmak için uygulamaya bir WireGuard `.conf` dosyası içe aktarılır. Mod, yapılandırma dosyasının içeriğine göre belirlenir:
+
+- **Standalone WireGuard** — Klasik `.conf` dosyası içe aktarıldığında uygulama doğrudan WireGuard tünelini başlatır.
+- **Ghost Mode (wstunnel + WireGuard)** — `.conf` dosyası `[Wstunnel]` bölümü içerirse uygulama otomatik olarak Ghost moduna geçer; trafik wstunnel katmanı içinde taşınır.
+
+Mod seçimi için ayrı bir uygulama veya ayar gerekmez; yapılandırma dosyası belirler.
+
+---
+
+**Tab: Customizing**
+
+_Route selected apps outside the tunnel_
+
+Split-Tunneling, listeye eklediğiniz uygulamaların trafiğini tünelin dışına çıkarır:
+
+- **Bypass Yönlendirmesi** — Seçilen uygulamalar fiziksel arayüzünüz veya tercih ettiğiniz ağ arayüzü üzerinden doğrudan çıkar; tünel ayakta kalır, diğer trafik VPN üzerinden akmaya devam eder.
+- **Strict Mod** — Seçilen arayüz erişilemez hale gelirse bypass listesindeki akışlar reddedilir; sessizce tünele geri yönlendirilmez.
+- **mDNSResponder dahil etme** — Listeye eklenince yerel ad çözümlemesi de seçili arayüzden taşınır.
+
+---
+
+> [Interactive] A playable mini-game (Chrome-dino style). Visual/interactive content with no textual equivalent.
+
+---
+
+## Mimari ve Kaynak Kod
+
+| Kaynak              | Bağlantı                                                                                                 |
+| ------------------- | -------------------------------------------------------------------------------------------------------- |
+| Geliştirme Branch'i | [app/mac](https://github.com/ARAS-Workspace/phantom-wg/tree/app/mac)                                     |
+| ADR Dökümanları     | [app/mac/Documentation/ADR](https://github.com/ARAS-Workspace/phantom-wg/tree/app/mac/Documentation/ADR) |
+
+---
+
+_Tutorial müziklerinin lisans ve atıf bilgileri için [DISCLOSURE\_TR.md](https://github.com/ARAS-Workspace/phantom-wg/blob/press-kit/asset-pipelines/tutorial-music/projects/DISCLOSURE_TR.md) dosyasına bakın._

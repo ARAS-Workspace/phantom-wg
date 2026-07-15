@@ -1,0 +1,33 @@
+> **Phantom-WG — machine-readable page content.**
+>
+> **EN:** Root site index (llms.txt) — a machine-readable map of the Phantom-WG documentation for LLM agents. Each entry links to that page's `llms.txt`. English is the default (the bare URL, or `?locale=en`); append `?locale=tr` for Turkish.
+>
+> **TR:** Kök site indeksi (llms.txt) — LLM ajanları için Phantom-WG dokümantasyonunun makine-okunur haritası. Her giriş ilgili sayfanın `llms.txt`'sine bağlanır. Varsayılan dil İngilizce (parametresiz URL veya `?locale=en`); Türkçe için `?locale=tr` ekleyin.
+
+**path:** / · **locale:** en · **tr:** https://www.phantom.tc/llms.txt?locale=tr
+
+# Phantom-WG
+
+Self-hosted, WireGuard-based VPN platform: set up and manage your own WireGuard VPN infrastructure on your own server — censorship-resistant connections, multi-layer encryption, and advanced privacy scenarios.
+
+**Start here:**
+- [**Installation & Update**](https://www.phantom.tc/docs/installation-update/llms.txt): get Phantom-WG running on your server, then keep it updated.
+- [**Documentation**](https://www.phantom.tc/docs/llms.txt): the full technical documentation home.
+
+## Documentation
+- [Documentation Home](https://www.phantom.tc/docs/llms.txt): architecture, API reference, and deployment guides.
+- [Installation & Update](https://www.phantom.tc/docs/installation-update/llms.txt): installation, configuration, management commands, and the update mechanism.
+- [API Reference](https://www.phantom.tc/docs/api/llms.txt): endpoints served by Phantom Daemon over a Unix Domain Socket (UDS); OpenAPI at `/openapi.json`.
+- [Mac Client Application](https://www.phantom.tc/docs/client-applications/mac/llms.txt): native macOS client — Ghost Mode (wstunnel + WireGuard), standalone WireGuard, split-tunneling.
+
+## Architecture
+- [System Architecture](https://www.phantom.tc/docs/architecture/llms.txt): production topology, container layout, bridge architecture, request lifecycle, databases.
+- [Bridge Structures](https://www.phantom.tc/docs/architecture/bridge/llms.txt): wireguard-go-bridge + firewall-bridge FFI integration, lifecycle, firewall presets.
+- [Database Schema](https://www.phantom.tc/docs/architecture/database/llms.txt): wallet.db, exit.db, device.db, firewall.db schemas.
+- [Multihop](https://www.phantom.tc/docs/architecture/multihop/llms.txt): double-VPN layer routing traffic through an external WireGuard server.
+- [Backup & Restore](https://www.phantom.tc/docs/architecture/backup/llms.txt): tar archive structure, export/import flow, validation layers.
+- [Balance System (Terazi)](https://www.phantom.tc/docs/architecture/terazi/llms.txt): deterministic IPv4/IPv6 address pairing — how the dual-stack pool is built, balanced, validated.
+
+## Tools
+- [My IP Address](https://www.phantom.tc/docs/tools/ip/llms.txt): check your public IP, location, ISP, ASN; verify your VPN exit IP.
+- [DNS Leak Test](https://www.phantom.tc/docs/tools/dns/llms.txt): detect whether DNS queries leak outside the tunnel by revealing which resolvers answer them.

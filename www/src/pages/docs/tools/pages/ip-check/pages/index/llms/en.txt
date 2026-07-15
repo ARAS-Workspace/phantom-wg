@@ -1,0 +1,18 @@
+> **Phantom-WG — machine-readable page content.**
+>
+> **EN:** This page is an interactive tool; the summary below describes what it does. Run it live at the page URL.
+>
+> **TR:** Bu sayfa interaktif bir araçtır; aşağıdaki özet ne yaptığını anlatır. Canlı çalıştırmak için sayfa URL'ini kullanın.
+
+**path:** /docs/tools/ip · **locale:** en · **tr:** https://www.phantom.tc/docs/tools/ip/llms.txt?locale=tr
+
+# My IP Address
+
+An interactive tool that shows your connection the way the internet sees it — the data a website can read from your IP address:
+
+- **Public IP** — your IPv4 and IPv6 address
+- **Location** — the geographic location derived from your IP
+- **ISP** — your internet service provider
+- **ASN** — the autonomous system number of your network
+
+Use it to confirm your own address, or — once connected to Phantom-WG — to verify that the tunnel's exit IP is shown instead of your real IP.

@@ -1,0 +1,18 @@
+> **Phantom-WG — machine-readable page content.**
+>
+> **EN:** This page is an interactive tool; the summary below describes what it does. Run it live at the page URL.
+>
+> **TR:** Bu sayfa interaktif bir araçtır; aşağıdaki özet ne yaptığını anlatır. Canlı çalıştırmak için sayfa URL'ini kullanın.
+
+**path:** /docs/tools/dns · **locale:** tr · **en:** https://www.phantom.tc/docs/tools/dns/llms.txt?locale=en
+
+# DNS Sızıntı Testi
+
+Sorgularınızı hangi DNS çözümleyicilerinin gerçekten yanıtladığını ortaya çıkaran interaktif bir araç. Birkaç benzersiz DNS sorgusu gönderir, her birini işleyen çözümleyiciyi kaydeder, ardından bulduğu her çözümleyiciyi zenginleştirir:
+
+- **IP** — sorguyu yanıtlayan DNS çözümleyicisinin adresi
+- **Konum** — çözümleyicinin coğrafi konumu
+- **İSS** — çözümleyiciyi işleten sağlayıcı
+- **ASN** — çözümleyicinin ağının otonom sistem numarası
+
+DNS'inizin tünel içinde kaldığını doğrulamak için çalıştırın: Phantom-WG'ye bağlıyken yalnızca tünelin çözümleyicilerini görmelisiniz. Kendi İSS'nizin çözümleyicileri — veya tünelin çıkışı dışındaki herhangi bir sunucu — görünüyorsa, DNS'iniz sızıyor demektir.

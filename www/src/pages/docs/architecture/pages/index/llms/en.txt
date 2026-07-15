@@ -1,0 +1,424 @@
+> **Phantom-WG — machine-readable page content.**
+>
+> **EN:** Auto-generated from this page's MDX source. Interactive components
+> (diagrams, players, API explorers, simulators) are replaced by their source
+> data or a short directive — read those as data pointers, not missing content.
+>
+> **TR:** Bu sayfanın MDX kaynağından otomatik üretildi. İnteraktif bileşenler
+> (diyagram, oynatıcı, API gezgini, simülasyon) kaynak verisiyle veya kısa bir
+> direktifle değiştirildi — eksik içerik değil, veri işaretçisi olarak okuyun.
+
+**path:** /docs/architecture · **locale:** en · **tr:** https://www.phantom.tc/docs/architecture/llms.txt?locale=tr
+
+# System Architecture
+
+_**Phantom-WG**_ is a WireGuard®-based VPN management platform. All components run within a Docker container architecture, and the core component _**Phantom Daemon**_ communicates over Unix Domain Socket (UDS).
+
+**Tab: Production Topology**
+
+_**Production Topology**_ consists of three containers orchestrated via Docker Compose. The primary objective of this architecture is to securely forward queries to the _**Daemon**_.
+
+```mermaid
+flowchart
+  A[Internet] -->|"HTTPS :443 TLS"| B[phantom-nginx]
+  B -->|"/auth/*  /api/*"| C[phantom-auth]
+  C <-->|"UNIX socket\ndaemon.sock"| D[phantom-daemon]
+
+  A -->|"WireGuard\nUDP 51820"| D
+```
+
+There are two distinct traffic paths that reach the _**Daemon**_.
+
+```mermaid
+flowchart LR
+A[":443 HTTPS"] --> N["nginx"] --> AS["auth-service"] --> D["phantom-daemon"]
+B[":51820 UDP"] --> D
+```
+
+**Management Traffic (User Interaction)** (`:443`): Internet → phantom-nginx → phantom-auth → phantom-daemon
+
+**VPN Traffic** (`:51820/udp`): WireGuard clients connect directly to phantom-daemon.
+
+The UDS socket (`daemon.sock`) is shared with phantom-auth via a Docker named volume.
+
+> [!NOTE]
+> **Flexible Configuration**
+> The port values specified for internal and external communication are configurable. However, this requires additional configuration and environment variable adjustments.
+
+---
+
+**Tab: Nginx (phantom-nginx)**
+
+_**phantom-nginx**_, is the only externally exposed HTTPS entry point of the system.
+
+```mermaid
+flowchart
+  B[phantom-nginx] -- volumes --> SPA_DIST["./services/react-spa/dist\n→ /usr/share/nginx/html"]
+  SPA_DIST --> SPA["SPA\nstatic files"]
+  B -- secrets --> TLS[TLS Cert + Key]
+```
+
+## Routing
+
+| Location    | Target                  | Description                                                   |
+| ----------- | ----------------------- | ------------------------------------------------------------- |
+| `/auth/*`   | phantom-auth:8443       | Auth endpoints (login, MFA, session)                          |
+| `/api/*`    | phantom-auth:8443       | API proxy — buffering disabled for backup operations          |
+| `/`         | SPA static (try\_files) | React SPA fallback — unknown paths are served as `index.html` |
+| `/assets/*` | Static cache            | 1 year, `Cache-Control: public, immutable`                    |
+
+## Nginx Configuration
+
+```nginx
+worker_processes auto;
+error_log /var/log/nginx/error.log warn;
+pid /var/run/nginx.pid;
+
+events {
+    worker_connections 256;
+}
+
+http {
+    include       /etc/nginx/mime.types;
+    default_type  application/octet-stream;
+
+    log_format main '$remote_addr - $remote_user [$time_local] '
+                    '"$request" $status $body_bytes_sent '
+                    '"$http_referer" "$http_user_agent"';
+
+    access_log /var/log/nginx/access.log main;
+
+    sendfile        on;
+    keepalive_timeout 65;
+
+    # Request body limit (matches AUTH_PROXY_MAX_BODY=64m)
+    client_max_body_size 64m;
+
+    # Gzip
+    gzip on;
+    gzip_types text/plain text/css application/json application/javascript text/xml;
+    gzip_min_length 1000;
+
+    server {
+        listen 443 ssl;
+        server_name _;
+
+        # TLS certificate (mounted via Docker secrets)
+        ssl_certificate     /run/secrets/tls_cert;
+        ssl_certificate_key /run/secrets/tls_key;
+
+        # TLS hardening
+        ssl_protocols TLSv1.3 TLSv1.2;
+        ssl_ciphers ECDHE-ECDSA-AES256-GCM-SHA384:ECDHE-ECDSA-CHACHA20-POLY1305:ECDHE-ECDSA-AES128-GCM-SHA256;
+        ssl_prefer_server_ciphers on;
+        ssl_session_timeout 1d;
+        ssl_session_cache shared:SSL:10m;
+        ssl_session_tickets off;
+
+        # Security headers
+        add_header X-Content-Type-Options nosniff always;
+        add_header X-Frame-Options DENY always;
+        add_header Strict-Transport-Security "max-age=63072000; includeSubDomains" always;
+
+        # SPA static files
+        root /usr/share/nginx/html;
+        index index.html;
+
+        # Docker internal DNS — resolve upstream at request time, not startup
+        resolver 127.0.0.11 valid=10s;
+        set $upstream_auth http://auth-service:8443;
+
+        # Auth + API proxy
+        location /auth/ {
+            proxy_pass $upstream_auth;
+            proxy_set_header Host $host;
+            proxy_set_header X-Real-IP $remote_addr;
+            proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+            proxy_set_header X-Forwarded-Proto $scheme;
+        }
+
+        location /api/ {
+            proxy_pass $upstream_auth;
+            proxy_set_header Host $host;
+            proxy_set_header X-Real-IP $remote_addr;
+            proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+            proxy_set_header X-Forwarded-Proto $scheme;
+
+            # Backup export/import: large body + streaming
+            proxy_request_buffering off;
+            proxy_read_timeout 300s;
+        }
+
+        # SPA fallback — all other routes serve index.html
+        location / {
+            try_files $uri $uri/ /index.html;
+        }
+
+        # Cache static assets
+        location /assets/ {
+            expires 1y;
+            add_header Cache-Control "public, immutable";
+        }
+    }
+}
+```
+
+---
+
+**Tab: Auth Service (phantom-auth)**
+
+_**phantom-auth**_, serves two roles: it directly handles its own auth endpoints (`/auth/*`) and proxies daemon API requests over UDS (`/api/*`).
+
+```mermaid
+flowchart
+  C[phantom-auth] -- volumes --> AUTH_DIR["./container-data/auth-db\n→ /var/lib/phantom/auth"]
+  AUTH_DIR --> AUTH_DB[(Auth DB)]
+
+  C -- secrets --> AUTH_KEYS[Signing / Verify Keys]
+```
+
+## Environment
+
+| Variable                   | Default                             |
+| -------------------------- | ----------------------------------- |
+| `AUTH_HOST`                | 0.0.0.0                             |
+| `AUTH_PORT`                | 8443                                |
+| `AUTH_LOG_LEVEL`           | info                                |
+| `AUTH_PROXY_URL`           | unix:///var/run/phantom/daemon.sock |
+| `AUTH_PROXY_TIMEOUT`       | 30.0                                |
+| `AUTH_PROXY_MAX_BODY`      | 67108864 (64 MB)                    |
+| `AUTH_DB_DIR`              | /var/lib/phantom/auth               |
+| `AUTH_SECRETS_DIR`         | /run/secrets                        |
+| `AUTH_TOKEN_LIFETIME`      | 86400 (24h)                         |
+| `AUTH_MFA_TOKEN_LIFETIME`  | 120 (2m)                            |
+| `AUTH_TOTP_SETUP_LIFETIME` | 300 (5m)                            |
+| `AUTH_INACTIVITY_TIMEOUT`  | 1800 (30m)                          |
+| `AUTH_RATE_LIMIT_WINDOW`   | 60                                  |
+| `AUTH_RATE_LIMIT_MAX`      | 5                                   |
+
+> [!NOTE]
+> **Binary Proxy Passthrough**
+> Non-JSON responses (such as backup exports) are forwarded as raw bytes. Maximum body size is controlled by AUTH_PROXY_MAX_BODY.
+
+---
+
+**Tab: Daemon (phantom-daemon)**
+
+_**phantom-daemon**_, is the core of the system. It manages WireGuard interfaces, client management, firewall rules, and databases. Management access is provided exclusively over UDS.
+
+```mermaid
+flowchart
+  D[phantom-daemon] -- volumes --> PHANTOM_DB["./container-data/db\n→ /var/lib/phantom/db"]
+  PHANTOM_DB --> DB1[(Wallet)]
+  PHANTOM_DB --> DB_exit[(Exit Store)]
+
+  D -- volumes --> PHANTOM_STATE["./container-data/state/db\n→ /var/lib/phantom/state/db"]
+  PHANTOM_STATE --> DB2a[("WG Device State")]
+  PHANTOM_STATE --> DB2b[(Firewall State)]
+
+  D -- secrets --> WG_KEYS[WireGuard Keys]
+```
+
+## Environment
+
+| Variable                | Default                   |
+| ----------------------- | ------------------------- |
+| `PHANTOM_DB_DIR`        | /var/lib/phantom/db       |
+| `PHANTOM_STATE_DIR`     | /var/lib/phantom/state/db |
+| `WIREGUARD_LISTEN_PORT` | 51820                     |
+| `WIREGUARD_MTU`         | 1420                      |
+| `WIREGUARD_KEEPALIVE`   | 25                        |
+| `WIREGUARD_ENDPOINT_V4` | —                         |
+| `WIREGUARD_ENDPOINT_V6` | —                         |
+
+## Kernel Requirements
+
+| Parameter               | Description                                      |
+| ----------------------- | ------------------------------------------------ |
+| `NET_ADMIN`             | WireGuard interface and nftables rule management |
+| `NET_RAW`               | Raw socket access                                |
+| `net.ipv4.ip_forward=1` | IP packet forwarding                             |
+| `/dev/net/tun`          | TUN interface creation                           |
+
+> [!WARNING]
+> **WIREGUARD_ENDPOINT_V4**
+> This is the public IP address used in client configurations. Client configurations cannot be exported if this value is not set.
+
+> [!WARNING]
+> **WIREGUARD_ENDPOINT_V6**
+> This is the public IP address used in client configurations. Client configurations cannot be exported if this value is not set.
+
+---
+
+## Docker Compose Layout
+
+```yaml
+# ──────────────────────────────────────────────────────────────────
+# phantom-daemon  ·  Production Compose
+# ──────────────────────────────────────────────────────────────────
+# Usage:
+#   ./tools/prod.sh setup       # first-time: keys + auth + TLS cert
+#   ./tools/prod.sh up          # start production stack
+#
+# Topology:
+#   Internet → :443 (nginx, TLS) → auth-service → daemon (UDS)
+#   Internet → :51820/udp (WireGuard) → daemon
+#
+# Environment: .env.daemon + .env.auth-service (see .example files)
+# Set WIREGUARD_ENDPOINT_V4 to your server's public IP.
+# ──────────────────────────────────────────────────────────────────
+
+services:
+  daemon:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: phantom-daemon
+    command: ["python", "-m", "phantom_daemon.main", "/var/run/phantom/daemon.sock"]
+    restart: unless-stopped
+    volumes:
+      - phantom-sock:/var/run/phantom
+      - ./phantom_daemon:/app/phantom_daemon:ro
+      - ./container-data/db:/var/lib/phantom/db
+      - ./container-data/state/db:/var/lib/phantom/state/db
+    secrets:
+      - wg_private_key
+      - wg_public_key
+    env_file: .env.daemon
+    cap_add:
+      - NET_ADMIN
+      - NET_RAW
+    sysctls:
+      - net.ipv4.ip_forward=1
+    devices:
+      - /dev/net/tun:/dev/net/tun
+    ports:
+      - "51820:51820/udp"
+
+  auth-service:
+    build:
+      context: ./services/auth-service
+      dockerfile: Dockerfile
+    container_name: phantom-auth
+    restart: unless-stopped
+    depends_on:
+      - daemon
+    volumes:
+      - phantom-sock:/var/run/phantom
+      - ./services/auth-service/auth_service:/app/auth_service:ro
+      - ./container-data/auth-db:/var/lib/phantom/auth
+    secrets:
+      - auth_signing_key
+      - auth_verify_key
+    env_file: .env.auth-service
+
+  nginx:
+    image: nginx:1-alpine
+    container_name: phantom-nginx
+    restart: unless-stopped
+    depends_on:
+      - auth-service
+    volumes:
+      - ./services/nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./services/react-spa/dist:/usr/share/nginx/html:ro
+    secrets:
+      - tls_cert
+      - tls_key
+    ports:
+      - "443:443"
+
+secrets:
+  wg_private_key:
+    file: ./container-data/secrets/production/wg_private_key
+  wg_public_key:
+    file: ./container-data/secrets/production/wg_public_key
+  auth_signing_key:
+    file: ./container-data/secrets/production/auth_signing_key
+  auth_verify_key:
+    file: ./container-data/secrets/production/auth_verify_key
+  tls_cert:
+    file: ./container-data/secrets/production/tls_cert
+  tls_key:
+    file: ./container-data/secrets/production/tls_key
+
+volumes:
+  phantom-sock:
+```
+
+---
+
+## Request Lifecycle
+
+How an API request flows through the system:
+
+```mermaid
+sequenceDiagram
+participant B as Browser (SPA)
+participant N as nginx (:443)
+participant A as auth-service
+participant D as daemon (UDS)
+
+B->>N: HTTPS GET /api/core/wireguard
+N->>A: Proxy /api/*
+A->>A: Validate JWT (Bearer token)
+A->>A: Audit log (proxy_request)
+A->>D: UDS forward (daemon.sock)
+D->>D: Process (WireGuard IPC / nftables API)
+D-->>A: JSON response
+A-->>N: JSON response
+N-->>B: HTTPS response
+```
+
+> [!NOTE]
+> **Security layers.**
+> Every request passes through 3 layers: Nginx (TLS) → Auth Service (JWT) → Phantom Daemon (Unix Socket)
+
+---
+
+## Bridge Architecture
+
+The daemon performs system-level operations through native bridges. The Python layer manages the business logic, while the bridges communicate directly with the kernel.
+
+```mermaid
+flowchart TD
+D["Phantom Daemon
+(Python)"]
+D -->|"FFI"| WGB["wireguard-go-bridge
+(Go)"]
+D -->|"FFI"| FWB["firewall-bridge
+(Rust)"]
+WGB -->|"tun.CreateTUN"| TUN["/dev/net/tun
+WireGuard interfaces"]
+FWB -->|"nftables API"| NFT["nftables
+Kernel rules"]
+```
+
+| Bridge                  | Language | Responsibility                                                              |
+| ----------------------- | -------- | --------------------------------------------------------------------------- |
+| **wireguard-go-bridge** | Go       | WireGuard userspace, TUN interface creation, peer management, UAPI protocol |
+| **firewall-bridge**     | Rust     | nftables rule groups, routing policy, atomic rule application               |
+
+---
+
+## Databases
+
+All databases are in SQLite format. They are divided into two categories:
+
+### Persistent Data
+
+User data and configuration. Backup and migration are performed through these databases.
+
+| Database      | Owner        | Container Path        |
+| ------------- | ------------ | --------------------- |
+| **wallet.db** | daemon       | /var/lib/phantom/db   |
+| **exit.db**   | daemon       | /var/lib/phantom/db   |
+| **auth.db**   | auth-service | /var/lib/phantom/auth |
+
+### Runtime State
+
+Runtime data managed by bridges. Automatically created when the daemon starts, no intervention required.
+
+| Database        | Owner               | Container Path                                 |
+| --------------- | ------------------- | ---------------------------------------------- |
+| **device.db**   | wireguard-go-bridge | /var/lib/phantom/state/db/wireguard/\{ifname}/ |
+| **firewall.db** | firewall-bridge     | /var/lib/phantom/state/db                      |

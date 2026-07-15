@@ -1,0 +1,90 @@
+> **Phantom-WG — machine-readable page content.**
+>
+> **EN:** Auto-generated from this page's MDX source. Interactive components
+> (diagrams, players, API explorers, simulators) are replaced by their source
+> data or a short directive — read those as data pointers, not missing content.
+>
+> **TR:** Bu sayfanın MDX kaynağından otomatik üretildi. İnteraktif bileşenler
+> (diyagram, oynatıcı, API gezgini, simülasyon) kaynak verisiyle veya kısa bir
+> direktifle değiştirildi — eksik içerik değil, veri işaretçisi olarak okuyun.
+
+**path:** /docs · **locale:** en · **tr:** https://www.phantom.tc/docs/llms.txt?locale=tr
+
+# Phantom-WG
+
+_**Phantom-WG**_ is a modular tool that lets you set up and manage a WireGuard VPN infrastructure on your own server. Beyond basic VPN management, it offers censorship-resistant connections, multi-layered encryption, and advanced privacy scenarios.
+
+_**Phantom-WG Modern**_ is the container-native implementation of this vision. All components run within Docker and are isolated from the host system:
+
+- **Userspace WireGuard** — Container-scoped TUN device via Go FFI bridge. No kernel module required, does not touch the host's network namespace.
+- **nftables netlink FFI** — Rust backend communicates directly with the kernel. No subprocess calls, firewall rules are managed programmatically.
+- **SQLite State Persistence** — All state is stored in SQLite databases. A daemon restart after a crash is sufficient — kernel state is rebuilt from the DB.
+- **Dual-Stack IPv6** — Even without IPv6 on the host, an IPv6 subnet is assigned within the container and traffic is carried through the tunnel.
+- **Container Isolation** — `NET_ADMIN` + `NET_RAW` is sufficient. WireGuard interfaces live within the container namespace. Configurations that weaken host security such as `SYS_ADMIN`, `privileged`, or `host` network mode are not used.
+
+---
+
+> **Video** · EN: an embedded video walkthrough — its content is shown in the recording, not as text · TR: gömülü video anlatımı — içerik metin olarak değil kayıt olarak gösterilir
+> src: `https://media.phantom.tc/quickstart-guide/master.m3u8`
+
+---
+
+## Topology
+
+Three containers, managed via Docker Compose. Management traffic passes through TLS + JWT authentication, WireGuard traffic reaches the daemon directly.
+
+```mermaid
+flowchart
+  A[Internet] -->|"HTTPS :443"| B[nginx]
+  B --> C[auth-service]
+  C <-->|"UDS"| D[daemon]
+  A -->|"WireGuard :51820/udp"| D
+```
+
+| Component        | Role                                                                                                |
+| ---------------- | --------------------------------------------------------------------------------------------------- |
+| **nginx**        | TLS termination, React SPA (static compiled files), reverse proxy configuration                     |
+| **auth-service** | Comprehensive authentication system, API proxy to daemon over UDS                                   |
+| **daemon**       | Userspace WireGuard (Go FFI), nftables firewall (Rust FFI), client and tunnel management, databases |
+
+---
+
+## Key Features
+
+### Bridge Architecture
+
+The daemon performs system-level operations through two native bridges. Python manages the business logic, bridges communicate directly with the kernel.
+
+```mermaid
+graph
+  D["Daemon (Python)"] -->|"ctypes FFI"| WG["wireguard-go-bridge (Go)"]
+  D -->|"ctypes FFI"| FW["firewall-bridge (Rust)"]
+  WG --> TUN["TUN device"]
+  FW --> NFT["nftables kernel"]
+```
+
+| Bridge                  | Language | Responsibility                                         |
+| ----------------------- | -------- | ------------------------------------------------------ |
+| **wireguard-go-bridge** | Go       | Userspace WireGuard, TUN device, IPC state persistence |
+| **firewall-bridge**     | Rust     | nftables rule groups, policy routing, preset system    |
+
+### Multihop Exit Routing
+
+You can define your exit tunnel to route traffic through an external WireGuard VPN server. IPv4 and IPv6 tunnels are supported simultaneously.
+
+```mermaid
+flowchart LR
+  C[Client] -->|"WireGuard"| M["wg_main"] -->|"forward + masquerade"| E["wg_exit"] --> X[Exit Server]
+```
+
+### IPv6 Dual-Stack
+
+IPv6 support across all layers — firewall rules, policy routing, masquerade, and multihop presets operate with `family: 10` (AF\_INET6). IPv6 tunnel traffic can be carried from within the container even without an IPv6 address on the host.
+
+### Crash Recovery
+
+When the service starts, kernel state (nftables rules, routing policies) is rebuilt from SQLite state databases. No data loss after an unexpected shutdown.
+
+---
+
+For installation, configuration, management commands, and update mechanism, see [Installation & Update](/docs/installation-update).

@@ -1,0 +1,127 @@
+> **Phantom-WG — machine-readable page content.**
+>
+> **EN:** Auto-generated from this page's MDX source. Interactive components
+> (diagrams, players, API explorers, simulators) are replaced by their source
+> data or a short directive — read those as data pointers, not missing content.
+>
+> **TR:** Bu sayfanın MDX kaynağından otomatik üretildi. İnteraktif bileşenler
+> (diyagram, oynatıcı, API gezgini, simülasyon) kaynak verisiyle veya kısa bir
+> direktifle değiştirildi — eksik içerik değil, veri işaretçisi olarak okuyun.
+
+**path:** /docs/architecture/multihop · **locale:** en · **tr:** https://www.phantom.tc/docs/architecture/multihop/llms.txt?locale=tr
+
+# Multihop
+
+Multihop routes client traffic through an **exit server** instead of sending it directly to the internet. The daemon runs two WireGuard interfaces: one serves clients (`wg_phantom_main`), the other connects to the exit tunnel (`wg_phantom_exit`). Firewall rules handle the traffic forwarding between them.
+
+---
+
+## Topology
+
+```mermaid
+flowchart TD
+subgraph Clients["Clients"]
+  C1["Client 1"]
+  C2["Client 2"]
+  Cn["Client N"]
+end
+subgraph Daemon["Phantom Daemon"]
+  WG_MAIN["wg_phantom_main
+:51820/udp"]
+  FW["Firewall
+(forward + masquerade)"]
+  WG_EXIT["wg_phantom_exit"]
+end
+subgraph Exit["Exit Server"]
+  ES["WireGuard Peer
+10.0.2.1"]
+end
+C1 & C2 & Cn -->|"WireGuard"| WG_MAIN
+WG_MAIN -->|"forward"| FW
+FW -->|"masquerade"| WG_EXIT
+WG_EXIT -->|"WireGuard tunnel"| ES
+ES -->|"Internet"| I["Internet"]
+```
+
+---
+
+## Traffic Flow
+
+When a packet from a client reaches the daemon, firewall rules take over:
+
+```mermaid
+sequenceDiagram
+participant C as Client
+participant M as wg_phantom_main
+participant FW as Firewall (nftables)
+participant E as wg_phantom_exit
+participant X as Exit Server
+
+C->>M: Encrypted packet (WireGuard)
+M->>FW: Decrypted packet
+FW->>FW: forward: main→exit (accept)
+FW->>FW: postrouting: masquerade (SNAT)
+FW->>E: Forwarded packet
+E->>X: Encrypted packet (WireGuard tunnel)
+X-->>E: Response
+E-->>FW: Decrypted response
+FW-->>FW: forward: exit→main (established/related)
+FW-->>M: Response packet
+M-->>C: Encrypted response
+```
+
+---
+
+## Firewall Rules
+
+When multihop is enabled, the `multihop-exit` preset is applied. There are three main rule groups:
+
+### Policy Routing
+
+Table 200 (`mh`) is created. Traffic from the client subnet is directed to this table:
+
+```mermaid
+flowchart TD
+A["Source: client subnet
+(e.g. 10.8.0.0/24)"] -->|"policy rule"| T["Table 200 (mh)"]
+T --> R1["10.8.0.0/24 → wg_phantom_main
+(local VPN traffic)"]
+T --> R2["default → wg_phantom_exit
+(all other traffic)"]
+```
+
+### Forward Rules
+
+```text
+main → exit :  accept                       (all client traffic passes through)
+exit → main :  accept (established/related)  (only response traffic returns)
+```
+
+### Masquerade
+
+```text
+postrouting :  source=client subnet, out=wg_phantom_exit → masquerade
+```
+
+Client IPs appear to the exit server as the daemon's tunnel address (SNAT).
+
+---
+
+## Lifecycle
+
+```mermaid
+flowchart TD
+S["Start"] --> D
+D["Disabled
+wg_phantom_exit GONE
+firewall preset removed"]
+D -->|"enable (select exit)"| E["Enabled
+wg_phantom_exit UP
+firewall preset active
+1s status polling"]
+E -->|"disable"| D
+```
+
+> [!NOTE]
+> **Safe transition.**
+> To switch to a different exit server, the current connection must be disabled first. This design prevents partial state.

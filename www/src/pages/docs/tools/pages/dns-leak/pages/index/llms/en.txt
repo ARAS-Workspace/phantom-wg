@@ -1,0 +1,18 @@
+> **Phantom-WG — machine-readable page content.**
+>
+> **EN:** This page is an interactive tool; the summary below describes what it does. Run it live at the page URL.
+>
+> **TR:** Bu sayfa interaktif bir araçtır; aşağıdaki özet ne yaptığını anlatır. Canlı çalıştırmak için sayfa URL'ini kullanın.
+
+**path:** /docs/tools/dns · **locale:** en · **tr:** https://www.phantom.tc/docs/tools/dns/llms.txt?locale=tr
+
+# DNS Leak Test
+
+An interactive tool that reveals which DNS resolvers actually answer your queries. It sends several unique DNS lookups, records the resolver that handled each one, then enriches every resolver it finds:
+
+- **IP** — the address of the DNS resolver that answered
+- **Location** — the resolver's geographic location
+- **ISP** — the operator of the resolver
+- **ASN** — the autonomous system number of the resolver's network
+
+Run it to confirm your DNS stays inside the tunnel: while connected to Phantom-WG you should see only the tunnel's resolvers. If your own ISP's resolvers — or any server outside the tunnel's exit — appear, your DNS is leaking.

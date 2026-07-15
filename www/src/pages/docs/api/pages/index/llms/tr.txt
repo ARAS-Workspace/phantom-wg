@@ -1,0 +1,38 @@
+> **Phantom-WG — machine-readable page content.**
+>
+> **EN:** Auto-generated from this page's MDX source. Interactive components
+> (diagrams, players, API explorers, simulators) are replaced by their source
+> data or a short directive — read those as data pointers, not missing content.
+>
+> **TR:** Bu sayfanın MDX kaynağından otomatik üretildi. İnteraktif bileşenler
+> (diyagram, oynatıcı, API gezgini, simülasyon) kaynak verisiyle veya kısa bir
+> direktifle değiştirildi — eksik içerik değil, veri işaretçisi olarak okuyun.
+
+**path:** /docs/api · **locale:** tr · **en:** https://www.phantom.tc/docs/api/llms.txt?locale=en
+
+# API Referansı
+
+_**Phantom Daemon**_'un Unix Domain Socket (UDS) üzerinden sunduğu uç noktaların teknik referansıdır. Üretim ortamında _**Auth Service**_ proxy katmanı aracılığıyla erişilir.
+
+```mermaid
+flowchart
+B["İstemci"] -->|"HTTPS :443"| N["nginx"]
+N -->|"/auth/*"| A["Auth Service"]
+N -->|"/api/*"| A
+A -->|"UDS"| D["Phantom Daemon"]
+```
+
+> [!NOTE]
+> **Modüler Mimari**
+> Phantom Daemon sistemde asıl işi yapan parçadır. UDS üzerinden haberleşebildiğiniz sürece, bu yapıyı kendi senaryonuza göre farklı bir proxy veya kimlik doğrulama katmanıyla rahatlıkla kullanabilirsiniz.
+
+---
+
+## Daemon OpenAPI Reference
+
+```mermaid
+flowchart
+Q["Request"] -->|"UDS · daemon.sock"| D["Phantom Daemon"]
+```
+
+> API reference — machine-readable OpenAPI definition: `/openapi.json`
