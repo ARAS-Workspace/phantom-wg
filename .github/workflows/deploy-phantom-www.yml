@@ -62,6 +62,17 @@ jobs:
         run: npm ci
         working-directory: www
 
+      - name: Verify llms.txt is up to date
+        working-directory: www
+        run: |
+          npm --prefix ../tools/agentic-data-builder ci
+          node scripts/generate-llms.js
+          if ! git diff --quiet -- ':(glob)src/pages/**/llms/*.txt'; then
+            echo "::error::llms.txt is out of date — run 'npm run generate-llms' and commit the result."
+            git diff --stat -- ':(glob)src/pages/**/llms/*.txt'
+            exit 1
+          fi
+
       - name: Generate development certificate
         run: node scripts/generate_development_certificate.js
         working-directory: www
