@@ -11,6 +11,7 @@ const HomePage = lazy(() => import('@pages/home/pages/index/LandingPage'));
 
 // ── Documentation pages ───────────────────────────────────────────
 const DocsHomePage      = lazy(() => import('@pages/docs/home/pages/index/HomePage'));
+const QuickstartPage    = lazy(() => import('@pages/docs/quickstart-guide/QuickstartGuidePage'));
 const InstallUpdatePage = lazy(() => import('@pages/docs/installation-update/InstallationUpdatePage'));
 const MacPage = lazy(() => import('@pages/docs/client-applications/pages/mac/index/MacPage'));
 const ApiPage           = lazy(() => import('@pages/docs/api/pages/index/ApiPage'));
@@ -48,6 +49,10 @@ const router = createBrowserRouter([
       {
         index: true,
         element: <DocsHomePage />,
+      },
+      {
+        path: 'quickstart-guide',
+        element: <QuickstartPage />,
       },
       {
         path: 'installation-update',

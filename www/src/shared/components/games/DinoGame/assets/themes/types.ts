@@ -1,1 +1,1 @@
-export type ThemeName = 'error' | 'dpi' | 'dpi-mac' |'under-construction';
+export type ThemeName = 'error' | 'dpi' | 'dpi-mac' | 'dpi-phantom' | 'under-construction';

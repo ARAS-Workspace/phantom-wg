@@ -1,0 +1,89 @@
+import { InlineNotification } from '@carbon/react';
+
+*Creating the servers with the `hcloud` CLI: Nuremberg (**Phantom-Frontmatter**) and Falkenstein (**Phantom-WG**)*
+
+The video uses the `hcloud` CLI, but the web console does the same job if you prefer easier management.
+
+In this step we'll prepare two servers.
+
+- **Phantom-Frontmatter** (Nuremberg)
+- **Phantom-WG** (Falkenstein)
+
+<InlineNotification
+  kind="info"
+  title="Installing the hcloud CLI"
+  subtitle="To install and configure the hcloud CLI, see Hetzner's official guide: https://community.hetzner.com/tutorials/howto-hcloud-cli"
+  hideCloseButton
+  lowContrast
+/>
+
+### 1 · Generate the SSH Key
+
+```bash
+ssh-keygen -t ed25519 -C "phantom-wg" -f ~/.ssh/phantom-wg
+hcloud ssh-key create --name phantom-wg-key --public-key-from-file ~/.ssh/phantom-wg.pub
+hcloud ssh-key list
+```
+
+### 2 · Create cloud-init.yaml
+
+Before creating the servers, prepare a `cloud-init.yaml` file. When Hetzner provisions the server, this file runs automatically on first boot: it updates the system and installs Docker, which **Phantom-WG** requires. By the time the server is ready, the core requirements are already in place. You can customize the file to your own needs if you like.
+
+```yaml
+#cloud-config
+package_update: true
+package_upgrade: true
+runcmd:
+  - curl -fsSL https://get.docker.com -o /tmp/get-docker.sh
+  - sh /tmp/get-docker.sh
+  - systemctl enable docker
+  - systemctl start docker
+```
+
+### 3 · Create the Servers
+
+```bash
+# Phantom-Frontmatter — Nuremberg
+hcloud server create \
+  --name phantom-frontmatter \
+  --type cx23 \
+  --image debian-13 \
+  --location nbg1 \
+  --ssh-key phantom-wg-key
+
+# Phantom-WG — Falkenstein (cloud-init attached for Docker)
+hcloud server create \
+  --name phantom-wg \
+  --type cx23 \
+  --image debian-13 \
+  --location fsn1 \
+  --ssh-key phantom-wg-key \
+  --user-data-from-file cloud-init.yaml
+```
+
+### 4 · Verify via CLI
+
+```bash
+hcloud server list
+
+# Phantom-Frontmatter — access check only
+ssh -i ~/.ssh/phantom-wg root@<frontmatter-ip>
+
+# Phantom-WG — Docker check
+ssh -i ~/.ssh/phantom-wg root@<phantom-wg-ip>
+docker --version && docker compose version
+```
+
+### 5 · Console + DNS
+
+In the Hetzner Console, open your DNS zone and point a domain name at each of the two servers. These records are required so the Let's Encrypt certificates can be issued later without issues.
+
+```dns
+# Phantom-WG — Falkenstein
+vpn.phantom-wg.dev            A       <phantom-wg-ipv4>
+vpn.phantom-wg.dev            AAAA    <phantom-wg-ipv6>
+
+# Phantom-Frontmatter — Nuremberg
+frontmatter.phantom-wg.dev    A       <frontmatter-ipv4>
+frontmatter.phantom-wg.dev    AAAA    <frontmatter-ipv6>
+```

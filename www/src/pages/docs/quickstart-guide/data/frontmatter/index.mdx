@@ -1,0 +1,40 @@
+*Ghost Mode — doğrudan UDP erişimi engellendiğinde bile **Phantom-WG**'ye ulaşan hafif wstunnel proxy katmanı*
+
+### Kurulum
+
+```bash
+# Phantom-Frontmatter sunucusuna bağlan ve gerekli paketleri kur
+ssh -i ~/.ssh/phantom-wg root@frontmatter.phantom-wg.dev
+
+# En güncel sürümü indir, arşivi aç ve dizine gir
+wget https://github.com/ARAS-Workspace/phantom-wg/releases/download/frontmatter-v1.0.0/phantom-wg-frontmatter-v1.0.0.zip
+unzip phantom-wg-frontmatter-v1.0.0.zip
+cd phantom-wg-frontmatter-v1.0.0
+
+# Kurulum betiğini çalıştır
+./frontmatter-install.sh
+
+# Backend Phantom-WG sunucusunu tanımla, sertifika al ve servisi başlat
+frontmatter-api setup init backend=<phantom-wg-ip>
+frontmatter-certbot frontmatter.phantom-wg.dev
+frontmatter-api ghost start
+frontmatter-api ghost status
+```
+
+### Yapılandırma
+
+Bağlantı kurmak için iki yöntem vardır.
+
+**Birinci yöntem**, Mac ve iOS'taki **Phantom-WG** istemci uygulamaları için tasarlanmış bir **Wstunnel** konfigürasyon bloğu verir. Bu bloğu mevcut istemci konfigürasyonunuzun en üstüne ekleyin, sunucu adresini erişilebilir **Phantom-Frontmatter** IP'niz veya alan adınızla güncelleyin ve `Endpoint`'i `127.0.0.1` yapın. Böylece hem masaüstünde hem mobilde aynı konfigürasyonla bağlanırsınız.
+
+```bash
+frontmatter-api ghost client_config | jq -r '.data.wstunnel_block'
+```
+
+**İkinci yöntem**, kullanıma hazır bir wstunnel komutu üretir; wstunnel'ı doğrudan terminalden çalıştırmayı tercih ediyorsanız (ve cihazınızda kuruluysa) kullanışlıdır.
+
+```bash
+frontmatter-api ghost client_command | jq -r '.data.command'
+```
+
+Bu rehberde birinci yöntem kullanılır: Wstunnel bloğunu mevcut istemci konfigürasyonunuza ekleyin, `Endpoint`'i `127.0.0.1` yapın ve bağlanın — aynı adımlar **Phantom-WG** iOS uygulamasında da geçerlidir. Bağlantı kurulduğunda tüm trafik **Phantom-Frontmatter** üzerinden **Phantom-WG** sunucunuza yönlenir.

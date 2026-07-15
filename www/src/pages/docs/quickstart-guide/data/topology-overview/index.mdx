@@ -1,0 +1,17 @@
+import Mermaid from '@shared/components/visualization/Mermaid';
+
+*Örnek topolojideki trafiğin tam rotası: İstanbul → Nuremberg → Falkenstein → Internet*
+
+Bu rehberde kurulan örnek topoloji, trafiğinizin internete nasıl ulaştığını gösterir.
+
+İstanbul'daki istemci, Nuremberg'deki **Phantom-Frontmatter**'a wstunnel üzerinden bağlanır; **Phantom-Frontmatter** maskelenmiş trafiği Falkenstein'daki **Phantom-WG** sunucusuna iletir ve internete çıkışınız buradan gerçekleşir.
+
+Dışarıdan bakıldığında yalnızca sıradan bir HTTPS bağlantısı görünmekle beraber asıl VPN bağlantınızı taşıyacak sunucu farklı ve yakın bir fiziksel konumda bulunur.
+
+<Mermaid chart={`flowchart LR
+    C["İstanbul\\nClient"] -->|"Ghost Mode · WSS :443"| F["Nuremberg\\nPhantom-Frontmatter"]
+    F -->|"WireGuard :51820"| W["Falkenstein\\nPhantom-WG"]
+    W -->|"Çıkış"| I["Internet"]
+`} />
+
+İnşa edeceğimiz yapı budur. Hetzner sunucularını hazırlayarak başlıyoruz.

@@ -1,5 +1,4 @@
 import Mermaid from '@shared/components/visualization/Mermaid';
-import PhantomHLSPlayer from '@shared/components/visualization/PhantomHLSPlayer';
 
 # Phantom-WG
 
@@ -15,23 +14,7 @@ import PhantomHLSPlayer from '@shared/components/visualization/PhantomHLSPlayer'
 
 ---
 
-export const CHAPTERS = {
-    fps: 30,
-    chapters: [
-        { title: 'Intro', start: '00:00:00:00' },
-        { title: 'Topology Overview', start: '00:00:14:27' },
-        { title: 'Hetzner Server Provisioning', start: '00:01:07:11' },
-        { title: 'Phantom-WG Installation & Configuration', start: '00:04:31:11' },
-        { title: 'Phantom-Frontmatter Installation & Configuration', start: '00:10:38:29' },
-        { title: 'Final', start: '00:14:16:05' }
-    ],
-};
-
-<PhantomHLSPlayer
-    src="https://media.phantom.tc/quickstart-guide/master.m3u8"
-    poster="https://media.phantom.tc/quickstart-guide/Poster.jpg"
-    chaptersData={CHAPTERS}
-/>
+> **Looking for where to start?** Follow the **[Quickstart Guide](/docs/quickstart-guide)** hands-on — from server provisioning to installing and configuring **Phantom-WG** and **Phantom-Frontmatter** — alongside a chaptered video.
 
 ---
 

@@ -1,0 +1,50 @@
+import { InlineNotification } from '@carbon/react';
+
+*Install, Configure, Connect*
+
+### Installation
+
+```bash
+# Connect to the Phantom-WG server and go to the install directory
+ssh -i ~/.ssh/phantom-wg root@vpn.phantom-wg.dev
+cd /opt
+curl -sSL get.phantom.tc | bash
+
+# Enter the project directory and prepare the system (env files, WireGuard keys, auth-service, TLS)
+cd /opt/phantom-wg
+./tools/prod.sh setup
+
+# Fetch the public IPv4/IPv6 addresses and set the WireGuard endpoints
+IPV4=$(curl -4 -sSL https://get.phantom.tc/ip)
+IPV6=$(curl -6 -sSL https://get.phantom.tc/ip)
+sed -i "s/WIREGUARD_ENDPOINT_V4=.*/WIREGUARD_ENDPOINT_V4=${IPV4}/" .env.daemon
+sed -i "s/WIREGUARD_ENDPOINT_V6=.*/WIREGUARD_ENDPOINT_V6=${IPV6}/" .env.daemon
+
+# Bring the stack up, check status, and obtain a Let's Encrypt certificate
+./tools/prod.sh up
+./tools/prod.sh status
+./tools/prod.sh certbot vpn.phantom-wg.dev
+```
+
+<InlineNotification
+  kind="warning"
+  title="Save your admin password."
+  subtitle="Setup writes your Phantom-WG admin password to container-data/secrets/production/.admin_password. It is recommended that you copy the password, store it somewhere safe, and delete the password file from the server. You will need this password for your first login to the dashboard."
+  hideCloseButton
+  lowContrast
+/>
+
+### Configuration
+
+Open the dashboard address in your browser (`vpn.phantom-wg.dev` in this example) and sign in with the admin credentials you saved during setup (username `admin`).
+
+To establish a connection, first create a client: from the left menu, **Clients → Add Client**, give it a name (here `mac-vm`) and create the client.
+Once it appears in the list, select **Get Config** from the three-dot menu next to it. There are three configuration types:
+
+- **IPv4** — IPv4 endpoint, and traffic inside the tunnel is IPv4 only.
+- **IPv6** — IPv6 endpoint, and traffic inside the tunnel is IPv6 only.
+- **Hybrid** — IPv4 endpoint, but both IPv4 and IPv6 traffic can travel inside the tunnel; usually the most flexible option.
+
+Select **Hybrid**, get the configuration with **Get Config**, and copy it. Open the **Phantom-WG** client, import the configuration, and connect.
+You can also view the configuration as a QR code, which is handy for setting up on mobile devices.
+Finally, from the **WireGuard** section on the dashboard, you can confirm that the handshake completed and the tunnel is active.

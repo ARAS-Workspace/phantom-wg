@@ -1,0 +1,235 @@
+> **Phantom-WG — machine-readable page content.**
+>
+> **EN:** Auto-generated from this page's MDX source. Interactive components
+> (diagrams, players, API explorers, simulators) are replaced by their source
+> data or a short directive — read those as data pointers, not missing content.
+>
+> **TR:** Bu sayfanın MDX kaynağından otomatik üretildi. İnteraktif bileşenler
+> (diyagram, oynatıcı, API gezgini, simülasyon) kaynak verisiyle veya kısa bir
+> direktifle değiştirildi — eksik içerik değil, veri işaretçisi olarak okuyun.
+
+**path:** /docs/quickstart-guide · **locale:** tr · **en:** https://www.phantom.tc/docs/quickstart-guide/llms.txt?locale=en
+
+# Hızlı Başlangıç Rehberi
+
+> **Video** · EN: an embedded video walkthrough — its content is shown in the recording, not as text · TR: gömülü video anlatımı — içerik metin olarak değil kayıt olarak gösterilir
+> src: `https://media.phantom.tc/quickstart-guide/master.m3u8`
+
+---
+
+> [!NOTE]
+> **Sağlayıcı Tercihi Hakkında**
+> Pratik ve kullanımı kolay bir yapıya sahip olması nedeniyle demonstrasyon ortamı Hetzner üzerinde gösterilmiştir. Phantom-WG adına ilgili sağlayıcı tarafında herhangi bir ticari ortaklık, sponsorluk ve anlaşma bulunmamaktadır. Dilerseniz sağlayıcıya özgü adımlar üzerinde anlatılan ana fikri anlayıp içeriğin ilerleyen bölümlerindeki Installation & Configuration adımlarını kendi sunucunuz üzerinde gerçekleştirebilirsiniz.
+
+---
+
+## Bölüm Notları
+
+**Tab: Topology Overview**
+
+_Örnek topolojideki trafiğin tam rotası: İstanbul → Nuremberg → Falkenstein → Internet_
+
+Bu rehberde kurulan örnek topoloji, trafiğinizin internete nasıl ulaştığını gösterir.
+
+İstanbul'daki istemci, Nuremberg'deki **Phantom-Frontmatter**'a wstunnel üzerinden bağlanır; **Phantom-Frontmatter** maskelenmiş trafiği Falkenstein'daki **Phantom-WG** sunucusuna iletir ve internete çıkışınız buradan gerçekleşir.
+
+Dışarıdan bakıldığında yalnızca sıradan bir HTTPS bağlantısı görünmekle beraber asıl VPN bağlantınızı taşıyacak sunucu farklı ve yakın bir fiziksel konumda bulunur.
+
+```mermaid
+flowchart LR
+  C["İstanbul\nClient"] -->|"Ghost Mode · WSS :443"| F["Nuremberg\nPhantom-Frontmatter"]
+  F -->|"WireGuard :51820"| W["Falkenstein\nPhantom-WG"]
+  W -->|"Çıkış"| I["Internet"]
+```
+
+İnşa edeceğimiz yapı budur. Hetzner sunucularını hazırlayarak başlıyoruz.
+
+---
+
+**Tab: Hetzner Server Provisioning**
+
+_`hcloud` CLI ile: Nuremberg (**Phantom-Frontmatter**) ve Falkenstein (**Phantom-WG**) sunucularını oluşturma_
+
+Video içeriğinde `hcloud` CLI kullanılıyor ancak daha kolay yönetim için web konsolu da aynı işi görür.
+
+Bu aşamada iki sunucu hazırlayacağız.
+
+- **Phantom-Frontmatter** (Nuremberg)
+- **Phantom-WG** (Falkenstein)
+
+> [!NOTE]
+> **hcloud CLI kurulumu**
+> hcloud CLI'ı kurmak ve yapılandırmak için Hetzner'in resmi rehberine bakabilirsiniz: https://community.hetzner.com/tutorials/howto-hcloud-cli
+
+### 1 · SSH Anahtarı Oluşturma
+
+```bash
+ssh-keygen -t ed25519 -C "phantom-wg" -f ~/.ssh/phantom-wg
+hcloud ssh-key create --name phantom-wg-key --public-key-from-file ~/.ssh/phantom-wg.pub
+hcloud ssh-key list
+```
+
+### 2 · cloud-init.yaml dosyasını Oluştur
+
+Sunucuları oluşturmadan önce bir `cloud-init.yaml` hazırlanır. Hetzner sunucuyu sağlarken bu dosya ilk açılışta otomatik çalışır: sistemi günceller ve **Phantom-WG**'nin gereksinimi olan Docker'ı kurar. Sunucu hazır olduğunda temel gereksinimler yerindedir. Dosyayı dilerseniz kendi ihtiyaçlarınıza göre özelleştirebilirsiniz.
+
+```yaml
+#cloud-config
+package_update: true
+package_upgrade: true
+runcmd:
+  - curl -fsSL https://get.docker.com -o /tmp/get-docker.sh
+  - sh /tmp/get-docker.sh
+  - systemctl enable docker
+  - systemctl start docker
+```
+
+### 3 · Sunucuları Oluştur
+
+```bash
+# Phantom-Frontmatter — Nuremberg
+hcloud server create \
+  --name phantom-frontmatter \
+  --type cx23 \
+  --image debian-13 \
+  --location nbg1 \
+  --ssh-key phantom-wg-key
+
+# Phantom-WG — Falkenstein (Docker için cloud-init ekli)
+hcloud server create \
+  --name phantom-wg \
+  --type cx23 \
+  --image debian-13 \
+  --location fsn1 \
+  --ssh-key phantom-wg-key \
+  --user-data-from-file cloud-init.yaml
+```
+
+### 4 · CLI ile Doğrula
+
+```bash
+hcloud server list
+
+# Phantom-Frontmatter — yalnızca erişim doğrulaması
+ssh -i ~/.ssh/phantom-wg root@<frontmatter-ip>
+
+# Phantom-WG — Docker doğrulaması
+ssh -i ~/.ssh/phantom-wg root@<phantom-wg-ip>
+docker --version && docker compose version
+```
+
+### 5 · Console + DNS
+
+Hetzner Console'da DNS bölgenizi açıp her iki sunucuya birer alan adı yönlendirin. Bu kayıtlar ilerideki Let's Encrypt sertifikalarının sorunsuz imzalanması için gereklidir.
+
+```dns
+# Phantom-WG — Falkenstein
+vpn.phantom-wg.dev            A       <phantom-wg-ipv4>
+vpn.phantom-wg.dev            AAAA    <phantom-wg-ipv6>
+
+# Phantom-Frontmatter — Nuremberg
+frontmatter.phantom-wg.dev    A       <frontmatter-ipv4>
+frontmatter.phantom-wg.dev    AAAA    <frontmatter-ipv6>
+```
+
+---
+
+**Tab: Phantom-WG Installation & Configuration**
+
+_Kur, Yapılandır, Bağlan_
+
+### Kurulum
+
+```bash
+# Phantom-WG sunucusuna bağlan ve kurulum dizinine geç
+ssh -i ~/.ssh/phantom-wg root@vpn.phantom-wg.dev
+cd /opt
+curl -sSL get.phantom.tc | bash
+
+# Proje dizinine gir ve sistemi hazırla (env dosyaları, WireGuard anahtarları, auth-service, TLS)
+cd /opt/phantom-wg
+./tools/prod.sh setup
+
+# Public IPv4/IPv6 adreslerini al ve WireGuard endpoint'lerini ayarla
+IPV4=$(curl -4 -sSL https://get.phantom.tc/ip)
+IPV6=$(curl -6 -sSL https://get.phantom.tc/ip)
+sed -i "s/WIREGUARD_ENDPOINT_V4=.*/WIREGUARD_ENDPOINT_V4=${IPV4}/" .env.daemon
+sed -i "s/WIREGUARD_ENDPOINT_V6=.*/WIREGUARD_ENDPOINT_V6=${IPV6}/" .env.daemon
+
+# Yığını başlat, durumu kontrol et ve Let's Encrypt sertifikası al
+./tools/prod.sh up
+./tools/prod.sh status
+./tools/prod.sh certbot vpn.phantom-wg.dev
+```
+
+> [!WARNING]
+> **Admin parolanızı kaydedin.**
+> Setup, Phantom-WG admin parolanızı container-data/secrets/production/.admin_password dosyasına yazar. Parolayı kopyalayıp güvenli bir yerde saklamanız ve şifre dosyasını sunucudan silmeniz tavsiye edilir. Dashboard'a ilk girişte bu parolaya ihtiyacınız olacaktır.
+
+### Yapılandırma
+
+Tarayıcınızdan dashboard adresine gidin (bu örnekte `vpn.phantom-wg.dev`) ve setup sırasında kaydettiğiniz admin bilgileriyle oturum açın (kullanıcı adı `admin`).
+
+Bağlantı kurmak için önce bir istemci oluşturun: soldaki menüden **Clients → Add Client**, bir ad verin (burada `mac-vm`) ve istemciyi oluşturun.
+Listede belirince yanındaki üç nokta menüsünden **Get Config**'i seçin. Üç konfigürasyon tipi vardır:
+
+- **IPv4** — Endpoint IPv4 ve tünel içi trafik yalnızca IPv4.
+- **IPv6** — Endpoint IPv6 ve tünel içi trafik yalnızca IPv6.
+- **Hybrid** — Endpoint IPv4 ancak tünel içinde hem IPv4 hem IPv6 trafiği taşınabilir; genelde en esnek seçenektir.
+
+**Hybrid**'i seçip **Get Config** ile konfigürasyonu alın ve kopyalayın. **Phantom-WG** istemcisini açıp konfigürasyonu içe aktarın ve bağlanın.
+Konfigürasyonu QR kod olarak da görüntüleyebilirsiniz; mobil cihazlarda kurulum için pratiktir.
+Son olarak dashboard üzerindeki **WireGuard** bölümünden handshake'in tamamlandığını ve tünelin aktif olduğunu doğrulayabilirsiniz.
+
+---
+
+**Tab: Phantom-Frontmatter Installation & Configuration**
+
+_Ghost Mode — doğrudan UDP erişimi engellendiğinde bile **Phantom-WG**'ye ulaşan hafif wstunnel proxy katmanı_
+
+### Kurulum
+
+```bash
+# Phantom-Frontmatter sunucusuna bağlan ve gerekli paketleri kur
+ssh -i ~/.ssh/phantom-wg root@frontmatter.phantom-wg.dev
+
+# En güncel sürümü indir, arşivi aç ve dizine gir
+wget https://github.com/ARAS-Workspace/phantom-wg/releases/download/frontmatter-v1.0.0/phantom-wg-frontmatter-v1.0.0.zip
+unzip phantom-wg-frontmatter-v1.0.0.zip
+cd phantom-wg-frontmatter-v1.0.0
+
+# Kurulum betiğini çalıştır
+./frontmatter-install.sh
+
+# Backend Phantom-WG sunucusunu tanımla, sertifika al ve servisi başlat
+frontmatter-api setup init backend=<phantom-wg-ip>
+frontmatter-certbot frontmatter.phantom-wg.dev
+frontmatter-api ghost start
+frontmatter-api ghost status
+```
+
+### Yapılandırma
+
+Bağlantı kurmak için iki yöntem vardır.
+
+**Birinci yöntem**, Mac ve iOS'taki **Phantom-WG** istemci uygulamaları için tasarlanmış bir **Wstunnel** konfigürasyon bloğu verir. Bu bloğu mevcut istemci konfigürasyonunuzun en üstüne ekleyin, sunucu adresini erişilebilir **Phantom-Frontmatter** IP'niz veya alan adınızla güncelleyin ve `Endpoint`'i `127.0.0.1` yapın. Böylece hem masaüstünde hem mobilde aynı konfigürasyonla bağlanırsınız.
+
+```bash
+frontmatter-api ghost client_config | jq -r '.data.wstunnel_block'
+```
+
+**İkinci yöntem**, kullanıma hazır bir wstunnel komutu üretir; wstunnel'ı doğrudan terminalden çalıştırmayı tercih ediyorsanız (ve cihazınızda kuruluysa) kullanışlıdır.
+
+```bash
+frontmatter-api ghost client_command | jq -r '.data.command'
+```
+
+Bu rehberde birinci yöntem kullanılır: Wstunnel bloğunu mevcut istemci konfigürasyonunuza ekleyin, `Endpoint`'i `127.0.0.1` yapın ve bağlanın — aynı adımlar **Phantom-WG** iOS uygulamasında da geçerlidir. Bağlantı kurulduğunda tüm trafik **Phantom-Frontmatter** üzerinden **Phantom-WG** sunucunuza yönlenir.
+
+---
+
+> [Interactive] A playable mini-game (Chrome-dino style). Visual/interactive content with no textual equivalent.
+
+---
+
+_Tutorial içeriğinin hazırlanmasında kullanılan görsel ve işitsel dijital materyaller [asset-pipelines/phantom-wg-quickstart-guide](https://github.com/ARAS-Workspace/phantom-wg/tree/press-kit/asset-pipelines/phantom-wg-quickstart-guide) altında paylaşılmıştır._

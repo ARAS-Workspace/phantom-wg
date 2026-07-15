@@ -14,6 +14,7 @@ import {
   Apple
 } from '@carbon/icons-react';
 import type { CarbonIconType } from '@carbon/icons-react';
+import { PhantomGhost } from './PhantomGhost';
 import type { ThemeName } from './types';
 
 export type IconComponent = CarbonIconType;
@@ -42,6 +43,12 @@ const DPI_MAC_ICONS: ThemeIcons = {
   clouds: [Locked, SecurityServices, CloudIcon],
 };
 
+const DPI_PHANTOM_ICONS: ThemeIcons = {
+  dino: PhantomGhost,
+  obstacles: [Firewall, ViewFilled, WarningHex],
+  clouds: [Locked, SecurityServices, CloudIcon],
+};
+
 const UNDER_CONSTRUCTION_ICONS: ThemeIcons = {
   dino: Running,
   obstacles: [Construction, TrafficCone, Building],
@@ -54,6 +61,8 @@ export function getThemeIcons(theme: ThemeName): ThemeIcons {
       return DPI_ICONS;
     case 'dpi-mac':
       return DPI_MAC_ICONS;
+    case 'dpi-phantom':
+      return DPI_PHANTOM_ICONS;
     case 'under-construction':
       return UNDER_CONSTRUCTION_ICONS;
     case 'error':

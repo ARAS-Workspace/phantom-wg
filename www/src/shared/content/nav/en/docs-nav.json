@@ -6,6 +6,7 @@
   ],
   "sideNav": [
     { "label": "Introduction", "href": "/docs" },
+    { "label": "Quickstart Guide", "href": "/docs/quickstart-guide" },
     { "label": "Installation & Update", "href": "/docs/installation-update" },
     {
       "label": "Client Applications",

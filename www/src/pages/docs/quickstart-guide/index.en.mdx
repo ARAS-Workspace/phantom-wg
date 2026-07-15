@@ -1,0 +1,57 @@
+import PhantomHLSPlayer from '@shared/components/visualization/PhantomHLSPlayer';
+import ContentTabs from '@shared/components/content/ContentTabs';
+import { InlineNotification } from '@carbon/react';
+import DinoGame from '@shared/components/games/DinoGame';
+import TopologyOverview from './data/topology-overview/index.en.mdx';
+import ServerProvisioning from './data/hetzner-provisioning/index.en.mdx';
+import PhantomWG from './data/phantom-wg/index.en.mdx';
+import Frontmatter from './data/frontmatter/index.en.mdx';
+
+# Quickstart Guide
+
+export const CHAPTERS = {
+    fps: 30,
+    chapters: [
+        { title: 'Intro', start: '00:00:00:00' },
+        { title: 'Topology Overview', start: '00:00:14:27' },
+        { title: 'Hetzner Server Provisioning', start: '00:01:07:11' },
+        { title: 'Phantom-WG Installation & Configuration', start: '00:04:31:11' },
+        { title: 'Phantom-Frontmatter Installation & Configuration', start: '00:10:38:29' },
+        { title: 'Final', start: '00:14:16:05' }
+    ],
+};
+
+<PhantomHLSPlayer
+    src="https://media.phantom.tc/quickstart-guide/master.m3u8"
+    poster="https://media.phantom.tc/quickstart-guide/Poster.jpg"
+    chaptersData={CHAPTERS}
+/>
+
+---
+
+<InlineNotification
+    kind="info"
+    title="About the Provider Choice"
+    subtitle="The demonstration environment is shown on Hetzner because of its practical, easy-to-use interface. There is no commercial partnership, sponsorship, or agreement with the provider on behalf of Phantom-WG. If you prefer, you can grasp the core idea behind the provider-specific steps and carry out the Installation & Configuration steps later in this guide directly on your own server."
+    hideCloseButton
+    lowContrast
+/>
+
+---
+
+## Chapter Notes
+
+<ContentTabs contained={false} tabs={[
+  { label: 'Topology Overview', content: TopologyOverview },
+  { label: 'Hetzner Server Provisioning', content: ServerProvisioning },
+  { label: 'Phantom-WG Installation & Configuration', content: PhantomWG },
+  { label: 'Phantom-Frontmatter Installation & Configuration', content: Frontmatter }
+]} />
+
+---
+
+<DinoGame.Lazy theme="dpi-phantom" />
+
+---
+
+*The visual and audio digital materials used in producing the tutorial content are shared under [asset-pipelines/phantom-wg-quickstart-guide](https://github.com/ARAS-Workspace/phantom-wg/tree/press-kit/asset-pipelines/phantom-wg-quickstart-guide).*

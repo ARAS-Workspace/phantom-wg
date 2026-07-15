@@ -1,0 +1,17 @@
+import Mermaid from '@shared/components/visualization/Mermaid';
+
+*The full route traffic takes in the example topology: Istanbul → Nuremberg → Falkenstein → Internet*
+
+The example topology built in this guide shows how your traffic reaches the internet.
+
+The Istanbul client connects to **Phantom-Frontmatter** in Nuremberg over wstunnel; **Phantom-Frontmatter** forwards the masked traffic to the **Phantom-WG** server in Falkenstein, and your exit to the internet happens from there.
+
+From the outside only an ordinary HTTPS connection is visible, while the server that actually carries your VPN connection sits in a different — and nearby — physical location.
+
+<Mermaid chart={`flowchart LR
+    C["Istanbul\\nClient"] -->|"Ghost Mode · WSS :443"| F["Nuremberg\\nPhantom-Frontmatter"]
+    F -->|"WireGuard :51820"| W["Falkenstein\\nPhantom-WG"]
+    W -->|"Exit"| I["Internet"]
+`} />
+
+This is what we're building. We start by provisioning the Hetzner servers.

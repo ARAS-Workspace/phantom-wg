@@ -1,0 +1,50 @@
+import { InlineNotification } from '@carbon/react';
+
+*Kur, Yapılandır, Bağlan*
+
+### Kurulum
+
+```bash
+# Phantom-WG sunucusuna bağlan ve kurulum dizinine geç
+ssh -i ~/.ssh/phantom-wg root@vpn.phantom-wg.dev
+cd /opt
+curl -sSL get.phantom.tc | bash
+
+# Proje dizinine gir ve sistemi hazırla (env dosyaları, WireGuard anahtarları, auth-service, TLS)
+cd /opt/phantom-wg
+./tools/prod.sh setup
+
+# Public IPv4/IPv6 adreslerini al ve WireGuard endpoint'lerini ayarla
+IPV4=$(curl -4 -sSL https://get.phantom.tc/ip)
+IPV6=$(curl -6 -sSL https://get.phantom.tc/ip)
+sed -i "s/WIREGUARD_ENDPOINT_V4=.*/WIREGUARD_ENDPOINT_V4=${IPV4}/" .env.daemon
+sed -i "s/WIREGUARD_ENDPOINT_V6=.*/WIREGUARD_ENDPOINT_V6=${IPV6}/" .env.daemon
+
+# Yığını başlat, durumu kontrol et ve Let's Encrypt sertifikası al
+./tools/prod.sh up
+./tools/prod.sh status
+./tools/prod.sh certbot vpn.phantom-wg.dev
+```
+
+<InlineNotification
+  kind="warning"
+  title="Admin parolanızı kaydedin."
+  subtitle="Setup, Phantom-WG admin parolanızı container-data/secrets/production/.admin_password dosyasına yazar. Parolayı kopyalayıp güvenli bir yerde saklamanız ve şifre dosyasını sunucudan silmeniz tavsiye edilir. Dashboard'a ilk girişte bu parolaya ihtiyacınız olacaktır."
+  hideCloseButton
+  lowContrast
+/>
+
+### Yapılandırma
+
+Tarayıcınızdan dashboard adresine gidin (bu örnekte `vpn.phantom-wg.dev`) ve setup sırasında kaydettiğiniz admin bilgileriyle oturum açın (kullanıcı adı `admin`).
+
+Bağlantı kurmak için önce bir istemci oluşturun: soldaki menüden **Clients → Add Client**, bir ad verin (burada `mac-vm`) ve istemciyi oluşturun.
+Listede belirince yanındaki üç nokta menüsünden **Get Config**'i seçin. Üç konfigürasyon tipi vardır:
+
+- **IPv4** — Endpoint IPv4 ve tünel içi trafik yalnızca IPv4.
+- **IPv6** — Endpoint IPv6 ve tünel içi trafik yalnızca IPv6.
+- **Hybrid** — Endpoint IPv4 ancak tünel içinde hem IPv4 hem IPv6 trafiği taşınabilir; genelde en esnek seçenektir.
+
+**Hybrid**'i seçip **Get Config** ile konfigürasyonu alın ve kopyalayın. **Phantom-WG** istemcisini açıp konfigürasyonu içe aktarın ve bağlanın.
+Konfigürasyonu QR kod olarak da görüntüleyebilirsiniz; mobil cihazlarda kurulum için pratiktir.
+Son olarak dashboard üzerindeki **WireGuard** bölümünden handshake'in tamamlandığını ve tünelin aktif olduğunu doğrulayabilirsiniz.

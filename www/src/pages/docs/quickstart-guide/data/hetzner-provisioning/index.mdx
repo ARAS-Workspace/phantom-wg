@@ -1,0 +1,90 @@
+import { InlineNotification } from '@carbon/react';
+
+*`hcloud` CLI ile: Nuremberg (**Phantom-Frontmatter**) ve Falkenstein (**Phantom-WG**) sunucularını oluşturma*
+
+Video içeriğinde `hcloud` CLI kullanılıyor ancak daha kolay yönetim için web konsolu da aynı işi görür.
+
+Bu aşamada iki sunucu hazırlayacağız.
+
+- **Phantom-Frontmatter** (Nuremberg)
+- **Phantom-WG** (Falkenstein)
+
+<InlineNotification
+  kind="info"
+  title="hcloud CLI kurulumu"
+  subtitle="hcloud CLI'ı kurmak ve yapılandırmak için Hetzner'in resmi rehberine bakabilirsiniz: https://community.hetzner.com/tutorials/howto-hcloud-cli"
+  hideCloseButton
+  lowContrast
+/>
+
+### 1 · SSH Anahtarı Oluşturma
+
+```bash
+ssh-keygen -t ed25519 -C "phantom-wg" -f ~/.ssh/phantom-wg
+hcloud ssh-key create --name phantom-wg-key --public-key-from-file ~/.ssh/phantom-wg.pub
+hcloud ssh-key list
+```
+
+### 2 · cloud-init.yaml dosyasını Oluştur
+
+Sunucuları oluşturmadan önce bir `cloud-init.yaml` hazırlanır. Hetzner sunucuyu sağlarken bu dosya ilk açılışta otomatik çalışır: sistemi günceller ve **Phantom-WG**'nin gereksinimi olan Docker'ı kurar. Sunucu hazır olduğunda temel gereksinimler yerindedir. Dosyayı dilerseniz kendi ihtiyaçlarınıza göre özelleştirebilirsiniz.
+
+```yaml
+#cloud-config
+package_update: true
+package_upgrade: true
+runcmd:
+  - curl -fsSL https://get.docker.com -o /tmp/get-docker.sh
+  - sh /tmp/get-docker.sh
+  - systemctl enable docker
+  - systemctl start docker
+```
+
+### 3 · Sunucuları Oluştur
+
+```bash
+# Phantom-Frontmatter — Nuremberg
+hcloud server create \
+  --name phantom-frontmatter \
+  --type cx23 \
+  --image debian-13 \
+  --location nbg1 \
+  --ssh-key phantom-wg-key
+
+# Phantom-WG — Falkenstein (Docker için cloud-init ekli)
+hcloud server create \
+  --name phantom-wg \
+  --type cx23 \
+  --image debian-13 \
+  --location fsn1 \
+  --ssh-key phantom-wg-key \
+  --user-data-from-file cloud-init.yaml
+```
+
+### 4 · CLI ile Doğrula
+
+```bash
+hcloud server list
+
+# Phantom-Frontmatter — yalnızca erişim doğrulaması
+ssh -i ~/.ssh/phantom-wg root@<frontmatter-ip>
+
+# Phantom-WG — Docker doğrulaması
+ssh -i ~/.ssh/phantom-wg root@<phantom-wg-ip>
+docker --version && docker compose version
+```
+
+### 5 · Console + DNS
+
+Hetzner Console'da DNS bölgenizi açıp her iki sunucuya birer alan adı yönlendirin. Bu kayıtlar ilerideki Let's Encrypt sertifikalarının sorunsuz imzalanması için gereklidir.
+
+```dns
+# Phantom-WG — Falkenstein
+vpn.phantom-wg.dev            A       <phantom-wg-ipv4>
+vpn.phantom-wg.dev            AAAA    <phantom-wg-ipv6>
+
+# Phantom-Frontmatter — Nuremberg
+frontmatter.phantom-wg.dev    A       <frontmatter-ipv4>
+frontmatter.phantom-wg.dev    AAAA    <frontmatter-ipv6>
+```
+

@@ -1,0 +1,235 @@
+> **Phantom-WG — machine-readable page content.**
+>
+> **EN:** Auto-generated from this page's MDX source. Interactive components
+> (diagrams, players, API explorers, simulators) are replaced by their source
+> data or a short directive — read those as data pointers, not missing content.
+>
+> **TR:** Bu sayfanın MDX kaynağından otomatik üretildi. İnteraktif bileşenler
+> (diyagram, oynatıcı, API gezgini, simülasyon) kaynak verisiyle veya kısa bir
+> direktifle değiştirildi — eksik içerik değil, veri işaretçisi olarak okuyun.
+
+**path:** /docs/quickstart-guide · **locale:** en · **tr:** https://www.phantom.tc/docs/quickstart-guide/llms.txt?locale=tr
+
+# Quickstart Guide
+
+> **Video** · EN: an embedded video walkthrough — its content is shown in the recording, not as text · TR: gömülü video anlatımı — içerik metin olarak değil kayıt olarak gösterilir
+> src: `https://media.phantom.tc/quickstart-guide/master.m3u8`
+
+---
+
+> [!NOTE]
+> **About the Provider Choice**
+> The demonstration environment is shown on Hetzner because of its practical, easy-to-use interface. There is no commercial partnership, sponsorship, or agreement with the provider on behalf of Phantom-WG. If you prefer, you can grasp the core idea behind the provider-specific steps and carry out the Installation & Configuration steps later in this guide directly on your own server.
+
+---
+
+## Chapter Notes
+
+**Tab: Topology Overview**
+
+_The full route traffic takes in the example topology: Istanbul → Nuremberg → Falkenstein → Internet_
+
+The example topology built in this guide shows how your traffic reaches the internet.
+
+The Istanbul client connects to **Phantom-Frontmatter** in Nuremberg over wstunnel; **Phantom-Frontmatter** forwards the masked traffic to the **Phantom-WG** server in Falkenstein, and your exit to the internet happens from there.
+
+From the outside only an ordinary HTTPS connection is visible, while the server that actually carries your VPN connection sits in a different — and nearby — physical location.
+
+```mermaid
+flowchart LR
+  C["Istanbul\nClient"] -->|"Ghost Mode · WSS :443"| F["Nuremberg\nPhantom-Frontmatter"]
+  F -->|"WireGuard :51820"| W["Falkenstein\nPhantom-WG"]
+  W -->|"Exit"| I["Internet"]
+```
+
+This is what we're building. We start by provisioning the Hetzner servers.
+
+---
+
+**Tab: Hetzner Server Provisioning**
+
+_Creating the servers with the `hcloud` CLI: Nuremberg (**Phantom-Frontmatter**) and Falkenstein (**Phantom-WG**)_
+
+The video uses the `hcloud` CLI, but the web console does the same job if you prefer easier management.
+
+In this step we'll prepare two servers.
+
+- **Phantom-Frontmatter** (Nuremberg)
+- **Phantom-WG** (Falkenstein)
+
+> [!NOTE]
+> **Installing the hcloud CLI**
+> To install and configure the hcloud CLI, see Hetzner's official guide: https://community.hetzner.com/tutorials/howto-hcloud-cli
+
+### 1 · Generate the SSH Key
+
+```bash
+ssh-keygen -t ed25519 -C "phantom-wg" -f ~/.ssh/phantom-wg
+hcloud ssh-key create --name phantom-wg-key --public-key-from-file ~/.ssh/phantom-wg.pub
+hcloud ssh-key list
+```
+
+### 2 · Create cloud-init.yaml
+
+Before creating the servers, prepare a `cloud-init.yaml` file. When Hetzner provisions the server, this file runs automatically on first boot: it updates the system and installs Docker, which **Phantom-WG** requires. By the time the server is ready, the core requirements are already in place. You can customize the file to your own needs if you like.
+
+```yaml
+#cloud-config
+package_update: true
+package_upgrade: true
+runcmd:
+  - curl -fsSL https://get.docker.com -o /tmp/get-docker.sh
+  - sh /tmp/get-docker.sh
+  - systemctl enable docker
+  - systemctl start docker
+```
+
+### 3 · Create the Servers
+
+```bash
+# Phantom-Frontmatter — Nuremberg
+hcloud server create \
+  --name phantom-frontmatter \
+  --type cx23 \
+  --image debian-13 \
+  --location nbg1 \
+  --ssh-key phantom-wg-key
+
+# Phantom-WG — Falkenstein (cloud-init attached for Docker)
+hcloud server create \
+  --name phantom-wg \
+  --type cx23 \
+  --image debian-13 \
+  --location fsn1 \
+  --ssh-key phantom-wg-key \
+  --user-data-from-file cloud-init.yaml
+```
+
+### 4 · Verify via CLI
+
+```bash
+hcloud server list
+
+# Phantom-Frontmatter — access check only
+ssh -i ~/.ssh/phantom-wg root@<frontmatter-ip>
+
+# Phantom-WG — Docker check
+ssh -i ~/.ssh/phantom-wg root@<phantom-wg-ip>
+docker --version && docker compose version
+```
+
+### 5 · Console + DNS
+
+In the Hetzner Console, open your DNS zone and point a domain name at each of the two servers. These records are required so the Let's Encrypt certificates can be issued later without issues.
+
+```dns
+# Phantom-WG — Falkenstein
+vpn.phantom-wg.dev            A       <phantom-wg-ipv4>
+vpn.phantom-wg.dev            AAAA    <phantom-wg-ipv6>
+
+# Phantom-Frontmatter — Nuremberg
+frontmatter.phantom-wg.dev    A       <frontmatter-ipv4>
+frontmatter.phantom-wg.dev    AAAA    <frontmatter-ipv6>
+```
+
+---
+
+**Tab: Phantom-WG Installation & Configuration**
+
+_Install, Configure, Connect_
+
+### Installation
+
+```bash
+# Connect to the Phantom-WG server and go to the install directory
+ssh -i ~/.ssh/phantom-wg root@vpn.phantom-wg.dev
+cd /opt
+curl -sSL get.phantom.tc | bash
+
+# Enter the project directory and prepare the system (env files, WireGuard keys, auth-service, TLS)
+cd /opt/phantom-wg
+./tools/prod.sh setup
+
+# Fetch the public IPv4/IPv6 addresses and set the WireGuard endpoints
+IPV4=$(curl -4 -sSL https://get.phantom.tc/ip)
+IPV6=$(curl -6 -sSL https://get.phantom.tc/ip)
+sed -i "s/WIREGUARD_ENDPOINT_V4=.*/WIREGUARD_ENDPOINT_V4=${IPV4}/" .env.daemon
+sed -i "s/WIREGUARD_ENDPOINT_V6=.*/WIREGUARD_ENDPOINT_V6=${IPV6}/" .env.daemon
+
+# Bring the stack up, check status, and obtain a Let's Encrypt certificate
+./tools/prod.sh up
+./tools/prod.sh status
+./tools/prod.sh certbot vpn.phantom-wg.dev
+```
+
+> [!WARNING]
+> **Save your admin password.**
+> Setup writes your Phantom-WG admin password to container-data/secrets/production/.admin_password. It is recommended that you copy the password, store it somewhere safe, and delete the password file from the server. You will need this password for your first login to the dashboard.
+
+### Configuration
+
+Open the dashboard address in your browser (`vpn.phantom-wg.dev` in this example) and sign in with the admin credentials you saved during setup (username `admin`).
+
+To establish a connection, first create a client: from the left menu, **Clients → Add Client**, give it a name (here `mac-vm`) and create the client.
+Once it appears in the list, select **Get Config** from the three-dot menu next to it. There are three configuration types:
+
+- **IPv4** — IPv4 endpoint, and traffic inside the tunnel is IPv4 only.
+- **IPv6** — IPv6 endpoint, and traffic inside the tunnel is IPv6 only.
+- **Hybrid** — IPv4 endpoint, but both IPv4 and IPv6 traffic can travel inside the tunnel; usually the most flexible option.
+
+Select **Hybrid**, get the configuration with **Get Config**, and copy it. Open the **Phantom-WG** client, import the configuration, and connect.
+You can also view the configuration as a QR code, which is handy for setting up on mobile devices.
+Finally, from the **WireGuard** section on the dashboard, you can confirm that the handshake completed and the tunnel is active.
+
+---
+
+**Tab: Phantom-Frontmatter Installation & Configuration**
+
+_Ghost Mode — a lightweight wstunnel proxy layer that reaches **Phantom-WG** even when direct UDP access is blocked_
+
+### Installation
+
+```bash
+# Connect to the Phantom-Frontmatter server and install the required packages
+ssh -i ~/.ssh/phantom-wg root@frontmatter.phantom-wg.dev
+
+# Download the latest release, unpack the archive, and enter the directory
+wget https://github.com/ARAS-Workspace/phantom-wg/releases/download/frontmatter-v1.0.0/phantom-wg-frontmatter-v1.0.0.zip
+unzip phantom-wg-frontmatter-v1.0.0.zip
+cd phantom-wg-frontmatter-v1.0.0
+
+# Run the installation script
+./frontmatter-install.sh
+
+# Point to the backend Phantom-WG server, obtain a certificate, and start the service
+frontmatter-api setup init backend=<phantom-wg-ip>
+frontmatter-certbot frontmatter.phantom-wg.dev
+frontmatter-api ghost start
+frontmatter-api ghost status
+```
+
+### Configuration
+
+There are two ways to establish a connection.
+
+**The first method** provides a **Wstunnel** configuration block designed for the **Phantom-WG** client apps on Mac and iOS. Add this block to the top of your existing client configuration, update the server address with your reachable **Phantom-Frontmatter** IP or domain, and set `Endpoint` to `127.0.0.1`. This lets you connect with the same configuration on both desktop and mobile.
+
+```bash
+frontmatter-api ghost client_config | jq -r '.data.wstunnel_block'
+```
+
+**The second method** generates a ready-to-use wstunnel command; it's handy if you prefer running wstunnel directly from the terminal (and have it installed on your device).
+
+```bash
+frontmatter-api ghost client_command | jq -r '.data.command'
+```
+
+This guide uses the first method: add the Wstunnel block to your existing client configuration, set `Endpoint` to `127.0.0.1`, and connect — the same steps apply in the **Phantom-WG** iOS app as well. Once connected, all traffic is routed through **Phantom-Frontmatter** to your **Phantom-WG** server.
+
+---
+
+> [Interactive] A playable mini-game (Chrome-dino style). Visual/interactive content with no textual equivalent.
+
+---
+
+_The visual and audio digital materials used in producing the tutorial content are shared under [asset-pipelines/phantom-wg-quickstart-guide](https://github.com/ARAS-Workspace/phantom-wg/tree/press-kit/asset-pipelines/phantom-wg-quickstart-guide)._

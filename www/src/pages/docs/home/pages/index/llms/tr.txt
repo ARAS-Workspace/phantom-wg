@@ -24,8 +24,7 @@ _**Phantom-WG Modern**_, bu vizyonun container-native implementasyonudur. Tüm b
 
 ---
 
-> **Video** · EN: an embedded video walkthrough — its content is shown in the recording, not as text · TR: gömülü video anlatımı — içerik metin olarak değil kayıt olarak gösterilir
-> src: `https://media.phantom.tc/quickstart-guide/master.m3u8`
+> **Nereden başlayacağınızı mı arıyorsunuz?** **[Hızlı Başlangıç Rehberi](/docs/quickstart-guide)** ile sunucu hazırlama sürecinden **Phantom-WG** ve **Phantom-Frontmatter** kurulum ve konfigürasyonuna kadar bölümlü bir video eşliğinde uygulamalı olarak izleyin.
 
 ---
 
