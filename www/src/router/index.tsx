@@ -25,9 +25,6 @@ const BridgePage        = lazy(() => import('@pages/docs/architecture/pages/brid
 const IPCheckPage       = lazy(() => import('@pages/docs/tools/pages/ip-check/pages/index/IPCheckPage'));
 const DnsLeakPage       = lazy(() => import('@pages/docs/tools/pages/dns-leak/pages/index/DnsLeakPage'));
 
-// ── Privacy Policy ───────────────────────────────────────────────
-const IOSPrivacyPage    = lazy(() => import('@pages/privacy-policy/pages/ios/IOSPrivacyPage'));
-
 // ── Router ────────────────────────────────────────────────────────
 const router = createBrowserRouter([
   // Home — www.phantom.tc/
@@ -95,18 +92,6 @@ const router = createBrowserRouter([
       {
         path: 'tools/dns',
         element: <DnsLeakPage />,
-      },
-    ],
-  },
-  // Privacy Policy — www.phantom.tc/privacy-policy/ios
-  {
-    path: '/privacy-policy/ios',
-    element: <DocumentationLayout />,
-    errorElement: <ErrorPage />,
-    children: [
-      {
-        index: true,
-        element: <IOSPrivacyPage />,
       },
     ],
   },
