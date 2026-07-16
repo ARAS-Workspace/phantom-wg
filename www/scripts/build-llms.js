@@ -62,9 +62,11 @@ function stripNotice(text) {
 
 /**
  * @param {string} locale
+ * @param {number} pageCount  Stated up front so a reader that counts fewer `path:`
+ *   sections knows its copy was truncated in transit rather than trusting a short read.
  * @returns {string}
  */
-function fullHeader(locale) {
+function fullHeader(locale, pageCount) {
   const others = LOCALES.filter((l) => l !== locale)
     .map((l) => `**${l}:** ${BASE_URL}/llms-full.txt?locale=${l}`)
     .join(' · ');
@@ -73,23 +75,23 @@ function fullHeader(locale) {
     '',
     '> **Full documentation — every page in a single file.**',
     '>',
-    '> **EN:** Every page of the Phantom-WG documentation, concatenated from each',
-    "> page's `llms.txt`. Pages are separated by a full-width `-----` rule and each",
-    '> one opens with the `path:` coordinate it came from — a plain `---` inside a',
-    '> page is that page\'s own horizontal rule, not a page break. Interactive',
-    '> components (diagrams, players, API explorers, simulators) are replaced by',
-    '> their source data or a short directive — read those as data pointers, not',
-    '> missing content.',
+    `> **EN:** All ${pageCount} pages of the Phantom-WG documentation, concatenated from`,
+    "> each page's `llms.txt`. Pages are separated by a rule of exactly 80 dashes,",
+    '> and each page opens with the `path:` coordinate it came from — so this file',
+    `> holds ${pageCount} such separators and ${pageCount} \`path:\` lines. A plain \`---\` inside a page is`,
+    "> that page's own horizontal rule, NOT a page break. Interactive components",
+    '> (diagrams, players, API explorers, simulators) are replaced by their source',
+    '> data or a short directive — read those as data pointers, not missing content.',
     '>',
-    '> **TR:** Phantom-WG dokümantasyonunun her sayfası, ilgili sayfanın `llms.txt`',
-    '> dosyasından birleştirildi. Sayfalar tam genişlikte `-----` çizgisiyle ayrılır',
-    '> ve her biri geldiği sayfanın `path:` koordinatıyla başlar — sayfa içindeki',
-    '> düz `---` o sayfanın kendi yatay çizgisidir, sayfa ayracı değildir.',
-    '> İnteraktif bileşenler (diyagram, oynatıcı, API gezgini, simülasyon) kaynak',
-    '> verisiyle veya kısa bir direktifle değiştirildi — eksik içerik değil, veri',
-    '> işaretçisi olarak okuyun.',
+    `> **TR:** Phantom-WG dokümantasyonunun ${pageCount} sayfasının tamamı, ilgili sayfanın`,
+    '> `llms.txt` dosyasından birleştirildi. Sayfalar tam olarak 80 çizgilik bir',
+    '> ayraçla ayrılır ve her sayfa geldiği `path:` koordinatıyla başlar — yani bu',
+    `> dosyada ${pageCount} ayraç ve ${pageCount} adet \`path:\` satırı vardır. Sayfa içindeki düz \`---\` o`,
+    '> sayfanın kendi yatay çizgisidir, sayfa ayracı DEĞİLDİR. İnteraktif bileşenler',
+    '> (diyagram, oynatıcı, API gezgini, simülasyon) kaynak verisiyle veya kısa bir',
+    '> direktifle değiştirildi — eksik içerik değil, veri işaretçisi olarak okuyun.',
     '',
-    `**locale:** ${locale} · ${others}`,
+    `**locale:** ${locale} · **pages:** ${pageCount} · ${others}`,
   ].join('\n');
 }
 
@@ -128,7 +130,7 @@ mkdirSync(fullDir, { recursive: true });
 for (const locale of LOCALES) {
   const parts = sections[locale];
   if (parts.length === 0) continue;
-  const out = `${fullHeader(locale)}\n\n${SEPARATOR}\n\n${parts.join(`\n\n${SEPARATOR}\n\n`)}\n`;
+  const out = `${fullHeader(locale, parts.length)}\n\n${SEPARATOR}\n\n${parts.join(`\n\n${SEPARATOR}\n\n`)}\n`;
   writeFileSync(path.join(fullDir, `${locale}.txt`), out, 'utf8');
   log(`llms-full/${locale}.txt — ${parts.length} page(s), ${(out.length / 1024).toFixed(1)} KB`);
 }
