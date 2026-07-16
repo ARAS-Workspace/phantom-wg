@@ -33,13 +33,13 @@ const Hero: React.FC<HeroProps> = ({ content }) => {
   return (
     <section className="hero-section">
       <Grid className="hero-grid">
-        <Column xlg={6} lg={16} md={8} sm={4} className="hero-visual-column">
+        <Column xlg={6} lg={6} md={8} sm={4} className="hero-visual-column">
           <div className="hero-visual">
             <PhantomIcon className="hero-visual-image" />
           </div>
         </Column>
 
-        <Column xlg={10} lg={16} md={8} sm={4} className="hero-content-column">
+        <Column xlg={10} lg={10} md={8} sm={4} className="hero-content-column">
           <div className="hero-content">
             <h1 className="hero-title">{content.title}</h1>
             <p className="hero-subtitle">{content.subtitle}</p>

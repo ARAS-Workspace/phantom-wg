@@ -10,7 +10,11 @@
 }
 
 .hero-section {
-  flex: 1;
+  // Grow into the space the flex chain (.app → .cds--content) already computes
+  // exactly — viewport minus header minus footer — and never shrink below the
+  // content. `overflow: hidden` would otherwise resolve `min-height: auto` to 0
+  // and let the section collapse under its own content, so flex-shrink is 0.
+  flex: 1 0 auto;
   display: flex;
   align-items: center;
   background: linear-gradient(135deg,
@@ -22,12 +26,7 @@
   overflow: hidden;
   transition: background 0.25s ease;
 
-  // Prevent excessive stretch on very tall monitors (4K / ultrawide)
-  max-height: calc(100vh - 12rem);
-
   @include bp.breakpoint-down(md) {
-    flex: none;
-    max-height: none;
     padding: spacing.$spacing-08 0;
   }
 }
@@ -43,7 +42,7 @@
   animation: fadeInUp 0.8s ease-out;
 
   // Icon sits on top on tablet/mobile — center content below it
-  @include bp.breakpoint-down(xlg) {
+  @include bp.breakpoint-down(lg) {
     text-align: center;
     display: flex;
     flex-direction: column;
@@ -97,14 +96,13 @@
   flex-wrap: wrap;
   margin-top: spacing.$spacing-06;
 
-  @include bp.breakpoint-down(xlg) {
-    justify-content: center;
-    width: 100%;
-  }
-
-  @include bp.breakpoint-down(md) {
+  // Below the side-by-side layout (tablet + mobile) the content is centred and
+  // the tiles stack under it.
+  @include bp.breakpoint-down(lg) {
     flex-direction: column;
+    justify-content: center;
     align-items: center;
+    width: 100%;
   }
 }
 
@@ -120,16 +118,12 @@
     background: var(--cds-layer-hover-01);
   }
 
-  // Tablet: stretch tiles to fill available width
-  @include bp.breakpoint-between(md, xlg) {
+  // Stacked (tablet + mobile): full available width, no vertical stretch
+  @include bp.breakpoint-down(lg) {
+    flex: 0 0 auto;
     min-width: 0;
-    max-width: none;
-  }
-
-  @include bp.breakpoint-down(md) {
-    min-width: 0;
-    max-width: 100%;
     width: 100%;
+    max-width: none;
   }
 
   &:active {
@@ -151,6 +145,9 @@
 .hero-version-tile__text {
   flex: 1;
   min-width: 0;
+  // The tile copy reads next to its icon, so keep it left-aligned regardless of
+  // the centred hero text it sits inside below `lg`.
+  text-align: left;
 }
 
 .hero-version-tile__title {
@@ -193,7 +190,7 @@
   }
 
   // Desktop: icon sits beside text, more room available
-  @include bp.breakpoint-up(xlg) {
+  @include bp.breakpoint-up(lg) {
     width: clamp(260px, 22vw, 360px);
   }
 }
@@ -206,7 +203,7 @@
     margin-bottom: spacing.$spacing-06;
   }
 
-  @include bp.breakpoint-up(xlg) {
+  @include bp.breakpoint-up(lg) {
     order: 1;
     margin-bottom: 0;
     padding-left: spacing.$spacing-07;
