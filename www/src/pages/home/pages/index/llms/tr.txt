@@ -10,6 +10,8 @@
 
 Kendinden barındırılan, WireGuard tabanlı VPN platformu: kendi sunucunuzda kendi WireGuard VPN altyapınızı kurun ve yönetin — sansüre dayanıklı bağlantılar, çok katmanlı şifreleme ve gelişmiş gizlilik senaryoları.
 
+**Tek dosyada tamamı:** [llms-full.txt](https://www.phantom.tc/llms-full.txt) — aşağıda listelenen tüm sayfaların tek belgede birleştirilmiş hâli (Türkçe için `?locale=tr` ekleyin).
+
 **Buradan başlayın:**
 - [**Kurulum ve Güncelleme**](https://www.phantom.tc/docs/installation-update/llms.txt): Phantom-WG'yi sunucunuzda çalışır hale getirin, ardından güncel tutun.
 - [**Dokümantasyon**](https://www.phantom.tc/docs/llms.txt): tam teknik dokümantasyon ana sayfası.

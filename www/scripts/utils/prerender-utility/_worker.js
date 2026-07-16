@@ -29,21 +29,32 @@ export default {
     const url = new URL(request.url);
     const pathname = url.pathname;
 
-    // llms.txt — locale-negotiated markdown (files live at <route>/llms/<locale>.txt)
-    if (pathname.endsWith('/llms.txt')) {
+    // llms.txt / llms-full.txt — locale-negotiated markdown. Both map the same
+    // way: <name>.txt → <name>/<locale>.txt, i.e. per-page files live at
+    // <route>/llms/<locale>.txt and the concatenated dump at /llms-full/<locale>.txt.
+    if (pathname.endsWith('/llms.txt') || pathname.endsWith('/llms-full.txt')) {
       const loc = detectLocale(url, request);
-      const wanted = pathname.replace(/llms\.txt$/, `llms/${loc}.txt`);
-      const base = pathname.replace(/llms\.txt$/, `llms/${DEFAULT_LOCALE}.txt`);
+      const dir = pathname.replace(/\.txt$/, '');
+      const wanted = `${dir}/${loc}.txt`;
+      const base = `${dir}/${DEFAULT_LOCALE}.txt`;
       for (const p of [wanted, base]) {
-        const r = await env.ASSETS.fetch(new URL(p, url.origin));
-        if (r.status === 200) {
+        const r = await env.ASSETS.fetch(new URL(p, url.origin).toString());
+        // A missing asset is answered with the SPA shell (200 HTML), so a real
+        // hit must not be HTML — otherwise the app shell ships as markdown.
+        if (r.status === 200 && !/text\/html/i.test(r.headers.get('content-type') || '')) {
           const headers = new Headers(r.headers);
           headers.set('Content-Type', 'text/markdown; charset=utf-8');
           headers.set('Content-Language', p === wanted ? loc : DEFAULT_LOCALE);
           return new Response(r.body, { status: 200, headers });
         }
       }
-      // no llms/ for this page → fall through
+      // No llms/ behind this path: answer as a missing text file. Falling through
+      // would hand the request to the SPA shell, which a browser cannot render
+      // as .txt — the request would look like a 200 instead of a 404.
+      return new Response('Not Found\n', {
+        status: 404,
+        headers: { 'Content-Type': 'text/plain; charset=utf-8' },
+      });
     }
 
     // Static assets — pass through
@@ -77,7 +88,7 @@ export default {
 
     for (const tryPath of tryPaths) {
       try {
-        const response = await env.ASSETS.fetch(new URL(tryPath, url.origin));
+        const response = await env.ASSETS.fetch(new URL(tryPath, url.origin).toString());
         if (response.status === 200) {
           const headers = new Headers(response.headers);
           headers.set('Content-Language', locale);
