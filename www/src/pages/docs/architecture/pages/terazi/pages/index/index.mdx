@@ -115,6 +115,15 @@ Boş slot'lar `<null>` olarak bekler. İstemci atandığında anahtar, isim ve z
 
 <TeraziPoolSimulator />
 
+### Atama ve İptal
+
+Havuz satırları sabittir. Atama ve iptal, satırın adresini değil yalnızca **dolu/boş** durumunu değiştirir:
+
+- **Atama** — ilk boş yuva verilir; yani `id` değeri `<null>` olan en küçük index. Yeni istemci her zaman havuzdaki en erken boşluğu doldurur.
+- **İptal** — satır silinmez, kimlik alanları (`id`, isim, anahtarlar, zaman damgaları) `<null>` yapılır. IPv4/IPv6 çifti havuzda **yerinde** kalır ve yeniden kullanılabilir hale gelir.
+
+Bunun sonucu: iptal, adres dizisinde kopukluk oluşturmaz — yalnızca o index'i boşa alır, sıradaki istemci de onu doldurur. Havuzdaki adresler her zaman ardışıktır; değişen tek şey hangi index'in dolu olduğudur.
+
 ---
 
 ## CIDR Değişikliğinde Ne Olur?
@@ -172,6 +181,8 @@ Terazi index uyumsuzluğu veya adres boşluğu tespit edilirse `valid: false` ve
   }
 }
 ```
+
+Buradaki `IPv4 gap`, havuzun **adres dizisindeki** bir kopukluğu bildirir; yani bir bozulma işaretidir. İptal edilmiş (boşta bekleyen) bir yuvayla ilgisi yoktur — boş yuva havuzun normal hâlidir ve hata sayılmaz.
 
 <Mermaid chart={`flowchart TD
   A["GET /api/core/network/validate"] --> B{Kontroller}

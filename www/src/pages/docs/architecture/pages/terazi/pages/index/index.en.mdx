@@ -115,6 +115,15 @@ Empty slots wait as `<null>`. When a client is assigned, keys, name and timestam
 
 <TeraziPoolSimulator />
 
+### Assigning and Revoking
+
+Pool rows are fixed. Assigning and revoking never change a row's address — only whether it is **taken or free**:
+
+- **Assign** — the first free slot is handed out: the lowest index whose `id` is `<null>`. A new client always fills the earliest gap in the pool.
+- **Revoke** — the row is not deleted; its identity fields (`id`, name, keys, timestamps) are set to `<null>`. The IPv4/IPv6 pair stays **in place** in the pool and becomes reusable.
+
+The upshot: revoking never breaks the address sequence — it only frees that index, and the next client fills it. Pool addresses are always contiguous; the only thing that changes is which index is taken.
+
 ---
 
 ## What Happens on CIDR Change?
@@ -172,6 +181,8 @@ If a Terazi index mismatch or address gap is detected, `valid: false` is returne
   }
 }
 ```
+
+The `IPv4 gap` here reports a break in the pool's **address sequence** — a sign of corruption. It has nothing to do with a revoked (free) slot: a free slot is the pool's normal state and is not an error.
 
 <Mermaid chart={`flowchart TD
   A["GET /api/core/network/validate"] --> B{Checks}
