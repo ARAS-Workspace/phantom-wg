@@ -35,4 +35,4 @@ flowchart
 Q["Request"] -->|"UDS · daemon.sock"| D["Phantom Daemon"]
 ```
 
-> API reference — machine-readable OpenAPI definition: `/openapi.json`
+> API reference — machine-readable OpenAPI definition: `https://www.phantom.tc/openapi.json`
