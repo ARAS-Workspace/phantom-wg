@@ -23,6 +23,38 @@ function detectLocale(url, request) {
   return DEFAULT_LOCALE;
 }
 
+/**
+ * Serve `<dir>/<locale>.txt` as markdown, negotiating the locale and falling back
+ * to the default file. Returns null when nothing is there, so each caller decides
+ * what a miss means: an explicit `.txt` request 404s, a negotiated page request
+ * falls through to HTML.
+ *
+ * @param {{ ASSETS: { fetch: (input: string) => Promise<Response> } }} env
+ * @param {URL} url
+ * @param {Request} request
+ * @param {string} dir  Asset directory holding `<locale>.txt`, e.g. `/docs/api/llms`.
+ * @returns {Promise<Response|null>}
+ */
+async function tryServeMarkdown(env, url, request, dir) {
+  const loc = detectLocale(url, request);
+  const wanted = `${dir}/${loc}.txt`;
+  const base = `${dir}/${DEFAULT_LOCALE}.txt`;
+  for (const p of [wanted, base]) {
+    const r = await env.ASSETS.fetch(new URL(p, url.origin).toString());
+    // A missing asset is answered with the SPA shell (200 HTML), so a real hit
+    // must not be HTML — otherwise the app shell ships as markdown.
+    if (r.status === 200 && !/text\/html/i.test(r.headers.get('content-type') || '')) {
+      const headers = new Headers(r.headers);
+      headers.set('Content-Type', 'text/markdown; charset=utf-8');
+      headers.set('Content-Language', p === wanted ? loc : DEFAULT_LOCALE);
+      // The body depends on both the negotiated format and the locale cookie.
+      headers.set('Vary', 'Accept, Cookie');
+      return new Response(r.body, { status: 200, headers });
+    }
+  }
+  return null;
+}
+
 // noinspection JSUnusedGlobalSymbols
 export default {
   async fetch(request, env) {
@@ -33,21 +65,8 @@ export default {
     // way: <name>.txt → <name>/<locale>.txt, i.e. per-page files live at
     // <route>/llms/<locale>.txt and the concatenated dump at /llms-full/<locale>.txt.
     if (pathname.endsWith('/llms.txt') || pathname.endsWith('/llms-full.txt')) {
-      const loc = detectLocale(url, request);
-      const dir = pathname.replace(/\.txt$/, '');
-      const wanted = `${dir}/${loc}.txt`;
-      const base = `${dir}/${DEFAULT_LOCALE}.txt`;
-      for (const p of [wanted, base]) {
-        const r = await env.ASSETS.fetch(new URL(p, url.origin).toString());
-        // A missing asset is answered with the SPA shell (200 HTML), so a real
-        // hit must not be HTML — otherwise the app shell ships as markdown.
-        if (r.status === 200 && !/text\/html/i.test(r.headers.get('content-type') || '')) {
-          const headers = new Headers(r.headers);
-          headers.set('Content-Type', 'text/markdown; charset=utf-8');
-          headers.set('Content-Language', p === wanted ? loc : DEFAULT_LOCALE);
-          return new Response(r.body, { status: 200, headers });
-        }
-      }
+      const md = await tryServeMarkdown(env, url, request, pathname.replace(/\.txt$/, ''));
+      if (md) return md;
       // No llms/ behind this path: answer as a missing text file. Falling through
       // would hand the request to the SPA shell, which a browser cannot render
       // as .txt — the request would look like a 200 instead of a 404.
@@ -60,6 +79,17 @@ export default {
     // Static assets — pass through
     if (pathname.includes('.') && !pathname.endsWith('.html')) {
       return env.ASSETS.fetch(request);
+    }
+
+    // Markdown negotiation — an agent that explicitly asks for markdown gets this
+    // page's llms text at the same URL. Browsers never send `text/markdown`, and
+    // a bare `*/*` means "no preference", so both keep HTML: it stays the page's
+    // primary representation. A route without llms/ falls through to HTML too —
+    // serving what we have beats answering 406.
+    if ((request.headers.get('accept') || '').includes('text/markdown')) {
+      const dir = pathname === '/' ? '/llms' : `${pathname.replace(/\/$/, '')}/llms`;
+      const md = await tryServeMarkdown(env, url, request, dir);
+      if (md) return md;
     }
 
     // ── Locale detection (query → cookie → default) ────────────────
@@ -92,7 +122,8 @@ export default {
         if (response.status === 200) {
           const headers = new Headers(response.headers);
           headers.set('Content-Language', locale);
-          headers.set('Vary', 'Cookie');
+          // Accept: this URL also answers markdown when an agent asks for it.
+          headers.set('Vary', 'Accept, Cookie');
           return new Response(response.body, { status: 200, headers });
         }
       } catch {
