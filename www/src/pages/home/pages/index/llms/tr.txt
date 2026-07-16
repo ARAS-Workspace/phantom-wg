@@ -13,11 +13,13 @@ Kendinden barındırılan, WireGuard tabanlı VPN platformu: kendi sunucunuzda k
 **Tek dosyada tamamı:** [llms-full.txt](https://www.phantom.tc/llms-full.txt) — aşağıda listelenen tüm sayfaların tek belgede birleştirilmiş hâli (Türkçe için `?locale=tr` ekleyin).
 
 **Buradan başlayın:**
+- [**Hızlı Başlangıç Rehberi**](https://www.phantom.tc/docs/quickstart-guide/llms.txt): boş bir sunucudan çalışan bir tünele giden rehberli yol — sunucu hazırlama, Phantom-WG, ardından Phantom-Frontmatter.
 - [**Kurulum ve Güncelleme**](https://www.phantom.tc/docs/installation-update/llms.txt): Phantom-WG'yi sunucunuzda çalışır hale getirin, ardından güncel tutun.
 - [**Dokümantasyon**](https://www.phantom.tc/docs/llms.txt): tam teknik dokümantasyon ana sayfası.
 
 ## Dokümantasyon
 - [Dokümantasyon Ana Sayfası](https://www.phantom.tc/docs/llms.txt): mimari, API referansı ve kurulum rehberleri.
+- [Hızlı Başlangıç Rehberi](https://www.phantom.tc/docs/quickstart-guide/llms.txt): uçtan uca anlatım — sunucu hazırlama, Phantom-WG kurulum ve yapılandırması, Phantom-Frontmatter (Ghost Mode); bölümlü video ve adım adım sekmeler.
 - [Kurulum ve Güncelleme](https://www.phantom.tc/docs/installation-update/llms.txt): kurulum, yapılandırma, yönetim komutları ve güncelleme mekanizması.
 - [API Referansı](https://www.phantom.tc/docs/api/llms.txt): Phantom Daemon'un Unix Domain Socket (UDS) üzerinden sunduğu uç noktalar; OpenAPI `/openapi.json` adresinde.
 - [Mac İstemci Uygulaması](https://www.phantom.tc/docs/client-applications/mac/llms.txt): yerel macOS istemcisi — Ghost Mode (wstunnel + WireGuard), standalone WireGuard, split-tunneling.

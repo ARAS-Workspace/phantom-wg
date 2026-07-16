@@ -13,11 +13,13 @@ Self-hosted, WireGuard-based VPN platform: set up and manage your own WireGuard 
 **Everything in one file:** [llms-full.txt](https://www.phantom.tc/llms-full.txt) — every page listed below, concatenated into a single document (append `?locale=tr` for Turkish).
 
 **Start here:**
+- [**Quickstart Guide**](https://www.phantom.tc/docs/quickstart-guide/llms.txt): the guided path from an empty server to a working tunnel — provisioning, Phantom-WG, then Phantom-Frontmatter.
 - [**Installation & Update**](https://www.phantom.tc/docs/installation-update/llms.txt): get Phantom-WG running on your server, then keep it updated.
 - [**Documentation**](https://www.phantom.tc/docs/llms.txt): the full technical documentation home.
 
 ## Documentation
 - [Documentation Home](https://www.phantom.tc/docs/llms.txt): architecture, API reference, and deployment guides.
+- [Quickstart Guide](https://www.phantom.tc/docs/quickstart-guide/llms.txt): end-to-end walkthrough — server provisioning, Phantom-WG installation and configuration, Phantom-Frontmatter (Ghost Mode); chaptered video plus step-by-step tabs.
 - [Installation & Update](https://www.phantom.tc/docs/installation-update/llms.txt): installation, configuration, management commands, and the update mechanism.
 - [API Reference](https://www.phantom.tc/docs/api/llms.txt): endpoints served by Phantom Daemon over a Unix Domain Socket (UDS); OpenAPI at `/openapi.json`.
 - [Mac Client Application](https://www.phantom.tc/docs/client-applications/mac/llms.txt): native macOS client — Ghost Mode (wstunnel + WireGuard), standalone WireGuard, split-tunneling.
