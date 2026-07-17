@@ -327,9 +327,13 @@ class TestExitTunnel:
             main_pub_b64 = hex_to_base64(main["pub"])
             client_priv_b64 = hex_to_base64(client_priv)
             client_psk_b64 = hex_to_base64(client_psk)
-            bridge_ip = subprocess.run(
+            # hostname -i returns every address; on a dual-stack docker
+            # network that is "fd.. 172...", which corrupts Endpoint.
+            # The tunnel here runs over v4 — take the first v4 address.
+            addrs = subprocess.run(
                 "hostname -i", shell=True, capture_output=True, text=True
-            ).stdout.strip()
+            ).stdout.split()
+            bridge_ip = next(a for a in addrs if "." in a)
 
             client_conf = (
                 f"[Interface]\n"
