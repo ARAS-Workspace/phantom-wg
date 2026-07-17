@@ -281,3 +281,49 @@ def wait_for_api(gateway_url):
         raise TimeoutError(f"API not ready after {timeout}s at {path}")
 
     return _wait
+
+
+# ── API client + exit config (shared across scenarios) ───────────
+
+@pytest.fixture(scope="module")
+def api(gateway_url):
+    """Thin API client that logs each call via helpers._api."""
+    from .helpers import _api
+
+    class _Api:
+        def __init__(self, base: str):
+            self.base = base
+
+        def get(self, path: str, **kwargs) -> requests.Response:
+            resp = requests.get(f"{self.base}{path}", timeout=10, **kwargs)
+            _api("GET", path, resp)
+            return resp
+
+        def post(self, path: str, body: dict | None = None, **kwargs) -> requests.Response:
+            if body is not None:
+                kwargs["json"] = body
+            resp = requests.post(f"{self.base}{path}", timeout=10, **kwargs)
+            _api("POST", path, resp)
+            return resp
+
+    return _Api(gateway_url)
+
+
+@pytest.fixture(scope="module")
+def exit_conf(container_exec, container_ip):
+    """The exit server's client config, with the endpoint filled in.
+
+    The chaos exit is dual-stack, so this one config carries both
+    families and a single import applies both multihop presets.
+    """
+    for _ in range(30):
+        rc, out = container_exec("exit-server", "cat /config/client.conf", check=False)
+        if rc == 0 and "PublicKey" in out:
+            break
+        time.sleep(1)
+    else:
+        pytest.fail("exit-server config not ready after 30s")
+
+    exit_ip = container_ip("exit-server")
+    _, conf = container_exec("exit-server", "cat /config/client.conf")
+    return conf.replace("__EXIT_SERVER_IP__", exit_ip)
