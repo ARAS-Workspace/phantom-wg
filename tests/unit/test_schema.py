@@ -417,7 +417,7 @@ class TestInvalidEnums:
             })
 
     def test_invalid_action(self):
-        with pytest.raises(PresetValidationError, match="action.*must start with one of"):
+        with pytest.raises(PresetValidationError, match="action.*must be one of"):
             validate_preset({
                 "name": "bad",
                 "rules": [{"chain": "input", "action": "allow"}],
@@ -592,3 +592,119 @@ class TestErrorAttributes:
         from firewall_bridge.types import BridgeError
         with pytest.raises(BridgeError):
             validate_preset({})
+
+
+# ---- Injection surface ----
+
+
+class TestNoCommandInjection:
+    """Every field below is formatted straight into an nftables command by
+    build_rule_cmd. libnftables accepts multiple ';'-separated commands per
+    buffer, so a value that can close a quote or start a statement escapes
+    the `inet phantom` table the whole design relies on for isolation.
+    """
+
+    @pytest.mark.parametrize("field", ["in_iface", "out_iface"])
+    def test_iface_cannot_close_the_quote(self, field):
+        with pytest.raises(PresetValidationError, match="interface name"):
+            validate_preset({
+                "name": "inj",
+                "rules": [{
+                    "chain": "forward", "action": "accept",
+                    field: 'wg0" ; add rule inet phantom input drop ; #',
+                }],
+            })
+
+    @pytest.mark.parametrize("field", ["in_iface", "out_iface"])
+    def test_iface_length_capped(self, field):
+        """IFNAMSIZ-1 — the kernel would not accept it either."""
+        with pytest.raises(PresetValidationError, match="interface name"):
+            validate_preset({
+                "name": "inj",
+                "rules": [{"chain": "forward", "action": "accept",
+                           field: "a" * 16}],
+            })
+
+    def test_state_cannot_inject(self):
+        with pytest.raises(PresetValidationError, match="comma-separated subset"):
+            validate_preset({
+                "name": "inj",
+                "rules": [{"chain": "forward", "action": "accept",
+                           "state": "established ; flush ruleset ; #"}],
+            })
+
+    def test_state_rejects_unknown_verb(self):
+        with pytest.raises(PresetValidationError, match="comma-separated subset"):
+            validate_preset({
+                "name": "inj",
+                "rules": [{"chain": "forward", "action": "accept",
+                           "state": "established,bogus"}],
+            })
+
+    def test_dnat_cannot_append_a_command(self):
+        """v2.1.4 relaxed action from enum to enum_prefix so 'dnat to <x>'
+        would validate; anything starting with 'dnat ' then reached the
+        parser, and `flush ruleset` wipes every table on the host."""
+        with pytest.raises(PresetValidationError, match="dnat must be"):
+            validate_preset({
+                "name": "inj",
+                "rules": [{"chain": "postrouting",
+                           "action": "dnat to 1.2.3.4 ; flush ruleset ; #"}],
+            })
+
+    def test_dnat_target_must_be_an_ip(self):
+        with pytest.raises(PresetValidationError, match="not a valid IP"):
+            validate_preset({
+                "name": "inj",
+                "rules": [{"chain": "postrouting", "action": "dnat to evil.example.com"}],
+            })
+
+    def test_dnat_port_range(self):
+        with pytest.raises(PresetValidationError, match="port out of range"):
+            validate_preset({
+                "name": "inj",
+                "rules": [{"chain": "postrouting", "action": "dnat to 1.2.3.4:99999"}],
+            })
+
+
+class TestLegitimateValuesStillPass:
+    """The hardening must not narrow what the shipped presets already use."""
+
+    def test_real_interface_names(self):
+        result = validate_preset({
+            "name": "ok",
+            "rules": [{"chain": "forward", "action": "accept",
+                       "in_iface": "wg_phantom_main",
+                       "out_iface": "wg_phantom_exit"}],
+        })
+        assert result["rules"][0]["in_iface"] == "wg_phantom_main"
+
+    def test_ct_state_list(self):
+        result = validate_preset({
+            "name": "ok",
+            "rules": [{"chain": "forward", "action": "accept",
+                       "state": "established,related"}],
+        })
+        assert result["rules"][0]["state"] == "established,related"
+
+    def test_dnat_v4_and_v6(self):
+        for target in ("dnat to 172.28.0.4:443", "dnat to 10.0.0.1",
+                       "dnat to [2001:db8::1]:443"):
+            result = validate_preset({
+                "name": "ok",
+                "rules": [{"chain": "prerouting", "action": target}],
+            })
+            assert result["rules"][0]["action"] == target
+
+
+class TestCidrIsNotDecorative:
+    def test_ipv6_garbage_rejected(self):
+        """The old regex was hex-digits-and-colons plus a 1-3 digit prefix."""
+        assert not _is_cidr(":::::/999")
+        assert not _is_cidr("fd00::/999")
+        assert not _is_cidr("gggg::/64")
+
+    def test_ipv6_still_accepted(self):
+        assert _is_cidr("fd00:70:68::/118")
+        assert _is_cidr("2001:db8::/32")
+        assert _is_cidr("::/0")
