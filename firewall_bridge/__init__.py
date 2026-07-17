@@ -15,7 +15,7 @@ SQLite state persistence, YAML-driven presets, crash recovery.
 Rust backend: pure nftables + netlink kernel operations.
 """
 
-__version__ = "2.1.5"
+__version__ = "2.1.6"
 
 from .types import (
     BridgeError,

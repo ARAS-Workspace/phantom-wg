@@ -1,6 +1,6 @@
 [package]
 name = "firewall-bridge-linux"
-version = "2.1.5"
+version = "2.1.6"
 edition = "2021"
 description = "Native firewall bridge — nftables and routing via netlink"
 
