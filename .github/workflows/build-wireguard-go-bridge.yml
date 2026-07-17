@@ -6,6 +6,7 @@ on:
       - 'dev/wireguard-go-bridge'
     paths-ignore:
       - '.github/**'
+      - 'CHECKSUMS'
   workflow_call:
 
 env:
