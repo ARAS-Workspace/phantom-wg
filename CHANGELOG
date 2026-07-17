@@ -4,6 +4,37 @@ nftables + netlink routing bridge for Linux. Python owns rules, state,
 and presets; Rust is a kernel-only FFI surface.
 
 
+v2.1.7 - 2026-07-18
+-------------------
+
+  Hardens the FFI boundary itself. This crate lives inside the
+  daemon's process: a Rust panic or a dangling read here does not
+  fail an operation, it takes the whole VPN down. Two panics-in-
+  waiting removed.
+
+  * with_nft resolved the global context with expect(), so any nft_*
+    call before nft_init — or after a failed init — was a guaranteed
+    SIGABRT for the host. It now takes an uninit fallback and returns
+    it with a clear last-error; the four call sites surface a new
+    NotInitialized (-8) code, added to all three ABI surfaces
+    (error.rs, header, Python NotInitializedError). The existing
+    contract tests pin the agreement.
+  * firewall_bridge_get_last_error returned a pointer into the
+    mutex-held CString — freed the moment the next error is recorded,
+    so a reader racing a writer dereferenced freed memory. New
+    firewall_bridge_get_last_error_copy copies into a caller buffer
+    entirely under the error lock (truncating to len-1 plus NUL,
+    InvalidParam on bad arguments); the Python side reads through it.
+    The raw variant stays for ABI compatibility, documented as
+    deprecated in the header.
+
+  26 Rust tests (2 new: uninit returns codes not panic; copy
+  roundtrip, truncation and guards), 219 Python unit including the
+  tri-surface contract tests, e2e against a live kernel. API impact:
+  calls before nft_init now raise NotInitializedError instead of
+  killing the process. No schema impact.
+
+
 v2.1.6 - 2026-07-17
 -------------------
 
