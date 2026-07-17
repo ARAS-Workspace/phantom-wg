@@ -18,8 +18,12 @@ ARG TARGETARCH
 
 ARG VENDOR_URL=https://vendor.phantom.tc
 ARG VENDOR_DIR=/opt/phantom/vendor
-ARG FIREWALL_BRIDGE_VERSION=latest
-ARG WIREGUARD_GO_BRIDGE_VERSION=latest
+# Pinned vendor releases. Verify any download against the trust root —
+# the CHECKSUMS file maintained on each bridge's own branch:
+#   https://raw.githubusercontent.com/ARAS-Workspace/phantom-wg/refs/heads/dev/firewall-bridge/CHECKSUMS
+#   https://raw.githubusercontent.com/ARAS-Workspace/phantom-wg/refs/heads/dev/wireguard-go-bridge/CHECKSUMS
+ARG FIREWALL_BRIDGE_VERSION=v2.1.6
+ARG WIREGUARD_GO_BRIDGE_VERSION=v2.1.2
 
 # ── System deps ──────────────────────────────────────────────────
 RUN apt-get update \
