@@ -46,15 +46,19 @@ char*       nft_list_table(void);   /* JSON, caller frees */
 
 int32_t     rt_table_ensure(uint32_t table_id, const char* table_name);
 
+/* family is AF_INET (2) or AF_INET6 (10). */
+
 int32_t     rt_policy_add(const char* from_network, const char* to_network,
-                          const char* table_name, uint32_t priority);
+                          const char* table_name, uint32_t priority,
+                          int32_t family);
 int32_t     rt_policy_delete(const char* from_network, const char* to_network,
-                             const char* table_name, uint32_t priority);
+                             const char* table_name, uint32_t priority,
+                             int32_t family);
 
 int32_t     rt_route_add(const char* destination, const char* device,
-                         const char* table_name);
+                         const char* table_name, int32_t family);
 int32_t     rt_route_delete(const char* destination, const char* device,
-                            const char* table_name);
+                            const char* table_name, int32_t family);
 
 int32_t     rt_enable_ip_forward(void);
 int32_t     rt_flush_cache(void);
