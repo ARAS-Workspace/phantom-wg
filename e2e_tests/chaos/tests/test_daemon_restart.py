@@ -80,16 +80,22 @@ def _exec_log(label: str, rc: int, out: str) -> None:
 
 
 def _adapt_config(raw: str, endpoint_override: str | None = None) -> str:
-    """Adapt wg-quick config for E2E: strip DNS, /32->/24, narrow AllowedIPs."""
+    """Adapt a wg-quick config for the E2E client, dual-stack aware.
+
+    Widens host addresses to their subnets (/32->/24, /128->/64) and narrows
+    AllowedIPs to the topology's ULA/private ranges — 10.0.0.0/8 for v4,
+    fd00::/8 for v6 (covers the daemon's fd00:70:68:: and the exit's
+    fd10:0:2::). DNS is dropped; there is no resolver in the netns.
+    """
     adapted = []
     for line in raw.splitlines():
         stripped = line.strip()
         if stripped.startswith("DNS"):
             continue
-        if stripped.startswith("Address") and "/32" in stripped:
-            line = line.replace("/32", "/24")
-        if stripped.startswith("AllowedIPs") and "0.0.0.0/0" in stripped:
-            line = line.replace("0.0.0.0/0", "10.0.0.0/8")
+        if stripped.startswith("Address"):
+            line = line.replace("/32", "/24").replace("/128", "/64")
+        if stripped.startswith("AllowedIPs"):
+            line = line.replace("0.0.0.0/0", "10.0.0.0/8").replace("::/0", "fd00::/8")
         if endpoint_override and stripped.startswith("Endpoint"):
             line = f"Endpoint = {endpoint_override}"
         adapted.append(line)
@@ -139,7 +145,8 @@ def _print_connectivity(container_exec, targets: list[tuple[str, str, bool]]) ->
     print("  Connectivity")
     print(f"{_THIN}")
     for ip, label, should_succeed in targets:
-        rc, out = container_exec("client", f"ping -c 3 -W 2 {ip}", check=False)
+        ping = "ping6" if ":" in ip else "ping"
+        rc, out = container_exec("client", f"{ping} -c 3 -W 2 {ip}", check=False)
         ok = rc == 0
         icon = "OK" if ok else "UNREACHABLE"
         print(f"  {label:20s}: {icon} ({ip})")
@@ -203,7 +210,7 @@ def _setup_client_wg(
     endpoint_override: str | None = None,
 ) -> str:
     """Export config, adapt, write, bring up WG on client. Returns adapted conf."""
-    resp = api.post("/api/core/clients/config", body={"name": "chaos-client", "version": "v4"})
+    resp = api.post("/api/core/clients/config", body={"name": "chaos-client", "version": "hybrid"})
     assert resp.status_code == 200
     raw = base64.b64decode(resp.json()["data"]).decode()
     conf = _adapt_config(raw, endpoint_override=endpoint_override)
@@ -336,6 +343,7 @@ class TestDaemonRestart:
         _print_connectivity(container_exec, [
             (gw, "client -> daemon WG", True),
             ("10.0.2.1", "client -> exit (mhop)", True),
+            ("fd10:0:2::1", "client -> exit v6 (mhop)", True),
         ])
         _elapsed(t0)
 
@@ -384,7 +392,7 @@ class TestDaemonRestart:
 
         _print_server_state(multihop=mh, fw_groups=fw_groups)
 
-        resp = api.post("/api/core/clients/config", body={"name": "chaos-client", "version": "v4"})
+        resp = api.post("/api/core/clients/config", body={"name": "chaos-client", "version": "hybrid"})
         assert resp.status_code == 200
         _info("client config", "exportable")
 
@@ -404,6 +412,7 @@ class TestDaemonRestart:
         _print_connectivity(container_exec, [
             (gw, "client -> daemon WG", True),
             ("10.0.2.1", "client -> exit", False),
+            ("fd10:0:2::1", "client -> exit v6", False),
         ])
         _elapsed(t0)
 

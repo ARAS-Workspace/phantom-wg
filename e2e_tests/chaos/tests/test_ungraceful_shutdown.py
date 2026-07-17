@@ -66,9 +66,11 @@ from __future__ import annotations
 
 import base64
 import functools
+import ipaddress
 import random
 import threading
 import time
+from concurrent.futures import ThreadPoolExecutor
 
 import pytest
 import requests
@@ -115,16 +117,23 @@ def _exec_log(label: str, rc: int, out: str) -> None:
 # ── Shared helpers ───────────────────────────────────────────────
 
 def _adapt_config(raw: str, endpoint_override: str | None = None) -> str:
-    """Adapt wg-quick config for E2E: strip DNS, /32->/24, narrow AllowedIPs."""
+    """Adapt a wg-quick config for the E2E client, dual-stack aware.
+
+    Widens the host addresses to their subnets (/32->/24, /128->/64) so the
+    client can reach its peers, and narrows AllowedIPs from a full tunnel to
+    the ULA/private ranges the topology actually uses — 10.0.0.0/8 for v4,
+    fd00::/8 for v6 (covers both the daemon's fd00:70:68:: and the exit's
+    fd10:0:2::). DNS lines are dropped; there is no resolver in the netns.
+    """
     adapted = []
     for line in raw.splitlines():
         stripped = line.strip()
         if stripped.startswith("DNS"):
             continue
-        if stripped.startswith("Address") and "/32" in stripped:
-            line = line.replace("/32", "/24")
-        if stripped.startswith("AllowedIPs") and "0.0.0.0/0" in stripped:
-            line = line.replace("0.0.0.0/0", "10.0.0.0/8")
+        if stripped.startswith("Address"):
+            line = line.replace("/32", "/24").replace("/128", "/64")
+        if stripped.startswith("AllowedIPs"):
+            line = line.replace("0.0.0.0/0", "10.0.0.0/8").replace("::/0", "fd00::/8")
         if endpoint_override and stripped.startswith("Endpoint"):
             line = f"Endpoint = {endpoint_override}"
         adapted.append(line)
@@ -171,7 +180,8 @@ def _print_connectivity(container_exec, targets: list[tuple[str, str, bool]]) ->
     print("  Connectivity")
     print(f"{_THIN}")
     for ip, label, should_succeed in targets:
-        rc, out = container_exec("client", f"ping -c 3 -W 2 {ip}", check=False)
+        ping = "ping6" if ":" in ip else "ping"
+        rc, out = container_exec("client", f"{ping} -c 3 -W 2 {ip}", check=False)
         ok = rc == 0
         icon = "OK" if ok else "UNREACHABLE"
         print(f"  {label:24s}: {icon} ({ip})")
@@ -281,8 +291,17 @@ def _get_server_state(api):
     return mh, group_names
 
 
-def _setup_client_wg(api, container_exec, container_write_file, endpoint_override=None):
-    resp = api.post("/api/core/clients/config", body={"name": "kill-client", "version": "v4"})
+def _setup_client_wg(
+    api, container_exec, container_write_file,
+    name="kill-client", version="v4", endpoint_override=None,
+):
+    """Fetch a client's config, adapt it, and bring the tunnel up.
+
+    name/version default to the SIGKILL scenario's v4 client so existing
+    callers are unchanged; the CIDR scenario passes its own name and
+    version='hybrid' to drive a dual-stack tunnel.
+    """
+    resp = api.post("/api/core/clients/config", body={"name": name, "version": version})
     assert resp.status_code == 200
     raw = base64.b64decode(resp.json()["data"]).decode()
     conf = _adapt_config(raw, endpoint_override=endpoint_override)
@@ -295,6 +314,61 @@ def _setup_client_wg(api, container_exec, container_write_file, endpoint_overrid
 
 def _teardown_client(container_exec) -> None:
     container_exec("client", "wg-quick down wg0 2>/dev/null || true", check=False)
+
+
+# ── Bulk client helpers (production-scale fill/drain) ─────────────
+
+def _bulk_assign(gateway_url: str, names: list[str], workers: int = 10) -> int:
+    """Assign clients concurrently. Returns the count committed (201)."""
+    def _one(name: str) -> bool:
+        try:
+            r = requests.post(
+                f"{gateway_url}/api/core/clients/assign",
+                json={"name": name}, timeout=15,
+            )
+            return r.status_code == 201
+        except (requests.ConnectionError, requests.Timeout):
+            return False
+
+    with ThreadPoolExecutor(max_workers=workers) as pool:
+        return sum(pool.map(_one, names))
+
+
+def _bulk_revoke(gateway_url: str, names: list[str], workers: int = 10) -> int:
+    """Revoke clients concurrently, tolerating already-absent ones."""
+    def _one(name: str) -> bool:
+        try:
+            r = requests.post(
+                f"{gateway_url}/api/core/clients/revoke",
+                json={"name": name}, timeout=15,
+            )
+            return r.status_code == 200
+        except (requests.ConnectionError, requests.Timeout):
+            return False
+
+    with ThreadPoolExecutor(max_workers=workers) as pool:
+        return sum(pool.map(_one, names))
+
+
+def _all_client_names(gateway_url: str) -> list[str]:
+    """Every current client name — used to reset a dirty pool.
+
+    The list endpoint caps limit at 100, so page through until a short
+    page ends it.
+    """
+    names: list[str] = []
+    page = 1
+    while True:
+        resp = requests.get(
+            f"{gateway_url}/api/core/clients/list?page={page}&limit=100",
+            timeout=15,
+        )
+        resp.raise_for_status()
+        batch = [c["name"] for c in resp.json()["data"]["clients"]]
+        names.extend(batch)
+        if len(batch) < 100:
+            return names
+        page += 1
 
 
 # ── Module fixture ───────────────────────────────────────────────
@@ -333,6 +407,7 @@ def exit_conf(container_exec, container_ip):
     exit_ip = container_ip("exit-server")
     _, conf = container_exec("exit-server", "cat /config/client.conf")
     return conf.replace("__EXIT_SERVER_IP__", exit_ip)
+
 
 
 # ══════════════════════════════════════════════════════════════════
@@ -421,13 +496,14 @@ class TestSigkillRecovery:
         t0 = time.perf_counter()
         _phase("A4 — CLIENT E2E (raw WG/UDP -> multihop -> exit)")
 
-        conf = _setup_client_wg(api, container_exec, container_write_file)
+        conf = _setup_client_wg(api, container_exec, container_write_file, version="hybrid")
         _print_wg_show(container_exec)
 
         gw = _gateway_ip_from_conf(conf)
         _print_connectivity(container_exec, [
             (gw, "client -> daemon WG", True),
             ("10.0.2.1", "client -> exit (mhop)", True),
+            ("fd10:0:2::1", "client -> exit v6 (mhop)", True),
         ])
         _elapsed(t0)
 
@@ -852,4 +928,188 @@ class TestMidflightKill:
 
         print(f"\n{_SEP}")
         print("  SCENARIO C PASSED")
+        print(f"{_SEP}\n")
+
+# ══════════════════════════════════════════════════════════════════
+#  SCENARIO D — CIDR EXPANSION LEAK (production scale, dual-stack)
+# ══════════════════════════════════════════════════════════════════
+
+class TestCidrExpansionLeak:
+    """A CIDR expansion must resync every kernel surface, or a client
+    allocated outside the old subnet is stranded.
+
+    The /24 is filled (253 clients), then expanded to /23. The first
+    client after a full /24 lands on 10.8.0.255 — the old broadcast,
+    still INSIDE 10.8.0.0/24, so a stale masquerade covers it and it
+    proves nothing. Only 10.8.1.0 is genuinely outside; that is the
+    tooth, and D5 asserts the arithmetic so the test cannot silently
+    grade the wrong client.
+
+    The exit is dual-stack, so the new-range client must reach it over
+    both 10.0.2.1 and fd10:0:2::1 — one test drives fast_sync (peer
+    allowed_ips), update_addresses (interface prefix), bootstrap (v4+v6
+    masquerade) and resync_multihop (v4+v6 policy) at once, per family.
+    """
+
+    _fill = [f"fill-{i:04d}" for i in range(253)]
+    _OLD_V4 = ipaddress.ip_network("10.8.0.0/24")
+    # The daemon's wg_main gateway is the subnet's first host. The base
+    # (10.8.0.0) is fixed across the /24->/23 expansion, so the gateway
+    # is 10.8.0.1 for every client — the per-client /24 that
+    # _gateway_ip_from_conf would infer is wrong for the new range.
+    _GW = "10.8.0.1"
+
+    # Phase D0 — reset to a clean /24
+    def test_reset(self, api, gateway_url):
+        t0 = time.perf_counter()
+        _phase("D0 — RESET TO /24")
+
+        api.post("/api/multihop/disable")
+        stale = _all_client_names(gateway_url)
+        if stale:
+            _info("clearing stale clients", str(len(stale)))
+            _bulk_revoke(gateway_url, stale)
+
+        resp = api.post("/api/core/network/cidr", body={"prefix": 24})
+        assert resp.status_code == 200
+        data = api.get("/api/core/network").json()["data"]
+        _info("ipv4 subnet", data["ipv4_subnet"])
+        _info("assigned", str(data["pool"]["assigned"]))
+        assert data["ipv4_subnet"] == "10.8.0.0/24"
+        assert data["pool"]["assigned"] == 0
+        _elapsed(t0)
+
+    # Phase D1 — fill the /24
+    def test_fill_pool(self, gateway_url):
+        t0 = time.perf_counter()
+        _phase("D1 — FILL /24 (253 clients)")
+
+        committed = _bulk_assign(gateway_url, self._fill)
+        _info("committed", f"{committed}/253")
+        assert committed == 253, f"only {committed}/253 committed"
+        _elapsed(t0)
+
+    # Phase D2 — dual-stack multihop
+    def test_enable_multihop(self, api, exit_conf):
+        t0 = time.perf_counter()
+        _phase("D2 — DUAL-STACK MULTIHOP")
+
+        resp = api.post("/api/multihop/import",
+                        body={"name": "leak-exit", "config": exit_conf})
+        assert resp.status_code == 201
+        resp = api.post("/api/multihop/enable", body={"name": "leak-exit"})
+        assert resp.status_code == 200
+
+        _, groups = _get_server_state(api)
+        _print_server_state(fw_groups=groups)
+        assert {"multihop-exit", "multihop-exit-v6"} <= set(groups), (
+            f"dual-stack exit did not apply both presets: {groups}"
+        )
+        _elapsed(t0)
+
+    # Phase D3 — baseline: an old-range client reaches the exit (v4 + v6)
+    def test_baseline_old_range(self, api, container_exec, container_write_file):
+        t0 = time.perf_counter()
+        _phase("D3 — BASELINE (old-range client -> exit)")
+
+        conf = _setup_client_wg(
+            api, container_exec, container_write_file,
+            name="fill-0000", version="hybrid",
+        )
+        _print_wg_show(container_exec)
+        _print_connectivity(container_exec, [
+            (self._GW, "old client -> daemon WG", True),
+            ("10.0.2.1", "old client -> exit v4", True),
+            ("fd10:0:2::1", "old client -> exit v6", True),
+        ])
+        _teardown_client(container_exec)
+        _elapsed(t0)
+
+    # Phase D4 — expand, NO restart (inline resync must carry it)
+    def test_expand_cidr(self, api):
+        t0 = time.perf_counter()
+        _phase("D4 — EXPAND /24 -> /23 (no restart)")
+
+        resp = api.post("/api/core/network/cidr", body={"prefix": 23})
+        assert resp.status_code == 200
+        data = resp.json()["data"]
+        _info("ipv4 subnet", data["ipv4_subnet"])
+        _info("total slots", str(data["pool"]["total"]))
+        assert data["ipv4_subnet"] == "10.8.0.0/23"
+        assert data["pool"]["total"] == 509
+        _elapsed(t0)
+
+    # Phase D5 — mint the trap and the tooth, verify the arithmetic
+    def test_mint_new_range(self, api):
+        t0 = time.perf_counter()
+        _phase("D5 — NEW-RANGE CLIENTS (trap + tooth)")
+
+        trap = api.post("/api/core/clients/assign", body={"name": "trap"})
+        tooth = api.post("/api/core/clients/assign", body={"name": "tooth"})
+        assert trap.status_code == 201 and tooth.status_code == 201
+        trap_ip = trap.json()["data"]["ipv4_address"]
+        tooth_ip = tooth.json()["data"]["ipv4_address"]
+        _info("trap  (inside /24)", trap_ip)
+        _info("tooth (outside /24)", tooth_ip)
+
+        assert ipaddress.ip_address(trap_ip) in self._OLD_V4, (
+            f"trap {trap_ip} expected inside {self._OLD_V4}"
+        )
+        assert ipaddress.ip_address(tooth_ip) not in self._OLD_V4, (
+            f"tooth {tooth_ip} is inside {self._OLD_V4} — the test proves "
+            "nothing; a stale masquerade would still cover it"
+        )
+        _elapsed(t0)
+
+    # Phase D6 — THE TOOTH: new-range client reaches the exit (v4 + v6)
+    def test_tooth_new_range(self, api, container_exec, container_write_file):
+        t0 = time.perf_counter()
+        _phase("D6 — TOOTH (new-range client -> exit)")
+
+        conf = _setup_client_wg(
+            api, container_exec, container_write_file,
+            name="tooth", version="hybrid",
+        )
+        _print_wg_show(container_exec)
+        # Without the inline resync: v4 stranded by stale masquerade +
+        # policy, v6 by stale mh6 + ip6 masquerade. Both must reach the exit.
+        _print_connectivity(container_exec, [
+            (self._GW, "new client -> daemon WG", True),
+            ("10.0.2.1", "new client -> exit v4", True),
+            ("fd10:0:2::1", "new client -> exit v6", True),
+        ])
+        _teardown_client(container_exec)
+        _elapsed(t0)
+
+    # Phase D7 — regression: the old-range client still works
+    def test_old_range_still_ok(self, api, container_exec, container_write_file):
+        t0 = time.perf_counter()
+        _phase("D7 — REGRESSION (old-range client still reaches exit)")
+
+        conf = _setup_client_wg(
+            api, container_exec, container_write_file,
+            name="fill-0000", version="hybrid",
+        )
+        _print_connectivity(container_exec, [
+            ("10.0.2.1", "old client -> exit v4", True),
+            ("fd10:0:2::1", "old client -> exit v6", True),
+        ])
+        _teardown_client(container_exec)
+        _elapsed(t0)
+
+    # Phase D8 — cleanup
+    def test_cleanup(self, api, gateway_url):
+        t0 = time.perf_counter()
+        _phase("D8 — CLEANUP")
+
+        api.post("/api/multihop/disable")
+        api.post("/api/multihop/remove", body={"name": "leak-exit"})
+        revoked = _bulk_revoke(gateway_url, self._fill + ["trap", "tooth"])
+        _info("revoked", str(revoked))
+        resp = api.post("/api/core/network/cidr", body={"prefix": 24})
+        _info("cidr", resp.json()["data"]["ipv4_subnet"])
+        _elapsed(t0)
+
+        print(f"\n{_SEP}")
+        print("  SCENARIO D PASSED")
         print(f"{_SEP}\n")
