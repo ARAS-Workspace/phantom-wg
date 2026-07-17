@@ -3,6 +3,9 @@ Unit tests for YAML preset engine — new format (table: + rules:).
 Uses mock bridge, no .so required.
 """
 
+import builtins
+import contextlib
+import sys
 from textwrap import dedent
 from unittest.mock import MagicMock
 
@@ -387,3 +390,50 @@ class TestMultihopPreset:
         apply_preset(bridge, spec)
         args = bridge.add_routing_rule.call_args
         assert args[1]["family"] == 10
+
+
+@contextlib.contextmanager
+def _without_yaml():
+    """Block `import yaml` and drop the cached presets module.
+
+    Simulates a host where PyYAML is not installed, so the lazy import in
+    _load_spec is the only place it would be pulled in.
+    """
+    real = builtins.__import__
+
+    def _blocked(name, *a, **k):
+        if name == "yaml":
+            raise ImportError("No module named 'yaml'")
+        return real(name, *a, **k)
+
+    builtins.__import__ = _blocked
+    saved = sys.modules.pop("yaml", None)
+    sys.modules.pop("firewall_bridge.presets", None)
+    try:
+        yield
+    finally:
+        builtins.__import__ = real
+        if saved is not None:
+            sys.modules["yaml"] = saved
+        sys.modules.pop("firewall_bridge.presets", None)
+
+
+class TestYamlIsOptional:
+    """PyYAML is imported lazily, only for str/Path presets.
+
+    A consumer that resolves presets to dicts (the daemon does) must be
+    able to apply them on a host without PyYAML installed — the regression
+    that surfaced as ModuleNotFoundError on `import firewall_bridge`.
+    """
+
+    def test_dict_preset_needs_no_yaml(self):
+        with _without_yaml():
+            from firewall_bridge.presets import _load_spec
+            spec = _load_spec({"name": "dictonly", "rules": []})
+            assert spec["name"] == "dictonly"
+
+    def test_yaml_string_raises_clearly_without_yaml(self):
+        with _without_yaml():
+            from firewall_bridge.presets import _load_spec
+            with pytest.raises(ImportError, match="PyYAML is required"):
+                _load_spec("name: y")

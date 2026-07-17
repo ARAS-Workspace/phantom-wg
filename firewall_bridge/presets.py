@@ -22,8 +22,6 @@ from __future__ import annotations
 from pathlib import Path
 from typing import TYPE_CHECKING, Union
 
-import yaml
-
 from .models import Group
 
 if TYPE_CHECKING:
@@ -36,9 +34,22 @@ def _load_spec(preset: Union[str, Path, dict]) -> dict:
     - dict → use directly
     - Path → read file, parse YAML
     - str  → parse as raw YAML
+
+    PyYAML is imported lazily and only for the str/Path cases, so a
+    consumer that resolves presets to dicts (the daemon does) never needs
+    it. The dependency is therefore optional, not required.
     """
     if isinstance(preset, dict):
         return preset
+
+    try:
+        import yaml
+    except ImportError:
+        raise ImportError(
+            "PyYAML is required to load a preset from a YAML string or file. "
+            "Either `pip install pyyaml`, or pass an already-resolved dict."
+        ) from None
+
     if isinstance(preset, Path):
         if not preset.exists():
             raise FileNotFoundError(f"Preset not found: {preset}")
