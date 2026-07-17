@@ -31,6 +31,7 @@ from phantom_daemon.base.env import DaemonEnv
 from phantom_daemon.base.secrets.secrets import ServerKeys
 from phantom_daemon.base.exit_store import ExitStore, open_exit_store
 from phantom_daemon.base.wallet import Wallet, open_wallet
+from phantom_daemon.base.services.firewall.service import FirewallService, open_firewall
 from phantom_daemon.base.services.wireguard.service import WireGuardService, open_wireguard
 from phantom_daemon.main import create_app
 from wireguard_go_bridge.keys import generate_private_key, derive_public_key
@@ -49,6 +50,7 @@ class TestEnvironment:
     wallet: Wallet
     env: DaemonEnv
     wg: WireGuardService
+    fw: FirewallService
     server_keys: ServerKeys
     exit_store: ExitStore
 
@@ -88,6 +90,23 @@ def test_env():
     tag = hashlib.md5(ts.encode()).hexdigest()[:6]
     wg = open_wireguard(state_dir=env.state_dir, mtu=env.mtu, ifname=f"wg_t_{tag}")
 
+    # Firewall — deliberately not started. bootstrap/resync then write to
+    # the bridge DB only, so module tests never touch the live nft table
+    # they share with the daemon running in this container.
+    #
+    # The bridge opens its SQLite with the default check_same_thread=True and
+    # exposes no way to pass otherwise, so it is bound to the thread that
+    # created it. Production satisfies that — lifespan and the async handlers
+    # all run on the event loop thread — but TestClient drives the app from a
+    # portal thread. Swap the connection the same way wallet and exit_store
+    # above do; the reach-in is the price of not mocking the bridge.
+    fw = open_firewall(state_dir=env.state_dir)
+    fw_db_path = os.path.join(env.state_dir, "firewall.db")
+    fw._bridge._db._conn.close()
+    fw_conn = sqlite3.connect(fw_db_path, check_same_thread=False)
+    fw_conn.row_factory = sqlite3.Row
+    fw._bridge._db._conn = fw_conn
+
     # Server keys
     priv = generate_private_key()
     pub = derive_public_key(priv)
@@ -102,10 +121,11 @@ def test_env():
     exit_store = ExitStore(exit_conn, Path(exit_db_path))
 
     yield TestEnvironment(
-        wallet=wallet, env=env, wg=wg, server_keys=server_keys,
+        wallet=wallet, env=env, wg=wg, fw=fw, server_keys=server_keys,
         exit_store=exit_store,
     )
 
+    fw.close()
     wg.down()
     wg.close()
     exit_store.close()
@@ -119,6 +139,7 @@ def client(test_env):
     app = create_app(lifespan_func=None)
     app.state.wallet = test_env.wallet
     app.state.wg = test_env.wg
+    app.state.fw = test_env.fw
     app.state.env = test_env.env
     app.state.server_keys = test_env.server_keys
     app.state.exit_store = test_env.exit_store

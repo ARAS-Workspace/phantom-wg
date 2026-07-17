@@ -60,6 +60,63 @@ class TestNetworkEndpoints:
         assert wallet.count_users() == 1021
 
     @pytest.mark.dependency(depends=["TestNetworkEndpoints::test_change_cidr"])
+    def test_change_cidr_resyncs_firewall(self, client, test_env):
+        """The wallet is not the only thing a CIDR change has to reach.
+
+        The masquerade source is baked into the core preset at resolve time,
+        so before the endpoint resynced it, a client allocated outside the
+        original subnet got no NAT — permanently, since bootstrap only ran
+        on first boot.
+        """
+        from phantom_daemon.base.services.firewall.service import CORE_PRESET_NAME
+
+        masq = [
+            r for r in test_env.fw.list_firewall_rules(CORE_PRESET_NAME)
+            if r.action == "masquerade"
+        ]
+        assert {r.source for r in masq} == {"10.8.0.0/22", "fd00:70:68::/118"}
+
+    @pytest.mark.dependency(depends=["TestNetworkEndpoints::test_change_cidr"])
+    def test_change_cidr_resyncs_peers(self, client, test_env):
+        """Peer allowed_ips are pinned /32 to each client's address, and a
+        CIDR change closes gaps left by revoked clients — so a client that
+        sits after a gap moves, and its peer has to move with it.
+
+        The gap matters: change_cidr re-slots in rowid order, which is IP
+        order, so with a contiguous pool every client keeps its address and
+        a stale peer is indistinguishable from a synced one.
+        """
+        names = ["gap-a", "gap-b", "gap-c"]
+        try:
+            for n in names:
+                assert client.post(
+                    "/api/core/clients/assign", json={"name": n}
+                ).status_code == 201
+
+            # Open a hole between gap-a and gap-c.
+            client.post("/api/core/clients/revoke", json={"name": "gap-b"})
+            before = test_env.wallet.get_client("gap-c")["ipv4_address"]
+
+            client.post("/api/core/network/cidr", json={"prefix": 20})
+
+            after = test_env.wallet.get_client("gap-c")["ipv4_address"]
+            assert after != before, (
+                "pool was contiguous — the test proves nothing about resync"
+            )
+
+            dump = test_env.wg._bridge.ipc_get()
+            assert f"allowed_ip={after}/32" in dump, (
+                f"peer still pinned to {before}, the pre-change address"
+            )
+            assert f"allowed_ip={before}/32" not in dump
+        finally:
+            # test_env is session-scoped and mutable, and the tests below
+            # declare a dependency on the /22 this class established.
+            for n in names:
+                client.post("/api/core/clients/revoke", json={"name": n})
+            client.post("/api/core/network/cidr", json={"prefix": 22})
+
+    @pytest.mark.dependency(depends=["TestNetworkEndpoints::test_change_cidr"])
     def test_get_status_after_cidr(self, client, test_env):
         resp = client.get("/api/core/network")
         data = resp.json()["data"]

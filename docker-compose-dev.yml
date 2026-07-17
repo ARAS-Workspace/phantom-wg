@@ -48,6 +48,7 @@ services:
       - wg_public_key
     environment:
       - PYTHONUNBUFFERED=1
+      - PHANTOM_LOG_LEVEL=${PHANTOM_LOG_LEVEL:-info}
       - PHANTOM_DB_DIR=/var/lib/phantom/db
       - PHANTOM_STATE_DIR=/var/lib/phantom/state/db
       - WIREGUARD_LISTEN_PORT=51820

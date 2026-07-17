@@ -15,6 +15,8 @@ Client CRUD endpoints: assign, list, get, revoke, config export.
 
 from __future__ import annotations
 
+import logging
+
 import base64
 import ipaddress
 from typing import Literal
@@ -24,7 +26,11 @@ from pydantic import BaseModel, Field
 
 from phantom_daemon.base.errors import DaemonHTTPException
 from phantom_daemon.base.services.wireguard.config import build_client_config
+from phantom_daemon.base.logging import LOGGER_NAME
 from phantom_daemon.modules._envelope import ApiErr, ApiOk
+
+
+log = logging.getLogger(LOGGER_NAME)
 
 
 # ── Models ───────────────────────────────────────────────────────
@@ -114,7 +120,12 @@ async def assign_client(body: ClientNameRequest, request: Request):
         wg.add_peer(result, env.keepalive)
     except Exception:
         wallet.revoke_client(body.name)
+        log.warning("client assign rolled back: %s", body.name)
         raise
+    log.info(
+        "client assigned: %s -> %s / %s",
+        body.name, result["ipv4_address"], result["ipv6_address"],
+    )
     return ApiOk(data=ClientRecord(**result))
 
 
@@ -241,5 +252,9 @@ async def revoke_client(body: ClientNameRequest, request: Request):
         wallet.revoke_client(body.name)
     except Exception:
         wg.add_peer(client, env.keepalive)
+        log.warning("client revoke rolled back: %s", body.name)
         raise
+    log.info(
+        "client revoked: %s (%s freed)", body.name, client["ipv4_address"],
+    )
     return ApiOk(data={"status": "revoked", "code": "CLIENT_REVOKED"})

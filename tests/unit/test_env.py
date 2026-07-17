@@ -18,6 +18,7 @@ class TestLoadEnv:
             "WIREGUARD_KEEPALIVE",
             "WIREGUARD_ENDPOINT_V4",
             "WIREGUARD_ENDPOINT_V6",
+            "PHANTOM_LOG_LEVEL",
         ):
             monkeypatch.delenv(var, raising=False)
 
@@ -29,6 +30,7 @@ class TestLoadEnv:
         assert env.keepalive == 25
         assert env.endpoint_v4 == ""
         assert env.endpoint_v6 == ""
+        assert env.log_level == "info"
 
     def test_custom_values(self, monkeypatch):
         monkeypatch.setenv("PHANTOM_DB_DIR", "/tmp/test-db")
@@ -38,6 +40,7 @@ class TestLoadEnv:
         monkeypatch.setenv("WIREGUARD_KEEPALIVE", "10")
         monkeypatch.setenv("WIREGUARD_ENDPOINT_V4", "1.2.3.4")
         monkeypatch.setenv("WIREGUARD_ENDPOINT_V6", "::1")
+        monkeypatch.setenv("PHANTOM_LOG_LEVEL", "debug")
 
         env = load_env()
         assert env.db_dir == "/tmp/test-db"
@@ -47,6 +50,7 @@ class TestLoadEnv:
         assert env.keepalive == 10
         assert env.endpoint_v4 == "1.2.3.4"
         assert env.endpoint_v6 == "::1"
+        assert env.log_level == "debug"
 
     def test_frozen(self, monkeypatch):
         for var in (
@@ -57,6 +61,7 @@ class TestLoadEnv:
             "WIREGUARD_KEEPALIVE",
             "WIREGUARD_ENDPOINT_V4",
             "WIREGUARD_ENDPOINT_V6",
+            "PHANTOM_LOG_LEVEL",
         ):
             monkeypatch.delenv(var, raising=False)
 
@@ -74,6 +79,7 @@ class TestLoadEnv:
             "WIREGUARD_KEEPALIVE",
             "WIREGUARD_ENDPOINT_V4",
             "WIREGUARD_ENDPOINT_V6",
+            "PHANTOM_LOG_LEVEL",
         ):
             monkeypatch.delenv(var, raising=False)
 
