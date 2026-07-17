@@ -6,6 +6,7 @@ on:
       - 'dev/firewall-bridge'
     paths-ignore:
       - '.github/**'
+      - 'CHECKSUMS'
   workflow_call:
 
 env:

@@ -75,7 +75,12 @@ jobs:
     name: Publish to R2
     needs: [version, build]
     runs-on: self-hosted
+    permissions:
+      contents: write  # CHECKSUMS commit to the branch
     steps:
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
       - name: Download amd64 artifact
         uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
         with:
@@ -140,6 +145,34 @@ jobs:
           rclone copy VERSION "${R2_PATH}/latest/" --progress
 
           echo "Published: ${VERSION}"
+
+      # Trust root: the hashes of what was just published, committed to
+      # the branch by this workflow only. Consumers verify R2 downloads
+      # against this file — two independent channels, so a tampered zip
+      # cannot re-attest itself.
+      - name: Update CHECKSUMS on branch
+        env:
+          VERSION: ${{ needs.version.outputs.version }}
+        run: |
+          AMD64_SHA=$(sha256sum linux-amd64.zip | cut -d' ' -f1)
+          ARM64_SHA=$(sha256sum linux-arm64.zip | cut -d' ' -f1)
+          {
+            echo "firewall-bridge ${VERSION}"
+            echo ""
+            echo "- linux-amd64.zip/${AMD64_SHA}"
+            echo "- linux-arm64.zip/${ARM64_SHA}"
+          } > CHECKSUMS
+
+          if git diff --quiet -- CHECKSUMS && [ -z "$(git status --porcelain CHECKSUMS)" ]; then
+            echo "CHECKSUMS unchanged, nothing to commit"
+            exit 0
+          fi
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add CHECKSUMS
+          git -c commit.gpgsign=false commit -m "Checksums: ${VERSION}"
+          git push origin HEAD:dev/firewall-bridge
 
       - name: Summary
         env:
