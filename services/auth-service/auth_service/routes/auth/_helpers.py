@@ -20,7 +20,7 @@ from datetime import datetime, timedelta, timezone
 
 from fastapi import Request
 
-from auth_service.audit import audit_log
+from auth_service.audit import audit_log, get_client_ip
 from auth_service.crypto.jwt import encode_token, token_hash
 from auth_service.models import ApiOk, LoginResponse, UserInfo
 
@@ -30,6 +30,12 @@ def issue_access_token(request: Request, username: str, user_id: str, role: str 
     config = request.app.state.config
     signing_key = request.app.state.signing_key
     db = request.state.db
+
+    # The single success gate for all three auth paths (password login,
+    # TOTP verify, backup code). The limiter resets only here — after
+    # full authentication — so a correct password alone no longer
+    # clears the bucket while MFA is still pending.
+    request.app.state.rate_limiter.reset(get_client_ip(request))
 
     jti = uuid.uuid4().hex
     token = encode_token(
@@ -65,10 +71,3 @@ def user_info(user) -> UserInfo:
     )
 
 
-def get_client_ip(request: Request) -> str:
-    forwarded = request.headers.get("x-forwarded-for")
-    if forwarded:
-        return forwarded.split(",")[0].strip()
-    if request.client:
-        return request.client.host
-    return ""

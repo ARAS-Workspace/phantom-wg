@@ -15,12 +15,18 @@ DNS configuration endpoints: read and update per address family.
 
 from __future__ import annotations
 
+import logging
+
 from typing import Literal
 
 from fastapi import APIRouter, Request
 from pydantic import BaseModel
 
+from phantom_daemon.base.logging import LOGGER_NAME
 from phantom_daemon.modules._envelope import ApiErr, ApiOk
+
+
+log = logging.getLogger(LOGGER_NAME)
 
 
 # ── Models ───────────────────────────────────────────────────────
@@ -77,6 +83,14 @@ async def get_dns(body: DnsFamilyRequest, request: Request):
 )
 async def change_dns(body: ChangeDnsRequest, request: Request):
     wallet = request.app.state.wallet
+    before = wallet.get_dns(body.family)
     wallet.change_dns(body.family, body.primary, body.secondary)
     dns = wallet.get_dns(body.family)
+    if dns != before:
+        # Only reaches clients on their next config export — the change is
+        # not pushed to anyone already connected.
+        log.info(
+            "dns changed (%s): %s/%s -> %s/%s", body.family,
+            before["primary"], before["secondary"], dns["primary"], dns["secondary"],
+        )
     return ApiOk(data=DnsRecord(family=body.family, **dns))

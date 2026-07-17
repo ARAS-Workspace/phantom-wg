@@ -2,12 +2,18 @@
 
 All variables are optional. Daemon exits with code 1 on startup if required secrets are missing.
 
+## General
+
+| Variable            | Default | Type | Description                                                                                                  |
+|---------------------|---------|------|--------------------------------------------------------------------------------------------------------------|
+| `PHANTOM_LOG_LEVEL` | `info`  | enum | Daemon log level — `critical`/`error`/`warning`/`info`/`debug`. Also sets uvicorn's level. Unknown → `info`. |
+
 ## Paths
 
-| Variable            | Default                     | Type | Description                                            |
-|---------------------|-----------------------------|------|--------------------------------------------------------|
-| `PHANTOM_DB_DIR`    | `/var/lib/phantom/db`       | path | SQLite database directory (wallet + exit store)        |
-| `PHANTOM_STATE_DIR` | `/var/lib/phantom/state/db` | path | Bridge state directory (WireGuard, firewall) |
+| Variable            | Default                     | Type | Description                                     |
+|---------------------|-----------------------------|------|-------------------------------------------------|
+| `PHANTOM_DB_DIR`    | `/var/lib/phantom/db`       | path | SQLite database directory (wallet + exit store) |
+| `PHANTOM_STATE_DIR` | `/var/lib/phantom/state/db` | path | Bridge state directory (WireGuard, firewall)    |
 
 ## WireGuard
 

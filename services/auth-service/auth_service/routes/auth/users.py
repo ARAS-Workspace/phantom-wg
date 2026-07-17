@@ -96,10 +96,16 @@ def change_password(
     if payload.role != "superadmin" and username != payload.sub:
         raise ApiException(403, "CANNOT_CHANGE_OTHERS_PASSWORD")
     db = request.state.db
-    if not db.update_password(username, hash_password(body.password)):
+    user = db.get_user_by_username(username)
+    if user is None:
         raise ApiException(404, "USER_NOT_FOUND")
+    db.update_password(username, hash_password(body.password))
+    # Same discipline as self-service change and delete_user: a reset
+    # password invalidates every existing session for the target.
+    db.revoke_user_sessions(user.id)
     audit_log(
         db, request, "password_changed",
         {"username": username, "by": payload.sub},
+        user_id=user.id,
     )
     return ApiOk(data=ActionResult(success_code="PASSWORD_CHANGED"))

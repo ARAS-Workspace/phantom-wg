@@ -15,6 +15,8 @@ Backup endpoints: export (download) and import (upload + restore).
 
 from __future__ import annotations
 
+import logging
+
 import shutil
 import tempfile
 from datetime import datetime, timezone
@@ -28,7 +30,11 @@ from starlette.background import BackgroundTask
 from phantom_daemon.base.backup import create_backup_tar, restore_backup_tar
 from firewall_bridge import GroupNotFoundError
 from phantom_daemon.base.services.firewall.service import MULTIHOP_PRESET_NAME, MULTIHOP_V6_PRESET_NAME
+from phantom_daemon.base.logging import LOGGER_NAME
 from phantom_daemon.modules._envelope import ApiOk
+
+
+log = logging.getLogger(LOGGER_NAME)
 
 
 # ── Models ───────────────────────────────────────────────────────
@@ -69,6 +75,13 @@ async def export_backup(request: Request):
 
     tar_path = create_backup_tar(wallet._conn, exit_store._conn)
 
+    # Worth a line of its own: the tar carries every client's private key,
+    # so this is the highest-value artefact the daemon can produce.
+    log.info(
+        "backup exported: %d clients, %d exits", wallet.count_assigned(),
+        len(exit_store.list_exits()),
+    )
+
     timestamp = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H-%M-%S")
     filename = f"phantom-backup-{timestamp}.tar"
 
@@ -98,6 +111,7 @@ async def import_backup(file: UploadFile, request: Request):
     # Teardown multihop before restore — DB will be replaced with
     # multihop disabled, kernel state must be consistent.
     if wg_exit is not None:
+        log.warning("backup import: tearing down active multihop before restore")
         fw = request.app.state.fw
         for preset_name in (MULTIHOP_PRESET_NAME, MULTIHOP_V6_PRESET_NAME):
             try:
@@ -132,6 +146,12 @@ async def import_backup(file: UploadFile, request: Request):
 
     wallet_info = manifest.get("wallet", {})
     exit_info = manifest.get("exit_store", {})
+    log.warning(
+        "backup imported: wallet and exit store replaced — %s clients, "
+        "subnet %s, %s exits (from %s)",
+        wallet_info.get("clients", 0), wallet_info.get("subnet", ""),
+        exit_info.get("exits", 0), manifest.get("timestamp", ""),
+    )
 
     return ApiOk(data=RestoreResult(
         timestamp=manifest.get("timestamp", ""),

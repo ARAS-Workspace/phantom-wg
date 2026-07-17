@@ -23,6 +23,7 @@ import subprocess
 from pathlib import Path
 from typing import TYPE_CHECKING, Optional, Type
 
+from phantom_daemon.base.logging import LOGGER_NAME
 from phantom_daemon.base.errors import WireGuardError
 from phantom_daemon.base.services.wireguard import WG_INTERFACE_NAME
 from phantom_daemon.base.services.wireguard.ipc import (
@@ -41,7 +42,7 @@ if TYPE_CHECKING:
     from phantom_daemon.base.secrets.secrets import ServerKeys
     from phantom_daemon.base.wallet.wallet import Wallet
 
-log = logging.getLogger("phantom-daemon")
+log = logging.getLogger(LOGGER_NAME)
 
 
 # ── Device DB ────────────────────────────────────────────────────

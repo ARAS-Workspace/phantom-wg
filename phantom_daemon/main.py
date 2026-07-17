@@ -26,25 +26,33 @@ from fastapi import FastAPI, HTTPException
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 
+from firewall_bridge import BridgeError as FirewallBridgeError
+from wireguard_go_bridge.types import BridgeError as WireGuardBridgeError
+
 from phantom_daemon import __version__
 from phantom_daemon.base import (
     BackupError,
     ExitStoreError,
+    FirewallError,
     StartupError,
     WalletError,
     WalletFullError,
+    WireGuardError,
     load_env,
     load_secrets,
     open_exit_store,
     open_firewall,
     open_wallet,
     open_wireguard,
+    setup_logging,
 )
+from phantom_daemon.base.logging import LOGGER_NAME
+from phantom_daemon.base.services.firewall.service import parse_allowed_ips_families
 from phantom_daemon.base.services.wireguard import WG_INTERFACE_NAME_EXIT
 from phantom_daemon.base.services.wireguard.ipc import build_exit_config
 from phantom_daemon.modules import setup_routers
 
-log = logging.getLogger("phantom-daemon")
+log = logging.getLogger(LOGGER_NAME)
 
 
 @asynccontextmanager
@@ -74,6 +82,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         # fw.start() replays routing rules that reference wg_phantom_exit.
         exit_store = open_exit_store(db_dir=env.db_dir)
         wg_exit = None
+        exit_data = None
         if exit_store.is_enabled():
             active = exit_store.get_active()
             exit_data = exit_store.get_exit(active)
@@ -97,9 +106,23 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 
         # Phase 3c: Firewall bridge
         # Must come after WG exit recovery so interface exists for routing rules.
+        # bootstrap() is unconditional and idempotent — the core preset bakes
+        # the wallet subnet at resolve time, so re-resolving on every boot is
+        # what keeps the masquerade source in sync after a CIDR change.
+        # The bridge is not started yet, so this only touches the DB; start()
+        # below replays the result to the kernel.
         fw = open_firewall(state_dir=env.state_dir)
-        if not fw.list_groups():
-            fw.bootstrap(env=env, wallet=wallet)
+        fw.bootstrap(env=env, wallet=wallet)
+
+        # Unconditional too: with no active exit this removes any multihop
+        # groups left behind, so the firewall always converges to what the
+        # exit store declares rather than to whatever survived last boot.
+        if exit_data:
+            has_v4, has_v6 = parse_allowed_ips_families(exit_data["allowed_ips"])
+        else:
+            has_v4 = has_v6 = False
+        fw.resync_multihop(wallet=wallet, has_v4=has_v4, has_v6=has_v6)
+
         fw.start()
 
         app.state.server_keys = server_keys
@@ -197,6 +220,37 @@ def _register_error_handlers(app: FastAPI) -> None:
             content={"ok": False, "error": str(exc), "code": "WALLET_ERROR"},
         )
 
+    @app.exception_handler(WireGuardError)
+    async def _wireguard_error(_request, exc):
+        return JSONResponse(
+            status_code=500,
+            content={"ok": False, "error": str(exc), "code": "WIREGUARD_ERROR"},
+        )
+
+    @app.exception_handler(FirewallError)
+    async def _firewall_error(_request, exc):
+        return JSONResponse(
+            status_code=500,
+            content={"ok": False, "error": str(exc), "code": "FIREWALL_ERROR"},
+        )
+
+    # Native bridge failures. Without these a bridge error escapes as a bare
+    # 500 with no ApiErr envelope and no code — the one hole in a contract
+    # that API_CODES.md otherwise documents completely. The two BridgeError
+    # classes are unrelated types that happen to share a name.
+    @app.exception_handler(WireGuardBridgeError)
+    @app.exception_handler(FirewallBridgeError)
+    async def _bridge_error(_request, exc):
+        log.error("bridge error: %s: %s", type(exc).__name__, exc)
+        return JSONResponse(
+            status_code=500,
+            content={
+                "ok": False,
+                "error": f"{type(exc).__name__}: {exc}",
+                "code": "BRIDGE_ERROR",
+            },
+        )
+
     @app.exception_handler(RequestValidationError)
     async def _validation(_request, exc):
         return JSONResponse(
@@ -210,8 +264,13 @@ def main() -> None:
     if len(sys.argv) > 1:
         socket_path = sys.argv[1]
 
+    # Logging must be configured before create_app() — router auto-discovery
+    # logs while mounting. load_env() is pure, so lifespan()'s later call
+    # reads the same values.
+    level = setup_logging(load_env().log_level)
+
     app = create_app()
-    uvicorn.run(app, uds=socket_path, log_level="info")
+    uvicorn.run(app, uds=socket_path, log_level=level)
 
 
 if __name__ == "__main__":

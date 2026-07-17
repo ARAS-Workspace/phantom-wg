@@ -6,6 +6,7 @@ metadata:
 
 table:
   - ensure: {id: 200, name: mh}
+  - policy: {from: "{ipv4_subnet}", to: "{ipv4_subnet}", table: main, priority: 99}
   - policy: {from: "{ipv4_subnet}", table: mh, priority: 100}
   - route: {destination: "{ipv4_subnet}", device: "{wg_interface}", table: mh}
   - route: {destination: default, device: "{wg_interface_exit}", table: mh}

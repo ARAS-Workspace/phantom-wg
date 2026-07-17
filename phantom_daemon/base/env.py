@@ -30,6 +30,9 @@ class DaemonEnv:
     keepalive: int
     endpoint_v4: str
     endpoint_v6: str
+    # Defaulted so that direct construction (tests, fixtures) stays valid;
+    # load_env() always supplies it explicitly.
+    log_level: str = "info"
 
 
 def load_env() -> DaemonEnv:
@@ -42,4 +45,5 @@ def load_env() -> DaemonEnv:
         keepalive=int(os.environ.get("WIREGUARD_KEEPALIVE", "25")),
         endpoint_v4=os.environ.get("WIREGUARD_ENDPOINT_V4", ""),
         endpoint_v6=os.environ.get("WIREGUARD_ENDPOINT_V6", ""),
+        log_level=os.environ.get("PHANTOM_LOG_LEVEL", "info"),
     )
