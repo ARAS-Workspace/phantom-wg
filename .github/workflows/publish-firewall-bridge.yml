@@ -36,17 +36,26 @@ jobs:
           echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
           echo "Detected version: ${VERSION}"
 
-      - name: Validate Cargo.toml matches
+      - name: Validate Cargo.toml and Cargo.lock match
         env:
           VERSION: ${{ steps.extract.outputs.version }}
         run: |
-          CARGO_VER=$(grep '^version' Cargo.toml | head -1 | sed 's/.*"\(.*\)"/\1/')
           PY_VER="${VERSION#v}"
+          CARGO_VER=$(grep '^version' Cargo.toml | head -1 | sed 's/.*"\(.*\)"/\1/')
+          # The firewall-bridge-linux [[package]] entry, not a dependency's.
+          LOCK_VER=$(grep -A1 'name = "firewall-bridge-linux"' Cargo.lock \
+                     | grep '^version' | sed 's/.*"\(.*\)"/\1/')
+          fail=0
           if [ "$CARGO_VER" != "$PY_VER" ]; then
             echo "Version mismatch: Cargo.toml=${CARGO_VER} __init__.py=${PY_VER}"
-            exit 1
+            fail=1
           fi
-          echo "Versions match: ${PY_VER}"
+          if [ "$LOCK_VER" != "$PY_VER" ]; then
+            echo "Version mismatch: Cargo.lock=${LOCK_VER} __init__.py=${PY_VER}"
+            fail=1
+          fi
+          [ "$fail" -eq 0 ] || exit 1
+          echo "Versions match: ${PY_VER} (init, Cargo.toml, Cargo.lock)"
 
   test:
     name: Test
