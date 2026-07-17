@@ -4,6 +4,27 @@ nftables + netlink routing bridge for Linux. Python owns rules, state,
 and presets; Rust is a kernel-only FFI surface.
 
 
+v2.1.6 - 2026-07-17
+-------------------
+
+  Makes PyYAML optional. presets.py imported yaml at module load, so
+  `import firewall_bridge` raised ModuleNotFoundError on a host without
+  it — even for a consumer that only ever passes resolved dicts, which
+  is the daemon's whole pattern: service.py reads its own YAML and hands
+  _load_spec a dict. yaml is needed only to parse a str/Path preset.
+
+  * The yaml import moved into _load_spec, after the dict fast-path and
+    only on the str/Path branch, with a clear message when it is
+    missing. A dict preset now resolves with yaml uninstalled; a YAML
+    string raises "PyYAML is required". The dependency is optional in
+    fact, so the package behaves that way.
+  * The publish preflight validates Cargo.lock too. It checked
+    __init__.py against Cargo.toml but not the lock, so an out-of-sync
+    firewall-bridge-linux [[package]] version would have passed — the
+    one source bump.sh guards that CI did not. bump.sh's own comment
+    claimed the workflow rejected mismatches; now it actually does.
+
+
 v2.1.5 - 2026-07-17
 -------------------
 
