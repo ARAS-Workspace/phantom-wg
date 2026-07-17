@@ -132,7 +132,10 @@ def _setup_signatures(lib: ctypes.CDLL) -> None:
     lib.firewall_bridge_get_version.restype = c_p  # static, no free
 
     lib.firewall_bridge_get_last_error.argtypes = []
-    lib.firewall_bridge_get_last_error.restype = c_p  # static, no free
+    lib.firewall_bridge_get_last_error.restype = c_p  # deprecated: dangles on next error
+
+    lib.firewall_bridge_get_last_error_copy.argtypes = [ctypes.c_char_p, c_i32]
+    lib.firewall_bridge_get_last_error_copy.restype = c_i32
 
     lib.firewall_bridge_free_string.argtypes = [c_vp]
     lib.firewall_bridge_free_string.restype = None
@@ -154,5 +157,12 @@ def get_version() -> str:
 
 
 def get_last_error() -> str:
-    result = get_lib().firewall_bridge_get_last_error()
-    return result.decode("utf-8") if result else ""
+    """Read the last error via the copy API.
+
+    The copy happens inside the Rust error lock, so the buffer can
+    never dangle — unlike the raw-pointer variant, whose result is
+    invalidated by the next recorded error.
+    """
+    buf = ctypes.create_string_buffer(1024)
+    n = get_lib().firewall_bridge_get_last_error_copy(buf, 1024)
+    return buf.value.decode("utf-8", errors="replace") if n > 0 else ""

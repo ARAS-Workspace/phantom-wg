@@ -6,10 +6,10 @@ pub enum ErrorCode {
     Ok = 0,
     NftablesFailed = -3,
     NetlinkFailed = -4,
-    #[allow(dead_code)]
     InvalidParam = -5,
     IoError = -6,
     PermissionDenied = -7,
+    NotInitialized = -8,
 }
 
 impl std::fmt::Display for ErrorCode {
@@ -21,6 +21,7 @@ impl std::fmt::Display for ErrorCode {
             Self::InvalidParam => write!(f, "Invalid parameter"),
             Self::IoError => write!(f, "I/O error"),
             Self::PermissionDenied => write!(f, "Permission denied"),
+            Self::NotInitialized => write!(f, "Context not initialized"),
         }
     }
 }

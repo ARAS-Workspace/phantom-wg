@@ -35,6 +35,7 @@ def mock_lib():
     lib.rt_flush_cache.return_value = 0
     lib.firewall_bridge_get_version.return_value = b"2.1.0"
     lib.firewall_bridge_get_last_error.return_value = b""
+    lib.firewall_bridge_get_last_error_copy.return_value = 0
     lib.firewall_bridge_free_string.return_value = None
     return lib
 

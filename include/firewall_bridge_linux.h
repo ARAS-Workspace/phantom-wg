@@ -26,6 +26,7 @@ extern "C" {
 #define FW_ERR_INVALID_PARAM    -5
 #define FW_ERR_IO_ERROR         -6
 #define FW_ERR_PERMISSION       -7
+#define FW_ERR_NOT_INITIALIZED  -8
 
 /* ---- nftables ---- */
 
@@ -66,7 +67,16 @@ int32_t     rt_flush_cache(void);
 /* ---- Utility ---- */
 
 const char* firewall_bridge_get_version(void);      /* static, do NOT free */
-const char* firewall_bridge_get_last_error(void);    /* static, do NOT free */
+
+/* Deprecated: pointer is invalidated by the next recorded error.
+ * Prefer firewall_bridge_get_last_error_copy. Do NOT free. */
+const char* firewall_bridge_get_last_error(void);
+
+/* Copy last error into buf (at most len-1 bytes + NUL), under the
+ * error lock. Returns bytes copied (0 = no error), or
+ * FW_ERR_INVALID_PARAM for null buf / len <= 0. */
+int32_t     firewall_bridge_get_last_error_copy(char* buf, int32_t len);
+
 void        firewall_bridge_free_string(char* ptr);
 
 #ifdef __cplusplus

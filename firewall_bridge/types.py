@@ -47,6 +47,10 @@ class PermissionDeniedError(BridgeError):
     """Permission denied — need CAP_NET_ADMIN."""
 
 
+class NotInitializedError(BridgeError):
+    """Kernel context not initialized — nft_init has not succeeded."""
+
+
 # ---- Python-side errors (DB, state, groups) ----
 
 class GroupNotFoundError(BridgeError):
@@ -85,6 +89,7 @@ _ERROR_MAP: dict[int, type[BridgeError]] = {
     -5: InvalidParamError,
     -6: IoError,
     -7: PermissionDeniedError,
+    -8: NotInitializedError,
 }
 
 
