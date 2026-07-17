@@ -20,13 +20,13 @@ import uuid
 from fastapi import APIRouter, Request
 from nacl.signing import VerifyKey
 
-from auth_service.audit import audit_log
+from auth_service.audit import audit_log, get_client_ip
 from auth_service.crypto.jwt import TokenPayload, decode_token, encode_token
 from auth_service.crypto.password import verify_password
 from auth_service.crypto.totp import hash_backup_code, verify_totp
 from auth_service.errors import ApiException, AuthTokenExpiredError, AuthTokenInvalidError
 from auth_service.models import ApiOk, MFARequiredResponse, MFAVerifyRequest, LoginRequest
-from auth_service.routes.auth._helpers import get_client_ip, issue_access_token
+from auth_service.routes.auth._helpers import issue_access_token
 
 router = APIRouter()
 
@@ -50,7 +50,9 @@ def login(body: LoginRequest, request: Request):
         audit_log(db, request, "login_failed", {"username": body.username})
         raise ApiException(401, "INVALID_CREDENTIALS")
 
-    rate_limiter.reset(ip)
+    # No limiter reset here: with TOTP enabled the password alone is not
+    # authentication, and resetting now would hand an attacker who knows
+    # the password an unlimited TOTP budget. issue_access_token resets.
 
     # TOTP enabled → issue short-lived MFA pending token
     if user.totp_secret is not None:
@@ -80,6 +82,11 @@ def mfa_verify(body: MFAVerifyRequest, request: Request):
     """Verify TOTP code and issue access token."""
     db = request.state.db
 
+    # A 6-digit TOTP is brute-forceable without this; same budget as login.
+    if not request.app.state.rate_limiter.check(get_client_ip(request)):
+        audit_log(db, request, "mfa_rate_limited")
+        raise ApiException(429, "RATE_LIMITED")
+
     try:
         payload = _decode_mfa_token(request.app.state.verify_key, body.mfa_token)
     except AuthTokenExpiredError:
@@ -106,6 +113,11 @@ def mfa_verify(body: MFAVerifyRequest, request: Request):
 def mfa_backup(body: MFAVerifyRequest, request: Request):
     """Verify backup code and issue access token."""
     db = request.state.db
+
+    # Backup codes are single-use but guessable without a budget.
+    if not request.app.state.rate_limiter.check(get_client_ip(request)):
+        audit_log(db, request, "backup_code_rate_limited")
+        raise ApiException(429, "RATE_LIMITED")
 
     try:
         payload = _decode_mfa_token(request.app.state.verify_key, body.mfa_token)
