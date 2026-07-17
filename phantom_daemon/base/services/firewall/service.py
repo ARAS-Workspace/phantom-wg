@@ -28,11 +28,12 @@ from firewall_bridge import FirewallBridge, FirewallRule, Group, RoutingRule
 from firewall_bridge.presets import apply_preset, disable_preset, enable_preset, remove_preset
 
 from phantom_daemon.base.env import DaemonEnv
+from phantom_daemon.base.logging import LOGGER_NAME
 from phantom_daemon.base.errors import FirewallError
 from phantom_daemon.base.services.wireguard import WG_INTERFACE_NAME, WG_INTERFACE_NAME_EXIT
 from phantom_daemon.base.wallet.wallet import Wallet
 
-log = logging.getLogger("phantom-daemon")
+log = logging.getLogger(LOGGER_NAME)
 
 CORE_PRESET_NAME = "core"
 MULTIHOP_PRESET_NAME = "multihop-exit"
@@ -176,10 +177,44 @@ class FirewallService:
     # ── Lifecycle ────────────────────────────────────────────────
 
     def bootstrap(self, env: DaemonEnv, wallet: Wallet) -> None:
-        """First-run initialisation: resolve and apply core preset."""
+        """Resolve and apply the core preset from current wallet config.
+
+        Idempotent — an existing core group is replaced, so the masquerade
+        source always tracks the wallet's current subnet. Safe to call on
+        every boot: the subnet is baked into the preset at resolve time, so
+        re-resolving is the only way a CIDR change reaches the kernel.
+        """
         spec = _resolve_core_preset(env, wallet)
+        self.remove_preset(CORE_PRESET_NAME)
         apply_preset(self._bridge, spec)
         log.info("firewall: core preset applied")
+
+    def resync_multihop(self, wallet: Wallet, has_v4: bool, has_v6: bool) -> None:
+        """Resolve and apply the multihop presets from current wallet config.
+
+        Idempotent, and converges to the requested state rather than assuming
+        one: with has_v4=has_v6=False both groups are removed, so a boot after
+        a disable that died halfway cleans up after it.
+
+        Callers pass the families the active exit actually carries — see
+        parse_allowed_ips_families. The subnet is baked into the policy rule,
+        the intra-subnet route and the masquerade source at resolve time, so
+        re-resolving is the only way a CIDR change reaches the kernel. The
+        policy rule is the one that matters most: if it no longer matches a
+        client's address, that client's traffic never enters the mh table and
+        leaves through the main route instead of the exit tunnel.
+        """
+        for name in (MULTIHOP_PRESET_NAME, MULTIHOP_V6_PRESET_NAME):
+            self.remove_preset(name)
+        if has_v4:
+            apply_preset(self._bridge, resolve_multihop_preset(
+                ipv4_subnet=wallet.get_config("ipv4_subnet") or "",
+            ))
+        if has_v6:
+            apply_preset(self._bridge, resolve_multihop_v6_preset(
+                ipv6_subnet=wallet.get_config("ipv6_subnet") or "",
+            ))
+        log.info("firewall: multihop presets resynced (v4=%s v6=%s)", has_v4, has_v6)
 
     def start(self) -> None:
         """Activate firewall — apply all enabled groups to kernel."""

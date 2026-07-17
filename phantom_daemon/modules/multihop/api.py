@@ -15,6 +15,8 @@ Multihop exit tunnel endpoints: import, remove, list, enable, disable, status.
 
 from __future__ import annotations
 
+import logging
+
 from fastapi import APIRouter, Request
 from pydantic import BaseModel, Field
 
@@ -24,14 +26,16 @@ from phantom_daemon.base.exit_store import parse_wireguard_config
 from phantom_daemon.base.services.firewall.service import (
     MULTIHOP_PRESET_NAME,
     MULTIHOP_V6_PRESET_NAME,
-    resolve_multihop_preset,
-    resolve_multihop_v6_preset,
     parse_allowed_ips_families,
 )
 from phantom_daemon.base.services.wireguard import WG_INTERFACE_NAME_EXIT
 from phantom_daemon.base.services.wireguard.ipc import build_exit_config
 from phantom_daemon.base.services.wireguard.service import open_wireguard
+from phantom_daemon.base.logging import LOGGER_NAME
 from phantom_daemon.modules._envelope import ApiErr, ApiOk
+
+
+log = logging.getLogger(LOGGER_NAME)
 
 
 # ── Models ───────────────────────────────────────────────────────
@@ -132,6 +136,12 @@ async def import_exit(body: ImportRequest, request: Request):
         allowed_ips=parsed.allowed_ips,
         keepalive=parsed.keepalive,
     )
+    # Endpoint and AllowedIPs only — the parsed config also holds the exit's
+    # private and preshared keys.
+    log.info(
+        "exit imported: %s via %s (allowed_ips=%s)",
+        body.name, parsed.endpoint, parsed.allowed_ips,
+    )
     return ApiOk(data=ExitSummary(
         id=result["id"],
         name=result["name"],
@@ -155,6 +165,7 @@ async def remove_exit(body: ExitNameRequest, request: Request):
     """Remove an exit configuration. Must not be active."""
     exit_store = request.app.state.exit_store
     exit_store.remove_exit(body.name)
+    log.info("exit removed: %s", body.name)
     return ApiOk(data={"status": "removed", "code": "EXIT_REMOVED"})
 
 
@@ -231,13 +242,14 @@ async def enable_multihop(body: ExitNameRequest, request: Request):
         wg_exit.up()
         wg_exit.apply_exit_interface(exit_data["address"])
 
+        # Same call the boot path uses — enable and recovery must not be able
+        # to resolve these presets differently.
         has_v4, has_v6 = parse_allowed_ips_families(exit_data["allowed_ips"])
-        if has_v4:
-            ipv4_subnet = wallet.get_config("ipv4_subnet") or ""
-            fw.apply_preset(resolve_multihop_preset(ipv4_subnet=ipv4_subnet))
-        if has_v6:
-            ipv6_subnet = wallet.get_config("ipv6_subnet") or ""
-            fw.apply_preset(resolve_multihop_v6_preset(ipv6_subnet=ipv6_subnet))
+        fw.resync_multihop(wallet=wallet, has_v4=has_v4, has_v6=has_v6)
+        log.info(
+            "multihop enabled: %s via %s (v4=%s v6=%s)",
+            body.name, exit_data["endpoint"], has_v4, has_v6,
+        )
     except Exception:
         # Rollback: always attempt cleanup regardless of which step failed.
         # remove_preset is safe to call even if preset was never applied.
@@ -287,7 +299,9 @@ async def disable_multihop(request: Request):
         wg_exit.close()
         request.app.state.wg_exit = None
 
+    active = exit_store.get_active()
     exit_store.deactivate()
+    log.info("multihop disabled: %s — traffic returns to the main route", active)
     return ApiOk(data={"status": "disabled", "code": "MULTIHOP_DISABLED"})
 
 

@@ -25,6 +25,7 @@ from phantom_daemon.base.errors import (
     WireGuardError,
 )
 from phantom_daemon.base.exit_store import ExitStore, open_exit_store
+from phantom_daemon.base.logging import LOGGER_NAME, setup_logging
 from phantom_daemon.base.secrets import ServerKeys, load_secrets
 from phantom_daemon.base.services.firewall import FirewallService, open_firewall
 from phantom_daemon.base.services.wireguard import WireGuardService, open_wireguard
@@ -37,6 +38,7 @@ __all__ = [
     "ExitStoreError",
     "FirewallError",
     "FirewallService",
+    "LOGGER_NAME",
     "SecretsError",
     "ServerKeys",
     "StartupError",
@@ -51,4 +53,5 @@ __all__ = [
     "open_firewall",
     "open_wallet",
     "open_wireguard",
+    "setup_logging",
 ]

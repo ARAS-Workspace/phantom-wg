@@ -16,11 +16,16 @@ Network status, CIDR change, and pool validation endpoints.
 from __future__ import annotations
 
 import json
+import logging
 
 from fastapi import APIRouter, Request
 from pydantic import BaseModel, Field
 
+from phantom_daemon.base.logging import LOGGER_NAME
+from phantom_daemon.base.services.firewall.service import parse_allowed_ips_families
 from phantom_daemon.modules._envelope import ApiErr, ApiOk
+
+log = logging.getLogger(LOGGER_NAME)
 
 
 # ── Models ───────────────────────────────────────────────────────
@@ -76,6 +81,54 @@ class ValidatePoolResponse(BaseModel):
     errors: list[str]
 
 
+# ── Kernel resync ────────────────────────────────────────────────
+
+
+def _resync_kernel(state, old_v4: str, new_v4: str) -> None:
+    """Rebuild kernel state from the wallet after a CIDR change.
+
+    The subnet is baked into peer allowed_ips, the server interface prefix
+    and the firewall presets at their own resolve time, so changing the
+    wallet alone leaves all three stale. Same calls the lifespan makes on
+    boot, in the same order.
+
+    The wallet is not rolled back on failure: reverting is another
+    change_cidr, which carries the same risk and re-slots every client a
+    second time. Kernel state is rebuilt from the DB on every boot, so a
+    restart is the recovery path — say so loudly instead.
+    """
+    wallet, wg, fw, env = state.wallet, state.wg, state.fw, state.env
+    ipv4_subnet = wallet.get_config("ipv4_subnet")
+    ipv6_subnet = wallet.get_config("ipv6_subnet")
+
+    try:
+        # Peers first, mirroring lifespan: allowed_ips are pinned /32 + /128
+        # to each client's address, and change_cidr may have re-slotted them.
+        wg.fast_sync(wallet=wallet, server_keys=state.server_keys, env=env)
+        wg.update_addresses(ipv4_subnet=ipv4_subnet, ipv6_subnet=ipv6_subnet)
+
+        # Core carries the masquerade source; multihop carries it again in
+        # the policy rule that steers a client into the exit table.
+        fw.bootstrap(env=env, wallet=wallet)
+        exit_data = None
+        if state.exit_store.is_enabled():
+            exit_data = state.exit_store.get_exit(state.exit_store.get_active())
+        if exit_data:
+            has_v4, has_v6 = parse_allowed_ips_families(exit_data["allowed_ips"])
+        else:
+            has_v4 = has_v6 = False
+        fw.resync_multihop(wallet=wallet, has_v4=has_v4, has_v6=has_v6)
+    except Exception:
+        log.critical(
+            "cidr changed %s -> %s but kernel resync failed — restart the "
+            "daemon to rebuild kernel state from the database",
+            old_v4, new_v4,
+        )
+        raise
+
+    log.info("cidr changed %s -> %s: kernel resynced", old_v4, new_v4)
+
+
 # ── Router ───────────────────────────────────────────────────────
 
 router = APIRouter(tags=["network"])
@@ -116,9 +169,16 @@ async def network_status(request: Request):
     "Returns 400 if the new prefix cannot accommodate current clients.",
 )
 async def change_cidr(body: ChangeCidrRequest, request: Request):
-    wallet = request.app.state.wallet
+    state = request.app.state
+    wallet = state.wallet
+    old_v4 = wallet.get_config("ipv4_subnet")
+
     wallet.change_cidr(body.prefix)
     config = wallet.get_all_config()
+
+    if config["ipv4_subnet"] != old_v4:
+        _resync_kernel(state, old_v4, config["ipv4_subnet"])
+
     return ApiOk(data=ChangeCidrResponse(
         ipv4_subnet=config["ipv4_subnet"],
         ipv6_subnet=config["ipv6_subnet"],

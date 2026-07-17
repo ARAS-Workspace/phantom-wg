@@ -15,8 +15,26 @@ Auth service configuration from environment variables.
 
 from __future__ import annotations
 
+import ipaddress
 import os
-from dataclasses import dataclass
+from dataclasses import dataclass, field
+
+# X-Forwarded-For is only honored when the connecting peer falls in one
+# of these networks. Default: the pinned phantom-net subnets from the
+# daemon compose (networks.phantom-net.ipam) — nginx always reaches us
+# from there, in prod and dev alike. Change the compose subnet, change
+# AUTH_TRUSTED_PROXIES with it.
+_DEFAULT_TRUSTED_PROXIES = "172.28.0.0/24,fd00:d0ce::/64"
+
+
+def _parse_trusted_proxies(raw: str) -> tuple[ipaddress.IPv4Network | ipaddress.IPv6Network, ...]:
+    """Parse a comma-separated CIDR list. Invalid entries fail startup loudly."""
+    networks = []
+    for part in raw.split(","):
+        part = part.strip()
+        if part:
+            networks.append(ipaddress.ip_network(part, strict=False))
+    return tuple(networks)
 
 
 @dataclass(frozen=True, slots=True)
@@ -37,6 +55,9 @@ class AuthConfig:
     proxy_max_body: int
     rate_limit_window: int
     rate_limit_max: int
+    trusted_proxies: tuple[ipaddress.IPv4Network | ipaddress.IPv6Network, ...] = field(
+        default_factory=lambda: _parse_trusted_proxies(_DEFAULT_TRUSTED_PROXIES),
+    )
 
     @property
     def proxy_is_uds(self) -> bool:
@@ -73,4 +94,7 @@ def load_auth_config() -> AuthConfig:
         proxy_max_body=int(os.environ.get("AUTH_PROXY_MAX_BODY", "67108864")),
         rate_limit_window=int(os.environ.get("AUTH_RATE_LIMIT_WINDOW", "60")),
         rate_limit_max=int(os.environ.get("AUTH_RATE_LIMIT_MAX", "5")),
+        trusted_proxies=_parse_trusted_proxies(
+            os.environ.get("AUTH_TRUSTED_PROXIES", _DEFAULT_TRUSTED_PROXIES),
+        ),
     )
