@@ -120,6 +120,9 @@ pub fn ensure_table(nft: &NftContext) -> Result<(), String> {
         "add chain {TABLE} forward {{ type filter hook forward priority 0; policy accept; }}"
     )).map(|_| ())?;
     nft.run(&format!(
+        "add chain {TABLE} prerouting {{ type nat hook prerouting priority -100; policy accept; }}"
+    )).map(|_| ())?;
+    nft.run(&format!(
         "add chain {TABLE} postrouting {{ type nat hook postrouting priority 100; policy accept; }}"
     )).map(|_| ())?;
     Ok(())
@@ -215,7 +218,15 @@ fn build_rule_cmd(
         parts.push(format!("ct state {}", state_match.to_lowercase()));
     }
 
-    parts.push(action.to_string());
+    // `dnat to <addr>` is rejected in an inet table — it carries both families,
+    // so nftables cannot infer which one the address belongs to and demands an
+    // explicit `ip` / `ip6`. The preset declares the intent; the family field
+    // already resolved above is what makes it expressible here.
+    if let Some(target) = action.strip_prefix("dnat to ") {
+        parts.push(format!("dnat {fam} to {}", target));
+    } else {
+        parts.push(action.to_string());
+    }
 
     if !comment.is_empty() {
         parts.push(format!("comment \"{}\"", comment));
@@ -321,6 +332,31 @@ mod tests {
                                   "", "", "", "", "", "").unwrap();
         assert!(cmd.contains("drop"));
         // family=10 (AF_INET6) affects source/dest prefix, no src/dst → no ip6 in cmd
+    }
+
+    #[test]
+    fn test_build_dnat_v4_gets_explicit_family() {
+        // inet tables reject a bare `dnat to <addr>`: "ip or ip6 must be
+        // specified with address for inet tables".
+        let cmd = build_rule_cmd("prerouting", "dnat to 172.28.0.4:443", 2,
+                                  "tcp", 443, "", "", "", "", "", "").unwrap();
+        assert!(cmd.contains("dnat ip to 172.28.0.4:443"), "got: {cmd}");
+    }
+
+    #[test]
+    fn test_build_dnat_v6_gets_explicit_family() {
+        let cmd = build_rule_cmd("prerouting", "dnat to [2001:db8::1]:443", 10,
+                                  "tcp", 443, "", "", "", "", "", "").unwrap();
+        assert!(cmd.contains("dnat ip6 to [2001:db8::1]:443"), "got: {cmd}");
+    }
+
+    #[test]
+    fn test_build_non_dnat_action_untouched() {
+        for action in ["accept", "drop", "reject", "masquerade"] {
+            let cmd = build_rule_cmd("forward", action, 2,
+                                      "", 0, "", "", "", "", "", "").unwrap();
+            assert!(cmd.ends_with(action), "got: {cmd}");
+        }
     }
 
     #[test]
