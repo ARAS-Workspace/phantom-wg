@@ -208,6 +208,41 @@ Tek kaynak: `wireguard_go_bridge/__init__.py` → `__version__`
 
 Go tarafı: `src/version.go` → `BridgeVersionStr` (publish'te eşleşme validasyonu yapılır).
 
+## Paket Doğrulama
+
+Vendor paketleri R2'den (`vendor.phantom.tc`) sunulur. Güven kökü ise
+burada, branch üzerindedir: [CHECKSUMS](CHECKSUMS) dosyasını her
+yayından sonra yalnızca publish workflow'u yazar. Artefakt ile
+beklenen hash iki bağımsız kanaldan gelir; kurcalanmış bir indirme
+kendi kendini yeniden onaylayamaz.
+
+```bash
+#!/usr/bin/env bash
+# verify.sh — vendor paketlerini branch'teki güven köküne karşı doğrula
+set -euo pipefail
+
+BASE="https://vendor.phantom.tc/wireguard-go-bridge"
+TRUST="https://raw.githubusercontent.com/ARAS-Workspace/phantom-wg/refs/heads/dev/wireguard-go-bridge/CHECKSUMS"
+
+VERSION=$(curl -fsSL "${BASE}/latest/VERSION")
+CHECKSUMS=$(curl -fsSL "${TRUST}")
+
+for ARCH in linux-amd64 linux-arm64; do
+  curl -fsSL -o "${ARCH}.zip" "${BASE}/${VERSION}/${ARCH}.zip"
+  EXPECTED=$(printf '%s\n' "${CHECKSUMS}" | grep -- "- ${ARCH}.zip/" | cut -d'/' -f2)
+  ACTUAL=$(sha256sum "${ARCH}.zip" | cut -d' ' -f1)
+  if [ "${EXPECTED}" = "${ACTUAL}" ]; then
+    echo "OK   ${ARCH}.zip ${VERSION} (${ACTUAL})"
+  else
+    echo "FAIL ${ARCH}.zip — beklenen ${EXPECTED}, gelen ${ACTUAL}" >&2
+    exit 1
+  fi
+done
+```
+
+`CHECKSUMS` her zaman yalnızca güncel sürümü tarif eder; eski sürümler
+dosyanın git geçmişi üzerinden doğrulanabilir kalır.
+
 ## Lisans
 
 AGPL-3.0 — [LICENSE](LICENSE) | [THIRD_PARTY_LICENSES](THIRD_PARTY_LICENSES)

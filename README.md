@@ -208,6 +208,41 @@ Single source of truth: `wireguard_go_bridge/__init__.py` → `__version__`
 
 Go side: `src/version.go` → `BridgeVersionStr` (validated to match during publish).
 
+## Package Verification
+
+Vendor packages are served from R2 (`vendor.phantom.tc`). Their trust
+root lives here, on the branch: the publish workflow — and only the
+publish workflow — writes the [CHECKSUMS](CHECKSUMS) file after every
+release. The artifact and its expected hash travel through two
+independent channels, so a tampered download cannot re-attest itself.
+
+```bash
+#!/usr/bin/env bash
+# verify.sh — verify vendor packages against the branch trust root
+set -euo pipefail
+
+BASE="https://vendor.phantom.tc/wireguard-go-bridge"
+TRUST="https://raw.githubusercontent.com/ARAS-Workspace/phantom-wg/refs/heads/dev/wireguard-go-bridge/CHECKSUMS"
+
+VERSION=$(curl -fsSL "${BASE}/latest/VERSION")
+CHECKSUMS=$(curl -fsSL "${TRUST}")
+
+for ARCH in linux-amd64 linux-arm64; do
+  curl -fsSL -o "${ARCH}.zip" "${BASE}/${VERSION}/${ARCH}.zip"
+  EXPECTED=$(printf '%s\n' "${CHECKSUMS}" | grep -- "- ${ARCH}.zip/" | cut -d'/' -f2)
+  ACTUAL=$(sha256sum "${ARCH}.zip" | cut -d' ' -f1)
+  if [ "${EXPECTED}" = "${ACTUAL}" ]; then
+    echo "OK   ${ARCH}.zip ${VERSION} (${ACTUAL})"
+  else
+    echo "FAIL ${ARCH}.zip — expected ${EXPECTED}, got ${ACTUAL}" >&2
+    exit 1
+  fi
+done
+```
+
+`CHECKSUMS` always describes the current release only; older releases
+remain verifiable through the file's git history.
+
 ## License
 
 AGPL-3.0 — [LICENSE](LICENSE) | [THIRD_PARTY_LICENSES](THIRD_PARTY_LICENSES)
