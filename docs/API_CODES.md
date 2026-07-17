@@ -27,7 +27,7 @@ All responses use a code-only envelope.
 | Code                  | HTTP | Trigger                                             |
 |-----------------------|------|-----------------------------------------------------|
 | `INVALID_CREDENTIALS` | 401  | Wrong username or password                          |
-| `RATE_LIMITED`        | 429  | Login attempts exceeded                             |
+| `RATE_LIMITED`        | 429  | Login/MFA attempts exceeded                         |
 | `INVALID_MFA_STATE`   | 401  | MFA token references non-existent or TOTP-less user |
 | `INVALID_TOTP_CODE`   | 401  | Wrong TOTP code                                     |
 | `INVALID_BACKUP_CODE` | 401  | Wrong or already-used backup code                   |

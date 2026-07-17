@@ -39,6 +39,18 @@ All variables are optional. Defaults are production-safe except where noted.
 | Variable                 | Default | Type    | Description                                                               |
 |--------------------------|---------|---------|---------------------------------------------------------------------------|
 | `AUTH_RATE_LIMIT_WINDOW` | `60`    | int (s) | Sliding window duration                                                   |
-| `AUTH_RATE_LIMIT_MAX`    | `5`     | int     | Max failed login attempts within window — exceeded → `RATE_LIMITED` (429) |
+| `AUTH_RATE_LIMIT_MAX`    | `5`     | int     | Max attempts within window — exceeded → `RATE_LIMITED` (429)              |
+| `AUTH_TRUSTED_PROXIES`   | `172.28.0.0/24,fd00:d0ce::/64` | CIDR list | Peers whose `X-Forwarded-For` is honored (comma-separated) |
 
-> Rate limiting applies to `POST /auth/login` only, keyed by client IP (`X-Forwarded-For` → first hop, fallback to direct IP).
+> Rate limiting applies to `POST /auth/login`, `POST /auth/mfa/verify` and
+> `POST /auth/totp/backup`, keyed by client IP and sharing one budget. The
+> limiter resets only after *completed* authentication — a correct password
+> with MFA still pending does not refill the budget.
+>
+> Client IP resolution: `X-Forwarded-For` is honored only when the
+> connecting peer is inside `AUTH_TRUSTED_PROXIES`. The default is exactly
+> the pinned `phantom-net` subnets from the daemon compose
+> (`networks.phantom-net.ipam`) — where nginx lives — nothing wider. If
+> you change the compose subnet, change this variable with it. Entries are
+> walked right to left, skipping trusted hops; the first untrusted address
+> is the client. A direct connection cannot spoof its own address.

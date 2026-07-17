@@ -521,6 +521,29 @@ def test_superadmin_can_change_other_password(auth_env):
     assert resp.status_code == 200
 
 
+def test_superadmin_password_change_revokes_target_sessions(auth_env):
+    auth_env.create_user("superrev", "superpw12", role="superadmin")
+    auth_env.create_user("victim", "victimpw1")
+    victim_token = auth_env.login("victim", "victimpw1")
+    super_token = auth_env.login("superrev", "superpw12")
+    client = auth_env.make_client()
+
+    resp = client.get("/auth/me", headers=auth_env.bearer(victim_token))
+    assert resp.status_code == 200
+
+    resp = client.post(
+        "/auth/users/victim/password",
+        json={"password": "Changed123!"},
+        headers=auth_env.bearer(super_token),
+    )
+    assert resp.status_code == 200
+
+    # The old session died with the old password.
+    resp = client.get("/auth/me", headers=auth_env.bearer(victim_token))
+    assert resp.status_code == 401
+    assert resp.json()["error_code"] == "SESSION_REVOKED"
+
+
 def test_superadmin_cannot_delete_self(auth_env):
     auth_env.create_user("superself", "superpw12", role="superadmin")
     token = auth_env.login("superself", "superpw12")
