@@ -4,6 +4,44 @@ Python FFI bindings for wireguard-go. PersistentDevice with automatic
 IPC state persistence and key generation.
 
 
+v2.1.3 - 2026-07-18
+-------------------
+
+  Contains panics at the FFI export surface. This library lives
+  inside the daemon's process, and a Go panic below an exported
+  function — nil map, slice bounds, a poisoned registry type
+  assertion — unwound through the cgo boundary and aborted the host:
+  a bridge bug became every client's dead tunnel. Twelve exports,
+  zero recover anywhere in the crate.
+
+  * guards.go (pure Go, no cgo): callGuarded helpers run an export
+    body and convert a panic into WG_ERR_INTERNAL — or a NULL string
+    for the char* returns — logging the stack to stderr, so the
+    failure stays visible in daemon logs instead of fatal. Every
+    export with Go logic routes through one; BridgeVersion and
+    FreeString carry none and stay bare.
+  * Success and known-error paths are byte-for-byte unchanged, and
+    WG_ERR_INTERNAL (-99) already existed on all ABI surfaces — no
+    header or Python change. A compile-time check pins the pure-Go
+    mirror of the constant to the header value; drift in either
+    direction fails the build.
+  * First Go tests in the repo: guards_test.go proves the panic,
+    nil-map and type-assertion classes all return -99 with values
+    passing through untouched, and the test image runs go test
+    before the c-shared build — the pipeline now gates on it.
+  * Honest boundary: recover only reaches panics on the export's own
+    goroutine. wireguard-go's internal goroutines are outside this
+    net — this closes our surface, not the library's.
+  * Test infra: the exit-tunnel test read `hostname -i` whole into
+    the client Endpoint; on a dual-stack docker network that is two
+    addresses and wg-quick rejects it. CI networks are v4-only, so
+    it only ever bit local environments. The test now takes the
+    first v4 address.
+
+  go test ok + full pipeline 52 passed against real tunnels. No API,
+  schema, or migration impact.
+
+
 v2.1.2 - 2026-03-24
 -------------------
 
