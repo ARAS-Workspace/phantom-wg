@@ -5,6 +5,43 @@ passwords, TOTP MFA, RBAC, audit log, authenticated reverse proxy
 to the daemon UDS.
 
 
+v1.1.5 - 2026-07-17
+-------------------
+
+  Hardens the auth composition layer against an attacker who controls
+  headers or knows half a credential. Three fixes, one discipline:
+  client identity and the brute-force budget must both survive.
+
+  * Client IP resolution behind trusted proxies. get_client_ip lived
+    as two verbatim copies and both trusted X-Forwarded-For blindly,
+    taking the leftmost entry — the one the client itself supplies.
+    nginx appends to the incoming header, so a spoofed prefix
+    survived the proxy, landed in the audit log, and keyed the login
+    rate limiter — one fake IP per request made it decorative. Now a
+    single implementation: the header is honored only when the peer
+    is inside AUTH_TRUSTED_PROXIES (new env, comma-separated CIDRs;
+    default is exactly the pinned phantom-net compose subnets), and
+    entries walk right to left, skipping trusted hops — the first
+    untrusted address is the client. A direct connection cannot
+    spoof at all.
+  * MFA endpoints joined the rate limit. The limiter guarded only
+    /login; /mfa/verify and /totp/backup were unlimited, and a
+    6-digit TOTP is brute-forceable. Worse, login reset the bucket
+    on a correct password before the MFA branch — an attacker who
+    knew the password could refill their own budget at will. Both
+    endpoints now spend from the same per-IP budget (429
+    RATE_LIMITED, audited), and the reset moved to the single
+    success gate shared by all three auth paths: only completed
+    authentication refills.
+  * Superadmin password reset revokes the target's sessions, the
+    discipline self-service change and delete_user already had. The
+    audit entry now carries the target user_id.
+
+  283 tests (21 new). No schema or migration impact; API impact is
+  429 on the two MFA endpoints and session invalidation on admin
+  password reset.
+
+
 v1.1.4 - 2026-07-14
 -------------------
 
