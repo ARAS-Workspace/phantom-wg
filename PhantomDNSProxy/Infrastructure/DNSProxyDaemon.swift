@@ -9,6 +9,15 @@ final class DNSProxyDaemon: NSObject, NSXPCListenerDelegate, DNSProxyDaemonProto
 
     static let shared = DNSProxyDaemon()
 
+    /// Same-team designated requirement for XPC peers. `anchor apple
+    /// generic` covers Apple Development, Developer ID and Mac App Store
+    /// signing (all chain to the Apple root); the OU pin is the 10-char
+    /// team identifier — the same team encoded in
+    /// `FlowDecisionEngine.selfSigningPrefix`. A network extension cannot
+    /// be ad-hoc signed, so both dev and release builds satisfy this.
+    private static let peerCodeRequirement =
+        #"anchor apple generic and certificate leaf[subject.OU] = "9C5SL5H7CM""#
+
     private let log = OSLog(
         subsystem: "com.remrearas.Phantom-WG-MacOS.PhantomDNSProxy",
         category: "daemon"
@@ -98,7 +107,21 @@ final class DNSProxyDaemon: NSObject, NSXPCListenerDelegate, DNSProxyDaemonProto
         shouldAcceptNewConnection newConnection: NSXPCConnection
     ) -> Bool {
         let pid = newConnection.processIdentifier
-        os_log("accepting connection pid=%{public}d",
+
+        // Pin the peer to our own team's signature. This mach service is
+        // registered under an application-group name, so any local
+        // process can look it up — and applyConfig() rewrites the
+        // split-tunnel exclude list, i.e. which flows leave the VPN. An
+        // unverified peer is therefore a tunnel-bypass primitive.
+        //
+        // setCodeSigningRequirement (macOS 13+) enforces the requirement
+        // off the kernel audit token, so it is race-free and immune to
+        // the PID-reuse window that manual processIdentifier checks have.
+        // It is additive: the existing app-group connection keeps working
+        // because the host app shares our team; a non-matching peer is
+        // simply never delivered messages. Must be set before resume().
+        newConnection.setCodeSigningRequirement(Self.peerCodeRequirement)
+        os_log("accepting connection pid=%{public}d (requirement pinned)",
                log: log, type: .default, pid)
 
         newConnection.exportedInterface = NSXPCInterface(with: DNSProxyDaemonProtocol.self)
