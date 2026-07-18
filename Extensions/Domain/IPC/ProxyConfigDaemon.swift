@@ -1,52 +1,58 @@
 import Foundation
 import os.log
 
-/// In-process XPC server inside PhantomDNSProxy. Singleton, tied to
-/// the extension process lifetime — outlives provider start/stop
-/// cycles. Buffers `applyConfig` payloads when no provider is
-/// attached so the lazy-spawn window doesn't drop config.
-final class DNSProxyDaemon: NSObject, NSXPCListenerDelegate, DNSProxyDaemonProtocol {
+/// A provider that accepts live split-tunneling configuration. Both
+/// PhantomDNSProxy and PhantomSplitTunnel conform, so one daemon can
+/// drive either.
+protocol ProxyConfigReceiver: AnyObject {
+    func applyConfiguration(_ configuration: SplitTunnelingConfiguration)
+}
 
-    static let shared = DNSProxyDaemon()
+/// In-process XPC server hosted by a lazy-spawned proxy extension.
+/// Started at extension boot — before the OS spawns the provider on the
+/// first flow — so the host app can push configuration into the daemon,
+/// which buffers it and replays it the moment the provider attaches.
+///
+/// One instance per extension process, reachable via `shared`. Because
+/// each extension is its own process that static is unambiguous; the
+/// DNSProxy and SplitTunnel extensions use this same class, each with
+/// its own Mach service name.
+final class ProxyConfigDaemon: NSObject, NSXPCListenerDelegate, ProxyConfigDaemonProtocol {
 
-    /// Same-team designated requirement for XPC peers. `anchor apple
-    /// generic` covers Apple Development, Developer ID and Mac App Store
-    /// signing (all chain to the Apple root); the OU pin is the 10-char
-    /// team identifier — the same team encoded in
-    /// `FlowDecisionEngine.selfSigningPrefix`. A network extension cannot
-    /// be ad-hoc signed, so both dev and release builds satisfy this.
+    /// Process-local singleton, assigned by each extension's `main.swift`.
+    static var shared: ProxyConfigDaemon?
+
+    /// Peers must be signed by our own team. Enforced off the kernel
+    /// audit token — race-free and immune to the PID-reuse window a
+    /// manual processIdentifier check carries. Set before `resume()`.
     private static let peerCodeRequirement =
         #"anchor apple generic and certificate leaf[subject.OU] = "9C5SL5H7CM""#
 
-    private let log = OSLog(
-        subsystem: "com.remrearas.Phantom-WG-MacOS.PhantomDNSProxy",
-        category: "daemon"
-    )
-
     private let listener: NSXPCListener
+    private let log: OSLog
     private(set) var isStarted = false
 
-    /// Live provider attached via `attach(provider:)` at `startProxy`.
-    /// Weak so `stopProxy` doesn't leave a dangling pointer.
-    private weak var provider: DNSProxyProvider?
+    /// Live provider attached at `startProxy`. Weak so `stopProxy`
+    /// leaves no dangling pointer.
+    private weak var provider: ProxyConfigReceiver?
 
-    /// Last `applyConfig` payload buffered while no provider was
-    /// attached. Replayed at the next `attach()`. Cleared on apply,
-    /// on detach, and overwritten by any subsequent push.
+    /// Payload buffered while no provider was attached (lazy-spawn
+    /// window). Replayed at the next `attach()`.
     private var pendingConfig: Data?
     private let pendingLock = NSLock()
 
-    private override init() {
-        self.listener = NSXPCListener(machServiceName: DNSProxyDaemonConfig.machServiceName)
+    init(machServiceName: String, subsystem: String) {
+        self.listener = NSXPCListener(machServiceName: machServiceName)
+        self.log = OSLog(subsystem: subsystem, category: "proxy-daemon")
         super.init()
         self.listener.delegate = self
     }
 
-    /// Provider lifecycle hook called from `startProxy`. Drains any
-    /// `pendingConfig` buffered during the lazy-spawn window so the
-    /// provider boots with the live App-pushed payload instead of
-    /// the stale `providerConfiguration` bootstrap.
-    func attach(provider: DNSProxyProvider) {
+    // MARK: - Provider lifecycle
+
+    /// Drains any config buffered during the lazy-spawn window so the
+    /// provider boots with the live App-pushed payload.
+    func attach(provider: ProxyConfigReceiver) {
         self.provider = provider
         os_log("provider attached", log: log, type: .default)
 
@@ -67,9 +73,8 @@ final class DNSProxyDaemon: NSObject, NSXPCListenerDelegate, DNSProxyDaemonProto
         }
     }
 
-    /// Drops the provider reference and clears the in-memory log
-    /// buffer so the next session starts with a fresh log surface
-    /// (matching SplitTunnel's session-bound log semantics).
+    /// Drops the provider reference and clears the log buffer so the
+    /// next session starts with a fresh log surface.
     func detach() {
         self.provider = nil
         pendingLock.lock()
@@ -83,14 +88,12 @@ final class DNSProxyDaemon: NSObject, NSXPCListenerDelegate, DNSProxyDaemonProto
     /// attempts a connection.
     func start() {
         guard !isStarted else {
-            os_log("daemon.start() already started, skipping",
-                   log: log, type: .default)
+            os_log("start() already started, skipping", log: log, type: .default)
             return
         }
         listener.resume()
         isStarted = true
-        os_log("daemon listening on %{public}@",
-               log: log, type: .default, DNSProxyDaemonConfig.machServiceName)
+        os_log("daemon listening", log: log, type: .default)
     }
 
     func stop() {
@@ -108,23 +111,16 @@ final class DNSProxyDaemon: NSObject, NSXPCListenerDelegate, DNSProxyDaemonProto
     ) -> Bool {
         let pid = newConnection.processIdentifier
 
-        // Pin the peer to our own team's signature. This mach service is
+        // Pin the peer to our own team's signature. The Mach service is
         // registered under an application-group name, so any local
         // process can look it up — and applyConfig() rewrites the
         // split-tunnel exclude list, i.e. which flows leave the VPN. An
-        // unverified peer is therefore a tunnel-bypass primitive.
-        //
-        // setCodeSigningRequirement (macOS 13+) enforces the requirement
-        // off the kernel audit token, so it is race-free and immune to
-        // the PID-reuse window that manual processIdentifier checks have.
-        // It is additive: the existing app-group connection keeps working
-        // because the host app shares our team; a non-matching peer is
-        // simply never delivered messages. Must be set before resume().
+        // unverified peer would be a tunnel-bypass primitive.
         newConnection.setCodeSigningRequirement(Self.peerCodeRequirement)
         os_log("accepting connection pid=%{public}d (requirement pinned)",
                log: log, type: .default, pid)
 
-        newConnection.exportedInterface = NSXPCInterface(with: DNSProxyDaemonProtocol.self)
+        newConnection.exportedInterface = NSXPCInterface(with: ProxyConfigDaemonProtocol.self)
         newConnection.exportedObject = self
         newConnection.invalidationHandler = { [weak self] in
             os_log("connection invalidated pid=%{public}d",
@@ -138,22 +134,20 @@ final class DNSProxyDaemon: NSObject, NSXPCListenerDelegate, DNSProxyDaemonProto
         return true
     }
 
-    // MARK: - DNSProxyDaemonProtocol
+    // MARK: - ProxyConfigDaemonProtocol
 
     /// Buffers the payload when no provider is attached (lazy-spawn
     /// window) and replies `true` so the App's client considers the
-    /// push successful — `attach` drains the buffer before the
-    /// provider sees its first flow.
+    /// push successful — `attach` drains the buffer before the provider
+    /// sees its first flow.
     func applyConfig(_ data: Data, reply: @escaping (Bool) -> Void) {
-        os_log("RPC applyConfig (%{public}d bytes)",
-               log: log, type: .default, data.count)
+        os_log("RPC applyConfig (%{public}d bytes)", log: log, type: .default, data.count)
 
         guard let provider = provider else {
             pendingLock.lock()
             pendingConfig = data
             pendingLock.unlock()
-            os_log("applyConfig — no provider yet, buffered for attach",
-                   log: log, type: .default)
+            os_log("applyConfig — no provider yet, buffered for attach", log: log, type: .default)
             reply(true)
             return
         }
@@ -161,8 +155,7 @@ final class DNSProxyDaemon: NSObject, NSXPCListenerDelegate, DNSProxyDaemonProto
         do {
             let config = try JSONDecoder().decode(SplitTunnelingConfiguration.self, from: data)
             provider.applyConfiguration(config)
-            os_log("applyConfig — applied apps=%{public}d",
-                   log: log, type: .default, config.apps.count)
+            os_log("applyConfig — applied apps=%{public}d", log: log, type: .default, config.apps.count)
             reply(true)
         } catch {
             os_log("applyConfig — decode FAILED: %{public}@",
@@ -173,11 +166,7 @@ final class DNSProxyDaemon: NSObject, NSXPCListenerDelegate, DNSProxyDaemonProto
 
     func fetchLogs(reply: @escaping (Data?) -> Void) {
         let snapshot = RingBufferLogger.shared.snapshot()
-        if snapshot.isEmpty {
-            reply(nil)
-            return
-        }
-        reply(snapshot.data(using: .utf8))
+        reply(snapshot.isEmpty ? nil : snapshot.data(using: .utf8))
     }
 
     func clearLogs(reply: @escaping (Bool) -> Void) {

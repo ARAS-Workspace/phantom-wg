@@ -10,6 +10,7 @@ struct SplitTunnelingView: View {
     @Environment(SplitTunnelProviderManager.self) private var providerManager
     @Environment(DNSProxyProviderManager.self) private var dnsProviderManager
     @Environment(DNSProxyDaemonClient.self) private var dnsDaemonClient
+    @Environment(SplitTunnelDaemonClient.self) private var splitDaemonClient
     @Environment(PhysicalInterfaceResolver.self) private var interfaceResolver
     @Environment(ToastCenter.self) private var toasts
     @Environment(LocalizationManager.self) private var loc
@@ -169,7 +170,7 @@ struct SplitTunnelingView: View {
     private func onSheetAppear() {
         store.reconcile()
         if logStore == nil {
-            let newStore = SplitTunnelLogStore(providerManager: providerManager)
+            let newStore = SplitTunnelLogStore(daemonClient: splitDaemonClient)
             logStore = newStore
             newStore.startPolling()
         }

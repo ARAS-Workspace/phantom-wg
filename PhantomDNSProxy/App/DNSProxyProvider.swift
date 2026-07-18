@@ -10,7 +10,7 @@ import os.log
 ///   → relay to that resolver, pinned to the interface
 /// - Listed app + missing interface or resolver → reject
 /// - Unmatched → relay to system default resolver (no pin)
-final class DNSProxyProvider: NEDNSProxyProvider {
+final class DNSProxyProvider: NEDNSProxyProvider, ProxyConfigReceiver {
 
     private let log = OSLog(
         subsystem: "com.remrearas.Phantom-WG-MacOS.PhantomDNSProxy",
@@ -34,7 +34,7 @@ final class DNSProxyProvider: NEDNSProxyProvider {
                options.map { "\(Array($0.keys))" } ?? "<nil>")
         logger.log("startProxy")
 
-        DNSProxyDaemon.shared.attach(provider: self)
+        ProxyConfigDaemon.shared?.attach(provider: self)
 
         interfaceMonitor.onChange = { [weak self] interface in
             if let interface {
@@ -54,7 +54,7 @@ final class DNSProxyProvider: NEDNSProxyProvider {
 
     override func stopProxy(with reason: NEProviderStopReason, completionHandler: @escaping () -> Void) {
         logger.log("stopProxy reason=\(reason.rawValue)")
-        DNSProxyDaemon.shared.detach()
+        ProxyConfigDaemon.shared?.detach()
         interfaceMonitor.stop()
         completionHandler()
     }
@@ -167,7 +167,7 @@ final class DNSProxyProvider: NEDNSProxyProvider {
 
     /// Apply a decoded configuration to in-memory state. Called
     /// from `startProxy` (initial bootstrap from
-    /// `providerConfiguration`) and from `DNSProxyDaemon.applyConfig`
+    /// `providerConfiguration`) and from `ProxyConfigDaemon.applyConfig`
     /// (live XPC push from the host app). The list is honored
     /// verbatim. Logs the app-list diff against the previous state.
     func applyConfiguration(_ configuration: SplitTunnelingConfiguration) {

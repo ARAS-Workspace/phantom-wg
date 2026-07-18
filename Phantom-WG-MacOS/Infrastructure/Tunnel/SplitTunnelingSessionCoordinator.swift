@@ -32,6 +32,7 @@ final class SplitTunnelingSessionCoordinator {
     @ObservationIgnored private let split: SplitTunnelProviderManager
     @ObservationIgnored private let dns: DNSProxyProviderManager
     @ObservationIgnored private let dnsDaemonClient: DNSProxyDaemonClient
+    @ObservationIgnored private let splitDaemonClient: SplitTunnelDaemonClient
     @ObservationIgnored private let oslog = OSLog(
         subsystem: "com.remrearas.Phantom-WG-MacOS",
         category: "session-coordinator"
@@ -40,11 +41,13 @@ final class SplitTunnelingSessionCoordinator {
     init(
         split: SplitTunnelProviderManager,
         dns: DNSProxyProviderManager,
-        dnsDaemonClient: DNSProxyDaemonClient
+        dnsDaemonClient: DNSProxyDaemonClient,
+        splitDaemonClient: SplitTunnelDaemonClient
     ) {
         self.split = split
         self.dns = dns
         self.dnsDaemonClient = dnsDaemonClient
+        self.splitDaemonClient = splitDaemonClient
     }
 
     // MARK: - Boot Reconcile
@@ -140,9 +143,9 @@ final class SplitTunnelingSessionCoordinator {
             log("reconfigure: state=\(state) → no-op (config persisted, applied on next start)")
             return
         }
-        log("reconfigure: opcode 0x00 → SplitTunnel")
-        await split.reloadExtensionConfig(with: config)
-        log("reconfigure: SplitTunnel reloaded")
+        log("reconfigure: XPC applyConfig → SplitTunnel")
+        let splitPushed = await splitDaemonClient.applyConfig(config)
+        log("reconfigure: SplitTunnel applyConfig \(splitPushed ? "OK" : "FAILED")")
 
         log("reconfigure: XPC applyConfig → DNSProxy")
         let pushed = await dnsDaemonClient.applyConfig(config)

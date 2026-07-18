@@ -24,6 +24,8 @@
 	<string>Phantom-WG Mac needs to install a system extension to manage per-app traffic routing for Split-Tunneling.</string>
 	<key>NetworkExtension</key>
 	<dict>
+		<key>NEMachServiceName</key>
+		<string>group.com.remrearas.phantom-wg-macos.splittunnel</string>
 		<key>NEProviderClasses</key>
 		<dict>
 			<key>com.apple.networkextension.app-proxy</key>

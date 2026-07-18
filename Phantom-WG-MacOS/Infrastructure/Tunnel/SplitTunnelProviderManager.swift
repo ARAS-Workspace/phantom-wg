@@ -70,49 +70,6 @@ class SplitTunnelProviderManager {
         try? await manager.saveToPreferences()
     }
 
-    // MARK: - Provider Messaging
-
-    /// Opcode `0x00` — live reload. Payload = opcode byte + JSON
-    /// configuration. No-op when the session isn't connected.
-    func reloadExtensionConfig(with configuration: SplitTunnelingConfiguration) async {
-        guard let configData = try? JSONEncoder().encode(configuration) else { return }
-        var message = Data([0x00])
-        message.append(configData)
-        _ = await sendOpcode(message)
-    }
-
-    /// Opcode `0x02` — flush the extension's log ring buffer.
-    func clearLogs() async {
-        _ = await sendOpcode(Data([0x02]))
-    }
-
-    /// Opcode `0x01` — newline-joined log snapshot, or `nil` if the
-    /// session isn't up.
-    func fetchLogs() async -> String? {
-        guard let data = await sendOpcode(Data([0x01])) else { return nil }
-        return String(data: data, encoding: .utf8)
-    }
-
-    /// Send an opcode (and inline payload) to the running extension.
-    /// Returns the reply bytes, or `nil` if the session isn't
-    /// connected or the call throws.
-    private func sendOpcode(_ message: Data) async -> Data? {
-        guard let manager,
-              let session = manager.connection as? NETunnelProviderSession,
-              session.status == .connected else {
-            return nil
-        }
-        return await withCheckedContinuation { (continuation: CheckedContinuation<Data?, Never>) in
-            do {
-                try session.sendProviderMessage(message) { reply in
-                    continuation.resume(returning: reply)
-                }
-            } catch {
-                continuation.resume(returning: nil)
-            }
-        }
-    }
-
     // MARK: - Observation
 
     private func attachStatusObserver() {

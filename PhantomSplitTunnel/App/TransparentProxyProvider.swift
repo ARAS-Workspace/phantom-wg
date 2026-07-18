@@ -7,7 +7,7 @@ import os.log
 /// `NWConnection.requiredInterface`. Strict mode: no interface →
 /// reject the flow rather than letting it leak through the OS
 /// default route.
-final class TransparentProxyProvider: NETransparentProxyProvider, ActiveFlowRelayRegistry {
+final class TransparentProxyProvider: NETransparentProxyProvider, ActiveFlowRelayRegistry, ProxyConfigReceiver {
 
     private let log = OSLog(
         subsystem: "com.remrearas.Phantom-WG-MacOS.PhantomSplitTunnel",
@@ -29,6 +29,8 @@ final class TransparentProxyProvider: NETransparentProxyProvider, ActiveFlowRela
 
     override func startProxy(options: [String: Any]? = nil) async throws {
         os_log("startProxy — loading configuration", log: log, type: .default)
+
+        ProxyConfigDaemon.shared?.attach(provider: self)
 
         try await setTunnelNetworkSettings(buildNetworkSettings())
 
@@ -81,6 +83,7 @@ final class TransparentProxyProvider: NETransparentProxyProvider, ActiveFlowRela
 
     override func stopProxy(with reason: NEProviderStopReason) async {
         os_log("stopProxy — reason=%{public}d", log: log, type: .default, reason.rawValue)
+        ProxyConfigDaemon.shared?.detach()
         interfaceMonitor.stop()
     }
 
@@ -178,60 +181,14 @@ final class TransparentProxyProvider: NETransparentProxyProvider, ActiveFlowRela
         excludedApps.first { FlowDecisionEngine.matches(signingID: signingID, against: $0) }
     }
 
-    // MARK: - App Messages
+    // MARK: - Configuration
 
-    override func handleAppMessage(
-        _ messageData: Data,
-        completionHandler: ((Data?) -> Void)? = nil
-    ) {
-        guard let opcode = messageData.first else {
-            completionHandler?(nil)
-            return
-        }
-
-        switch opcode {
-        case 0x00:
-            // Live reload: opcode + inline JSON payload. Apply
-            // locally; the App pushes the same config to DNSProxy
-            // independently via its own XPC channel.
-            let configBytes = messageData.dropFirst()
-            let resolved: SplitTunnelingConfiguration
-            if configBytes.isEmpty {
-                resolved = .default
-            } else if let decoded = try? JSONDecoder().decode(
-                SplitTunnelingConfiguration.self,
-                from: Data(configBytes)
-            ) {
-                resolved = decoded
-            } else {
-                os_log("Live reload — decode FAILED, keeping previous config", log: log, type: .error)
-                completionHandler?(Data([0x00]))
-                return
-            }
-
-            applyConfiguration(resolved)
-            completionHandler?(Data([0x00]))
-
-        case 0x01:
-            let payload = logger.snapshot().data(using: .utf8) ?? Data()
-            completionHandler?(payload)
-
-        case 0x02:
-            logger.clear()
-            completionHandler?(Data([0x02]))
-
-        default:
-            os_log("Unknown opcode: 0x%02x", log: log, type: .error, opcode)
-            completionHandler?(nil)
-        }
-    }
-
-    // MARK: - Configuration Reload
-
-    /// Apply the decoded configuration to in-memory state. Shared by
-    /// startup and live reload. Logs the app-list diff against the
-    /// previous state so the user can see additions/removals.
-    private func applyConfiguration(_ configuration: SplitTunnelingConfiguration) {
+    /// Apply the decoded configuration to in-memory state. Called from
+    /// `startProxy` (bootstrap from providerConfiguration) and from
+    /// `ProxyConfigDaemon.applyConfig` (live XPC push from the host app).
+    /// Logs the app-list diff against the previous state so the user can
+    /// see additions/removals.
+    func applyConfiguration(_ configuration: SplitTunnelingConfiguration) {
         let previous = excludedApps
         excludedApps = configuration.apps
         interfaceMonitor.setSelection(configuration.interfaceSelection)

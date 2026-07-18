@@ -18,6 +18,7 @@ struct PhantomApp: App {
     @State private var splitProviderManager: SplitTunnelProviderManager
     @State private var dnsProviderManager: DNSProxyProviderManager
     @State private var dnsDaemonClient: DNSProxyDaemonClient
+    @State private var splitDaemonClient: SplitTunnelDaemonClient
     @State private var interfaceResolver: PhysicalInterfaceResolver
     @State private var toastCenter: ToastCenter
 
@@ -29,10 +30,12 @@ struct PhantomApp: App {
         let splitProviderManager = SplitTunnelProviderManager()
         let dnsProviderManager = DNSProxyProviderManager()
         let dnsDaemonClient = DNSProxyDaemonClient()
+        let splitDaemonClient = SplitTunnelDaemonClient()
         let sessionCoordinator = SplitTunnelingSessionCoordinator(
             split: splitProviderManager,
             dns: dnsProviderManager,
-            dnsDaemonClient: dnsDaemonClient
+            dnsDaemonClient: dnsDaemonClient,
+            splitDaemonClient: splitDaemonClient
         )
         splitTunnelingStore.sessionCoordinator = sessionCoordinator
 
@@ -46,6 +49,7 @@ struct PhantomApp: App {
         _interfaceResolver = State(initialValue: PhysicalInterfaceResolver())
         _toastCenter = State(initialValue: ToastCenter())
         _dnsDaemonClient = State(initialValue: dnsDaemonClient)
+        _splitDaemonClient = State(initialValue: splitDaemonClient)
     }
 
     var body: some Scene {
@@ -64,6 +68,7 @@ struct PhantomApp: App {
             .environment(splitProviderManager)
             .environment(dnsProviderManager)
             .environment(dnsDaemonClient)
+            .environment(splitDaemonClient)
             .environment(interfaceResolver)
             .environment(toastCenter)
             .tint(Color.accentColor)

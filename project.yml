@@ -230,7 +230,8 @@ targets:
       # contract + group ID. Lives under the App tree because it
       # crosses the App/extension boundary.
       - path: Phantom-WG-MacOS/Domain/Configuration/SplitTunnelingConfiguration.swift
-      - path: Phantom-WG-MacOS/Domain/IPC/DNSProxyDaemonProtocol.swift
+      - path: Phantom-WG-MacOS/Domain/IPC/ProxyConfigDaemonProtocol.swift
+      - path: Extensions/Domain/IPC/ProxyConfigDaemon.swift
       - path: Phantom-WG-MacOS/Shared/SharedConstants.swift
       # Extension-only shared domain — ring-buffer logger, matching
       # engine, interface watcher.
@@ -267,6 +268,11 @@ targets:
         CFBundleDisplayName: PhantomSplitTunnel
         NSSystemExtensionUsageDescription: "Phantom-WG Mac needs to install a system extension to manage per-app traffic routing for Split-Tunneling."
         NetworkExtension:
+          # Authorizes the Mach service the ProxyConfigDaemon vends, so
+          # the app's XPC client can look it up. Must be prefixed by one
+          # of the entitlement's application-groups (the `group.<id>`
+          # one). Mirrors PhantomDNSProxy.
+          NEMachServiceName: group.com.remrearas.phantom-wg-macos.splittunnel
           NEProviderClasses:
             com.apple.networkextension.app-proxy: $(PRODUCT_MODULE_NAME).TransparentProxyProvider
     entitlements:
@@ -296,7 +302,8 @@ targets:
       # contract + group ID. DNSProxy absorbs the port 53 flows
       # SplitTunnel carves out via excludedNetworkRules.
       - path: Phantom-WG-MacOS/Domain/Configuration/SplitTunnelingConfiguration.swift
-      - path: Phantom-WG-MacOS/Domain/IPC/DNSProxyDaemonProtocol.swift
+      - path: Phantom-WG-MacOS/Domain/IPC/ProxyConfigDaemonProtocol.swift
+      - path: Extensions/Domain/IPC/ProxyConfigDaemon.swift
       - path: Phantom-WG-MacOS/Shared/SharedConstants.swift
       # Extension-only shared domain — ring-buffer logger, matching
       # engine, interface watcher.

@@ -7,7 +7,11 @@ os_log("PhantomDNSProxy system extension BOOT", log: bootLog, type: .default)
 
 // Listener must answer before any client connects; the provider
 // itself is lazy-spawned by the OS on first DNS flow.
-DNSProxyDaemon.shared.start()
+ProxyConfigDaemon.shared = ProxyConfigDaemon(
+    machServiceName: ProxyConfigService.dnsProxy,
+    subsystem: "com.remrearas.Phantom-WG-MacOS.PhantomDNSProxy"
+)
+ProxyConfigDaemon.shared?.start()
 
 autoreleasepool {
     NEProvider.startSystemExtensionMode()
