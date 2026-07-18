@@ -56,20 +56,42 @@ enum FlowDecisionEngine {
         }
 
         // Bundle-ID namespace — covers helpers signed with a different
-        // team prefix, or no prefix at all. Checks every position the
-        // bundle ID could appear at:
-        //   head:     "com.vendor.Browser"
-        //   head.*:   "com.vendor.Browser.helper"
-        //   *.tail:   "TEAM.com.vendor.Browser"
-        //   *.mid.*:  "TEAM.com.vendor.Browser.helper"
+        // team prefix, or no prefix at all. The only thing that ever
+        // legitimately precedes a bundle ID in a signing identifier is
+        // a single 10-char Apple team ID, so strip at most that and
+        // then anchor at the FRONT:
+        //   "com.vendor.Browser"                 → core, exact
+        //   "com.vendor.Browser.helper"          → core, subtree
+        //   "ZZ99YY88XX.com.vendor.Browser.gpu"  → strip team, subtree
+        //
+        // Anchoring is the security boundary. The earlier hasSuffix /
+        // contains passes matched the bundle ID anywhere in the string,
+        // so an attacker-controlled app signed
+        // "EVILTEAM00.evil.com.vendor.Browser" satisfied `hasSuffix(
+        // ".com.vendor.Browser")` and silently bypassed the tunnel.
+        // Stripping only a real team prefix, then requiring the bundle
+        // ID at position zero, rejects that while still matching a
+        // legitimate helper under a different team.
         let bundleID = app.bundleIdentifier
-        if signingID == bundleID
-            || signingID.hasPrefix(bundleID + ".")
-            || signingID.hasSuffix("." + bundleID)
-            || signingID.contains("." + bundleID + ".") {
+        let core = Self.withoutTeamPrefix(signingID)
+        if core == bundleID || core.hasPrefix(bundleID + ".") {
             return true
         }
 
         return false
+    }
+
+    /// Drop a leading Apple team-identifier segment if present. Team
+    /// IDs are exactly 10 characters, uppercase letters and digits
+    /// (e.g. `9C5SL5H7CM`). Anything else — a longer segment, a
+    /// lowercase reverse-DNS label — is left in place, so a spoofed
+    /// prefix cannot be mistaken for a team and stripped away.
+    static func withoutTeamPrefix(_ signingID: String) -> String {
+        guard let dot = signingID.firstIndex(of: ".") else { return signingID }
+        let head = signingID[..<dot]
+        let isTeamID = head.count == 10 && head.allSatisfy {
+            $0.isNumber || ($0.isLetter && $0.isUppercase)
+        }
+        return isTeamID ? String(signingID[signingID.index(after: dot)...]) : signingID
     }
 }
