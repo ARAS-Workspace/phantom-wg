@@ -56,7 +56,7 @@ targets:
           - "-lresolv"
           - "-Wl,-w"
         SWIFT_VERSION: "5.0"
-        MARKETING_VERSION: "1.1.1"
+        MARKETING_VERSION: "1.1.2"
         CURRENT_PROJECT_VERSION: 1
         TARGETED_DEVICE_FAMILY: "1,2"
     info:
@@ -132,7 +132,7 @@ targets:
         OTHER_LDFLAGS:
           - "-lresolv"
         SWIFT_VERSION: "5.0"
-        MARKETING_VERSION: "1.1.1"
+        MARKETING_VERSION: "1.1.2"
         CURRENT_PROJECT_VERSION: 1
         LIBRARY_SEARCH_PATHS:
           - "$(PROJECT_DIR)/Libraries/WireGuardKit/Sources/WireGuardKitGo/out"
