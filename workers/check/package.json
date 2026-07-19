@@ -9,9 +9,9 @@
     "types": "wrangler types"
   },
   "devDependencies": {
-    "@cloudflare/workers-types": "4.20260317.1",
+    "@cloudflare/workers-types": "5.20260719.1",
     "typescript": "5.9.3",
-    "wrangler": "4.75.0"
+    "wrangler": "4.112.0"
   },
   "dependencies": {
     "dotenv-cli": "11.0.0"
