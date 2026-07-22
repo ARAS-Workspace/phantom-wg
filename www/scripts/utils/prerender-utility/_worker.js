@@ -6,6 +6,25 @@ const DEFAULT_LOCALE = __DEFAULT_LOCALE__;
 const THEMES = __THEMES__;
 const DEFAULT_THEME = __DEFAULT_THEME__;
 
+// Cache policy. Content-hashed build output (`/assets/*.js|css`) can never
+// change under a given URL, so it is immutable and cached forever. Everything a
+// deploy can rewrite in place — HTML documents, llms markdown, sitemap/robots,
+// public images — must be revalidated, so a client never runs a stale HTML that
+// points at a hashed chunk the new deploy has already purged (→ 404 / white page).
+const IMMUTABLE = 'public, max-age=31536000, immutable';
+const REVALIDATE = 'no-cache';
+
+/**
+ * Cache-Control for a static asset by path. Only Vite's hashed JS/CSS live at
+ * `/assets/*.{js,css}` (public/ ships images/svg/cast, never js/css there), so
+ * that pattern is a safe immutable signal; anything else revalidates.
+ * @param {string} pathname
+ * @returns {string}
+ */
+function assetCacheControl(pathname) {
+  return /^\/assets\/.+\.(js|css)$/.test(pathname) ? IMMUTABLE : REVALIDATE;
+}
+
 /**
  * Locale negotiation shared by every route: an explicit `?locale=` wins;
  * otherwise the `preferred_locale` cookie; otherwise the default. Agents send
@@ -49,6 +68,8 @@ async function tryServeMarkdown(env, url, request, dir) {
       headers.set('Content-Language', p === wanted ? loc : DEFAULT_LOCALE);
       // The body depends on both the negotiated format and the locale cookie.
       headers.set('Vary', 'Accept, Cookie');
+      // Regenerated every deploy — revalidate so agents never read a stale dump.
+      headers.set('Cache-Control', REVALIDATE);
       return new Response(r.body, { status: 200, headers });
     }
   }
@@ -76,9 +97,12 @@ export default {
       });
     }
 
-    // Static assets — pass through
+    // Static assets — pass through, tagged with the right cache lifetime.
     if (pathname.includes('.') && !pathname.endsWith('.html')) {
-      return env.ASSETS.fetch(request);
+      const res = await env.ASSETS.fetch(request);
+      const headers = new Headers(res.headers);
+      headers.set('Cache-Control', assetCacheControl(pathname));
+      return new Response(res.body, { status: res.status, statusText: res.statusText, headers });
     }
 
     // Markdown negotiation — an agent that explicitly asks for markdown gets this
@@ -124,6 +148,9 @@ export default {
           headers.set('Content-Language', locale);
           // Accept: this URL also answers markdown when an agent asks for it.
           headers.set('Vary', 'Accept, Cookie');
+          // The document must be revalidated every time: it is the map to the
+          // current hashed chunks, so a stale copy would point at purged files.
+          headers.set('Cache-Control', REVALIDATE);
           return new Response(response.body, { status: 200, headers });
         }
       } catch {
@@ -131,7 +158,10 @@ export default {
       }
     }
 
-    // SPA fallback
-    return env.ASSETS.fetch(request);
+    // SPA fallback — an HTML shell; revalidate it like every other document.
+    const res = await env.ASSETS.fetch(request);
+    const headers = new Headers(res.headers);
+    headers.set('Cache-Control', REVALIDATE);
+    return new Response(res.body, { status: res.status, statusText: res.statusText, headers });
   }
 };
