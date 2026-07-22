@@ -275,13 +275,14 @@ function generateSitemap(config) {
   const urls = config.routes.filter((route) => !excluded.includes(route)).map((route) => {
     const loc = route === '/' ? productionUrl + '/' : `${productionUrl}${route}`;
 
-    // hreflang alternates: ?locale=xx → Worker serves correct prerendered HTML
+    // hreflang alternates: the default locale is canonical at the BARE url
+    // (matching the page's own <link rel="canonical">); only non-default
+    // locales carry ?locale= (the Worker negotiates and serves that variant).
     const alternates = config.locales.map((altLocale) => {
-      const altLoc = `${loc}${loc.endsWith('/') ? '' : ''}?locale=${altLocale}`;
+      const altLoc = altLocale === config.default_locale ? loc : `${loc}?locale=${altLocale}`;
       return `    <xhtml:link rel="alternate" hreflang="${altLocale}" href="${altLoc}" />`;
     });
-    const defaultLoc = `${loc}${loc.endsWith('/') ? '' : ''}?locale=${config.default_locale}`;
-    alternates.push(`    <xhtml:link rel="alternate" hreflang="x-default" href="${defaultLoc}" />`);
+    alternates.push(`    <xhtml:link rel="alternate" hreflang="x-default" href="${loc}" />`);
 
     return [
       '  <url>',
