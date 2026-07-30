@@ -51,12 +51,12 @@
     "@types/react-dom": "19.2.3",
     "@vitejs/plugin-react": "4.7.0",
     "dotenv-cli": "8.0.0",
-    "js-yaml": "4.2.0",
+    "js-yaml": "4.3.0",
     "p-limit": "7.2.0",
     "prettier": "3.8.1",
     "sass-embedded": "1.97.3",
     "typescript": "5.9.3",
     "vite": "7.3.6",
-    "wrangler": "4.103.0"
+    "wrangler": "4.115.0"
   }
 }
