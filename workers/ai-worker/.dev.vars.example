@@ -1,0 +1,25 @@
+# Phantom-WG AI Worker - Development Environment Variables
+# Copy to .dev.vars and fill in. TURNSTILE dummy secret always passes;
+# use 3x0000000000000000000000000000000AA to test the already-spent path.
+
+# The model is reached only through AI Gateway, which holds the spend limit,
+# the rate limit and the Anthropic key itself. There is no ANTHROPIC_API_KEY
+# here on purpose: the key is stored in the gateway under CF_AIG_KEY_ALIAS and
+# attached on the way out, so this worker never carries it.
+#
+# Both of the first two are required. Missing either, the worker refuses the
+# turn rather than reaching the model unmetered.
+#
+# The SDK appends /v1/messages, so give the provider endpoint itself.
+ANTHROPIC_BASE_URL=https://gateway.ai.cloudflare.com/v1/<account_id>/<gateway>/anthropic
+# Gateway access token: AI Gateway > your gateway > Settings > Create
+# authentication token (needs the `AI Gateway Run` permission). Without it the
+# gateway answers 401 from its own error body and the request never reaches
+# Anthropic — which reads as an Anthropic key problem and is not one.
+CF_AIG_TOKEN=
+# Which stored provider key the gateway should use. Unset means `default`.
+CF_AIG_KEY_ALIAS=default
+
+TURNSTILE_SECRET_KEY=1x0000000000000000000000000000000AA
+SESSION_SIGNING_KEY=dev-only-signing-key-change-me
+ENVIRONMENT=development

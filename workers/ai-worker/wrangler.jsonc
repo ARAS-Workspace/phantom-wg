@@ -1,0 +1,101 @@
+/**
+ * Phantom-WG AI Worker Configuration
+ * For more details: https://developers.cloudflare.com/workers/wrangler/configuration/
+ */
+{
+	"$schema": "node_modules/wrangler/config-schema.json",
+	"name": "phantom-ai-worker",
+	"main": "src/index.ts",
+	"compatibility_date": "2026-07-01",
+	/** Required by @anthropic-ai/sdk (imports Node built-ins). */
+	"compatibility_flags": ["nodejs_compat"],
+	"workers_dev": false,
+	"preview_urls": false,
+	"observability": {
+		"enabled": true
+	},
+	/**
+	 * The custom domain (ai-worker.phantom.tc) is attached in the Cloudflare
+	 * dashboard, not here — same as the other workers in this account. A
+	 * `routes` entry would try to own the domain on every deploy and fight the
+	 * dashboard binding. The site reaches the worker through
+	 * VITE_AI_WORKER_PRODUCTION_ENDPOINT, so this config never needs its own
+	 * hostname.
+	 */
+	/**
+	 * Text module — the system prompt ships as a bundled .md import.
+	 */
+	"rules": [
+		{
+			"type": "Text",
+			"globs": [
+				"**/*.md"
+			],
+			"fallthrough": true
+		}
+	],
+	/**
+	 * Non-secret gateway settings. They are vars rather than secrets because
+	 * neither is a credential: the endpoint is a URL and the alias only names
+	 * which stored key the gateway should reach for. CF_AIG_TOKEN is the secret.
+	 * The gateway (phantomtc-site) is this worker's own, separate from its
+	 * siblings in the account, so its budget and its stored key answer for
+	 * this agent alone.
+	 */
+	"vars": {
+		"ANTHROPIC_BASE_URL": "https://gateway.ai.cloudflare.com/v1/87828472d0ce84b59c0d336a53783d84/phantomtc-site/anthropic",
+		"CF_AIG_KEY_ALIAS": "default"
+	},
+	/**
+	 * D1 Database — the conversation record and integrity chain
+	 * (conversation_logs), the one table this worker has. It is required at
+	 * runtime and created by the single schema migration. Nothing here records
+	 * spend: AI Gateway holds the budget.
+	 * The commands below are for recreating the database elsewhere or working
+	 * locally.
+	 *
+	 * Create database:
+	 *   npx wrangler d1 create phantom-ai-logs
+	 *
+	 * Apply the schema (local):
+	 *   npx wrangler d1 migrations apply phantom-ai-logs --local
+	 *
+	 * Apply the schema (remote/production):
+	 *   npx wrangler d1 migrations apply phantom-ai-logs --remote
+	 *
+	 * Query (local):
+	 *   npx wrangler d1 execute phantom-ai-logs --local --command="SELECT * FROM conversation_logs"
+	 *
+	 * Reset local database (migrations have to be re-applied afterwards):
+	 *   rm -rf .wrangler/state
+	 */
+	"d1_databases": [
+		{
+			"binding": "AI_LOGS_DB",
+			"database_name": "phantom-ai-logs",
+			"database_id": "0641aee6-d66e-4aef-93f7-a3d2b4f8a4b8"
+		}
+	]
+	/**
+	 * Production Secrets (set via CLI):
+	 * npx wrangler secret put TURNSTILE_SECRET_KEY
+	 * npx wrangler secret put CF_AIG_TOKEN
+	 *
+	 * There is no ANTHROPIC_API_KEY. The model is reached only through AI
+	 * Gateway, which stores the Anthropic key itself and attaches it on the way
+	 * out — so CF_AIG_TOKEN is what protects it, while the `vars` block above
+	 * names which gateway (ANTHROPIC_BASE_URL) and which stored key
+	 * (CF_AIG_KEY_ALIAS). Without the endpoint and the token the worker refuses
+	 * to answer rather than reaching the model with no spend limit in front of
+	 * it.
+	 *
+	 * SESSION_SIGNING_KEY signs the session tokens and is never shown to a
+	 * client, so it only has to be long and random — generate and set it in
+	 * one go (rotating it just invalidates live sessions; clients re-solve
+	 * the Turnstile challenge and carry on):
+	 *   openssl rand -base64 48 | npx wrangler secret put SESSION_SIGNING_KEY
+	 */
+	/**
+	 * Development: use a .dev.vars file (see .dev.vars.example).
+	 */
+}

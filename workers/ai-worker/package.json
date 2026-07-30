@@ -1,0 +1,23 @@
+{
+	"name": "phantom-ai-worker",
+	"version": "1.0.0",
+	"description": "Phantom-WG — AI Worker (ai-worker.phantom.tc) - Claude-backed site agent with llms-full context injection",
+	"author": "Rıza Emre ARAS",
+	"license": "AGPL-3.0-or-later",
+	"private": true,
+	"scripts": {
+		"typecheck": "tsc --noEmit",
+		"deploy": "dotenv -- wrangler deploy",
+		"dev": "dotenv -- wrangler dev --port 8792",
+		"start": "dotenv -- wrangler dev --port 8792"
+	},
+	"dependencies": {
+		"@anthropic-ai/sdk": "0.115.0"
+	},
+	"devDependencies": {
+		"@cloudflare/workers-types": "5.20260726.1",
+		"dotenv-cli": "11.0.0",
+		"typescript": "7.0.2",
+		"wrangler": "4.114.0"
+	}
+}

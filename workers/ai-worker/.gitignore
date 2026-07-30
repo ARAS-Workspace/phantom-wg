@@ -1,0 +1,34 @@
+#  █████╗ ██████╗  █████╗ ███████╗
+# ██╔══██╗██╔══██╗██╔══██╗██╔════╝
+# ███████║██████╔╝███████║███████╗
+# ██╔══██║██╔══██╗██╔══██║╚════██║
+# ██║  ██║██║  ██║██║  ██║███████║
+# ╚═╝  ╚═╝╚═╝  ╚═╝╚═╝  ╚═╝╚══════╝
+
+# Worker-local rules. The site's root .gitignore covers the repo at large;
+# everything specific to this worker lives here so the two stay independent.
+
+# Dependencies
+node_modules/
+
+# Wrangler local state (dev D1, KV, caches) and build output
+.wrangler/
+dist/
+
+# Runtime secrets for `wrangler dev` — never commit (see .dev.vars.example)
+.dev.vars
+
+# Cloudflare API credentials used by `wrangler deploy`
+.env
+.env.cf
+
+# Test output
+coverage/
+
+# IDE
+.idea/
+*.iml
+
+# Logs / OS
+*.log
+.DS_Store

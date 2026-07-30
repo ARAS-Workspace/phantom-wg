@@ -1,0 +1,74 @@
+name: Deploy phantom-ai-worker
+
+# Only the worker's own files trigger this. Site changes deploy through
+# deploy-phantom-www.yml and must not redeploy the worker, and vice versa —
+# the two are independent deployables that happen to share a repository.
+on:
+  push:
+    branches: [press-kit]
+    paths:
+      - 'workers/ai-worker/**'
+      - '.github/workflows/deploy-phantom-ai-worker.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  deployments: write
+
+# A second push while a deploy is running waits for it instead of racing it —
+# the in-flight deploy always finishes (cancel-in-progress: false).
+concurrency:
+  group: deploy-phantom-ai-worker
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    name: Deploy to Cloudflare Workers
+    runs-on: self-hosted
+    defaults:
+      run:
+        working-directory: workers/ai-worker
+
+    steps:
+      - name: Harden runner
+        uses: step-security/harden-runner@58077d3c7e43986b6b15fba718e8ea69e387dfcc # v2.15.1
+        with:
+          egress-policy: audit
+
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+
+      - name: Setup Node.js
+        uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # v6.3.0
+        with:
+          node-version: '24'
+          cache: 'npm'
+          cache-dependency-path: workers/ai-worker/package-lock.json
+
+      - name: Create .env
+        # `npm run deploy` is `dotenv -- wrangler deploy`, which reads .env.
+        # Only Wrangler's own credentials belong here; the worker's runtime
+        # secrets live in Cloudflare (wrangler secret put), never in CI.
+        run: |
+          cat > .env << EOF
+          CLOUDFLARE_API_TOKEN=${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID=${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          EOF
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Typecheck
+        # The deploy itself does not typecheck, so a type error would ship.
+        run: npx tsc --noEmit
+
+      - name: Deploy to Cloudflare Workers
+        run: npm run deploy
+
+      - name: Cleanup
+        # The runner is self-hosted, so its disk outlives the job: the deploy
+        # credentials must not stay behind between runs.
+        if: always()
+        run: rm -f .env
