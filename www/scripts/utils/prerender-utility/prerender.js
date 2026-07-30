@@ -81,7 +81,7 @@ function startPreviewServer(config) {
     const serverProcess = spawn(
       'npm',
       ['run', 'preview', '--', '--port', config.preview_port.toString()],
-      { cwd: PROJECT_ROOT, stdio: 'pipe', shell: true }
+      { cwd: PROJECT_ROOT, stdio: 'pipe' }
     );
 
     const timeout = setTimeout(() => {
