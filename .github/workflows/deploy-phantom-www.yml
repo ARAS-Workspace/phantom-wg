@@ -56,6 +56,8 @@ jobs:
           cat > .env.production << EOF
           VITE_PHANTOM_CHECK_ENDPOINT=https://check.phantom.tc
           VITE_PHANTOM_CHECK_TURNSTILE_SITE_KEY=${{ secrets.PHANTOM_CHECK_TURNSTILE_SITE_KEY }}
+          VITE_PHANTOM_AI_ENDPOINT=https://ai-worker.phantom.tc
+          VITE_PHANTOM_AI_TURNSTILE_SITE_KEY=${{ secrets.PHANTOM_AI_TURNSTILE_SITE_KEY }}
           EOF
 
       - name: Install dependencies

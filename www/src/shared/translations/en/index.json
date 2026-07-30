@@ -139,5 +139,23 @@
     "noParameters": "No parameters",
     "noResponse": "No response body",
     "endpoints": "endpoints"
+  },
+  "aiChat": {
+    "header": {
+      "title": "Site Agent"
+    },
+    "assistantName": "Claude",
+    "greeting": "Hi! I am this site's agent. Ask me about Phantom-WG's architecture, installation, client applications and documentation.",
+    "unavailable": "The agent is currently unavailable",
+    "unavailableHint": "This build has no agent configuration. The rest of the site works normally.",
+    "errors": {
+      "title": "Error",
+      "turnstile": "The security check could not be completed. Please try again.",
+      "sessionFailed": "The session could not be started. Please try again.",
+      "sessionExpired": "Your session expired. Complete the check again to pick up where you left off.",
+      "incomplete": "The connection dropped before the answer was finished. Please ask again.",
+      "network": "The agent could not be reached. Check your connection and try again.",
+      "generic": "Something went wrong while generating the response. Please try again."
+    }
   }
 }

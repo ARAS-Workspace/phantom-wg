@@ -21,6 +21,7 @@
     "deploy:preview": "dotenv -e .env.cf -- wrangler pages deploy dist --branch preview"
   },
   "dependencies": {
+    "@carbon/ai-chat": "1.17.0",
     "@carbon/icons-react": "11.76.0",
     "@carbon/react": "1.102.0",
     "@carbon/styles": "1.101.0",

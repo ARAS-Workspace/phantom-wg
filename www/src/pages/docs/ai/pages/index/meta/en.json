@@ -1,0 +1,10 @@
+{
+  "seo": {
+    "title": "AI",
+    "description": "A Claude-backed site agent fed by the Phantom-WG documentation. Ask about the architecture, installation, client applications and tools."
+  },
+  "kv": {
+    "datePublished": "30/07/2026 00:00",
+    "dateModified": "30/07/2026 00:00"
+  }
+}

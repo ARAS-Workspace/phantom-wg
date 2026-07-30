@@ -169,5 +169,23 @@
     "noParameters": "Parametre yok",
     "noResponse": "Yanıt gövdesi yok",
     "endpoints": "uç nokta"
+  },
+  "aiChat": {
+    "header": {
+      "title": "Site Ajanı"
+    },
+    "assistantName": "Claude",
+    "greeting": "Merhaba! Ben bu sitenin ajanıyım. Phantom-WG'nin mimarisi, kurulumu, istemci uygulamaları ve dokümantasyonu hakkında sorularınızı yanıtlayabilirim.",
+    "unavailable": "Ajan şu anda kullanılamıyor",
+    "unavailableHint": "Bu derlemede ajan yapılandırması bulunmuyor. Sitenin geri kalanı normal şekilde çalışıyor.",
+    "errors": {
+      "title": "Hata",
+      "turnstile": "Güvenlik doğrulaması tamamlanamadı. Lütfen tekrar deneyin.",
+      "sessionFailed": "Oturum başlatılamadı. Lütfen tekrar deneyin.",
+      "sessionExpired": "Oturum süresi doldu. Doğrulamayı tekrarlayıp kaldığınız yerden devam edebilirsiniz.",
+      "incomplete": "Yanıt tamamlanamadan bağlantı kesildi. Sorunuzu tekrar sorabilirsiniz.",
+      "network": "Ajana ulaşılamadı. Bağlantınızı kontrol edip tekrar deneyin.",
+      "generic": "Yanıt üretilirken bir hata oluştu. Lütfen tekrar deneyin."
+    }
   }
 }

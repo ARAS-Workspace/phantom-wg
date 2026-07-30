@@ -2,6 +2,7 @@
   "headerNav": [
     { "label": "Homepage", "href": "/" },
     { "label": "Documentation", "href": "/docs" },
+    { "label": "AI", "href": "/docs/ai" },
     { "label": "GitHub", "href": "https://github.com/ARAS-Workspace/phantom-wg", "external": true }
   ],
   "sideNav": [

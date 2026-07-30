@@ -26,6 +26,9 @@ const BridgePage        = lazy(() => import('@pages/docs/architecture/pages/brid
 const IPCheckPage       = lazy(() => import('@pages/docs/tools/pages/ip-check/pages/index/IPCheckPage'));
 const DnsLeakPage       = lazy(() => import('@pages/docs/tools/pages/dns-leak/pages/index/DnsLeakPage'));
 
+// ── AI page ──────────────────────────────────────────────────────
+const AiPage            = lazy(() => import('@pages/docs/ai/pages/index/AiPage'));
+
 // ── Router ────────────────────────────────────────────────────────
 const router = createBrowserRouter([
   // Home — www.phantom.tc/
@@ -97,6 +100,10 @@ const router = createBrowserRouter([
       {
         path: 'tools/dns',
         element: <DnsLeakPage />,
+      },
+      {
+        path: 'ai',
+        element: <AiPage />,
       },
     ],
   },

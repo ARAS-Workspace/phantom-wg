@@ -1,0 +1,99 @@
+@use '@carbon/react/scss/spacing';
+@use '@carbon/react/scss/theme';
+@use '@carbon/react/scss/breakpoint' as bp;
+@use '@carbon/react/scss/config' as config;
+
+// Carbon AI Chat renders inside a shadow root, so nothing here leaks into it
+// and none of its styles leak out — only the host box is ours to size.
+//
+// Every box below is width-capped: the widget's own mobile treatment is
+// switched off (it fights an embedded element), so containing it is on us.
+// Without the caps a long unbroken line inside the chat widens the host and
+// the whole page gains a horizontal scrollbar.
+.ai-chat {
+  --ai-chat-block-size: 32rem;
+
+  max-inline-size: 100%;
+  margin-block: spacing.$spacing-06;
+  overflow-x: hidden;
+
+  @include bp.breakpoint(md) {
+    --ai-chat-block-size: 40rem;
+  }
+
+  // Phones in landscape: 32rem plus the header, page padding and the heading
+  // above it overflows a viewport this short, which buries the input below the
+  // fold.
+  @media (max-height: 34rem) {
+    --ai-chat-block-size: 22rem;
+  }
+
+  &__element,
+  &__skeleton,
+  &__gate {
+    block-size: var(--ai-chat-block-size);
+    inline-size: 100%;
+    max-inline-size: 100%;
+  }
+
+  &__element {
+    display: block;
+    border: 1px solid theme.$border-subtle-01;
+    border-radius: 8px;
+    // Long code blocks and URLs scroll inside the chat instead of stretching
+    // the page around it.
+    overflow: hidden;
+  }
+
+  // Turnstile gate — shown once per session, then replaced by the chat. It
+  // holds the chat's own height so solving the challenge swaps one box for
+  // another without moving the prose underneath.
+  &__gate {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: spacing.$spacing-05;
+
+    // Carbon floors an inline notification at 18rem. The column here is the
+    // viewport less roughly 96px of page padding and gutter, so on any phone
+    // under ~384px the notification is wider than the space it has and the
+    // clip above swallows its right edge — including the text that says why
+    // the challenge failed, which is the only thing the visitor can act on.
+    // The same override already exists for the diagram error notice.
+    .#{config.$prefix}--inline-notification {
+      max-inline-size: 100%;
+      min-inline-size: 0;
+    }
+  }
+
+  // Turnstile renders a fixed 300px iframe. The column here is the viewport
+  // less Carbon's content padding (2rem a side) and the grid gutter (1rem a
+  // side) — 96px — so anything under a ~396px viewport is narrower than the
+  // challenge.
+  //
+  // The box keeps the iframe's own width and is scaled from its left edge.
+  // A transform does not change layout, so the box still occupies 300px and
+  // still overflows the column; what absorbs that is `overflow-x: hidden` on
+  // the container above, which also stops the page gaining a scrollbar. What
+  // the scale buys is that everything painted now falls inside the clip rather
+  // than beyond it. Scaling from the centre would not: half the reduction would
+  // go to the left, moving the widget out of the clip on that side instead.
+  &__turnstile {
+    inline-size: 300px;
+    max-inline-size: 100%;
+    transform-origin: left center;
+
+    // 400px viewport → 304px column; 300 × 0.82 = 246px.
+    @media (max-width: 25rem) {
+      align-self: flex-start;
+      max-inline-size: none;
+      transform: scale(0.82);
+    }
+
+    // 320px viewport → 224px column; 300 × 0.7 = 210px.
+    @media (max-width: 20rem) {
+      transform: scale(0.7);
+    }
+  }
+}
