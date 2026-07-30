@@ -16,6 +16,7 @@
     "generate-llms": "node scripts/generate-llms.js",
     "llms": "node scripts/build-llms.js",
     "prod": "npm run build && npm run routes && npm run prerender && npm run llms",
+    "test:worker": "node scripts/test-worker.js",
     "deploy": "dotenv -e .env.cf -- wrangler pages deploy dist --branch main",
     "deploy:preview": "dotenv -e .env.cf -- wrangler pages deploy dist --branch preview"
   },
