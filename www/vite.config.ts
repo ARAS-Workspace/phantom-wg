@@ -4,7 +4,6 @@ import mdx from '@mdx-js/rollup';
 import remarkGfm from 'remark-gfm';
 import remarkFrontmatter from 'remark-frontmatter';
 import remarkMdxFrontmatter from 'remark-mdx-frontmatter';
-import { compression } from 'vite-plugin-compression2';
 import * as path from 'path';
 import * as fs from 'fs';
 
@@ -20,10 +19,11 @@ export default defineConfig({
       providerImportSource: '@mdx-js/react',
     }) as Plugin,
     react(),
-    compression({
-      include: /\.(js|mjs|json|css|html|svg)$/,
-      threshold: 1024,
-    }),
+    // No compression plugin, deliberately: Cloudflare's edge compresses every
+    // response at its own quality regardless of what is uploaded — measured
+    // live on a sibling Pages deployment, the edge's brotli body was 12-33%
+    // larger than the stored .br for the same URL, proving the sidecars are
+    // never read. They were 56% of dist's file count and bought nothing.
   ],
   server: {
     port: 5173,
