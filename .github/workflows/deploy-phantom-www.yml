@@ -85,6 +85,14 @@ jobs:
         run: npm run prod
         working-directory: www
 
+      - name: Test the worker contract
+        # scripts/test-worker.js starts `wrangler pages dev` on the dist/ that
+        # was just built — fully local, no credentials — and asserts the edge
+        # worker's documented six-stage contract against it. Red here means the
+        # artifact would ship broken, so it must stop the deploy that follows.
+        run: npm run test:worker
+        working-directory: www
+
       - name: Deploy to Cloudflare Pages
         run: npm run deploy
         working-directory: www
