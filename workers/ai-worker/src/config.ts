@@ -57,7 +57,7 @@ export const CONFIG = {
 		 * Origins allowed in every environment
 		 * @example if (CONFIG.cors.allowedOrigins.includes(origin))
 		 */
-		allowedOrigins: ['https://www.phantom.tc'],
+		allowedOrigins: ['https://www.phantom.tc', 'https://phantom.tc'],
 
 		/**
 		 * Extra origins allowed only when ENVIRONMENT === 'development'
@@ -135,10 +135,13 @@ export const CONFIG = {
 		/**
 		 * Hostnames accepted from the Turnstile siteverify response. Local
 		 * development is covered by its own short-circuit, so this list is
-		 * production-only on purpose.
+		 * production-only on purpose. The apex is listed alongside www because
+		 * the site answers on both: a challenge solved on the apex page reports
+		 * `phantom.tc`, and rejecting it would fail exactly the visitors CORS
+		 * just admitted.
 		 * @example if (!CONFIG.session.expectedHostnames.includes(data.hostname))
 		 */
-		expectedHostnames: ['www.phantom.tc'],
+		expectedHostnames: ['www.phantom.tc', 'phantom.tc'],
 	},
 
 	/**
