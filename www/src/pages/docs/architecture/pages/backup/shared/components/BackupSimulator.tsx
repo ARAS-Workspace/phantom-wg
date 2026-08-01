@@ -4,15 +4,19 @@ import {
   Column,
   Tile,
   Button,
+  ButtonSkeleton,
+  SkeletonText,
   StructuredListWrapper,
   StructuredListHead,
   StructuredListRow,
   StructuredListCell,
   StructuredListBody,
+  StructuredListSkeleton,
   Tag,
 } from '@carbon/react';
 import { Download, DocumentImport } from '@carbon/icons-react';
 import { useLocale } from '@shared/hooks/useLocale';
+import { useIsClient } from '@shared/hooks/useIsClient';
 import './styles/BackupSimulator.scss';
 
 const MOCK_MANIFEST = {
@@ -62,8 +66,31 @@ const LABELS: Record<string, Record<string, string>> = {
 
 const BackupSimulator: React.FC = () => {
   const { locale } = useLocale();
+  const isClient = useIsClient();
   const l = LABELS[locale] || LABELS.en;
   const m = MOCK_MANIFEST;
+
+  // The snapshot mirrors the two tiles in skeleton form; the mock content
+  // mounts only on the client.
+  if (!isClient) {
+    return (
+      <Grid className="backup-sim">
+        <Column lg={16} md={8} sm={4}>
+          <Tile className="backup-sim__tile">
+            <SkeletonText heading width="30%" />
+            <SkeletonText width="60%" />
+            <ButtonSkeleton />
+          </Tile>
+        </Column>
+        <Column lg={16} md={8} sm={4}>
+          <Tile className="backup-sim__tile">
+            <SkeletonText heading width="30%" />
+            <StructuredListSkeleton rowCount={4} />
+          </Tile>
+        </Column>
+      </Grid>
+    );
+  }
 
   return (
     <Grid className="backup-sim">

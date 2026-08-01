@@ -1,6 +1,7 @@
 import React, { useState, useCallback } from 'react';
 import {
   DataTable,
+  DataTableSkeleton,
   Table,
   TableHead,
   TableRow,
@@ -12,6 +13,7 @@ import {
 } from '@carbon/react';
 import { Add, TrashCan, Renew } from '@carbon/icons-react';
 import { useLocale } from '@shared/hooks';
+import { useIsClient } from '@shared/hooks/useIsClient';
 import { translate } from '@shared/translations';
 import './styles/TeraziPoolSimulator.scss';
 
@@ -86,7 +88,7 @@ const CountdownOverlay: React.FC<{ count: number }> = ({ count }) => {
 
 // ── Component ─────────────────────────────────────────────────────
 
-const TeraziPoolSimulator: React.FC = () => {
+const TeraziPoolSimulatorCore: React.FC = () => {
   const { locale } = useLocale();
   const t = translate(locale);
   const sim = t.documentation.poolSimulator as Record<string, string>;
@@ -321,6 +323,30 @@ const TeraziPoolSimulator: React.FC = () => {
       </p>
     </div>
   );
+};
+
+// The prerender snapshot carries a table-shaped skeleton instead of the full
+// simulator markup; the sim itself mounts only on the client. Same wrapper
+// shape as AsciinemaPlayer — the guard sits outside the core so the core's
+// hooks never run behind a conditional.
+const TeraziPoolSimulator: React.FC = () => {
+  const isClient = useIsClient();
+
+  if (!isClient) {
+    // Deliberately fewer columns than the real table — a placeholder holds
+    // the area, it does not mirror the data. The wrapper is the same one the
+    // real table stands in: its overflow rule is what keeps a phone from
+    // widening the page, and its border keeps the two frames identical.
+    return (
+      <div className="pool-sim">
+        <div className="pool-sim__table-wrapper">
+          <DataTableSkeleton columnCount={4} rowCount={5} size="sm" showHeader={false} showToolbar={false} />
+        </div>
+      </div>
+    );
+  }
+
+  return <TeraziPoolSimulatorCore />;
 };
 
 export default TeraziPoolSimulator;

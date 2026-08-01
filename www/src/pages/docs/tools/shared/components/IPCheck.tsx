@@ -9,6 +9,7 @@ import {
   InlineLoading,
 } from '@carbon/react';
 import { useLocale } from '@shared/hooks/useLocale';
+import { useIsClient } from '@shared/hooks/useIsClient';
 import { translate } from '@shared/translations';
 import { CHECK_ENDPOINT } from './config';
 
@@ -23,13 +24,19 @@ interface IPInfo {
 
 export default function IPCheck() {
   const { locale } = useLocale();
+  const isClient = useIsClient();
   const t = translate(locale);
 
   const [info, setInfo] = useState<IPInfo | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
 
+  // Prerender never fetches: the snapshot must not bake the build machine's
+  // answer (or, failing CORS, the error text) into the document. `loading`
+  // stays true there, so the page prerenders with its own InlineLoading —
+  // the exact frame a visitor's first client paint shows anyway.
   useEffect(() => {
+    if (!isClient) return;
     fetch(`${CHECK_ENDPOINT}/ip`)
       .then((res) => res.json())
       .then((data) => {
@@ -40,7 +47,7 @@ export default function IPCheck() {
         setError(true);
         setLoading(false);
       });
-  }, []);
+  }, [isClient]);
 
   const location = [info?.city, info?.region, info?.country].filter(Boolean).join(', ');
 

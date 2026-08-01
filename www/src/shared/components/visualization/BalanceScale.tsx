@@ -1,4 +1,6 @@
 import React from 'react';
+import { SkeletonPlaceholder } from '@carbon/react';
+import { useIsClient } from '@shared/hooks/useIsClient';
 import './styles/BalanceScale.scss';
 
 // ── Tunables ──────────────────────────────────────────────────────
@@ -25,7 +27,18 @@ const LABEL_Y = PIVOT_Y + STRING_LEN + PAN_H + 40;
 // ── Component ─────────────────────────────────────────────────────
 
 const BalanceScale: React.FC = () => {
+  const isClient = useIsClient();
   const rc = String(REPEAT_COUNT);
+
+  // The SMIL animation would be captured mid-frame by the prerender; the
+  // snapshot holds the diagram's box instead and the SVG mounts on the client.
+  if (!isClient) {
+    return (
+      <div className="balance-scale">
+        <SkeletonPlaceholder className="balance-scale__skeleton" />
+      </div>
+    );
+  }
   const leftX = -ARM_HALF;
   const rightX = ARM_HALF;
   const panY = STRING_LEN;

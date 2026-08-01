@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   Button,
+  ButtonSkeleton,
   DataTable,
   Table,
   TableHead,
@@ -13,6 +14,7 @@ import {
   Tag,
 } from '@carbon/react';
 import { useLocale } from '@shared/hooks/useLocale';
+import { useIsClient } from '@shared/hooks/useIsClient';
 import { translate } from '@shared/translations';
 import { CHECK_ENDPOINT, TURNSTILE_SITE_KEY } from './config';
 
@@ -30,6 +32,7 @@ const QUERY_COUNT = 6;
 
 export default function DnsLeakTest() {
   const { locale } = useLocale();
+  const isClient = useIsClient();
   const t = translate(locale);
 
   const [status, setStatus] = useState<TestStatus>('idle');
@@ -39,14 +42,16 @@ export default function DnsLeakTest() {
   const turnstileRef = useRef<HTMLDivElement>(null);
   const turnstileWidgetId = useRef<string | null>(null);
 
+  // Client only: the prerender snapshot must not carry the Turnstile script.
   useEffect(() => {
+    if (!isClient) return;
     if (document.getElementById('turnstile-script')) return;
     const script = document.createElement('script');
     script.id = 'turnstile-script';
     script.src = 'https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit';
     script.async = true;
     document.head.appendChild(script);
-  }, []);
+  }, [isClient]);
 
   const getTurnstileToken = useCallback((): Promise<string> => {
     return new Promise((resolve, reject) => {
@@ -192,9 +197,13 @@ export default function DnsLeakTest() {
       <div ref={turnstileRef} style={{ display: 'none' }} />
 
       <div style={{ marginBlock: '1rem' }}>
-        {status === 'idle' && (
+        {/* The snapshot shows a button-shaped skeleton, not a control that
+            cannot work before hydration. */}
+        {status === 'idle' && (isClient ? (
           <Button onClick={startTest}>{t.tools.dnsLeak.startButton}</Button>
-        )}
+        ) : (
+          <ButtonSkeleton />
+        ))}
 
         {status === 'resolving' && (
           <InlineLoading

@@ -14,6 +14,13 @@
   height: auto;
 }
 
+// Prerender placeholder — holds the diagram's box so nothing shifts when the
+// animated SVG replaces it on the client.
+.balance-scale__skeleton {
+  inline-size: min(400px, 100%);
+  block-size: 300px;
+}
+
 // ── Guide lines ──────────────────────────────────────────────────
 
 .balance-scale__guide {
