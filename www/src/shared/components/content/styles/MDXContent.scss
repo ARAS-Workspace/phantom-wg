@@ -25,6 +25,25 @@
     margin-bottom: spacing.$spacing-04;
   }
 
+  // The ladder's lower half. Without these, h4-h6 fall through to Carbon's
+  // default element type — measured live, an h4 rendered at h2's exact size
+  // and weight with zero margins. One step below h3, same weight, and the
+  // rhythm keeps descending.
+  h4 {
+    @include type.type-style('heading-01');
+    color: var(--cds-text-primary);
+    margin-top: spacing.$spacing-05;
+    margin-bottom: spacing.$spacing-03;
+  }
+
+  h5,
+  h6 {
+    @include type.type-style('heading-compact-01');
+    color: var(--cds-text-primary);
+    margin-top: spacing.$spacing-04;
+    margin-bottom: spacing.$spacing-02;
+  }
+
   p {
     @include type.type-style('body-01');
     color: var(--cds-text-secondary);
