@@ -194,3 +194,25 @@ struct LogTabsSection: View {
         return "phantom-\(stem)-log-\(formatter.string(from: Date())).txt"
     }
 }
+
+// MARK: - Previews
+
+#Preview {
+    let splitStore = SplitTunnelLogStore(daemonClient: SplitTunnelDaemonClient())
+    splitStore.entries = [
+        LogEntry(id: 0, tag: "SPL", timestamp: "", text: "[12:04:12] flow com.apple.Safari → en0 (bypass)"),
+        LogEntry(id: 1, tag: "SPL", timestamp: "", text: "[12:04:13] flow org.videolan.vlc → en0 (bypass)"),
+        LogEntry(id: 2, tag: "SPL", timestamp: "", text: "[12:04:15] flow com.example.app → default route")
+    ]
+    let dnsStore = DNSProxyLogStore(daemonClient: DNSProxyDaemonClient())
+    dnsStore.entries = [
+        LogEntry(id: 0, tag: "DNS", timestamp: "", text: "[12:04:12] query safari.apple.com A via en0"),
+        LogEntry(id: 1, tag: "DNS", timestamp: "", text: "[12:04:14] query update.vlc.org AAAA via en0")
+    ]
+    return Form {
+        LogTabsSection(splitLogStore: splitStore, dnsLogStore: dnsStore)
+    }
+    .formStyle(.grouped)
+    .previewEnvironment()
+    .frame(width: 560, height: 480)
+}

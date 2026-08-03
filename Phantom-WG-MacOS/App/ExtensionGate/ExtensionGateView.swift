@@ -77,3 +77,31 @@ struct ExtensionGateView: View {
         }
     }
 }
+
+// MARK: - Previews
+
+#Preview("First run") {
+    ExtensionGateView()
+        .previewEnvironment(gate: PreviewFixtures.gateCoordinator(
+            tunnel: .notInstalled, split: .notInstalled, dns: .notInstalled
+        ))
+        .frame(width: 480, height: 720)
+}
+
+#Preview("Mixed progress") {
+    ExtensionGateView()
+        .previewEnvironment(gate: PreviewFixtures.gateCoordinator(
+            tunnel: .activated, split: .needsApproval, dns: .activating
+        ))
+        .frame(width: 480, height: 720)
+}
+
+#Preview("Failure") {
+    ExtensionGateView()
+        .previewEnvironment(gate: PreviewFixtures.gateCoordinator(
+            tunnel: .activated,
+            split: .failed("The code signature of the extension is invalid."),
+            dns: .unknown
+        ))
+        .frame(width: 480, height: 720)
+}

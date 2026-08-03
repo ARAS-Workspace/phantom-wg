@@ -57,3 +57,16 @@ struct InterfaceUnavailableBanner: View {
         .accessibilityIdentifier(AXID.SplitTunneling.interfaceUnavailableBanner)
     }
 }
+
+// MARK: - Previews
+
+#Preview {
+    InterfaceUnavailableBanner(
+        selectionLabel: "Ethernet (en5)",
+        onSwitchToAuto: {},
+        onDisable: {}
+    )
+    .padding(24)
+    .previewEnvironment()
+    .frame(width: 560)
+}

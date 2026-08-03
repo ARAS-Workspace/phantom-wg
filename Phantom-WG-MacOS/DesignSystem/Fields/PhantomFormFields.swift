@@ -98,3 +98,47 @@ struct PhantomStringNumericField: View {
         .padding(.vertical, 2)
     }
 }
+
+// MARK: - Previews
+
+#Preview {
+    PreviewBindingHost("edge.phantom.tc:51820") { text in
+        PreviewBindingHost("1420") { numeric in
+            Form {
+                Section {
+                    PhantomTextField(
+                        label: "Endpoint",
+                        text: text,
+                        isDisabled: false
+                    )
+                    PhantomTextField(
+                        label: "Endpoint (disabled)",
+                        text: text,
+                        isDisabled: true
+                    )
+                    PhantomTextField(
+                        label: "Endpoint (error)",
+                        text: text,
+                        isDisabled: false,
+                        errorMessage: "Port must be between 1 and 65535."
+                    )
+                }
+                Section {
+                    PhantomStringNumericField(
+                        label: "MTU",
+                        text: numeric,
+                        isDisabled: false
+                    )
+                    PhantomStringNumericField(
+                        label: "MTU (error)",
+                        text: numeric,
+                        isDisabled: false,
+                        errorMessage: "Value out of range (576–9200)."
+                    )
+                }
+            }
+            .formStyle(.grouped)
+        }
+    }
+    .frame(width: 480)
+}

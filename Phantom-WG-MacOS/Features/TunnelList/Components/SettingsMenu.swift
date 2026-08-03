@@ -63,3 +63,19 @@ struct SettingsMenu: View {
         }
     }
 }
+
+// MARK: - Previews
+
+#Preview {
+    PreviewBindingHost(false) { uninstall in
+        PreviewBindingHost(false) { split in
+            SettingsMenu(
+                showingUninstallConfirm: uninstall,
+                showingSplitTunneling: split,
+                isUninstalling: false
+            )
+        }
+    }
+    .previewEnvironment()
+    .padding(40)
+}

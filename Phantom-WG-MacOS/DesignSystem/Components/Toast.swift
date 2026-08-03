@@ -143,3 +143,39 @@ extension View {
         modifier(ToastOverlayModifier())
     }
 }
+
+// MARK: - Previews
+
+#Preview("Banner kinds") {
+    VStack(spacing: 12) {
+        ToastBanner(toast: Toast(kind: .info, message: "Interface switched to automatic selection."), onDismiss: {})
+        ToastBanner(toast: Toast(kind: .success, message: "Tunnel configuration saved."), onDismiss: {})
+        ToastBanner(toast: Toast(kind: .warning, message: "Selected interface is unavailable."), onDismiss: {})
+        ToastBanner(toast: Toast(kind: .error, message: "The extension refused the configuration."), onDismiss: {})
+    }
+    .padding(24)
+    .frame(width: 480)
+}
+
+/// Interactive: each button routes through the environment's
+/// `ToastCenter`, exercising the single-slot replacement behaviour.
+#Preview("Live center") {
+    ToastDemoHost()
+        .previewEnvironment()
+        .frame(width: 480, height: 300)
+}
+
+private struct ToastDemoHost: View {
+    @Environment(ToastCenter.self) private var toasts
+
+    var body: some View {
+        VStack(spacing: 12) {
+            Button("Info") { toasts.info("Interface switched to automatic selection.") }
+            Button("Success") { toasts.success("Tunnel configuration saved.") }
+            Button("Warning") { toasts.warning("Selected interface is unavailable.") }
+            Button("Error") { toasts.error("The extension refused the configuration.") }
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .toastOverlay()
+    }
+}

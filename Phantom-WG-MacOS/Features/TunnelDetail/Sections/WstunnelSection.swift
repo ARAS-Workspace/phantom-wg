@@ -58,3 +58,31 @@ struct WstunnelSection: View {
         }
     }
 }
+
+// MARK: - Previews
+
+#Preview("Editable") {
+    let config = PreviewFixtures.ghostConfig()
+    return PreviewBindingHost(WstunnelDraft(from: config.wstunnel!)) { draft in
+        List {
+            WstunnelSection(draft: draft, isEditable: true, fieldErrors: [:])
+        }
+    }
+    .previewEnvironment()
+    .frame(width: 480)
+}
+
+#Preview("Field error") {
+    let config = PreviewFixtures.ghostConfig()
+    return PreviewBindingHost(WstunnelDraft(from: config.wstunnel!)) { draft in
+        List {
+            WstunnelSection(
+                draft: draft,
+                isEditable: true,
+                fieldErrors: [.wstunnelUrl: .wstunnelURL(.invalidScheme("https"))]
+            )
+        }
+    }
+    .previewEnvironment()
+    .frame(width: 480)
+}

@@ -139,3 +139,43 @@ struct TunnelDetailView: View {
         }
     }
 }
+
+// MARK: - Previews
+
+#Preview("Active ghost") {
+    let manager = PreviewFixtures.tunnelsManager(providers: [
+        PreviewFixtures.provider(
+            config: PreviewFixtures.ghostConfig(),
+            status: .connected,
+            logLines: PreviewFixtures.logLines
+        )
+    ])
+    return NavigationStack {
+        TunnelDetailView(tunnel: manager.tunnels[0])
+    }
+    .previewEnvironment(tunnels: manager)
+    .frame(width: 480, height: 720)
+}
+
+#Preview("Inactive standalone") {
+    let manager = PreviewFixtures.tunnelsManager(providers: [
+        PreviewFixtures.provider(config: PreviewFixtures.wireguardConfig())
+    ])
+    return NavigationStack {
+        TunnelDetailView(tunnel: manager.tunnels[0])
+    }
+    .previewEnvironment(tunnels: manager)
+    .frame(width: 480, height: 720)
+}
+
+#Preview("Activation error") {
+    let manager = PreviewFixtures.tunnelsManager(providers: [
+        PreviewFixtures.provider(config: PreviewFixtures.ghostConfig())
+    ])
+    manager.tunnels[0].lastActivationError = PreviewFixtures.activationError
+    return NavigationStack {
+        TunnelDetailView(tunnel: manager.tunnels[0])
+    }
+    .previewEnvironment(tunnels: manager)
+    .frame(width: 480, height: 720)
+}

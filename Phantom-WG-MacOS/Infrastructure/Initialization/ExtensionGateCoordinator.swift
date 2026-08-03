@@ -30,19 +30,30 @@ final class ExtensionGateCoordinator {
     )
     @ObservationIgnored private var foregroundObserver: NSObjectProtocol?
 
-    init() {
+    /// Designated initializer with explicit controllers — previews
+    /// inject controllers frozen at specific statuses through this.
+    init(tunnel: ExtensionGateController, split: ExtensionGateController, dns: ExtensionGateController) {
+        self.tunnel = tunnel
+        self.split = split
+        self.dns = dns
+    }
+
+    /// Production composition: the app's three system extensions.
+    convenience init() {
         let loc = LocalizationManager.shared
-        self.tunnel = ExtensionGateController(
-            bundleID: "com.remrearas.Phantom-WG-MacOS.PhantomTunnel",
-            displayName: loc.t("gate_ext_tunnel")
-        )
-        self.split = ExtensionGateController(
-            bundleID: "com.remrearas.Phantom-WG-MacOS.PhantomSplitTunnel",
-            displayName: loc.t("gate_ext_split")
-        )
-        self.dns = ExtensionGateController(
-            bundleID: "com.remrearas.Phantom-WG-MacOS.PhantomDNSProxy",
-            displayName: loc.t("gate_ext_dns")
+        self.init(
+            tunnel: ExtensionGateController(
+                bundleID: "com.remrearas.Phantom-WG-MacOS.PhantomTunnel",
+                displayName: loc.t("gate_ext_tunnel")
+            ),
+            split: ExtensionGateController(
+                bundleID: "com.remrearas.Phantom-WG-MacOS.PhantomSplitTunnel",
+                displayName: loc.t("gate_ext_split")
+            ),
+            dns: ExtensionGateController(
+                bundleID: "com.remrearas.Phantom-WG-MacOS.PhantomDNSProxy",
+                displayName: loc.t("gate_ext_dns")
+            )
         )
     }
 

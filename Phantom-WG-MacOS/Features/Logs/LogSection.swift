@@ -134,3 +134,23 @@ struct LogView: View {
         }
     }
 }
+
+// MARK: - Previews
+
+#Preview("Populated") {
+    let store = LogStore(tunnel: nil)
+    store.entries = PreviewFixtures.logEntries
+    return NavigationStack {
+        LogView(logStore: store)
+    }
+    .previewEnvironment()
+    .frame(width: 480, height: 720)
+}
+
+#Preview("Empty") {
+    NavigationStack {
+        LogView(logStore: LogStore(tunnel: nil))
+    }
+    .previewEnvironment()
+    .frame(width: 480, height: 720)
+}

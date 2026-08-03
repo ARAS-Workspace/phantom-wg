@@ -31,3 +31,17 @@ struct LogNavigationSection: View {
         }
     }
 }
+
+// MARK: - Previews
+
+#Preview {
+    let store = LogStore(tunnel: nil)
+    store.entries = PreviewFixtures.logEntries
+    return NavigationStack {
+        List {
+            LogNavigationSection(logStore: store)
+        }
+    }
+    .previewEnvironment()
+    .frame(width: 480)
+}

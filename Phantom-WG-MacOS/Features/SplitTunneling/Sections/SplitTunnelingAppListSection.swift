@@ -87,3 +87,50 @@ struct SplitTunnelingAppListSection: View {
         return loc.t("split_tunneling_empty_state_title")
     }
 }
+
+// MARK: - Previews
+
+#Preview("Populated") {
+    Form {
+        SplitTunnelingAppListSection(
+            apps: PreviewFixtures.appEntries,
+            isDisabled: false,
+            resolvedInterfaceLabel: "Wi-Fi (en0)",
+            onAddApp: {},
+            onRemoveApp: { _ in }
+        )
+    }
+    .formStyle(.grouped)
+    .previewEnvironment()
+    .frame(width: 560)
+}
+
+#Preview("Empty") {
+    Form {
+        SplitTunnelingAppListSection(
+            apps: [],
+            isDisabled: false,
+            resolvedInterfaceLabel: "Wi-Fi (en0)",
+            onAddApp: {},
+            onRemoveApp: { _ in }
+        )
+    }
+    .formStyle(.grouped)
+    .previewEnvironment()
+    .frame(width: 560)
+}
+
+#Preview("Disabled") {
+    Form {
+        SplitTunnelingAppListSection(
+            apps: PreviewFixtures.appEntries,
+            isDisabled: true,
+            resolvedInterfaceLabel: nil,
+            onAddApp: {},
+            onRemoveApp: { _ in }
+        )
+    }
+    .formStyle(.grouped)
+    .previewEnvironment()
+    .frame(width: 560)
+}

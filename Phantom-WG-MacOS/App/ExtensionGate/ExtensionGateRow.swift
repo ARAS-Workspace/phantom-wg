@@ -114,3 +114,29 @@ struct ExtensionGateRow: View {
         }
     }
 }
+
+// MARK: - Previews
+
+#Preview("All statuses") {
+    let statuses: [ExtensionGateController.Status] = [
+        .unknown,
+        .notInstalled,
+        .activating,
+        .needsApproval,
+        .activated,
+        .failed("The extension was blocked by system policy.")
+    ]
+    return VStack(spacing: 10) {
+        ForEach(Array(statuses.enumerated()), id: \.offset) { _, status in
+            ExtensionGateRow(
+                controller: PreviewFixtures.gateController(titleKey: "gate_ext_tunnel", status: status),
+                onActivate: {},
+                onOpenSettings: {},
+                onRetry: {}
+            )
+        }
+    }
+    .padding(24)
+    .frame(width: 480)
+    .previewEnvironment()
+}

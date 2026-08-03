@@ -262,3 +262,31 @@ private struct ResetAlert: ViewModifier {
         }
     }
 }
+
+// MARK: - Previews
+
+/// The preview host has no physical interfaces (`NWInterface` cannot
+/// be fabricated), so the enabled variant also demonstrates the
+/// interface-unavailable banner — that pairing is inherent to the
+/// canvas, not a bug in the view.
+#Preview("Enabled") {
+    NavigationStack {
+        SplitTunnelingView()
+    }
+    .previewEnvironment(
+        splitStore: PreviewFixtures.splitStore(enabled: true),
+        sessionState: .running
+    )
+    .frame(width: 560, height: 700)
+}
+
+#Preview("Disabled") {
+    NavigationStack {
+        SplitTunnelingView()
+    }
+    .previewEnvironment(
+        splitStore: PreviewFixtures.splitStore(enabled: false),
+        sessionState: .stopped
+    )
+    .frame(width: 560, height: 700)
+}

@@ -141,3 +141,17 @@ struct TunnelListView: View {
         }
     }
 }
+
+// MARK: - Previews
+
+#Preview("Tunnels") {
+    TunnelListView()
+        .previewEnvironment()
+        .frame(width: 480, height: 720)
+}
+
+#Preview("Empty") {
+    TunnelListView()
+        .previewEnvironment(tunnels: PreviewFixtures.tunnelsManager(providers: []))
+        .frame(width: 480, height: 720)
+}

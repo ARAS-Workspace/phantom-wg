@@ -36,3 +36,22 @@ struct TunnelContentView: View {
         }
     }
 }
+
+// MARK: - Previews
+
+#Preview("Loaded") {
+    let manager = PreviewFixtures.tunnelsManager()
+    let loader = TunnelsManagerLoader()
+    loader.manager = manager
+    return TunnelContentView(loader: loader)
+        .previewEnvironment(tunnels: manager)
+        .frame(width: 480, height: 720)
+}
+
+#Preview("Load error") {
+    let loader = TunnelsManagerLoader()
+    loader.loadError = "The VPN preferences could not be read."
+    return TunnelContentView(loader: loader)
+        .previewEnvironment()
+        .frame(width: 480, height: 720)
+}

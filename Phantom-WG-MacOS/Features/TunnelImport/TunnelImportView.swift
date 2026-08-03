@@ -226,6 +226,19 @@ struct TunnelImportView: View {
     }
 }
 
+// MARK: - Previews
+
+/// Fully interactive against the in-memory manager: paste a `.conf`
+/// (`PreviewFixtures.ghostConfig().asConfString()` shape) and the
+/// import round-trips through parse → validate → add.
+#Preview {
+    NavigationStack {
+        TunnelImportView()
+    }
+    .previewEnvironment(tunnels: PreviewFixtures.tunnelsManager(providers: []))
+    .frame(width: 480, height: 720)
+}
+
 // MARK: - Import Field Ordering
 
 private extension TunnelDraft.Field {

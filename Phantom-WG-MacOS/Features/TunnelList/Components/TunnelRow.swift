@@ -43,3 +43,18 @@ struct TunnelRow: View {
         }
     }
 }
+
+// MARK: - Previews
+
+#Preview("Row states") {
+    let manager = PreviewFixtures.tunnelsManager()
+    manager.tunnels[1].status = .activating
+    return List {
+        ForEach(manager.tunnels) { tunnel in
+            TunnelRow(tunnel: tunnel)
+        }
+    }
+    .listStyle(.inset)
+    .previewEnvironment(tunnels: manager)
+    .frame(width: 480)
+}

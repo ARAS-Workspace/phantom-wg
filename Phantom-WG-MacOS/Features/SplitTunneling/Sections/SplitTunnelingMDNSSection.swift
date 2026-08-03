@@ -21,3 +21,16 @@ struct SplitTunnelingMDNSSection: View {
         }
     }
 }
+
+// MARK: - Previews
+
+#Preview {
+    PreviewBindingHost(true) { isEnabled in
+        Form {
+            SplitTunnelingMDNSSection(isEnabled: isEnabled)
+        }
+        .formStyle(.grouped)
+    }
+    .previewEnvironment()
+    .frame(width: 560)
+}

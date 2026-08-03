@@ -66,3 +66,37 @@ struct ActionsSection: View {
         }
     }
 }
+
+// MARK: - Previews
+
+#Preview("Active — reset enabled") {
+    let manager = PreviewFixtures.tunnelsManager()
+    return PreviewBindingHost(false) { showingDelete in
+        List {
+            ActionsSection(
+                tunnel: manager.tunnels[0],
+                copyAction: {},
+                resetAction: {},
+                showingDeleteConfirmation: showingDelete
+            )
+        }
+    }
+    .previewEnvironment(tunnels: manager)
+    .frame(width: 480)
+}
+
+#Preview("Inactive — delete enabled") {
+    let manager = PreviewFixtures.tunnelsManager()
+    return PreviewBindingHost(false) { showingDelete in
+        List {
+            ActionsSection(
+                tunnel: manager.tunnels[1],
+                copyAction: {},
+                resetAction: {},
+                showingDeleteConfirmation: showingDelete
+            )
+        }
+    }
+    .previewEnvironment(tunnels: manager)
+    .frame(width: 480)
+}

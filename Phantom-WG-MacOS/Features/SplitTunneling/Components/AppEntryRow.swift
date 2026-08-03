@@ -87,3 +87,24 @@ private struct AppIconView: View {
         return NSWorkspace.shared.icon(forFile: url.path)
     }
 }
+
+// MARK: - Previews
+
+#Preview {
+    List {
+        ForEach(PreviewFixtures.appEntries) { entry in
+            AppEntryRow(entry: entry, onRemove: {})
+        }
+        AppEntryRow(
+            entry: AppEntry(
+                signingIdentifier: "com.example.ghost-app",
+                bundleIdentifier: "com.example.ghost-app",
+                displayName: "Uninstalled App",
+                lastKnownPath: "/Applications/Missing.app"
+            ),
+            onRemove: {}
+        )
+    }
+    .previewEnvironment()
+    .frame(width: 560)
+}

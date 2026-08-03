@@ -50,3 +50,29 @@ struct PeerSection: View {
         }
     }
 }
+
+// MARK: - Previews
+
+#Preview("Editable") {
+    PreviewBindingHost(PeerDraft(from: PreviewFixtures.ghostConfig().wireguard.peer)) { draft in
+        List {
+            PeerSection(draft: draft, isEditable: true, fieldErrors: [:])
+        }
+    }
+    .previewEnvironment()
+    .frame(width: 480)
+}
+
+#Preview("Field error") {
+    PreviewBindingHost(PeerDraft(from: PreviewFixtures.ghostConfig().wireguard.peer)) { draft in
+        List {
+            PeerSection(
+                draft: draft,
+                isEditable: true,
+                fieldErrors: [.peerPublicKey: .wireGuardKey(.notBase64)]
+            )
+        }
+    }
+    .previewEnvironment()
+    .frame(width: 480)
+}

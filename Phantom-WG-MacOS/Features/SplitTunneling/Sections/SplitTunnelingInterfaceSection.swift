@@ -50,3 +50,41 @@ struct SplitTunnelingInterfaceSection: View {
         .opacity(isDisabled ? 0.5 : 1.0)
     }
 }
+
+// MARK: - Previews
+
+/// `NWInterface` cannot be fabricated, so the picker list itself stays
+/// empty in the canvas; the explicit variant shows the saved-entry
+/// fallback path (selection preserved with no resolver data).
+#Preview("Auto") {
+    PreviewBindingHost(InterfaceSelection.auto) { selection in
+        Form {
+            SplitTunnelingInterfaceSection(selection: selection, availableInterfaces: [], isDisabled: false)
+        }
+        .formStyle(.grouped)
+    }
+    .previewEnvironment()
+    .frame(width: 560)
+}
+
+#Preview("Explicit saved entry") {
+    PreviewBindingHost(InterfaceSelection.explicit(name: "en0")) { selection in
+        Form {
+            SplitTunnelingInterfaceSection(selection: selection, availableInterfaces: [], isDisabled: false)
+        }
+        .formStyle(.grouped)
+    }
+    .previewEnvironment()
+    .frame(width: 560)
+}
+
+#Preview("Disabled") {
+    PreviewBindingHost(InterfaceSelection.auto) { selection in
+        Form {
+            SplitTunnelingInterfaceSection(selection: selection, availableInterfaces: [], isDisabled: true)
+        }
+        .formStyle(.grouped)
+    }
+    .previewEnvironment()
+    .frame(width: 560)
+}

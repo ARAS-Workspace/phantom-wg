@@ -22,3 +22,17 @@ struct NameSection: View {
         }
     }
 }
+
+// MARK: - Previews
+
+#Preview {
+    PreviewBindingHost("Istanbul Edge") { name in
+        List {
+            NameSection(name: name, isEditable: true, errorMessage: nil)
+            NameSection(name: name, isEditable: false, errorMessage: nil)
+            NameSection(name: name, isEditable: true, errorMessage: "A tunnel with this name already exists.")
+        }
+    }
+    .previewEnvironment()
+    .frame(width: 480)
+}

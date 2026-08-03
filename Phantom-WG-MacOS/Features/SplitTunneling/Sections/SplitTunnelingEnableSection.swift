@@ -23,3 +23,16 @@ struct SplitTunnelingEnableSection: View {
         }
     }
 }
+
+// MARK: - Previews
+
+#Preview {
+    PreviewBindingHost(true) { isEnabled in
+        Form {
+            SplitTunnelingEnableSection(isEnabled: isEnabled)
+        }
+        .formStyle(.grouped)
+    }
+    .previewEnvironment()
+    .frame(width: 560)
+}

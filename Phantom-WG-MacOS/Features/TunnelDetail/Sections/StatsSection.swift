@@ -22,3 +22,21 @@ struct StatsSection: View {
         }
     }
 }
+
+// MARK: - Previews
+
+#Preview("Live values") {
+    List {
+        StatsSection(handshake: "12 seconds ago", rxBytes: "45.12 MB", txBytes: "8.79 MB")
+    }
+    .previewEnvironment()
+    .frame(width: 480)
+}
+
+#Preview("Idle") {
+    List {
+        StatsSection(handshake: "—", rxBytes: "—", txBytes: "—")
+    }
+    .previewEnvironment()
+    .frame(width: 480)
+}

@@ -53,13 +53,17 @@ final class ExtensionGateController: NSObject, OSSystemExtensionRequestDelegate 
 
     @ObservationIgnored private let oslog: OSLog
 
-    init(bundleID: String, displayName: String) {
+    /// Production always starts at `.unknown` and lets the delegate
+    /// callbacks settle the real state; previews pass a fixed `status`
+    /// to render a specific gate scenario.
+    init(bundleID: String, displayName: String, status: Status = .unknown) {
         self.bundleID = bundleID
         self.displayName = displayName
         self.oslog = OSLog(
             subsystem: "com.remrearas.Phantom-WG-MacOS",
             category: "gate.\(displayName)"
         )
+        self.status = status
         super.init()
     }
 

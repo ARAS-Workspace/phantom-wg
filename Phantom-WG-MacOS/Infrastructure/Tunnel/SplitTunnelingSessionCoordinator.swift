@@ -38,16 +38,21 @@ final class SplitTunnelingSessionCoordinator {
         category: "session-coordinator"
     )
 
+    /// Production leaves `state` at `.stopped` and lets `boot(with:)`
+    /// reconcile against the live extensions; previews pass a fixed
+    /// state to render the feature mid-session.
     init(
         split: SplitTunnelProviderManager,
         dns: DNSProxyProviderManager,
         dnsDaemonClient: DNSProxyDaemonClient,
-        splitDaemonClient: SplitTunnelDaemonClient
+        splitDaemonClient: SplitTunnelDaemonClient,
+        state: State = .stopped
     ) {
         self.split = split
         self.dns = dns
         self.dnsDaemonClient = dnsDaemonClient
         self.splitDaemonClient = splitDaemonClient
+        self.state = state
     }
 
     // MARK: - Boot Reconcile

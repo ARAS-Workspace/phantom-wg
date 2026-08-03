@@ -43,3 +43,29 @@ struct InterfaceSection: View {
         }
     }
 }
+
+// MARK: - Previews
+
+#Preview("Editable") {
+    PreviewBindingHost(InterfaceDraft(from: PreviewFixtures.ghostConfig().wireguard.interface)) { draft in
+        List {
+            InterfaceSection(draft: draft, isEditable: true, fieldErrors: [:])
+        }
+    }
+    .previewEnvironment()
+    .frame(width: 480)
+}
+
+#Preview("Field error") {
+    PreviewBindingHost(InterfaceDraft(from: PreviewFixtures.ghostConfig().wireguard.interface)) { draft in
+        List {
+            InterfaceSection(
+                draft: draft,
+                isEditable: true,
+                fieldErrors: [.interfaceMTU: .intOutOfRange(value: 99_999, min: 576, max: 9_200)]
+            )
+        }
+    }
+    .previewEnvironment()
+    .frame(width: 480)
+}

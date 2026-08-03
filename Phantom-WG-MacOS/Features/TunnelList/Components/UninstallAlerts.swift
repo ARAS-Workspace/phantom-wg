@@ -31,3 +31,33 @@ struct UninstallAlerts: ViewModifier {
             }
     }
 }
+
+// MARK: - Previews
+
+/// Interactive host: alerts have no static rendering, so the canvas
+/// offers a trigger button for each one.
+#Preview {
+    PreviewBindingHost(String?.none) { errorMessage in
+        PreviewBindingHost(false) { showingError in
+            PreviewBindingHost(false) { showingConfirm in
+                VStack(spacing: 12) {
+                    Button("Show uninstall confirmation") {
+                        showingConfirm.wrappedValue = true
+                    }
+                    Button("Show error alert") {
+                        errorMessage.wrappedValue = "The extension refused to deactivate."
+                        showingError.wrappedValue = true
+                    }
+                }
+                .padding(40)
+                .modifier(UninstallAlerts(
+                    errorMessage: errorMessage,
+                    showingError: showingError,
+                    showingUninstallConfirm: showingConfirm,
+                    onConfirm: {}
+                ))
+            }
+        }
+    }
+    .previewEnvironment()
+}

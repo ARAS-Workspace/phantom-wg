@@ -58,3 +58,16 @@ struct StatusSection: View {
         }
     }
 }
+
+// MARK: - Previews
+
+#Preview {
+    let manager = PreviewFixtures.tunnelsManager()
+    manager.tunnels[1].lastActivationError = PreviewFixtures.activationError
+    return List {
+        StatusSection(tunnel: manager.tunnels[0], isGhost: true)
+        StatusSection(tunnel: manager.tunnels[1], isGhost: false)
+    }
+    .previewEnvironment(tunnels: manager)
+    .frame(width: 480)
+}
