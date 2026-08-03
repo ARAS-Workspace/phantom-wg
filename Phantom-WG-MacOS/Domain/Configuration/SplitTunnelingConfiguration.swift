@@ -6,8 +6,8 @@ import Foundation
 /// in `apps` bypass the tunnel through the physical interface; every
 /// other flow stays on the OS default route. Persisted as JSON in
 /// the App Group container; delivered to extensions at startup via
-/// `providerConfiguration["split_config"]` and live-updated via
-/// opcode `0x00` (SplitTunnel) / XPC `applyConfig` (DNSProxy).
+/// `providerConfiguration["split_config"]` and live-updated over
+/// each proxy's `ProxyConfigDaemon` XPC channel (`applyConfig`).
 struct SplitTunnelingConfiguration: Codable, Equatable {
     var isEnabled: Bool
     var interfaceSelection: InterfaceSelection

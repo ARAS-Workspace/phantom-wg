@@ -9,7 +9,8 @@ import SwiftUI
 /// compact description is shown directly beneath the input.
 ///
 /// The `axIdentifier` parameter attaches a stable accessibility identifier
-/// to the underlying `TextField` so UI tests can query it by string.
+/// to the underlying `TextField` so automation and accessibility tooling
+/// can address it by string.
 
 /// Monospaced text input field — label on top, value below, optional
 /// inline error beneath. Becomes disabled while the tunnel is active

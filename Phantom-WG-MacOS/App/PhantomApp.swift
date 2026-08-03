@@ -5,11 +5,6 @@ import AppKit
 @MainActor
 struct PhantomApp: App {
 
-    /// Skips system extension activation in the test environment.
-    static var isRunningTests: Bool {
-        ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] != nil
-    }
-
     @State private var coordinator: ExtensionGateCoordinator
     @State private var sessionCoordinator: SplitTunnelingSessionCoordinator
     @State private var tunnelsManager: TunnelsManagerLoader
@@ -75,9 +70,6 @@ struct PhantomApp: App {
             .frame(width: 480, height: 720)
             .onAppear {
                 interfaceResolver.start()
-                guard !PhantomApp.isRunningTests else {
-                    return
-                }
                 coordinator.start()
             }
             .task(id: coordinator.allReady) {
@@ -90,7 +82,7 @@ struct PhantomApp: App {
                 // is found — the UI must always mirror what the
                 // extensions are actually doing, not a separate
                 // persisted bool.
-                guard coordinator.allReady, !PhantomApp.isRunningTests else { return }
+                guard coordinator.allReady else { return }
                 await sessionCoordinator.boot(with: splitTunnelingStore.configuration)
             }
         }

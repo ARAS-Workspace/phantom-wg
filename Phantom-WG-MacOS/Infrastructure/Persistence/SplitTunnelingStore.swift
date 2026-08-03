@@ -21,7 +21,8 @@ final class SplitTunnelingStore {
     // MARK: - Init
 
     /// Production: no argument — persists to the App Group container.
-    /// Tests: pass `fileURL` to isolate the persist/load cycle.
+    /// Previews: pass `fileURL` to keep the persist/load cycle in an
+    /// isolated temp file so canvas interactions never touch real config.
     init(fileURL: URL? = nil) {
         self.fileURLOverride = fileURL
         self.configuration = Self.loadFromDisk(fileURL: fileURL) ?? .default
@@ -110,8 +111,8 @@ final class SplitTunnelingStore {
     // MARK: - Private
 
     /// Routes config changes through the coordinator's
-    /// `reconfigure(with:)`. SplitTunnel reloads via opcode 0x00 and
-    /// pushes the same payload to DNSProxy via XPC. No-op when
+    /// `reconfigure(with:)`, which pushes the payload to both
+    /// extensions over their XPC config daemons. No-op when
     /// stopped — edits stick in storage and apply on next start.
     private func scheduleReload() {
         let snapshot = configuration

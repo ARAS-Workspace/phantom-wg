@@ -1,6 +1,6 @@
 import Foundation
 
-/// Swift bridge for wstunnel-ios C FFI.
+/// Swift bridge for the wstunnel C FFI (`libwstunnel_mac`).
 /// Wraps wstunnel identically to wstunnel-cli — same Client config, same run_client().
 /// Only the interface differs: C FFI → Swift instead of CLI args.
 enum WstunnelBridge {

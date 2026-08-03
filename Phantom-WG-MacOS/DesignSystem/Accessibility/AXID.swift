@@ -3,10 +3,11 @@ import Foundation
 // swiftlint:disable nesting
 
 /// Canonical accessibility identifiers attached to interactive UI
-/// elements via `.accessibilityIdentifier(...)`. UI tests consume
-/// these as their sole query surface — think of them as Playwright's
-/// `data-testid`. Changing a string here is a breaking change for
-/// the test suite.
+/// elements via `.accessibilityIdentifier(...)`. They give every
+/// control a stable, human-independent address for automation and
+/// accessibility tooling — think of them as Playwright's
+/// `data-testid`. Treat the strings as a public contract: renaming
+/// one breaks anything that queries by identifier.
 ///
 /// Convention: `<feature>.<sub-feature>.<element>[.<variant>]`
 /// Style:      dot-separated, lower-kebab segments

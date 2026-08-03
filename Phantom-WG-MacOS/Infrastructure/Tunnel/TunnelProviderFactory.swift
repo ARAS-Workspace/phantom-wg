@@ -1,7 +1,8 @@
 import NetworkExtension
 
 /// Factory for creating and loading tunnel providers.
-/// Production uses RealTunnelProviderFactory; tests inject MockTunnelProviderFactory.
+/// Production uses RealTunnelProviderFactory; SwiftUI previews inject
+/// PreviewTunnelProviderFactory with canned providers.
 protocol TunnelProviderFactory {
     func makeProvider() -> TunnelProviding
     func loadAllFromPreferences() async throws -> [TunnelProviding]

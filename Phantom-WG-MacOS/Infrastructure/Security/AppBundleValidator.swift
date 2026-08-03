@@ -2,9 +2,10 @@ import Foundation
 import Security
 
 /// Validates an application bundle picked from `NSOpenPanel` before it
-/// can be added to the split tunneling list. Only apps that expose both
-/// a bundle identifier and a signing team identifier are accepted, so
-/// the system extension can later match flows by
+/// can be added to the split tunneling list. Only apps that expose a
+/// bundle identifier and a code-signing identity are accepted — the
+/// team prefix is optional (Apple platform-signed apps have none) —
+/// so the system extension can later match flows by
 /// `sourceAppSigningIdentifier` without ambiguity.
 enum AppBundleValidator {
 

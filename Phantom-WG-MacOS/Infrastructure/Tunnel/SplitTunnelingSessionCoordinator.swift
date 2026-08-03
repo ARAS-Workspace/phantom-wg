@@ -5,10 +5,10 @@ import os.log
 /// Single source of truth for the Split-Tunneling feature's runtime
 /// state. The UI toggle binds to `state.isUserVisiblyActive`; the
 /// coordinator drives both managers in lockstep at the preference
-/// layer and pushes live config updates through the App's own
-/// channels (opcode 0x00 for SplitTunnel, XPC `applyConfig` for
-/// DNSProxy). The two extensions run independently — they do not
-/// monitor or coordinate with each other.
+/// layer and pushes live config updates to both extensions over
+/// their `ProxyConfigDaemon` XPC channels (`applyConfig`). The two
+/// extensions run independently — they do not monitor or coordinate
+/// with each other.
 @Observable
 @MainActor
 final class SplitTunnelingSessionCoordinator {
@@ -132,9 +132,8 @@ final class SplitTunnelingSessionCoordinator {
     }
 
     /// Live config change. App pushes the new payload to both
-    /// extensions independently:
-    /// - SplitTunnel via opcode 0x00 (existing in-band channel)
-    /// - DNSProxy via XPC `applyConfig`
+    /// extensions independently via XPC `applyConfig` — SplitTunnel
+    /// and DNSProxy each through their own daemon client.
     /// `dns.enable` is also called to persist the fresh
     /// `providerConfiguration` so future bootstraps read the latest
     /// blob. No-op when stopped.

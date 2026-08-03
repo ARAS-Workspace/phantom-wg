@@ -16,8 +16,9 @@ import Foundation
 ///   + bundle-ID namespace) so a single entry captures both the main
 ///   process and its helper / service children.
 ///
-/// Lives in Domain (not the extension) so main-app tests can exercise
-/// the matrix without having to run the proxy provider.
+/// Lives in Domain (not the provider) so the matching matrix stays
+/// pure, side-effect-free logic that can be exercised without running
+/// the proxy provider.
 enum FlowDecisionEngine {
 
     /// Anything signed by our own team + bundle prefix must bypass

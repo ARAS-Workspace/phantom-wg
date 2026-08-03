@@ -2,8 +2,8 @@ import Foundation
 import NetworkExtension
 
 /// Wraps `NETransparentProxyManager`. Owns the preference entry
-/// lifecycle and surfaces three opcode RPCs to the running session
-/// (config reload, log fetch, log clear).
+/// lifecycle and mirrors the session's `NEVPNStatus`; runtime config
+/// and log RPCs go through `SplitTunnelDaemonClient` instead.
 @Observable
 @MainActor
 class SplitTunnelProviderManager {

@@ -7,8 +7,8 @@ enum SharedConstants {
     /// the App Group container. Written by `SplitTunnelingStore` for
     /// main-app persistence. Extensions receive the configuration
     /// through `providerConfiguration["split_config"]` at startup
-    /// and via opcode `0x00` (SplitTunnel) / XPC `applyConfig`
-    /// (DNSProxy) for live updates — neither reads this file.
+    /// and over their `ProxyConfigDaemon` XPC channels
+    /// (`applyConfig`) for live updates — neither reads this file.
     static var splitTunnelingConfigurationFileURL: URL? {
         guard let container = FileManager.default.containerURL(
             forSecurityApplicationGroupIdentifier: appGroupID

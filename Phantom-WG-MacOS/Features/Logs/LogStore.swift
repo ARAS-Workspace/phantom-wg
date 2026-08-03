@@ -1,8 +1,8 @@
 import Foundation
 
-/// Shared row shape so `LogView` can render either the tunnel
-/// extension's structured entries or the split-tunnel extension's
-/// plain-line dump without branching on concrete store type.
+/// Shared row shape so the log panels can render the tunnel
+/// extension's structured entries and the proxy daemons' plain-line
+/// dumps without branching on concrete store type.
 struct LogEntry: Identifiable, Hashable {
     let id: Int
     let tag: String
@@ -10,9 +10,9 @@ struct LogEntry: Identifiable, Hashable {
     let text: String
 }
 
-/// Read surface that both `LogStore` and `SplitTunnelLogStore`
-/// satisfy. `LogView` takes one of these and never distinguishes
-/// between the two sources.
+/// Read surface satisfied by `LogStore`, `SplitTunnelLogStore` and
+/// `DNSProxyLogStore`. `LogView` takes any of these and never
+/// distinguishes between the sources.
 @MainActor
 protocol LogEntryProvider: AnyObject, Observable {
     var entries: [LogEntry] { get }

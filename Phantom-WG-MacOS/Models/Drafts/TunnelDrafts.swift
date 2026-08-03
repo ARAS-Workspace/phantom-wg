@@ -4,8 +4,7 @@ import Foundation
 
 /// Typed description of a single-field validation failure. The UI layer
 /// maps each case to a localized message; keeping the error as typed data
-/// here makes testing deterministic and keeps localization concerns in
-/// one place (the view).
+/// here keeps localization concerns in one place (the view).
 enum FieldValidationError: Equatable {
     case empty
     case nameAlreadyExists
