@@ -1,8 +1,11 @@
 import SwiftUI
 
-/// Footer actions — copy-to-clipboard, reset connection, and delete.
+/// Footer actions — copy-to-clipboard, edit, reset connection, and
+/// delete.
 ///
 /// - Copy owns its own "Copied!" feedback timer locally.
+/// - Edit opens `TunnelEditView` (raw-text editing, the WireGuard app
+///   pattern) and is enabled only while the tunnel is inactive.
 /// - Reset is enabled only while the tunnel is active/reasserting;
 ///   tapping it asks the extension to restart the tunnel layer in
 ///   place (wstunnel + WireGuard in ghost mode, WireGuard alone in
@@ -13,6 +16,7 @@ import SwiftUI
 struct ActionsSection: View {
     var tunnel: TunnelContainer
     let copyAction: () -> Void
+    let editAction: () -> Void
     let resetAction: () -> Void
     @Binding var showingDeleteConfirmation: Bool
     @State private var copiedItem: String?
@@ -23,6 +27,13 @@ struct ActionsSection: View {
             copyButton(loc.t("detail_copy_conf"), icon: "doc.text", id: "conf") { copyAction() }
                 .listRowSeparator(.hidden)
                 .accessibilityIdentifier(AXID.TunnelDetail.Actions.copyButton)
+
+            Button(action: editAction) {
+                Label(loc.t("detail_edit_conf"), systemImage: "square.and.pencil")
+            }
+            .disabled(!canEdit)
+            .listRowSeparator(.hidden)
+            .accessibilityIdentifier(AXID.TunnelDetail.Actions.editButton)
 
             Button(action: resetAction) {
                 Label(loc.t("detail_reset_connection"), systemImage: "arrow.clockwise")
@@ -51,6 +62,12 @@ struct ActionsSection: View {
         tunnel.status == .active || tunnel.status == .reasserting
     }
 
+    /// Config edits require a fully stopped tunnel — mirrors the
+    /// delete gate.
+    private var canEdit: Bool {
+        tunnel.status == .inactive
+    }
+
     private func copyButton(_ title: String, icon: String, id: String, action: @escaping () -> Void) -> some View {
         Button {
             action()
@@ -76,6 +93,7 @@ struct ActionsSection: View {
             ActionsSection(
                 tunnel: manager.tunnels[0],
                 copyAction: {},
+                editAction: {},
                 resetAction: {},
                 showingDeleteConfirmation: showingDelete
             )
@@ -92,6 +110,7 @@ struct ActionsSection: View {
             ActionsSection(
                 tunnel: manager.tunnels[1],
                 copyAction: {},
+                editAction: {},
                 resetAction: {},
                 showingDeleteConfirmation: showingDelete
             )

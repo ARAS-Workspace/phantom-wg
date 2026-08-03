@@ -134,11 +134,21 @@ enum AXID {
 
         enum Actions {
             static let copyButton    = "tunnel-detail.actions.copy"
+            static let editButton    = "tunnel-detail.actions.edit"
             static let resetButton   = "tunnel-detail.actions.reset"
             static let deleteButton  = "tunnel-detail.actions.delete"
             static let deleteConfirm = "tunnel-detail.delete-confirm.confirm"
             static let deleteCancel  = "tunnel-detail.delete-confirm.cancel"
         }
+    }
+
+    // MARK: Tunnel Edit
+
+    enum TunnelEdit {
+        static let nameField   = "tunnel-edit.name-field"
+        static let confEditor  = "tunnel-edit.conf-editor"
+        static let saveButton  = "tunnel-edit.save-button"
+        static let errorBanner = "tunnel-edit.error-banner"
     }
 
     // MARK: Log View

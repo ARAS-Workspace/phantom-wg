@@ -1,41 +1,32 @@
 import SwiftUI
 
-/// WireGuard interface configuration — private key, local addresses,
-/// DNS servers, and MTU. Editable only while the tunnel is inactive.
+/// WireGuard interface configuration, read-only — private key, local
+/// addresses, DNS servers, and MTU. Values change only through
+/// `TunnelEditView`'s raw-text editor.
 struct InterfaceSection: View {
-    @Binding var draft: InterfaceDraft
-    let isEditable: Bool
-    let fieldErrors: [TunnelDraft.Field: FieldValidationError]
+    let config: InterfaceConfig
     @Environment(LocalizationManager.self) private var loc
 
     var body: some View {
         Section {
-            PhantomTextField(
+            PhantomStaticField(
                 label: loc.t("detail_private_key"),
-                text: $draft.privateKey,
-                isDisabled: !isEditable,
-                errorMessage: fieldErrors[.interfacePrivateKey]?.localizedMessage(loc),
+                value: config.privateKey.textual,
                 axIdentifier: AXID.TunnelDetail.Interface.privateKey
             )
-            PhantomTextField(
+            PhantomStaticField(
                 label: loc.t("detail_address"),
-                text: $draft.addresses,
-                isDisabled: !isEditable,
-                errorMessage: fieldErrors[.interfaceAddresses]?.localizedMessage(loc),
+                value: config.addresses.map(\.textual).joined(separator: ", "),
                 axIdentifier: AXID.TunnelDetail.Interface.addresses
             )
-            PhantomTextField(
+            PhantomStaticField(
                 label: loc.t("detail_dns"),
-                text: $draft.dnsServers,
-                isDisabled: !isEditable,
-                errorMessage: fieldErrors[.interfaceDnsServers]?.localizedMessage(loc),
+                value: config.dnsServers.map(\.textual).joined(separator: ", "),
                 axIdentifier: AXID.TunnelDetail.Interface.dnsServers
             )
-            PhantomStringNumericField(
+            PhantomStaticField(
                 label: loc.t("detail_mtu"),
-                text: $draft.mtu,
-                isDisabled: !isEditable,
-                errorMessage: fieldErrors[.interfaceMTU]?.localizedMessage(loc),
+                value: String(config.mtu),
                 axIdentifier: AXID.TunnelDetail.Interface.mtu
             )
         } header: {
@@ -46,25 +37,9 @@ struct InterfaceSection: View {
 
 // MARK: - Previews
 
-#Preview("Editable") {
-    PreviewBindingHost(InterfaceDraft(from: PreviewFixtures.ghostConfig().wireguard.interface)) { draft in
-        List {
-            InterfaceSection(draft: draft, isEditable: true, fieldErrors: [:])
-        }
-    }
-    .previewEnvironment()
-    .frame(width: 480)
-}
-
-#Preview("Field error") {
-    PreviewBindingHost(InterfaceDraft(from: PreviewFixtures.ghostConfig().wireguard.interface)) { draft in
-        List {
-            InterfaceSection(
-                draft: draft,
-                isEditable: true,
-                fieldErrors: [.interfaceMTU: .intOutOfRange(value: 99_999, min: 576, max: 9_200)]
-            )
-        }
+#Preview {
+    List {
+        InterfaceSection(config: PreviewFixtures.ghostConfig().wireguard.interface)
     }
     .previewEnvironment()
     .frame(width: 480)

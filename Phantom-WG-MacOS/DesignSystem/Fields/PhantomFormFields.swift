@@ -99,6 +99,29 @@ struct PhantomStringNumericField: View {
     }
 }
 
+/// Read-only counterpart of the editable fields — label on top,
+/// selectable monospaced value below. Used by the tunnel detail
+/// sections now that configuration editing happens exclusively in
+/// `TunnelEditView`'s raw-text editor.
+struct PhantomStaticField: View {
+    let label: String
+    let value: String
+    var axIdentifier: String?
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text(label)
+                .font(.caption)
+                .foregroundStyle(Color.secondary)
+            Text(value)
+                .font(.system(.body, design: .monospaced))
+                .textSelection(.enabled)
+                .accessibilityIdentifier(axIdentifier ?? "")
+        }
+        .padding(.vertical, 2)
+    }
+}
+
 // MARK: - Previews
 
 #Preview {
@@ -134,6 +157,12 @@ struct PhantomStringNumericField: View {
                         text: numeric,
                         isDisabled: false,
                         errorMessage: "Value out of range (576–9200)."
+                    )
+                }
+                Section {
+                    PhantomStaticField(
+                        label: "Endpoint (read-only)",
+                        value: "edge.phantom.tc:51820"
                     )
                 }
             }

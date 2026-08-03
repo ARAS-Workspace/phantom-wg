@@ -1,10 +1,10 @@
 import SwiftUI
 
-/// Tunnel detail + editor. Orchestrates the draft/original/errors
-/// state machine and dispatches each visual slice to a dedicated
-/// section view. Field edits are validated on commit (Enter on any
-/// field); invalid commits revert the draft and surface per-field
-/// errors for a short grace period.
+/// Tunnel detail — read-only structured presentation of the saved
+/// configuration plus live status, stats, and logs. Following the
+/// WireGuard app pattern, the configuration is edited as raw text in
+/// `TunnelEditView` (Actions → Edit Config) and never field-by-field
+/// here; the edit entry is only enabled while the tunnel is inactive.
 struct TunnelDetailView: View {
     var tunnel: TunnelContainer
     @State private var logStore: LogStore
@@ -12,14 +12,7 @@ struct TunnelDetailView: View {
     @Environment(LocalizationManager.self) var loc
     @Environment(\.dismiss) var dismiss
 
-    @State var draft: TunnelDraft = .empty()
-    @State var originalDraft: TunnelDraft = .empty()
-    @State var fieldErrors: [TunnelDraft.Field: FieldValidationError] = [:]
-    @State var fieldErrorClearTask: Task<Void, Never>?
-    /// Distinguishes a programmatic revert (rejection of an invalid
-    /// commit) from a user edit. Set to `true` just before reverting
-    /// the draft; the next `onChange(of: draft)` consumes and resets it.
-    @State var programmaticRevert: Bool = false
+    @State var showingEdit = false
     @State var showingDeleteConfirmation = false
     @State var errorMessage: String?
     @State var showingError = false
@@ -30,88 +23,51 @@ struct TunnelDetailView: View {
     @State var txBytes: String = "—"
     @State var statsPollingTask: Task<Void, Never>?
 
-    /// Config fields are only editable while the tunnel is inactive.
-    var isEditable: Bool { tunnel.status == .inactive }
-
     init(tunnel: TunnelContainer) {
         self.tunnel = tunnel
         _logStore = State(wrappedValue: LogStore(tunnel: tunnel))
     }
 
     var body: some View {
+        let config = tunnel.tunnelConfig
         List {
-            StatusSection(tunnel: tunnel, isGhost: draft.wstunnel != nil)
+            StatusSection(tunnel: tunnel, isGhost: config?.isGhostMode == true)
 
             StatsSection(handshake: lastHandshake, rxBytes: rxBytes, txBytes: txBytes)
 
-            NameSection(
-                name: $draft.name,
-                isEditable: isEditable,
-                errorMessage: fieldErrors[.name]?.localizedMessage(loc)
-            )
+            if let config {
+                NameSection(name: config.name)
 
-            if let wstunnelBinding = Binding($draft.wstunnel) {
-                WstunnelSection(
-                    draft: wstunnelBinding,
-                    isEditable: isEditable,
-                    fieldErrors: fieldErrors
-                )
+                if let wstunnel = config.wstunnel {
+                    WstunnelSection(config: wstunnel)
+                }
+
+                InterfaceSection(config: config.wireguard.interface)
+
+                PeerSection(config: config.wireguard.peer)
             }
-
-            InterfaceSection(
-                draft: $draft.wireguard.interface,
-                isEditable: isEditable,
-                fieldErrors: fieldErrors
-            )
-
-            PeerSection(
-                draft: $draft.wireguard.peer,
-                isEditable: isEditable,
-                fieldErrors: fieldErrors
-            )
 
             LogNavigationSection(logStore: logStore)
 
             ActionsSection(
                 tunnel: tunnel,
                 copyAction: copyConf,
+                editAction: { showingEdit = true },
                 resetAction: resetConnection,
                 showingDeleteConfirmation: $showingDeleteConfirmation
             )
         }
-        .navigationTitle(draft.name.isEmpty ? loc.t("detail_tunnel") : draft.name)
-        .onChange(of: draft) { _, _ in
-            // Skip the clearing side-effect when the change originated
-            // from a programmatic revert (invalid commit rollback) so
-            // the accompanying error banner can still be seen.
-            if programmaticRevert {
-                programmaticRevert = false
-                return
-            }
-            // User edit: drop stale errors and cancel the auto-dismiss
-            // timer — the next commit re-validates the full draft.
-            if !fieldErrors.isEmpty {
-                fieldErrors = [:]
-                fieldErrorClearTask?.cancel()
-                fieldErrorClearTask = nil
-            }
-        }
-        .onSubmit {
-            // Native form commit: when any field's Enter fires, validate
-            // the draft and persist if it's clean. Invalid fields show
-            // their errors inline; the draft itself remains editable.
-            commitDraft()
+        .navigationTitle(tunnel.name.isEmpty ? loc.t("detail_tunnel") : tunnel.name)
+        .navigationDestination(isPresented: $showingEdit) {
+            TunnelEditView(tunnel: tunnel)
         }
         .onAppear {
-            loadDraft()
             logStore.startPolling()
             if tunnel.status == .active { startStatsPolling() }
         }
         .onDisappear {
             logStore.stopPolling()
             stopStatsPolling()
-            fieldErrorClearTask?.cancel()
-            fieldErrorClearTask = nil
         }
         .confirmationDialog(loc.t("detail_delete_confirm_title"),
                             isPresented: $showingDeleteConfirmation,

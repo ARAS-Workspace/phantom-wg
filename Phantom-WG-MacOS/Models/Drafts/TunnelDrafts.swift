@@ -19,10 +19,10 @@ enum FieldValidationError: Equatable {
 
 // MARK: - Draft Types
 
-/// Mutable, string-backed editing surface for a tunnel configuration.
-/// Form fields bind directly to draft properties. `validate()` produces
-/// a typed `TunnelConfig` plus a per-field error map the UI can use to
-/// highlight individual fields.
+/// Mutable, string-backed intermediate between raw `.conf` text and a
+/// typed `TunnelConfig`. `ConfParser` produces drafts for the two
+/// raw-text surfaces (import + edit); `validate()` yields the typed
+/// config plus a per-field error map the banners render in order.
 struct TunnelDraft: Equatable {
     let id: UUID
     var name: String
@@ -70,23 +70,6 @@ struct TunnelDraft: Equatable {
         self.createdAt = createdAt
         self.wireguard = wireguard
         self.wstunnel = wstunnel
-    }
-
-    init(from config: TunnelConfig) {
-        self.id = config.id
-        self.name = config.name
-        self.createdAt = config.createdAt
-        self.wireguard = WireguardDraft(from: config.wireguard)
-        self.wstunnel = config.wstunnel.map(WstunnelDraft.init(from:))
-    }
-
-    /// Empty draft — used when the user begins an import with blank fields.
-    static func empty() -> TunnelDraft {
-        TunnelDraft(
-            name: "",
-            wireguard: WireguardDraft.empty(),
-            wstunnel: nil
-        )
     }
 
     // MARK: Validate
@@ -139,20 +122,6 @@ struct TunnelDraft: Equatable {
 struct WireguardDraft: Equatable {
     var interface: InterfaceDraft
     var peer: PeerDraft
-
-    static func empty() -> WireguardDraft {
-        WireguardDraft(interface: InterfaceDraft.empty(), peer: PeerDraft.empty())
-    }
-
-    init(interface: InterfaceDraft, peer: PeerDraft) {
-        self.interface = interface
-        self.peer = peer
-    }
-
-    init(from config: WireguardConfig) {
-        self.interface = InterfaceDraft(from: config.interface)
-        self.peer = PeerDraft(from: config.peer)
-    }
 }
 
 // MARK: - InterfaceDraft
@@ -161,30 +130,7 @@ struct InterfaceDraft: Equatable {
     var privateKey: String
     var addresses: String      // comma-separated, user-editable
     var dnsServers: String     // comma-separated, user-editable
-    var mtu: String            // string-backed for numeric field binding
-
-    static func empty() -> InterfaceDraft {
-        InterfaceDraft(
-            privateKey: "",
-            addresses: "",
-            dnsServers: "1.1.1.1, 9.9.9.9",
-            mtu: "1420"
-        )
-    }
-
-    init(privateKey: String, addresses: String, dnsServers: String, mtu: String) {
-        self.privateKey = privateKey
-        self.addresses = addresses
-        self.dnsServers = dnsServers
-        self.mtu = mtu
-    }
-
-    init(from config: InterfaceConfig) {
-        self.privateKey = config.privateKey.textual
-        self.addresses = config.addresses.map(\.textual).joined(separator: ", ")
-        self.dnsServers = config.dnsServers.map(\.textual).joined(separator: ", ")
-        self.mtu = String(config.mtu)
-    }
+    var mtu: String            // string-backed, validated as int
 
     /// Returns (parsed config or nil) + per-field errors.
     func validate() -> (InterfaceConfig?, [TunnelDraft.Field: FieldValidationError]) {
@@ -238,38 +184,6 @@ struct PeerDraft: Equatable {
     var allowedIPs: String       // comma-separated
     var endpoint: String
     var persistentKeepalive: String
-
-    static func empty() -> PeerDraft {
-        PeerDraft(
-            publicKey: "",
-            presharedKey: "",
-            allowedIPs: "0.0.0.0/0, ::/0",
-            endpoint: "",
-            persistentKeepalive: "25"
-        )
-    }
-
-    init(
-        publicKey: String,
-        presharedKey: String,
-        allowedIPs: String,
-        endpoint: String,
-        persistentKeepalive: String
-    ) {
-        self.publicKey = publicKey
-        self.presharedKey = presharedKey
-        self.allowedIPs = allowedIPs
-        self.endpoint = endpoint
-        self.persistentKeepalive = persistentKeepalive
-    }
-
-    init(from config: PeerConfig) {
-        self.publicKey = config.publicKey.textual
-        self.presharedKey = config.presharedKey?.textual ?? ""
-        self.allowedIPs = config.allowedIPs.map(\.textual).joined(separator: ", ")
-        self.endpoint = config.endpoint.textual
-        self.persistentKeepalive = String(config.persistentKeepalive)
-    }
 
     func validate() -> (PeerConfig?, [TunnelDraft.Field: FieldValidationError]) {
         var errors: [TunnelDraft.Field: FieldValidationError] = [:]
@@ -369,42 +283,6 @@ struct WstunnelDraft: Equatable {
     var localPort: String
     var remoteHost: String
     var remotePort: String
-
-    static func empty() -> WstunnelDraft {
-        WstunnelDraft(
-            url: "",
-            secret: "",
-            localHost: "127.0.0.1",
-            localPort: "51820",
-            remoteHost: "127.0.0.1",
-            remotePort: "51820"
-        )
-    }
-
-    init(
-        url: String,
-        secret: String,
-        localHost: String,
-        localPort: String,
-        remoteHost: String,
-        remotePort: String
-    ) {
-        self.url = url
-        self.secret = secret
-        self.localHost = localHost
-        self.localPort = localPort
-        self.remoteHost = remoteHost
-        self.remotePort = remotePort
-    }
-
-    init(from config: WstunnelConfig) {
-        self.url = config.url.textual
-        self.secret = config.secret
-        self.localHost = config.localHost
-        self.localPort = String(config.localPort)
-        self.remoteHost = config.remoteHost
-        self.remotePort = String(config.remotePort)
-    }
 
     func validate() -> (WstunnelConfig?, [TunnelDraft.Field: FieldValidationError]) {
         var errors: [TunnelDraft.Field: FieldValidationError] = [:]

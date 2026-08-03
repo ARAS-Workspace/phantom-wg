@@ -1,56 +1,43 @@
 import SwiftUI
 
-/// Ghost-mode section — only present when `TunnelConfig.wstunnel` is
-/// non-nil. Exposes the six wstunnel bridge fields; fields remain
-/// editable only while the tunnel is inactive.
+/// Ghost-mode section, read-only — only present when
+/// `TunnelConfig.wstunnel` is non-nil. Adding or removing the
+/// `[Wstunnel]` block happens in `TunnelEditView`'s raw-text editor,
+/// which is also how a tunnel converts between ghost and standalone.
 struct WstunnelSection: View {
-    @Binding var draft: WstunnelDraft
-    let isEditable: Bool
-    let fieldErrors: [TunnelDraft.Field: FieldValidationError]
+    let config: WstunnelConfig
     @Environment(LocalizationManager.self) private var loc
 
     var body: some View {
         Section {
-            PhantomTextField(
+            PhantomStaticField(
                 label: loc.t("detail_server_url"),
-                text: $draft.url,
-                isDisabled: !isEditable,
-                errorMessage: fieldErrors[.wstunnelUrl]?.localizedMessage(loc),
+                value: config.url.textual,
                 axIdentifier: AXID.TunnelDetail.Wstunnel.url
             )
-            PhantomTextField(
+            PhantomStaticField(
                 label: loc.t("detail_secret"),
-                text: $draft.secret,
-                isDisabled: !isEditable,
-                errorMessage: fieldErrors[.wstunnelSecret]?.localizedMessage(loc),
+                value: config.secret,
                 axIdentifier: AXID.TunnelDetail.Wstunnel.secret
             )
-            PhantomTextField(
+            PhantomStaticField(
                 label: loc.t("detail_local_host"),
-                text: $draft.localHost,
-                isDisabled: !isEditable,
-                errorMessage: fieldErrors[.wstunnelLocalHost]?.localizedMessage(loc),
+                value: config.localHost,
                 axIdentifier: AXID.TunnelDetail.Wstunnel.localHost
             )
-            PhantomStringNumericField(
+            PhantomStaticField(
                 label: loc.t("detail_local_port"),
-                text: $draft.localPort,
-                isDisabled: !isEditable,
-                errorMessage: fieldErrors[.wstunnelLocalPort]?.localizedMessage(loc),
+                value: String(config.localPort),
                 axIdentifier: AXID.TunnelDetail.Wstunnel.localPort
             )
-            PhantomTextField(
+            PhantomStaticField(
                 label: loc.t("detail_remote_host"),
-                text: $draft.remoteHost,
-                isDisabled: !isEditable,
-                errorMessage: fieldErrors[.wstunnelRemoteHost]?.localizedMessage(loc),
+                value: config.remoteHost,
                 axIdentifier: AXID.TunnelDetail.Wstunnel.remoteHost
             )
-            PhantomStringNumericField(
+            PhantomStaticField(
                 label: loc.t("detail_remote_port"),
-                text: $draft.remotePort,
-                isDisabled: !isEditable,
-                errorMessage: fieldErrors[.wstunnelRemotePort]?.localizedMessage(loc),
+                value: String(config.remotePort),
                 axIdentifier: AXID.TunnelDetail.Wstunnel.remotePort
             )
         } header: {
@@ -61,27 +48,9 @@ struct WstunnelSection: View {
 
 // MARK: - Previews
 
-#Preview("Editable") {
-    let config = PreviewFixtures.ghostConfig()
-    return PreviewBindingHost(WstunnelDraft(from: config.wstunnel!)) { draft in
-        List {
-            WstunnelSection(draft: draft, isEditable: true, fieldErrors: [:])
-        }
-    }
-    .previewEnvironment()
-    .frame(width: 480)
-}
-
-#Preview("Field error") {
-    let config = PreviewFixtures.ghostConfig()
-    return PreviewBindingHost(WstunnelDraft(from: config.wstunnel!)) { draft in
-        List {
-            WstunnelSection(
-                draft: draft,
-                isEditable: true,
-                fieldErrors: [.wstunnelUrl: .wstunnelURL(.invalidScheme("https"))]
-            )
-        }
+#Preview {
+    List {
+        WstunnelSection(config: PreviewFixtures.ghostConfig().wstunnel!)
     }
     .previewEnvironment()
     .frame(width: 480)

@@ -1,18 +1,31 @@
 import SwiftUI
 
-/// Raw-paste import surface. The user pastes a WireGuard `.conf`,
-/// enters a tunnel name, and imports. Structural and field-level
-/// errors are surfaced in a single inline banner above the inputs —
-/// no detail form is shown here. Editing individual fields is done
-/// later via `TunnelDetailView`.
-struct TunnelImportView: View {
+/// Raw-text editor for an existing tunnel — the WireGuard app
+/// pattern: tunnel name on top, the full `.conf` below, validation on
+/// save. Prefilled from the saved config's canonical serialization
+/// (`asConfString()`), which `ConfParser` round-trips. The parsed
+/// draft is rebuilt with the tunnel's original `id`/`createdAt` so an
+/// edit never changes identity or list order. Ghost mode is just text
+/// here: adding or deleting the `[Wstunnel]` section converts the
+/// tunnel between ghost and standalone WireGuard, through exactly the
+/// same validation steps as import. Reachable only while the tunnel
+/// is inactive.
+struct TunnelEditView: View {
+    var tunnel: TunnelContainer
     @Environment(TunnelsManager.self) private var tunnelsManager
     @Environment(LocalizationManager.self) private var loc
     @Environment(\.dismiss) private var dismiss
 
-    @State private var name: String = ""
-    @State private var rawInput: String = ""
+    @State private var name: String
+    @State private var rawInput: String
     @State private var errorMessages: [String] = []
+
+    init(tunnel: TunnelContainer) {
+        self.tunnel = tunnel
+        let config = tunnel.tunnelConfig
+        _name = State(initialValue: config?.name ?? tunnel.name)
+        _rawInput = State(initialValue: config?.asConfString() ?? "")
+    }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -27,13 +40,13 @@ struct TunnelImportView: View {
             .formStyle(.grouped)
             .padding(.horizontal, 8)
         }
-        .navigationTitle(loc.t("import_title"))
+        .navigationTitle(loc.t("edit_title"))
         .toolbar {
             ToolbarItem(placement: .primaryAction) {
-                Button(loc.t("import_button")) { submit() }
+                Button(loc.t("edit_save")) { submit() }
                     .fontWeight(.semibold)
                     .disabled(!canSubmit)
-                    .accessibilityIdentifier(AXID.TunnelImport.submitButton)
+                    .accessibilityIdentifier(AXID.TunnelEdit.saveButton)
             }
         }
     }
@@ -44,7 +57,7 @@ struct TunnelImportView: View {
         Section {
             TextField(loc.t("import_name_placeholder"), text: $name)
                 .textFieldStyle(.roundedBorder)
-                .accessibilityIdentifier(AXID.TunnelImport.nameField)
+                .accessibilityIdentifier(AXID.TunnelEdit.nameField)
         } header: {
             Label(loc.t("detail_name"), systemImage: "gearshape")
                 .padding(.leading, 4)
@@ -57,21 +70,12 @@ struct TunnelImportView: View {
                 .font(.system(.caption, design: .monospaced))
                 .frame(minHeight: 220)
                 .autocorrectionDisabled()
-                .accessibilityIdentifier(AXID.TunnelImport.confEditor)
-
-            Button {
-                if let clipboard = NSPasteboard.general.string(forType: .string) {
-                    rawInput = clipboard
-                }
-            } label: {
-                Label(loc.t("import_paste"), systemImage: "doc.on.clipboard")
-            }
-            .accessibilityIdentifier(AXID.TunnelImport.pasteButton)
+                .accessibilityIdentifier(AXID.TunnelEdit.confEditor)
         } header: {
             Label(loc.t("import_configuration"), systemImage: "doc.text")
                 .padding(.leading, 4)
         } footer: {
-            Text(loc.t("import_footer"))
+            Text(loc.t("edit_footer"))
                 .padding(.leading, 4)
         }
     }
@@ -94,18 +98,24 @@ struct TunnelImportView: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(.red.gradient)
         .accessibilityElement(children: .combine)
-        .accessibilityIdentifier(AXID.TunnelImport.errorBanner)
+        .accessibilityIdentifier(AXID.TunnelEdit.errorBanner)
     }
 
     // MARK: - Logic
 
     private var canSubmit: Bool {
-        !name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        tunnel.status == .inactive
+            && !name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
             && !rawInput.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
     }
 
     private func submit() {
         errorMessages = []
+
+        // Identity anchor. Without a decodable saved config there is
+        // nothing to edit against — the entry button is unreachable in
+        // that state, so this is purely defensive.
+        guard let original = tunnel.tunnelConfig else { return }
 
         let trimmedName = name.trimmingCharacters(in: .whitespacesAndNewlines)
         let trimmedInput = rawInput.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -120,9 +130,9 @@ struct TunnelImportView: View {
         }
 
         // Structural parse — produces a draft or throws a banner error.
-        var draft: TunnelDraft
+        let parsed: TunnelDraft
         do {
-            draft = try ConfParser.parse(trimmedInput)
+            parsed = try ConfParser.parse(trimmedInput)
         } catch let error as ConfParser.ParseError {
             errorMessages = [ConfEditorMessages.parseMessage(error, loc: loc)]
             return
@@ -130,10 +140,20 @@ struct TunnelImportView: View {
             errorMessages = [error.localizedDescription]
             return
         }
-        draft.name = trimmedName
 
-        // Field-level validation — all failures are surfaced as a list
-        // in the banner; the form itself never appears during import.
+        // Re-anchor the parsed sections onto the tunnel's original
+        // identity — `ConfParser` mints a fresh id/createdAt, but an
+        // edit must not change either.
+        let draft = TunnelDraft(
+            id: original.id,
+            name: trimmedName,
+            createdAt: original.createdAt,
+            wireguard: parsed.wireguard,
+            wstunnel: parsed.wstunnel
+        )
+
+        // Field-level validation — identical steps and messages as
+        // import, surfaced as a list in the banner.
         let result = draft.validate()
         guard let config = result.config else {
             errorMessages = ConfEditorMessages.fieldMessages(result.errors, loc: loc)
@@ -142,25 +162,27 @@ struct TunnelImportView: View {
 
         Task {
             do {
-                _ = try await tunnelsManager.add(config: config)
+                try await tunnelsManager.modify(tunnel: tunnel, with: config)
                 dismiss()
             } catch {
                 errorMessages = [error.localizedDescription]
             }
         }
     }
-
 }
 
 // MARK: - Previews
 
-/// Fully interactive against the in-memory manager: paste a `.conf`
-/// (`PreviewFixtures.ghostConfig().asConfString()` shape) and the
-/// import round-trips through parse → validate → add.
+/// Fully interactive against the in-memory manager: reshape the
+/// prefilled `.conf` (drop the `[Wstunnel]` block, break a key…) and
+/// Save exercises the real parse → validate → modify chain.
 #Preview {
-    NavigationStack {
-        TunnelImportView()
+    let manager = PreviewFixtures.tunnelsManager(providers: [
+        PreviewFixtures.provider(config: PreviewFixtures.ghostConfig())
+    ])
+    return NavigationStack {
+        TunnelEditView(tunnel: manager.tunnels[0])
     }
-    .previewEnvironment(tunnels: PreviewFixtures.tunnelsManager(providers: []))
+    .previewEnvironment(tunnels: manager)
     .frame(width: 480, height: 720)
 }
