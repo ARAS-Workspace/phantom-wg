@@ -2,9 +2,9 @@ import SwiftUI
 
 /// Raw-paste import surface. The user pastes a WireGuard `.conf`,
 /// enters a tunnel name, and imports. Structural and field-level
-/// errors are surfaced in a single inline banner above the inputs —
-/// no detail form is shown here. Editing individual fields is done
-/// later via `TunnelDetailView`.
+/// errors are surfaced in a single inline banner above the inputs.
+/// Later edits go through `TunnelEditView` — the same raw-text
+/// shape as this screen.
 struct TunnelImportView: View {
     @Environment(TunnelsManager.self) private var tunnelsManager
     @Environment(LocalizationManager.self) private var loc

@@ -33,13 +33,20 @@ struct TunnelRow: View {
 
     private var statusIndicator: some View {
         let color = tunnel.status.color
+        let isGhost = tunnel.tunnelConfig?.isGhostMode == true
         return ZStack {
             Circle()
                 .fill(color.opacity(0.15))
                 .frame(width: 32, height: 32)
-            Image(systemName: tunnel.status.iconName)
-                .font(.system(size: 14, weight: .semibold))
-                .foregroundStyle(color)
+            if isGhost {
+                GhostGlyph()
+                    .fill(color, style: FillStyle(eoFill: true))
+                    .frame(width: 15, height: 15)
+            } else {
+                Image(systemName: tunnel.status.iconName)
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundStyle(color)
+            }
         }
     }
 }

@@ -13,15 +13,13 @@ struct TunnelListView: View {
     @State private var showingSplitTunneling = false
     @State private var uninstalling = false
 
-    /// Display order: non-inactive tunnels pinned to the top (preserves
-    /// their mutual order — already newest-first via `TunnelsManager`);
-    /// inactive tunnels follow in the same newest-first order. When a
-    /// tunnel transitions back to inactive it slots into its natural
-    /// `createdAt`-based position in the lower group.
-    private var displayTunnels: [TunnelContainer] {
-        let active = tunnelsManager.tunnels.filter { $0.status != .inactive }
-        let inactive = tunnelsManager.tunnels.filter { $0.status == .inactive }
-        return active + inactive
+    /// The tunnel the top section mirrors. `TunnelsManager` enforces a
+    /// single non-inactive tunnel at a time (activation queues behind
+    /// deactivation), so "first non-inactive" is the whole story. The
+    /// list itself stays in plain newest-first order — no active-first
+    /// pinning; the top section is where the running tunnel surfaces.
+    private var activeTunnel: TunnelContainer? {
+        tunnelsManager.tunnels.first { $0.status != .inactive }
     }
 
     var body: some View {
@@ -52,17 +50,41 @@ struct TunnelListView: View {
         if tunnelsManager.tunnels.isEmpty {
             EmptyStateView(showingImport: $showingImport)
         } else {
-            List {
-                ForEach(displayTunnels) { tunnel in
-                    NavigationLink(destination: TunnelDetailView(tunnel: tunnel)) {
-                        TunnelRow(tunnel: tunnel)
+            VStack(spacing: 0) {
+                List {
+                    ActiveTunnelSection(activeTunnel: activeTunnel)
+
+                    Section {
+                        ForEach(tunnelsManager.tunnels) { tunnel in
+                            NavigationLink(destination: TunnelDetailView(tunnel: tunnel)) {
+                                TunnelRow(tunnel: tunnel)
+                            }
+                        }
+                        .onDelete { offsets in deleteTunnels(at: offsets) }
+                    } header: {
+                        HStack {
+                            Label(loc.t("tunnel_list_section_header"), systemImage: "list.bullet")
+                            Spacer()
+                            Text("\(tunnelsManager.tunnels.count)")
+                                .font(.footnote)
+                                .foregroundStyle(.secondary)
+                                .padding(.horizontal, 8)
+                                .padding(.vertical, 2)
+                                .background(
+                                    Capsule()
+                                        .fill(Color.secondary.opacity(0.15))
+                                )
+                                .accessibilityIdentifier(AXID.TunnelList.listCount)
+                        }
+                        .padding(.bottom, 6)
                     }
                 }
-                .onDelete { offsets in deleteTunnels(at: offsets) }
+                .listStyle(.inset)
 
-                aboutSection
+                Divider()
+
+                bottomLinks
             }
-            .listStyle(.inset)
         }
     }
 
@@ -85,15 +107,23 @@ struct TunnelListView: View {
         }
     }
 
-    private var aboutSection: some View {
-        Section {
+    /// Fixed footer — the list above scrolls as it grows inside the
+    /// app's fixed window, the links stay put. Mirrors the empty
+    /// state's bottom-link styling.
+    private var bottomLinks: some View {
+        HStack(spacing: 24) {
             Link(destination: URL(string: "https://www.phantom.tc")!) {
                 Label(loc.t("website"), systemImage: "globe")
+                    .font(.footnote)
             }
             Link(destination: URL(string: "https://www.phantom.tc/docs")!) {
                 Label(loc.t("documentation"), systemImage: "book")
+                    .font(.footnote)
             }
         }
+        .foregroundStyle(.secondary)
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 12)
     }
 
     // MARK: - Uninstall
@@ -124,7 +154,7 @@ struct TunnelListView: View {
     }
 
     private func deleteTunnels(at offsets: IndexSet) {
-        let visible = displayTunnels
+        let visible = tunnelsManager.tunnels
         let tunnelsToDelete = offsets.map { visible[$0] }
         for tunnel in tunnelsToDelete {
             if tunnel.status != .inactive {
@@ -147,6 +177,15 @@ struct TunnelListView: View {
 #Preview("Tunnels") {
     TunnelListView()
         .previewEnvironment()
+        .frame(width: 480, height: 720)
+}
+
+#Preview("No active tunnel") {
+    TunnelListView()
+        .previewEnvironment(tunnels: PreviewFixtures.tunnelsManager(providers: [
+            PreviewFixtures.provider(config: PreviewFixtures.wireguardConfig()),
+            PreviewFixtures.provider(config: PreviewFixtures.ghostConfig(name: "Home Lab"))
+        ]))
         .frame(width: 480, height: 720)
 }
 

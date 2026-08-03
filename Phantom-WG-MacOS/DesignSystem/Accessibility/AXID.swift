@@ -46,6 +46,11 @@ enum AXID {
         static let uninstallCancel      = "tunnel-list.uninstall-confirm.cancel"
         static let errorAlertOK         = "tunnel-list.error-alert.ok"
 
+        static let activeToggle = "tunnel-list.active.toggle"
+        static let activeError  = "tunnel-list.active.activation-error"
+        static let activeNone   = "tunnel-list.active.none"
+        static let listCount    = "tunnel-list.count"
+
         static func row(_ name: String) -> String { "tunnel-row.\(name)" }
         static func rowToggle(_ name: String) -> String { "tunnel-row.\(name).toggle" }
     }
