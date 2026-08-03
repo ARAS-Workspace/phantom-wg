@@ -14,8 +14,8 @@ enum LogChannel: String, CaseIterable, Identifiable {
 /// daemon logs. Single toolbar retargets count / save / clear to
 /// the active channel.
 struct LogTabsSection: View {
-    let splitLogStore: SplitTunnelLogStore
-    let dnsLogStore: DNSProxyLogStore
+    let splitLogStore: ProxyLogStore
+    let dnsLogStore: ProxyLogStore
     @Environment(LocalizationManager.self) private var loc
 
     @State private var channel: LogChannel = .split
@@ -198,13 +198,13 @@ struct LogTabsSection: View {
 // MARK: - Previews
 
 #Preview {
-    let splitStore = SplitTunnelLogStore(daemonClient: SplitTunnelDaemonClient())
+    let splitStore = ProxyLogStore(daemonClient: SplitTunnelDaemonClient(), tag: "SPL")
     splitStore.entries = [
         LogEntry(id: 0, tag: "SPL", timestamp: "", text: "[12:04:12] flow com.apple.Safari → en0 (bypass)"),
         LogEntry(id: 1, tag: "SPL", timestamp: "", text: "[12:04:13] flow org.videolan.vlc → en0 (bypass)"),
         LogEntry(id: 2, tag: "SPL", timestamp: "", text: "[12:04:15] flow com.example.app → default route")
     ]
-    let dnsStore = DNSProxyLogStore(daemonClient: DNSProxyDaemonClient())
+    let dnsStore = ProxyLogStore(daemonClient: DNSProxyDaemonClient(), tag: "DNS")
     dnsStore.entries = [
         LogEntry(id: 0, tag: "DNS", timestamp: "", text: "[12:04:12] query safari.apple.com A via en0"),
         LogEntry(id: 1, tag: "DNS", timestamp: "", text: "[12:04:14] query update.vlc.org AAAA via en0")

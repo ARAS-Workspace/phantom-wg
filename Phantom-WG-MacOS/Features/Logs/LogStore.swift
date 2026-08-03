@@ -10,9 +10,9 @@ struct LogEntry: Identifiable, Hashable {
     let text: String
 }
 
-/// Read surface satisfied by `LogStore`, `SplitTunnelLogStore` and
-/// `DNSProxyLogStore`. `LogView` takes any of these and never
-/// distinguishes between the sources.
+/// Read surface satisfied by `LogStore` and `ProxyLogStore`.
+/// `LogView` takes any of these and never distinguishes between
+/// the sources.
 @MainActor
 protocol LogEntryProvider: AnyObject, Observable {
     var entries: [LogEntry] { get }

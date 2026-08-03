@@ -1,19 +1,23 @@
 import Foundation
 import Observation
 
-/// Polls the SplitTunnel daemon's log ring buffer over XPC on a
-/// 1-second cadence and exposes the lines as `LogEntry` rows.
+/// Polls a proxy daemon's log ring buffer over XPC on a 1-second
+/// cadence and exposes the lines as `LogEntry` rows. One instance per
+/// proxy — the daemon client fixes which extension is polled, `tag`
+/// labels the rows (SPL / DNS).
 @Observable
 @MainActor
-final class SplitTunnelLogStore: LogEntryProvider {
+final class ProxyLogStore: LogEntryProvider {
 
     var entries: [LogEntry] = []
 
-    @ObservationIgnored private weak var daemonClient: SplitTunnelDaemonClient?
+    @ObservationIgnored private weak var daemonClient: ProxyConfigDaemonClient?
+    @ObservationIgnored private let tag: String
     @ObservationIgnored private var pollingTask: Task<Void, Never>?
 
-    init(daemonClient: SplitTunnelDaemonClient) {
+    init(daemonClient: ProxyConfigDaemonClient, tag: String) {
         self.daemonClient = daemonClient
+        self.tag = tag
     }
 
     func startPolling() {
@@ -35,7 +39,7 @@ final class SplitTunnelLogStore: LogEntryProvider {
         pollingTask = nil
     }
 
-    /// Flushes the extension's ring buffer and drops local entries.
+    /// Flushes the daemon's ring buffer and drops local entries.
     func clear() async {
         await daemonClient?.clearLogs()
         entries.removeAll()
@@ -57,7 +61,7 @@ final class SplitTunnelLogStore: LogEntryProvider {
             .map { index, line in
                 LogEntry(
                     id: index,
-                    tag: "SPL",
+                    tag: tag,
                     timestamp: "",
                     text: String(line)
                 )

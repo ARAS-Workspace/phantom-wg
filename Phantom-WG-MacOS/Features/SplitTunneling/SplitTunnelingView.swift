@@ -20,8 +20,8 @@ struct SplitTunnelingView: View {
     @State private var duplicateError = false
     @State private var showingValidationError = false
     @State private var showingResetConfirm = false
-    @State private var logStore: SplitTunnelLogStore?
-    @State private var dnsLogStore: DNSProxyLogStore?
+    @State private var logStore: ProxyLogStore?
+    @State private var dnsLogStore: ProxyLogStore?
 
     var body: some View {
         activatedContent
@@ -170,12 +170,12 @@ struct SplitTunnelingView: View {
     private func onSheetAppear() {
         store.reconcile()
         if logStore == nil {
-            let newStore = SplitTunnelLogStore(daemonClient: splitDaemonClient)
+            let newStore = ProxyLogStore(daemonClient: splitDaemonClient, tag: "SPL")
             logStore = newStore
             newStore.startPolling()
         }
         if dnsLogStore == nil {
-            let newStore = DNSProxyLogStore(daemonClient: dnsDaemonClient)
+            let newStore = ProxyLogStore(daemonClient: dnsDaemonClient, tag: "DNS")
             dnsLogStore = newStore
             newStore.startPolling()
         }
