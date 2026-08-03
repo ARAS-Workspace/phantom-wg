@@ -1,11 +1,14 @@
 import SwiftUI
 
-/// Top-of-list mirror of the running tunnel: the same status row the
-/// detail view renders, surfaced so connection state and the master
-/// toggle are reachable without opening the detail. While every
-/// tunnel is inactive a quiet placeholder keeps the section stable.
-/// The section only appears once at least one tunnel exists — the
-/// empty state stays untouched.
+/// Headerless top block mirroring the running tunnel: the same
+/// status row the detail view renders, surfaced so connection state
+/// and the master toggle are reachable without opening the detail.
+/// Deliberately not a titled section — the header chrome produced
+/// intermittent phantom spacing after navigation pops, and the
+/// block's position above the titled tunnel list already says what
+/// it is. While every tunnel is inactive a quiet placeholder keeps
+/// the block stable. Only appears once at least one tunnel exists —
+/// the empty state stays untouched.
 struct ActiveTunnelSection: View {
     let activeTunnel: TunnelContainer?
     @Environment(LocalizationManager.self) private var loc
@@ -25,8 +28,6 @@ struct ActiveTunnelSection: View {
                 noActiveRow
                     .padding(.bottom, 8)
             }
-        } header: {
-            Label(loc.t("tunnel_list_active_header"), systemImage: "antenna.radiowaves.left.and.right")
         }
     }
 

@@ -7,7 +7,6 @@
   "delete": "Delete",
   "tunnel_list_empty_title": "No Tunnels",
   "tunnel_list_empty_description": "Import a config to get started.",
-  "tunnel_list_active_header": "Active Tunnel",
   "tunnel_list_no_active": "No active tunnel",
   "tunnel_list_section_header": "Tunnel List",
   "website": "Website",
