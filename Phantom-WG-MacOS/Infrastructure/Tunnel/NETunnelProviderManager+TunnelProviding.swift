@@ -15,8 +15,7 @@ extension NETunnelProviderManager: TunnelProviding {
     }
 
     func configure(with config: TunnelConfig) throws {
-        let oldProto = protocolConfiguration as? NETunnelProviderProtocol
-        guard let newProto = NETunnelProviderProtocol(tunnelConfig: config, previouslyFrom: oldProto) else {
+        guard let newProto = NETunnelProviderProtocol(tunnelConfig: config) else {
             throw NSError(domain: "PhantomWG", code: -1,
                           userInfo: [NSLocalizedDescriptionKey: "Failed to create protocol configuration"])
         }

@@ -31,8 +31,7 @@ extension NETunnelProviderProtocol {
     }
 
     /// Create protocol with config embedded in providerConfiguration.
-    convenience init?(tunnelConfig config: TunnelConfig,
-                      previouslyFrom proto: NETunnelProviderProtocol? = nil) {
+    convenience init?(tunnelConfig config: TunnelConfig) {
         self.init()
 
         guard let wgData = try? JSONEncoder().encode(config.wireguard) else { return nil }
