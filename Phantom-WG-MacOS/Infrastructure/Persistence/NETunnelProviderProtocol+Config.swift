@@ -2,64 +2,47 @@ import NetworkExtension
 
 extension NETunnelProviderProtocol {
 
-    /// Read config from providerConfiguration. WireGuard and (optional)
-    /// Wstunnel sections are stored as separate JSON blobs alongside
-    /// identity metadata (id, name, createdAt).
-    var tunnelConfig: TunnelConfig? {
+    /// Reads the tunnel's identity out of `providerConfiguration`.
+    /// This store is world-readable (`/Library/Preferences/
+    /// com.apple.networkextension.plist` is mode 644), which is why it
+    /// holds identity only — the secrets live in the vault the tunnel
+    /// extension keeps in the System keychain, keyed by `configId`.
+    var tunnelIdentity: TunnelIdentity? {
         guard let configId = providerConfiguration?["configId"] as? String,
               let id = UUID(uuidString: configId),
-              let name = providerConfiguration?["name"] as? String,
-              let wgData = providerConfiguration?["wireguardConfig"] as? Data,
-              let wireguard = try? JSONDecoder().decode(WireguardConfig.self, from: wgData) else {
+              let name = providerConfiguration?["name"] as? String else {
             return nil
         }
 
-        let createdAt = Self.decodeCreatedAt(providerConfiguration?["createdAt"])
-
-        var wstunnel: WstunnelConfig?
-        if let wsData = providerConfiguration?["wstunnelConfig"] as? Data {
-            wstunnel = try? JSONDecoder().decode(WstunnelConfig.self, from: wsData)
-        }
-
-        return TunnelConfig(
+        return TunnelIdentity(
             id: id,
             name: name,
-            createdAt: createdAt,
-            wireguard: wireguard,
-            wstunnel: wstunnel
+            createdAt: Self.decodeCreatedAt(providerConfiguration?["createdAt"]),
+            isGhost: providerConfiguration?["isGhost"] as? Bool ?? false
         )
     }
 
-    /// Create protocol with config embedded in providerConfiguration.
-    convenience init?(tunnelConfig config: TunnelConfig) {
+    /// Creates the protocol object for a tunnel. Nothing sensitive is
+    /// written: `serverAddress` is a fixed label rather than the real
+    /// endpoint (it is displayed in System Settings and stored in the
+    /// same world-readable plist), and the endpoint itself is part of
+    /// the vault payload.
+    convenience init(identity: TunnelIdentity) {
         self.init()
 
-        guard let wgData = try? JSONEncoder().encode(config.wireguard) else { return nil }
-
         providerBundleIdentifier = "com.remrearas.Phantom-WG-MacOS.PhantomTunnel"
+        serverAddress = "Phantom-WG"
 
-        var providerConfig: [String: Any] = [
-            "configId": config.id.uuidString,
-            "name": config.name,
-            "createdAt": config.createdAt.timeIntervalSince1970,
-            "wireguardConfig": wgData
+        providerConfiguration = [
+            "configId": identity.id.uuidString,
+            "name": identity.name,
+            "createdAt": identity.createdAt.timeIntervalSince1970,
+            "isGhost": identity.isGhost
         ]
-
-        if let wstunnel = config.wstunnel,
-           let wsData = try? JSONEncoder().encode(wstunnel) {
-            providerConfig["wstunnelConfig"] = wsData
-        }
-
-        providerConfiguration = providerConfig
-        serverAddress = config.wstunnel?.url.textual ?? config.wireguard.peer.endpoint.textual
     }
 
     // MARK: - Helpers
 
-    /// Accepts either a Double (seconds since 1970, current format) or
-    /// a missing field (fallback to "now" for migration safety). Once
-    /// the app has been run post-refactor every tunnel persists its
-    /// `createdAt` on the next save.
     private static func decodeCreatedAt(_ raw: Any?) -> Date {
         if let seconds = raw as? Double {
             return Date(timeIntervalSince1970: seconds)

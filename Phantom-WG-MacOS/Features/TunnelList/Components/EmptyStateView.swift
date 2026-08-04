@@ -65,5 +65,5 @@ struct EmptyStateView: View {
         EmptyStateView(showingImport: showingImport)
     }
     .previewEnvironment()
-    .frame(width: 480, height: 720)
+    .frame(width: 560, height: 720)
 }

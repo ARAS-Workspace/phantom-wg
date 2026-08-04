@@ -29,7 +29,7 @@ final class PreviewTunnelProvider: TunnelProviding {
     var protocolConfiguration: NEVPNProtocol?
 
     private(set) var config: TunnelConfig?
-    var tunnelConfig: TunnelConfig? { config }
+    var tunnelIdentity: TunnelIdentity? { config?.identity }
 
     private(set) var connectionStatus: NEVPNStatus
 
@@ -56,8 +56,14 @@ final class PreviewTunnelProvider: TunnelProviding {
 
     // MARK: - Configuration
 
-    func configure(with config: TunnelConfig) throws {
-        self.config = config
+    /// Production writes identity only — the payload lives in the
+    /// vault. The preview provider keeps the whole config so
+    /// `PreviewVaultClient` can serve it back.
+    func configure(with identity: TunnelIdentity) {
+        guard var updated = config else { return }
+        updated.name = identity.name
+        config = updated
+        localizedDescription = identity.name
     }
 
     // MARK: - VPN Control
@@ -140,6 +146,43 @@ final class PreviewTunnelProvider: TunnelProviding {
         let handshake = Int64(Date().timeIntervalSince1970) - 12
         return "rx_bytes=\(rxBytes)\ntx_bytes=\(txBytes)\nlast_handshake_time_sec=\(handshake)"
     }
+}
+
+// MARK: - Vault
+
+/// Stands in for the extension's custody service. Previews have no
+/// XPC peer, so this serves the fixture providers' configurations
+/// straight from memory — the canvas exercises the same async read
+/// path the app uses in production.
+@Observable
+@MainActor
+final class PreviewVaultClient: TunnelVaultClient {
+
+    private var payloads: [UUID: TunnelConfig]
+
+    init(configs: [TunnelConfig]) {
+        payloads = Dictionary(uniqueKeysWithValues: configs.map { ($0.id, $0) })
+        super.init()
+    }
+
+    override func store(_ config: TunnelConfig) async -> Bool {
+        payloads[config.id] = config
+        return true
+    }
+
+    override func fetch(id: UUID) async -> TunnelConfig? {
+        payloads[id]
+    }
+
+    override func delete(id: UUID) async -> Bool {
+        payloads.removeValue(forKey: id)
+        return true
+    }
+
+    override func fetchAll() async -> [TunnelConfig] {
+        Array(payloads.values)
+    }
+
 }
 
 // MARK: - Factory

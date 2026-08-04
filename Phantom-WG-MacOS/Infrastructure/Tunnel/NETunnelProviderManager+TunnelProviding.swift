@@ -10,16 +10,12 @@ extension NETunnelProviderManager: TunnelProviding {
 
     // MARK: - Configuration
 
-    var tunnelConfig: TunnelConfig? {
-        (protocolConfiguration as? NETunnelProviderProtocol)?.tunnelConfig
+    var tunnelIdentity: TunnelIdentity? {
+        (protocolConfiguration as? NETunnelProviderProtocol)?.tunnelIdentity
     }
 
-    func configure(with config: TunnelConfig) throws {
-        guard let newProto = NETunnelProviderProtocol(tunnelConfig: config) else {
-            throw NSError(domain: "PhantomWG", code: -1,
-                          userInfo: [NSLocalizedDescriptionKey: "Failed to create protocol configuration"])
-        }
-        protocolConfiguration = newProto
+    func configure(with identity: TunnelIdentity) {
+        protocolConfiguration = NETunnelProviderProtocol(identity: identity)
     }
 
     // MARK: - VPN Control

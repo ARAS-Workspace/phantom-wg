@@ -5,8 +5,11 @@ import Foundation
 /// Top-level tunnel configuration. All nested fields are pre-validated:
 /// once a `TunnelConfig` exists it is guaranteed well-formed.
 /// Drafts (`TunnelDraft`) hold raw user-edited strings and are converted
-/// into this type via `.validated()` before storage.
-struct TunnelConfig: Identifiable, Equatable {
+/// into this type via `validate()` before storage.
+///
+/// `Codable` because the whole value is what gets sealed into the
+/// System keychain vault — one payload per tunnel, secrets included.
+struct TunnelConfig: Identifiable, Equatable, Codable {
     var id: UUID
     var name: String
     var createdAt: Date
@@ -15,6 +18,11 @@ struct TunnelConfig: Identifiable, Equatable {
 
     /// Ghost mode when wstunnel is present, standalone WireGuard otherwise.
     var isGhostMode: Bool { wstunnel != nil }
+
+    /// The secret-free projection stored in `providerConfiguration`.
+    var identity: TunnelIdentity {
+        TunnelIdentity(id: id, name: name, createdAt: createdAt, isGhost: isGhostMode)
+    }
 
     init(
         id: UUID = UUID(),
@@ -63,6 +71,19 @@ struct TunnelConfig: Identifiable, Equatable {
 
         return lines.joined(separator: "\n")
     }
+}
+
+// MARK: - Tunnel Identity
+
+/// What the system's NetworkExtension preferences are allowed to know
+/// about a tunnel: enough to list it, sort it, name it and badge it —
+/// and nothing that would be worth stealing. The secrets live in the
+/// vault the tunnel extension owns, keyed by this `id`.
+struct TunnelIdentity: Equatable {
+    let id: UUID
+    let name: String
+    let createdAt: Date
+    let isGhost: Bool
 }
 
 // MARK: - WireGuard Config

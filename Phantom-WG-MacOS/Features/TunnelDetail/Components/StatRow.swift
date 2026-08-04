@@ -27,5 +27,5 @@ struct StatRow: View {
         StatRow(icon: "arrow.down.circle", label: "Data Received", value: "45.12 MB", valueColor: .green)
         StatRow(icon: "arrow.up.circle", label: "Data Sent", value: "8.79 MB", valueColor: .blue)
     }
-    .frame(width: 480)
+    .frame(width: 560)
 }

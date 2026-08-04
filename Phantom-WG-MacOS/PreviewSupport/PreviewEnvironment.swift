@@ -29,6 +29,7 @@ extension View {
             .environment(coordinator)
             .environment(sessionCoordinator)
             .environment(manager)
+            .environment(manager.vault)
             .environment(store)
             .environment(SplitTunnelProviderManager())
             .environment(DNSProxyProviderManager())

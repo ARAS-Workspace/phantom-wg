@@ -16,6 +16,7 @@ struct PhantomApp: App {
     @State private var splitDaemonClient: SplitTunnelDaemonClient
     @State private var interfaceResolver: PhysicalInterfaceResolver
     @State private var toastCenter: ToastCenter
+    @State private var vaultClient: TunnelVaultClient
 
     init() {
         let loc = LocalizationManager.shared
@@ -43,6 +44,7 @@ struct PhantomApp: App {
         _dnsProviderManager = State(initialValue: dnsProviderManager)
         _interfaceResolver = State(initialValue: PhysicalInterfaceResolver())
         _toastCenter = State(initialValue: ToastCenter())
+        _vaultClient = State(initialValue: TunnelVaultClient())
         _dnsDaemonClient = State(initialValue: dnsDaemonClient)
         _splitDaemonClient = State(initialValue: splitDaemonClient)
     }
@@ -66,8 +68,13 @@ struct PhantomApp: App {
             .environment(splitDaemonClient)
             .environment(interfaceResolver)
             .environment(toastCenter)
+            .environment(vaultClient)
             .tint(Color.accentColor)
-            .frame(width: 480, height: 720)
+            // Fixed: the layout is designed at this size. Wide enough
+            // that a 44-character base64 key sits on one line with
+            // room to spare — the configuration screens are dense
+            // with monospaced values.
+            .frame(width: 560, height: 720)
             .onAppear {
                 interfaceResolver.start()
                 coordinator.start()

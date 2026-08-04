@@ -4,11 +4,12 @@ import SwiftUI
 
 extension TunnelDetailView {
 
-    /// Serializes the saved config to the canonical `.conf` text —
-    /// the same output `TunnelEditView` starts from, so what the user
-    /// copies is exactly what they would edit.
+    /// Serializes the vault copy to the canonical `.conf` text — the
+    /// same output `TunnelEditView` starts from, so what the user
+    /// copies is exactly what they would edit. The button is disabled
+    /// until the fetch lands, so `config` is non-nil here.
     func copyConf() {
-        guard let contents = tunnel.tunnelConfig?.asConfString() else { return }
+        guard let contents = config?.asConfString() else { return }
         NSPasteboard.general.clearContents()
         NSPasteboard.general.setString(contents, forType: .string)
     }

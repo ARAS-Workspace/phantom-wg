@@ -13,18 +13,22 @@ import SwiftUI
 struct TunnelEditView: View {
     var tunnel: TunnelContainer
     @Environment(TunnelsManager.self) private var tunnelsManager
+    @Environment(TunnelVaultClient.self) private var vault
     @Environment(LocalizationManager.self) private var loc
     @Environment(\.dismiss) private var dismiss
 
-    @State private var name: String
-    @State private var rawInput: String
+    @State private var name: String = ""
+    @State private var rawInput: String = ""
     @State private var errorMessages: [String] = []
+
+    /// The vault copy this edit started from. Until it arrives there
+    /// is nothing to edit against — saving stays disabled so an empty
+    /// editor can never overwrite a good configuration.
+    @State private var original: TunnelConfig?
+    @State private var loaded = false
 
     init(tunnel: TunnelContainer) {
         self.tunnel = tunnel
-        let config = tunnel.tunnelConfig
-        _name = State(initialValue: config?.name ?? tunnel.name)
-        _rawInput = State(initialValue: config?.asConfString() ?? "")
     }
 
     var body: some View {
@@ -48,6 +52,25 @@ struct TunnelEditView: View {
                     .disabled(!canSubmit)
                     .accessibilityIdentifier(AXID.TunnelEdit.saveButton)
             }
+        }
+        .task { await loadOriginal() }
+    }
+
+    /// Pulls the configuration out of the vault and seeds both fields
+    /// from it. A miss leaves the editor empty and surfaces the same
+    /// banner the detail screen uses.
+    private func loadOriginal() async {
+        guard !loaded else { return }
+        let config = await vault.fetch(id: tunnel.id)
+        original = config
+        loaded = true
+
+        if let config {
+            name = config.name
+            rawInput = config.asConfString()
+        } else {
+            name = tunnel.name
+            errorMessages = [loc.t("detail_config_unavailable")]
         }
     }
 
@@ -104,7 +127,8 @@ struct TunnelEditView: View {
     // MARK: - Logic
 
     private var canSubmit: Bool {
-        tunnel.status == .inactive
+        original != nil
+            && tunnel.status == .inactive
             && !name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
             && !rawInput.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
     }
@@ -112,10 +136,9 @@ struct TunnelEditView: View {
     private func submit() {
         errorMessages = []
 
-        // Identity anchor. Without a decodable saved config there is
-        // nothing to edit against — the entry button is unreachable in
-        // that state, so this is purely defensive.
-        guard let original = tunnel.tunnelConfig else { return }
+        // Identity anchor: the vault copy this edit started from.
+        // `canSubmit` already requires it, so this is defensive.
+        guard let original else { return }
 
         let trimmedName = name.trimmingCharacters(in: .whitespacesAndNewlines)
         let trimmedInput = rawInput.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -184,5 +207,5 @@ struct TunnelEditView: View {
         TunnelEditView(tunnel: manager.tunnels[0])
     }
     .previewEnvironment(tunnels: manager)
-    .frame(width: 480, height: 720)
+    .frame(width: 560, height: 720)
 }

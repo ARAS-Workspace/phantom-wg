@@ -154,7 +154,7 @@ extension View {
         ToastBanner(toast: Toast(kind: .error, message: "The extension refused the configuration."), onDismiss: {})
     }
     .padding(24)
-    .frame(width: 480)
+    .frame(width: 560)
 }
 
 /// Interactive: each button routes through the environment's
@@ -162,7 +162,7 @@ extension View {
 #Preview("Live center") {
     ToastDemoHost()
         .previewEnvironment()
-        .frame(width: 480, height: 300)
+        .frame(width: 560, height: 300)
 }
 
 private struct ToastDemoHost: View {

@@ -27,6 +27,7 @@ enum TunnelActivationError: Error {
 enum TunnelManagementError: Error, LocalizedError {
     case tunnelAlreadyExistsWithThatName
     case tunnelInvalidName
+    case vaultUnavailable
     case vpnSystemErrorOnAddTunnel(systemError: Error)
     case vpnSystemErrorOnModifyTunnel(systemError: Error)
     case vpnSystemErrorOnRemoveTunnel(systemError: Error)
@@ -38,6 +39,8 @@ enum TunnelManagementError: Error, LocalizedError {
             return loc.t("error_duplicate_name")
         case .tunnelInvalidName:
             return loc.t("error_invalid_name")
+        case .vaultUnavailable:
+            return loc.t("error_vault_unavailable")
         case .vpnSystemErrorOnAddTunnel(let error):
             return loc.t("error_add_tunnel", error.localizedDescription)
         case .vpnSystemErrorOnModifyTunnel(let error):

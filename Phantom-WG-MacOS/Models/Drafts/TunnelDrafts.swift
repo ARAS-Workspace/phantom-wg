@@ -52,8 +52,6 @@ struct TunnelDraft: Equatable {
     struct ValidationResult {
         let config: TunnelConfig?
         let errors: [Field: FieldValidationError]
-
-        var isValid: Bool { config != nil }
     }
 
     // MARK: Init

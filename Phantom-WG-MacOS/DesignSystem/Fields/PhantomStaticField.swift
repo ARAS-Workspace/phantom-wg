@@ -34,5 +34,5 @@ struct PhantomStaticField: View {
             PhantomStaticField(label: "MTU", value: "1420")
         }
     }
-    .frame(width: 480)
+    .frame(width: 560)
 }

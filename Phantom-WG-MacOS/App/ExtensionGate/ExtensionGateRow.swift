@@ -137,6 +137,6 @@ struct ExtensionGateRow: View {
         }
     }
     .padding(24)
-    .frame(width: 480)
+    .frame(width: 560)
     .previewEnvironment()
 }

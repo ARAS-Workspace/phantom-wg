@@ -3,12 +3,16 @@ import SwiftUI
 /// Headerless top block mirroring the running tunnel: the same
 /// status row the detail view renders, surfaced so connection state
 /// and the master toggle are reachable without opening the detail.
-/// Deliberately not a titled section — the header chrome produced
-/// intermittent phantom spacing after navigation pops, and the
-/// block's position above the titled tunnel list already says what
-/// it is. While every tunnel is inactive a quiet placeholder keeps
-/// the block stable. Only appears once at least one tunnel exists —
-/// the empty state stays untouched.
+///
+/// Deliberately not a titled section — a header in the **first** slot
+/// of a `List` intermittently leaves a band of empty space above its
+/// own content after a navigation transition (the detail view's
+/// status block hit the same thing). Later sections never do, so the
+/// house rule is: the first section of a list carries no header. Its
+/// position above the titled tunnel list already says what it is.
+/// While every tunnel is inactive a quiet placeholder keeps the block
+/// stable. Only appears once at least one tunnel exists — the empty
+/// state stays untouched.
 struct ActiveTunnelSection: View {
     let activeTunnel: TunnelContainer?
     @Environment(LocalizationManager.self) private var loc
@@ -18,7 +22,7 @@ struct ActiveTunnelSection: View {
             if let tunnel = activeTunnel {
                 TunnelStatusRow(
                     tunnel: tunnel,
-                    isGhost: tunnel.tunnelConfig?.isGhostMode == true,
+                    isGhost: tunnel.isGhost,
                     title: tunnel.name,
                     toggleAXID: AXID.TunnelList.activeToggle,
                     errorAXID: AXID.TunnelList.activeError
@@ -60,7 +64,7 @@ struct ActiveTunnelSection: View {
         ActiveTunnelSection(activeTunnel: manager.tunnels[0])
     }
     .previewEnvironment(tunnels: manager)
-    .frame(width: 480)
+    .frame(width: 560)
 }
 
 #Preview("None active") {
@@ -68,5 +72,5 @@ struct ActiveTunnelSection: View {
         ActiveTunnelSection(activeTunnel: nil)
     }
     .previewEnvironment()
-    .frame(width: 480)
+    .frame(width: 560)
 }

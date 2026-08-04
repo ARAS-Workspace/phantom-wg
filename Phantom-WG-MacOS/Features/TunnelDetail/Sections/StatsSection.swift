@@ -30,7 +30,7 @@ struct StatsSection: View {
         StatsSection(handshake: "12 seconds ago", rxBytes: "45.12 MB", txBytes: "8.79 MB")
     }
     .previewEnvironment()
-    .frame(width: 480)
+    .frame(width: 560)
 }
 
 #Preview("Idle") {
@@ -38,5 +38,5 @@ struct StatsSection: View {
         StatsSection(handshake: "—", rxBytes: "—", txBytes: "—")
     }
     .previewEnvironment()
-    .frame(width: 480)
+    .frame(width: 560)
 }

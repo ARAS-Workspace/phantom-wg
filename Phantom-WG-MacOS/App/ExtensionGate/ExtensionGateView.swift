@@ -85,7 +85,7 @@ struct ExtensionGateView: View {
         .previewEnvironment(gate: PreviewFixtures.gateCoordinator(
             tunnel: .notInstalled, split: .notInstalled, dns: .notInstalled
         ))
-        .frame(width: 480, height: 720)
+        .frame(width: 560, height: 720)
 }
 
 #Preview("Mixed progress") {
@@ -93,7 +93,7 @@ struct ExtensionGateView: View {
         .previewEnvironment(gate: PreviewFixtures.gateCoordinator(
             tunnel: .activated, split: .needsApproval, dns: .activating
         ))
-        .frame(width: 480, height: 720)
+        .frame(width: 560, height: 720)
 }
 
 #Preview("Failure") {
@@ -103,5 +103,5 @@ struct ExtensionGateView: View {
             split: .failed("The code signature of the extension is invalid."),
             dns: .unknown
         ))
-        .frame(width: 480, height: 720)
+        .frame(width: 560, height: 720)
 }

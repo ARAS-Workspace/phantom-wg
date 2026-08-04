@@ -36,17 +36,8 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
         os_log("startTunnel called", log: extLog, type: .default)
         TunnelLogger.log(.tunnel, "PacketTunnelProvider starting...")
 
-        // 1. Read config from providerConfiguration (embedded JSON)
-        guard let proto = protocolConfiguration as? NETunnelProviderProtocol else {
-            os_log("ERROR: protocolConfiguration is not NETunnelProviderProtocol", log: extLog, type: .error)
-            completionHandler(PacketTunnelProviderError.savedProtocolConfigurationIsInvalid)
-            return
-        }
-
-        guard let config = proto.tunnelConfig else {
-            let configId = proto.providerConfiguration?["configId"] as? String ?? "nil"
-            os_log("ERROR: tunnelConfig is nil (configId: %{public}@)", log: extLog, type: .error, configId)
-            TunnelLogger.log(.tunnel, "ERROR: Config decode failed (configId: \(configId))")
+        // 1. Identity from providerConfiguration, secrets from the vault.
+        guard let config = loadConfig() else {
             completionHandler(PacketTunnelProviderError.savedProtocolConfigurationIsInvalid)
             return
         }
@@ -93,6 +84,34 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
                 completionHandler(nil)
             }
         }
+    }
+
+    /// The system's preferences carry identity only; the secrets come
+    /// from this extension's own System keychain vault, read here
+    /// in-process — no XPC hop, and nothing sensitive ever lands in a
+    /// world-readable plist.
+    private func loadConfig() -> TunnelConfig? {
+        guard let proto = protocolConfiguration as? NETunnelProviderProtocol else {
+            os_log("ERROR: protocolConfiguration is not NETunnelProviderProtocol", log: extLog, type: .error)
+            return nil
+        }
+
+        guard let identity = proto.tunnelIdentity else {
+            os_log("ERROR: tunnel identity missing from providerConfiguration", log: extLog, type: .error)
+            TunnelLogger.log(.tunnel, "ERROR: Tunnel identity missing")
+            return nil
+        }
+
+        let configId = identity.id.uuidString
+        guard let payload = SystemKeychainVault.fetchForProvider(id: configId),
+              let config = try? JSONDecoder().decode(TunnelConfig.self, from: payload) else {
+            os_log("ERROR: vault holds no usable payload (configId: %{public}@)",
+                   log: extLog, type: .error, configId)
+            TunnelLogger.log(.tunnel, "ERROR: Vault fetch failed (configId: \(configId))")
+            return nil
+        }
+
+        return config
     }
 
     override func stopTunnel(

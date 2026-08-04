@@ -177,7 +177,7 @@ struct TunnelListView: View {
 #Preview("Tunnels") {
     TunnelListView()
         .previewEnvironment()
-        .frame(width: 480, height: 720)
+        .frame(width: 560, height: 720)
 }
 
 #Preview("No active tunnel") {
@@ -186,11 +186,11 @@ struct TunnelListView: View {
             PreviewFixtures.provider(config: PreviewFixtures.wireguardConfig()),
             PreviewFixtures.provider(config: PreviewFixtures.ghostConfig(name: "Home Lab"))
         ]))
-        .frame(width: 480, height: 720)
+        .frame(width: 560, height: 720)
 }
 
 #Preview("Empty") {
     TunnelListView()
         .previewEnvironment(tunnels: PreviewFixtures.tunnelsManager(providers: []))
-        .frame(width: 480, height: 720)
+        .frame(width: 560, height: 720)
 }

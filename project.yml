@@ -137,10 +137,13 @@ targets:
       - path: Phantom-WG-MacOS/Domain/Configuration/ConfigTypes.swift
       - path: Phantom-WG-MacOS/Domain/Configuration/SplitTunnelingConfiguration.swift
       - path: Phantom-WG-MacOS/Infrastructure/Persistence/NETunnelProviderProtocol+Config.swift
+      - path: Phantom-WG-MacOS/Domain/IPC/TunnelVaultDaemonProtocol.swift
       - path: Phantom-WG-MacOS/Shared/SharedConstants.swift
       - path: Phantom-WG-MacOS/Shared/WstunnelBridge.swift
-      # Extension-only shared domain — flow matching engine.
+      # Extension-only shared domain — flow matching engine, and the
+      # System-keychain vault that holds every tunnel's secrets.
       - path: Extensions/Domain/Matching/FlowDecisionEngine.swift
+      - path: Extensions/Domain/Security/SystemKeychainVault.swift
     dependencies:
       - package: WireGuardKit
         product: WireGuardKit
@@ -198,6 +201,12 @@ targets:
         CFBundleDisplayName: PhantomTunnel
         NSSystemExtensionUsageDescription: "Phantom-WG Mac needs to install a system extension to provide VPN tunnel functionality."
         NetworkExtension:
+          # Lets launchd spawn this extension on demand when the app
+          # connects to the vault daemon — the app stores a tunnel's
+          # secrets at import time, before any tunnel has ever run.
+          # Must be prefixed by one of the entitlement's
+          # application-groups; mirrors the two proxy extensions.
+          NEMachServiceName: group.com.remrearas.phantom-wg-macos.tunnelvault
           NEProviderClasses:
             com.apple.networkextension.packet-tunnel: $(PRODUCT_MODULE_NAME).PacketTunnelProvider
     entitlements:

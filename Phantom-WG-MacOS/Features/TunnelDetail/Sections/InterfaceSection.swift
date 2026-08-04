@@ -42,5 +42,5 @@ struct InterfaceSection: View {
         InterfaceSection(config: PreviewFixtures.ghostConfig().wireguard.interface)
     }
     .previewEnvironment()
-    .frame(width: 480)
+    .frame(width: 560)
 }

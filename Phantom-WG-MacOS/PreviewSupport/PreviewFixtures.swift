@@ -95,7 +95,9 @@ enum PreviewFixtures {
 
     /// `TunnelsManager` wired entirely to in-memory providers. The
     /// default set mirrors a realistic operator machine: one live
-    /// ghost tunnel, one standalone relay, one parked config.
+    /// ghost tunnel, one standalone relay, one parked config. The
+    /// vault is seeded from the same providers so the detail and edit
+    /// screens can read their configurations back.
     static func tunnelsManager(providers: [PreviewTunnelProvider]? = nil) -> TunnelsManager {
         let list = providers ?? [
             provider(config: ghostConfig(), status: .connected, logLines: logLines),
@@ -104,8 +106,14 @@ enum PreviewFixtures {
         ]
         return TunnelsManager(
             tunnelProviders: list,
-            providerFactory: PreviewTunnelProviderFactory(providers: list)
+            providerFactory: PreviewTunnelProviderFactory(providers: list),
+            vault: vaultClient(for: list)
         )
+    }
+
+    /// Vault preloaded with whatever the given providers carry.
+    static func vaultClient(for providers: [PreviewTunnelProvider]) -> TunnelVaultClient {
+        PreviewVaultClient(configs: providers.compactMap(\.config))
     }
 
     /// Activation failure for error-state previews; the wrapped

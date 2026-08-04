@@ -8,6 +8,7 @@ import SwiftUI
 struct TunnelContentView: View {
     var loader: TunnelsManagerLoader
     @Environment(LocalizationManager.self) private var loc
+    @Environment(TunnelVaultClient.self) private var vault
 
     var body: some View {
         Group {
@@ -31,7 +32,7 @@ struct TunnelContentView: View {
                     ProgressView(loc.t("app_loading"))
                         .tint(.secondary)
                 }
-                .task { await loader.load() }
+                .task { await loader.load(vault: vault) }
             }
         }
     }
@@ -45,7 +46,7 @@ struct TunnelContentView: View {
     loader.manager = manager
     return TunnelContentView(loader: loader)
         .previewEnvironment(tunnels: manager)
-        .frame(width: 480, height: 720)
+        .frame(width: 560, height: 720)
 }
 
 #Preview("Load error") {
@@ -53,5 +54,5 @@ struct TunnelContentView: View {
     loader.loadError = "The VPN preferences could not be read."
     return TunnelContentView(loader: loader)
         .previewEnvironment()
-        .frame(width: 480, height: 720)
+        .frame(width: 560, height: 720)
 }

@@ -83,12 +83,18 @@ struct TunnelStatusRow: View {
     }
 }
 
-/// Top section of the tunnel detail view — the shared status row
-/// under the "Status" header.
+/// Top block of the tunnel detail view — the shared status row.
+///
+/// Headerless on purpose. A section header in the **first** slot of a
+/// `List` intermittently leaves a band of empty space above its own
+/// content after a navigation push; it showed up here and, before
+/// that, on the tunnel list's active-tunnel block. Later sections are
+/// unaffected, so the house rule is: the first section of a list
+/// carries no header. The block reads fine without one — it is the
+/// status summary, sitting directly under the navigation title.
 struct StatusSection: View {
     var tunnel: TunnelContainer
     let isGhost: Bool
-    @Environment(LocalizationManager.self) private var loc
 
     var body: some View {
         Section {
@@ -99,8 +105,6 @@ struct StatusSection: View {
                 errorAXID: AXID.TunnelDetail.activationError,
                 badgeAXID: AXID.TunnelDetail.modeBadge
             )
-        } header: {
-            Label(loc.t("detail_status"), systemImage: "antenna.radiowaves.left.and.right")
         }
     }
 }
@@ -115,5 +119,5 @@ struct StatusSection: View {
         StatusSection(tunnel: manager.tunnels[1], isGhost: false)
     }
     .previewEnvironment(tunnels: manager)
-    .frame(width: 480)
+    .frame(width: 560)
 }

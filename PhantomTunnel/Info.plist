@@ -24,6 +24,8 @@
 	<string>Phantom-WG Mac needs to install a system extension to provide VPN tunnel functionality.</string>
 	<key>NetworkExtension</key>
 	<dict>
+		<key>NEMachServiceName</key>
+		<string>group.com.remrearas.phantom-wg-macos.tunnelvault</string>
 		<key>NEProviderClasses</key>
 		<dict>
 			<key>com.apple.networkextension.packet-tunnel</key>

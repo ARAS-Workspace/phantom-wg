@@ -33,7 +33,7 @@ struct TunnelRow: View {
 
     private var statusIndicator: some View {
         let color = tunnel.status.color
-        let isGhost = tunnel.tunnelConfig?.isGhostMode == true
+        let isGhost = tunnel.isGhost
         return ZStack {
             Circle()
                 .fill(color.opacity(0.15))
@@ -63,5 +63,5 @@ struct TunnelRow: View {
     }
     .listStyle(.inset)
     .previewEnvironment(tunnels: manager)
-    .frame(width: 480)
+    .frame(width: 560)
 }

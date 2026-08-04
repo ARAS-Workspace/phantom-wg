@@ -15,6 +15,7 @@ import SwiftUI
 ///   binding so the destructive action lives at the view root.
 struct ActionsSection: View {
     var tunnel: TunnelContainer
+    let canCopy: Bool
     let copyAction: () -> Void
     let editAction: () -> Void
     let resetAction: () -> Void
@@ -25,6 +26,7 @@ struct ActionsSection: View {
     var body: some View {
         Section {
             copyButton(loc.t("detail_copy_conf"), icon: "doc.text", id: "conf") { copyAction() }
+                .disabled(!canCopy)
                 .listRowSeparator(.hidden)
                 .accessibilityIdentifier(AXID.TunnelDetail.Actions.copyButton)
 
@@ -92,6 +94,7 @@ struct ActionsSection: View {
         List {
             ActionsSection(
                 tunnel: manager.tunnels[0],
+                canCopy: true,
                 copyAction: {},
                 editAction: {},
                 resetAction: {},
@@ -100,7 +103,7 @@ struct ActionsSection: View {
         }
     }
     .previewEnvironment(tunnels: manager)
-    .frame(width: 480)
+    .frame(width: 560)
 }
 
 #Preview("Inactive — delete enabled") {
@@ -109,6 +112,7 @@ struct ActionsSection: View {
         List {
             ActionsSection(
                 tunnel: manager.tunnels[1],
+                canCopy: true,
                 copyAction: {},
                 editAction: {},
                 resetAction: {},
@@ -117,5 +121,5 @@ struct ActionsSection: View {
         }
     }
     .previewEnvironment(tunnels: manager)
-    .frame(width: 480)
+    .frame(width: 560)
 }

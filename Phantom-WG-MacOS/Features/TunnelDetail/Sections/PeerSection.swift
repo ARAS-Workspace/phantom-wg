@@ -50,7 +50,7 @@ struct PeerSection: View {
         PeerSection(config: PreviewFixtures.ghostConfig().wireguard.peer)
     }
     .previewEnvironment()
-    .frame(width: 480)
+    .frame(width: 560)
 }
 
 #Preview("Without preshared key") {
@@ -60,5 +60,5 @@ struct PeerSection: View {
         PeerSection(config: peer)
     }
     .previewEnvironment()
-    .frame(width: 480)
+    .frame(width: 560)
 }

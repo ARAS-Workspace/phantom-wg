@@ -53,5 +53,5 @@ struct WstunnelSection: View {
         WstunnelSection(config: PreviewFixtures.ghostConfig().wstunnel!)
     }
     .previewEnvironment()
-    .frame(width: 480)
+    .frame(width: 560)
 }
