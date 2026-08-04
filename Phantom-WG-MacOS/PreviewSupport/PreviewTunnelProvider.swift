@@ -184,6 +184,20 @@ final class PreviewVaultClient: TunnelVaultClient {
         return true
     }
 
+    /// What `ping()` answers; `nil` never resolves, so the canvas can
+    /// hold the gate's connecting state indefinitely.
+    var pingAnswer: Ping? = .ready(payloads: 0)
+
+    override func ping() async -> Ping {
+        guard let pingAnswer else {
+            while !Task.isCancelled {
+                try? await Task.sleep(for: .seconds(3_600))
+            }
+            return .unreachable
+        }
+        return pingAnswer
+    }
+
     override func readAll() async -> ReadAll {
         .configs(Array(payloads.values))
     }

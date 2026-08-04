@@ -17,6 +17,7 @@ struct PhantomApp: App {
     @State private var interfaceResolver: PhysicalInterfaceResolver
     @State private var toastCenter: ToastCenter
     @State private var vaultClient: TunnelVaultClient
+    @State private var vaultSession: TunnelVaultSession
 
     init() {
         let loc = LocalizationManager.shared
@@ -43,8 +44,10 @@ struct PhantomApp: App {
         _splitProviderManager = State(initialValue: splitProviderManager)
         _dnsProviderManager = State(initialValue: dnsProviderManager)
         _interfaceResolver = State(initialValue: PhysicalInterfaceResolver())
+        let vaultClient = TunnelVaultClient()
         _toastCenter = State(initialValue: ToastCenter())
-        _vaultClient = State(initialValue: TunnelVaultClient())
+        _vaultClient = State(initialValue: vaultClient)
+        _vaultSession = State(initialValue: TunnelVaultSession(vault: vaultClient))
         _dnsDaemonClient = State(initialValue: dnsDaemonClient)
         _splitDaemonClient = State(initialValue: splitDaemonClient)
     }
@@ -53,7 +56,13 @@ struct PhantomApp: App {
         WindowGroup {
             Group {
                 if coordinator.allReady {
-                    TunnelContentView(loader: tunnelsManager)
+                    // Second lock: PhantomTunnel and TunnelVault exist
+                    // together or not at all — no session, no list.
+                    if vaultSession.state == .ready {
+                        TunnelContentView(loader: tunnelsManager)
+                    } else {
+                        TunnelVaultGateView()
+                    }
                 } else {
                     ExtensionGateView()
                 }
@@ -69,6 +78,7 @@ struct PhantomApp: App {
             .environment(interfaceResolver)
             .environment(toastCenter)
             .environment(vaultClient)
+            .environment(vaultSession)
             .tint(Color.accentColor)
             // Fixed: the layout is designed at this size. Wide enough
             // that a 44-character base64 key sits on one line with
@@ -78,6 +88,13 @@ struct PhantomApp: App {
             .onAppear {
                 interfaceResolver.start()
                 coordinator.start()
+            }
+            .onChange(of: coordinator.allReady) { _, ready in
+                // A gate that drops voids the session proof: a
+                // reinstalled extension is a cold one, and the next
+                // entry must probe again rather than trust a stale
+                // `.ready`.
+                if !ready { vaultSession.invalidate() }
             }
             .task(id: coordinator.allReady) {
                 // Boot reconcile once the gate clears. The session

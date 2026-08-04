@@ -214,6 +214,26 @@ enum PreviewFixtures {
         )
     }
 
+    // MARK: - Vault Session
+
+    /// Vault session pinned to a gate state. The backing client's
+    /// `ping` answers consistently with that state, so the canvas
+    /// survives the gate view's entry probe without drifting.
+    static func vaultSession(state: TunnelVaultSession.State = .ready) -> TunnelVaultSession {
+        let client = PreviewVaultClient(configs: [])
+        switch state {
+        case .connecting:
+            client.pingAnswer = nil
+        case .ready:
+            client.pingAnswer = .ready(payloads: 0)
+        case .silent:
+            client.pingAnswer = .unreachable
+        case .doorFailed:
+            client.pingAnswer = .doorFailed
+        }
+        return TunnelVaultSession(vault: client, state: state)
+    }
+
     // MARK: - Extension Gate
 
     static func gateController(

@@ -91,9 +91,16 @@ private final class TunnelVaultEndpoint: NSObject, TunnelVaultDaemonProtocol {
         reply(SystemKeychainVault.store(payload, id: id, owner: owner))
     }
 
-    func fetchVault(id: String, reply: @escaping (Data?) -> Void) {
+    func fetchVault(id: String, reply: @escaping (Data?, Bool) -> Void) {
         os_log("RPC fetchVault (uid=%{public}d)", log: log, type: .default, owner)
-        reply(SystemKeychainVault.fetch(id: id, owner: owner))
+        switch SystemKeychainVault.fetch(id: id, owner: owner) {
+        case .payload(let data):
+            reply(data, true)
+        case .missing:
+            reply(nil, true)
+        case .failed:
+            reply(nil, false)
+        }
     }
 
     func deleteVault(id: String, reply: @escaping (Bool) -> Void) {
@@ -103,13 +110,31 @@ private final class TunnelVaultEndpoint: NSObject, TunnelVaultDaemonProtocol {
 
     func fetchAllVaults(reply: @escaping ([Data]?) -> Void) {
         let payloads = SystemKeychainVault.fetchAll(owner: owner)
-        os_log("RPC fetchAllVaults (uid=%{public}d) -> %{public}d",
-               log: log, type: .default, owner, payloads.count)
-        reply(payloads.isEmpty ? nil : payloads)
+        if let payloads {
+            os_log("RPC fetchAllVaults (uid=%{public}d) -> %{public}d",
+                   log: log, type: .default, owner, payloads.count)
+        } else {
+            os_log("RPC fetchAllVaults (uid=%{public}d) FAILED to enumerate",
+                   log: log, type: .error, owner)
+        }
+        // `[]` for an empty vault, `nil` only for a failed one.
+        reply(payloads)
     }
 
     func purgeVault(reply: @escaping (Bool) -> Void) {
         os_log("RPC purgeVault (uid=%{public}d)", log: log, type: .default, owner)
         reply(SystemKeychainVault.purge(owner: owner))
+    }
+
+    func pingVault(reply: @escaping (Bool, Int) -> Void) {
+        if let count = SystemKeychainVault.count(owner: owner) {
+            os_log("RPC pingVault (uid=%{public}d) -> ready, %{public}d payload(s)",
+                   log: log, type: .default, owner, count)
+            reply(true, count)
+        } else {
+            os_log("RPC pingVault (uid=%{public}d) -> vault door FAILED",
+                   log: log, type: .error, owner)
+            reply(false, 0)
+        }
     }
 }

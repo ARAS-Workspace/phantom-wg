@@ -16,11 +16,13 @@ extension View {
         tunnels: TunnelsManager? = nil,
         gate: ExtensionGateCoordinator? = nil,
         splitStore: SplitTunnelingStore? = nil,
+        vaultSession: TunnelVaultSession? = nil,
         sessionState: SplitTunnelingSessionCoordinator.State = .stopped
     ) -> some View {
         let manager = tunnels ?? PreviewFixtures.tunnelsManager()
         let coordinator = gate ?? PreviewFixtures.gateCoordinator()
         let store = splitStore ?? PreviewFixtures.splitStore()
+        let session = vaultSession ?? PreviewFixtures.vaultSession()
         let sessionCoordinator = PreviewFixtures.sessionCoordinator(state: sessionState)
         store.sessionCoordinator = sessionCoordinator
 
@@ -30,6 +32,7 @@ extension View {
             .environment(sessionCoordinator)
             .environment(manager)
             .environment(manager.vault)
+            .environment(session)
             .environment(store)
             .environment(SplitTunnelProviderManager())
             .environment(DNSProxyProviderManager())

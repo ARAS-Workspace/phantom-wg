@@ -31,6 +31,15 @@ enum AXID {
         }
     }
 
+    // MARK: Vault Gate
+
+    enum VaultGate {
+        static let connecting  = "vault-gate.connecting"
+        static let silentError = "vault-gate.silent-error"
+        static let doorError   = "vault-gate.door-error"
+        static let checkAgain  = "vault-gate.check-again"
+    }
+
     // MARK: Tunnel List
 
     enum TunnelList {

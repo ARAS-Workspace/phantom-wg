@@ -88,7 +88,8 @@ class TunnelVaultClient {
         case config(TunnelConfig)
         /// The vault answered and had nothing usable for this tunnel.
         case missing
-        /// The vault could not be reached, or did not answer in time.
+        /// The vault could not be reached, did not answer in time, or
+        /// answered that it could not look.
         case unreachable
     }
 
@@ -106,7 +107,11 @@ class TunnelVaultClient {
                     resume.finish(.unreachable)
                     return
                 }
-                proxy.fetchVault(id: key) { data in
+                proxy.fetchVault(id: key) { data, ok in
+                    guard ok else {
+                        resume.finish(.failed)
+                        return
+                    }
                     resume.finish(data.map(RawRead.payload) ?? .empty)
                 }
             }
@@ -114,6 +119,10 @@ class TunnelVaultClient {
 
         switch raw {
         case .unreachable:
+            return .unreachable
+        case .failed:
+            os_log("fetch — the vault answered but could not read %{public}@",
+                   log: log, type: .error, key)
             return .unreachable
         case .empty:
             os_log("fetch — vault holds no payload for %{public}@", log: log, type: .default, key)
@@ -196,10 +205,42 @@ class TunnelVaultClient {
         }
     }
 
+    /// Outcome of the session probe. Three stories the gate tells
+    /// apart: the extension answering with a closed vault door is not
+    /// the extension being asleep.
+    enum Ping {
+        case ready(payloads: Int)
+        /// The extension answered; the System keychain did not.
+        case doorFailed
+        /// No answer at all — the extension is not awake (yet).
+        case unreachable
+    }
+
+    /// Session probe — wakes the extension through launchd if needed
+    /// and proves the custody chain end to end. Single attempt;
+    /// patience lives in `TunnelVaultSession`.
+    func ping() async -> Ping {
+        await withRaceTimeout("ping", seconds: 5, fallback: .unreachable) { [log] in
+            await withCheckedContinuation { (continuation: CheckedContinuation<Ping, Never>) in
+                let resume = SingleResume(continuation)
+                guard let proxy = self.proxy({ error in
+                    os_log("ping error: %{public}@", log: log, type: .error, error.localizedDescription)
+                    resume.finish(.unreachable)
+                }) else {
+                    resume.finish(.unreachable)
+                    return
+                }
+                proxy.pingVault { ready, count in
+                    resume.finish(ready ? .ready(payloads: count) : .doorFailed)
+                }
+            }
+        }
+    }
+
     /// Outcome of reading the whole vault. As with a single read the
     /// two outcomes must stay apart, and here it matters far more: an
     /// empty answer means the vault owns nothing, while an unreachable
-    /// vault means we know nothing at all. Reconcile deletes system
+    /// or failing vault means we know nothing at all. Reconcile deletes system
     /// entries the vault does not back, so mistaking the second for
     /// the first would wipe every tunnel on the machine.
     enum ReadAll {
@@ -222,13 +263,24 @@ class TunnelVaultClient {
                     resume.finish(.unreachable)
                     return
                 }
-                // The daemon answers `nil` for an empty vault, so the
-                // reply block firing at all is what proves it spoke.
-                proxy.fetchAllVaults { data in resume.finish(.payloads(data ?? [])) }
+                // An empty vault answers `[]`. `nil` is the vault
+                // saying it could not enumerate — the daemon spoke,
+                // but taught nothing.
+                proxy.fetchAllVaults { data in
+                    resume.finish(data.map(RawReadAll.payloads) ?? .failed)
+                }
             }
         }
 
-        guard case .payloads(let payloads) = raw else {
+        let payloads: [Data]
+        switch raw {
+        case .payloads(let answered):
+            payloads = answered
+        case .failed:
+            os_log("fetchAll — the vault answered but could not enumerate",
+                   log: log, type: .error)
+            return .unreachable
+        case .unreachable:
             return .unreachable
         }
 
@@ -284,19 +336,22 @@ class TunnelVaultClient {
     }
 }
 
-/// What came back over the wire, before it is interpreted: the reply
-/// block firing with no data means the vault is empty, which is a very
-/// different thing from the reply block never firing at all.
+/// What came back over the wire, before it is interpreted. Absence
+/// and failure stay apart the whole way down: an answered "nothing
+/// here" is a fact, while a vault that answered "could not look"
+/// teaches as little as one that never spoke.
 private enum RawRead {
     case payload(Data)
     case empty
+    case failed
     case unreachable
 }
 
 /// Same distinction for the bulk read: an answered-but-empty vault is
-/// a fact, a silent one is an absence of facts.
+/// a fact, a failed or silent one is an absence of facts.
 private enum RawReadAll {
     case payloads([Data])
+    case failed
     case unreachable
 }
 

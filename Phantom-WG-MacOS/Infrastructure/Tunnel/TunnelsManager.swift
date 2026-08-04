@@ -19,6 +19,23 @@ class TunnelsManager {
     /// again — the flag keeps those from interleaving and creating the
     /// same tunnel twice.
     @ObservationIgnored private var isReconciling = false
+
+    /// Ids whose system entry is being written right now. An add puts
+    /// the payload in the vault before `savePreferences` lands the
+    /// entry, and a reconcile pass squeezing into that gap — off a
+    /// change notification whose reload still read the old, emptier
+    /// list — sees "payload with no entry" and mints a second one.
+    /// Field-measured on a first import; this set forbids it.
+    @ObservationIgnored private var creatingIds: Set<UUID> = []
+
+    /// Coalesces the refresh triggers. The system announces one change
+    /// as a burst of notifications more often than not, and a
+    /// foreground return can land on top of them — while every pass
+    /// costs a full vault read that wakes the extension. One trailing
+    /// pass serves the whole burst; `isReconciling` guards overlap,
+    /// this guards repetition.
+    @ObservationIgnored private var pendingRefresh: Task<Void, Never>?
+
     @ObservationIgnored var waitingTunnel: TunnelContainer?
 
     // Activation retry pacing (consumed by TunnelsManager+Activation)
@@ -57,6 +74,7 @@ class TunnelsManager {
     }
 
     deinit {
+        pendingRefresh?.cancel()
         if let token = statusObservationToken {
             NotificationCenter.default.removeObserver(token)
         }
@@ -79,7 +97,12 @@ class TunnelsManager {
             throw TunnelManagementError.tunnelAlreadyExistsWithThatName
         }
 
-        await purgeVaultDuplicates(of: config)
+        try await purgeVaultDuplicates(of: config)
+
+        // From the vault write until the entry lands, this id is
+        // reconcile's blind spot — mark it in flight.
+        creatingIds.insert(config.id)
+        defer { creatingIds.remove(config.id) }
 
         // Secrets first. A tunnel entry whose vault payload is missing
         // cannot start, so the vault write gates the whole operation —
@@ -112,7 +135,10 @@ class TunnelsManager {
     /// quietly — it cannot start, and telling the operator to repair
     /// something that is by definition unrepairable is worse than
     /// clearing it away. Nothing is destroyed by that removal: the
-    /// entry pointed at a payload that is already gone.
+    /// entry pointed at a payload that is already gone. And a
+    /// projection that stopped matching its payload — a name or mode
+    /// the system store missed — is rewritten in place, the vault's
+    /// version winning.
     ///
     /// Both directions rest on the vault having actually answered. A
     /// vault that cannot be reached teaches us nothing, and acting on
@@ -121,9 +147,10 @@ class TunnelsManager {
     @discardableResult
     func reconcileFromVault() async -> Int {
         // Idempotent by construction — it only creates entries the
-        // vault backs and the system lacks, and only removes entries
-        // the vault does not back, so a second pass over an unchanged
-        // world does nothing. The flag is about overlap, not
+        // vault backs and the system lacks, only removes entries the
+        // vault does not back, and rewrites a projection only when it
+        // differs, so a second pass over an unchanged world does
+        // nothing. The flag is about overlap, not
         // repetition: a pass in flight must finish before the next one
         // reads the list it is still adding to.
         guard !isReconciling else { return 0 }
@@ -139,11 +166,18 @@ class TunnelsManager {
 
         let known = Set(tunnels.map(\.id))
         let missing = payloads
-            .filter { !known.contains($0.id) }
+            .filter { !known.contains($0.id) && !creatingIds.contains($0.id) }
             .sorted { $0.createdAt < $1.createdAt }
 
         var restored = 0
         for config in missing {
+            // `known` is a snapshot. An import finishing mid-pass — or
+            // a bulk answer that carried the same id twice — would land
+            // a config here whose tunnel already exists, and creating a
+            // second entry for the same id is the one thing this pass
+            // must never do. The live list is the authority.
+            guard !tunnels.contains(where: { $0.id == config.id }) else { continue }
+
             // Names stay unique here too. Import and edit both refuse
             // a duplicate name, so reconcile must not be the one path
             // that manufactures one — a second tunnel with the same
@@ -167,10 +201,53 @@ class TunnelsManager {
             }
         }
 
+        await realignDriftedProjections(with: payloads)
+
         if restored > 0 {
             NSLog("[vault] reconcile restored \(restored) tunnel(s) the system had lost")
         }
         return restored
+    }
+
+    /// Realigns entries whose projection no longer matches their
+    /// payload — the drift `modify` leaves behind when the vault write
+    /// lands and the preference save fails. The vault's version wins:
+    /// name and mode are rewritten onto the system entry in place.
+    ///
+    /// `createdAt` is deliberately not compared: nothing can change
+    /// it, and the two stores round-trip the date through different
+    /// epochs, so exact equality would misfire on precision noise and
+    /// turn every pass into a save. Active tunnels are left alone,
+    /// as everywhere in this pass — the drift waits for the session
+    /// to end. A realign that would collide with another tunnel's
+    /// name is skipped the same way a restore would be.
+    private func realignDriftedProjections(with payloads: [TunnelConfig]) async {
+        for config in payloads {
+            guard let tunnel = tunnels.first(where: { $0.id == config.id }),
+                  tunnel.status == .inactive,
+                  let projected = tunnel.tunnelProvider.tunnelIdentity,
+                  projected.name != config.name || projected.isGhost != config.isGhostMode
+            else { continue }
+
+            let name = config.name.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !tunnels.contains(where: {
+                $0.id != config.id && $0.name.caseInsensitiveCompare(name) == .orderedSame
+            }) else {
+                NSLog("[vault] reconcile skipped realigning \(config.id): a tunnel named '\(name)' already exists")
+                continue
+            }
+
+            tunnel.tunnelProvider.localizedDescription = config.name
+            tunnel.tunnelProvider.configure(with: config.identity)
+            do {
+                try await tunnel.tunnelProvider.savePreferences()
+                try await tunnel.tunnelProvider.loadPreferences()
+                tunnel.name = config.name
+                NSLog("[vault] reconcile realigned \(config.id): the projection had gone stale")
+            } catch {
+                NSLog("[vault] reconcile could not realign \(config.id): \(error.localizedDescription)")
+            }
+        }
     }
 
     /// Removes system entries the vault does not back. Such an entry
@@ -205,10 +282,16 @@ class TunnelsManager {
     /// reconcile refuses to restore it (the name is taken) and nothing
     /// else ever looks at it. Writing the name is the moment the user
     /// says which tunnel owns it, so that is where the old claim goes.
-    private func purgeVaultDuplicates(of config: TunnelConfig) async {
+    ///
+    /// A vault that cannot answer aborts the write instead of being
+    /// skipped: letting a write proceed past an unanswered dedup is
+    /// the one way a name collision can ever be born.
+    private func purgeVaultDuplicates(of config: TunnelConfig) async throws {
         let name = config.name.trimmingCharacters(in: .whitespacesAndNewlines)
 
-        guard case .configs(let payloads) = await vault.readAll() else { return }
+        guard case .configs(let payloads) = await vault.readAll() else {
+            throw TunnelManagementError.vaultUnavailable
+        }
 
         for other in payloads where other.id != config.id {
             let otherName = other.name.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -251,12 +334,12 @@ class TunnelsManager {
             throw TunnelManagementError.tunnelAlreadyExistsWithThatName
         }
 
-        await purgeVaultDuplicates(of: config)
+        try await purgeVaultDuplicates(of: config)
 
         // Same ordering as `add`. If the preference save fails after
         // this, the vault holds the edit while the identity projection
         // stays stale — the tunnel still starts from the new payload,
-        // and the next successful edit realigns the projection.
+        // and the next reconcile pass realigns the projection.
         guard await vault.store(config) else {
             throw TunnelManagementError.vaultUnavailable
         }
@@ -381,13 +464,6 @@ class TunnelsManager {
                 activateWaitingTunnelIfNeeded()
             }
         }
-
-        let isActive = tunnels.contains { $0.status == .active }
-        NotificationCenter.default.post(
-            name: NSNotification.Name("PhantomTunnelStatusChanged"),
-            object: nil,
-            userInfo: ["isActive": isActive]
-        )
     }
 
     // MARK: - Configuration Observation
@@ -403,17 +479,16 @@ class TunnelsManager {
             object: nil,
             queue: .main
         ) { [weak self] _ in
-            guard let self else { return }
             Task { @MainActor in
-                await self.reload()
+                self?.scheduleRefresh()
             }
         }
     }
 
     /// Coming back to the foreground is the catch-all trigger: it
-    /// covers the launch where the extension was not answering yet,
-    /// and any change that happened while the app was in the
-    /// background without a notification reaching it.
+    /// covers any change that happened while the app was in the
+    /// background without a notification reaching it. Same door as
+    /// the configuration observer — one refresh semantic, coalesced.
     private func startObservingForeground() {
         foregroundObservationToken = NotificationCenter.default.addObserver(
             forName: NSApplication.didBecomeActiveNotification,
@@ -421,8 +496,19 @@ class TunnelsManager {
             queue: .main
         ) { [weak self] _ in
             Task { @MainActor in
-                await self?.reconcileFromVault()
+                self?.scheduleRefresh()
             }
+        }
+    }
+
+    /// Trailing-edge debounce: a new trigger restarts the window, the
+    /// pass runs once the burst goes quiet.
+    private func scheduleRefresh() {
+        pendingRefresh?.cancel()
+        pendingRefresh = Task { [weak self] in
+            try? await Task.sleep(for: .milliseconds(400))
+            guard !Task.isCancelled else { return }
+            await self?.reload()
         }
     }
 
