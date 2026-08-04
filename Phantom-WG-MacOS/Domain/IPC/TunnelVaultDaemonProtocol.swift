@@ -24,6 +24,11 @@ import Foundation
     /// compares the system's NetworkExtension preferences against.
     func fetchAllVaults(reply: @escaping ([Data]?) -> Void)
 
+    /// Deletes every payload the caller owns. The uninstall flow runs
+    /// this before deactivating the extensions, while there is still a
+    /// peer to ask.
+    func purgeVault(reply: @escaping (Bool) -> Void)
+
 }
 
 /// Mach service the tunnel extension vends. Like the proxy services it

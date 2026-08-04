@@ -107,4 +107,9 @@ private final class TunnelVaultEndpoint: NSObject, TunnelVaultDaemonProtocol {
                log: log, type: .default, owner, payloads.count)
         reply(payloads.isEmpty ? nil : payloads)
     }
+
+    func purgeVault(reply: @escaping (Bool) -> Void) {
+        os_log("RPC purgeVault (uid=%{public}d)", log: log, type: .default, owner)
+        reply(SystemKeychainVault.purge(owner: owner))
+    }
 }

@@ -140,31 +140,35 @@ enum SystemKeychainVault {
         // Two passes on purpose: the file-based keychain rejects a
         // bulk query that asks for item *data* (`kSecMatchLimitAll`
         // with `kSecReturnData` answers errSecParam), so enumerate the
-        // accounts first — which also carries the owner stamp — and
-        // then read each payload with the single-item query that is
-        // known to work.
-        let request: [String: Any] = [
-            kSecClass as String: kSecClassGenericPassword,
-            kSecAttrService as String: service,
-            kSecMatchLimit as String: kSecMatchLimitAll,
-            kSecReturnAttributes as String: true
-        ]
-
-        var out: CFTypeRef?
-        let status = SecItemCopyMatching(request as CFDictionary, &out)
-        guard status == errSecSuccess else {
-            // No items at all is a normal, quiet outcome.
-            if status != errSecItemNotFound {
-                report("fetchAll", id: "*", status: status)
-            }
-            return []
-        }
-
-        let mine = (out as? [[String: Any]] ?? []).filter {
-            ($0[kSecAttrDescription as String] as? String) == String(owner)
-        }
-        let accounts = mine.compactMap { $0[kSecAttrAccount as String] as? String }
+        // accounts first and then read each payload with the
+        // single-item query that is known to work.
+        guard let accounts = accounts(of: owner) else { return [] }
         return accounts.compactMap { payload(for: $0) }
+    }
+
+    /// Deletes every payload belonging to `owner`. The uninstall flow
+    /// runs this while the tunnel extension still answers — once the
+    /// extensions are deactivated there is no XPC peer left to ask,
+    /// which is exactly how payloads used to outlive the app. `false`
+    /// means the vault must not be treated as clean: the enumeration
+    /// failed, or at least one item refused to go.
+    static func purge(owner: uid_t) -> Bool {
+        lock.lock()
+        defer { lock.unlock() }
+
+        _ = systemKeychain()
+
+        guard let accounts = accounts(of: owner) else { return false }
+
+        var clean = true
+        for account in accounts {
+            let status = SecItemDelete(query(id: account) as CFDictionary)
+            report("purge", id: account, status: status)
+            if status != errSecSuccess && status != errSecItemNotFound {
+                clean = false
+            }
+        }
+        return clean
     }
 
     // MARK: - Private
@@ -205,6 +209,32 @@ enum SystemKeychainVault {
             return nil
         }
         return owner
+    }
+
+    /// Accounts (config ids) of every item stamped with `owner`, or
+    /// `nil` when the enumeration itself failed. An empty vault is
+    /// `[]` — `errSecItemNotFound` is a quiet normal here, not an
+    /// error. Callers hold `lock`.
+    private static func accounts(of owner: uid_t) -> [String]? {
+        let request: [String: Any] = [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrService as String: service,
+            kSecMatchLimit as String: kSecMatchLimitAll,
+            kSecReturnAttributes as String: true
+        ]
+
+        var out: CFTypeRef?
+        let status = SecItemCopyMatching(request as CFDictionary, &out)
+        guard status == errSecSuccess else {
+            if status == errSecItemNotFound { return [] }
+            report("enumerate", id: "*", status: status)
+            return nil
+        }
+
+        let mine = (out as? [[String: Any]] ?? []).filter {
+            ($0[kSecAttrDescription as String] as? String) == String(owner)
+        }
+        return mine.compactMap { $0[kSecAttrAccount as String] as? String }
     }
 
     /// Single-item data read. Callers hold `lock`.

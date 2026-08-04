@@ -305,6 +305,19 @@ class TunnelsManager {
         }
     }
 
+    /// Empties the vault ahead of extension deactivation — the
+    /// uninstall flow's first step, and ordered before it by force:
+    /// the vault lives behind the tunnel extension, so once
+    /// deactivation starts there is no XPC peer left to ask, which is
+    /// exactly how payloads used to outlive the app. A vault that
+    /// cannot be emptied stops the uninstall whole rather than letting
+    /// it report clean while secrets stay behind.
+    func purgeVault() async throws {
+        guard await vault.purge() else {
+            throw TunnelManagementError.vaultPurgeFailed
+        }
+    }
+
     // MARK: - Status Observation
 
     private func startObservingTunnelStatuses() {

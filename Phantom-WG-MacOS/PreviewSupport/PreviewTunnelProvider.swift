@@ -179,6 +179,11 @@ final class PreviewVaultClient: TunnelVaultClient {
         return true
     }
 
+    override func purge() async -> Bool {
+        payloads.removeAll()
+        return true
+    }
+
     override func readAll() async -> ReadAll {
         .configs(Array(payloads.values))
     }

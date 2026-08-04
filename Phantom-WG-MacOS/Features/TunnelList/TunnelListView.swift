@@ -132,6 +132,15 @@ struct TunnelListView: View {
         uninstalling = true
         Task {
             do {
+                // The vault empties first, while the tunnel extension
+                // is still there to answer — deactivation removes the
+                // XPC peer. A failed purge stops the uninstall whole:
+                // better than reporting clean while secrets stay in
+                // the System keychain. The cost of the ordering: once
+                // the purge has run, cancelling the deactivation that
+                // follows does not bring the tunnels back.
+                try await tunnelsManager.purgeVault()
+
                 // Sequential deactivation of all three system
                 // extensions (Tunnel + Split-Tunnel + DNSProxy).
                 // VPN configurations stored in
@@ -139,7 +148,9 @@ struct TunnelListView: View {
                 // place: every `removeFromPreferences` triggers an
                 // "Allow VPN Configurations" consent prompt with no
                 // API to batch them; without the system extensions
-                // the configurations are inert. On success every
+                // the configurations are inert — and should the
+                // extensions ever return, reconcile clears the
+                // now-unbacked entries. On success every
                 // controller settles to `.notInstalled`,
                 // `coordinator.allReady` flips to false and
                 // `PhantomApp` falls back to `ExtensionGateView`.
