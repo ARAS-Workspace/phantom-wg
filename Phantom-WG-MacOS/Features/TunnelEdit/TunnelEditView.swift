@@ -61,11 +61,14 @@ struct TunnelEditView: View {
     /// banner the detail screen uses.
     private func loadOriginal() async {
         guard !loaded else { return }
-        let config = await vault.fetch(id: tunnel.id)
-        original = config
+
+        // Same retry as the detail screen: a first read that cannot
+        // reach the extension says nothing about the configuration.
+        let result = await vault.read(id: tunnel.id, attempts: 3)
         loaded = true
 
-        if let config {
+        if case .config(let config) = result {
+            original = config
             name = config.name
             rawInput = config.asConfString()
         } else {

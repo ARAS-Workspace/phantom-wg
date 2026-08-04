@@ -78,31 +78,82 @@ class TunnelVaultClient {
         }
     }
 
-    /// The tunnel's configuration, or `nil` when the vault has no
-    /// payload for it (deleted out of band, or written by a build that
-    /// predates custody).
-    func fetch(id: UUID) async -> TunnelConfig? {
+    /// Outcome of a single read. The two failures are different
+    /// stories and callers must not tell them the same way: the vault
+    /// answering "no such payload" is final, while failing to reach
+    /// the vault at all is usually a moment old — the extension is
+    /// spawned on demand, and the first connection after it has been
+    /// idle can lose the race.
+    enum Read {
+        case config(TunnelConfig)
+        /// The vault answered and had nothing usable for this tunnel.
+        case missing
+        /// The vault could not be reached, or did not answer in time.
+        case unreachable
+    }
+
+    /// One attempt. Overridden by the preview support.
+    func read(id: UUID) async -> Read {
         let key = id.uuidString
 
-        let payload: Data? = await withRaceTimeout("fetch", seconds: 5, fallback: nil) { [log] in
-            await withCheckedContinuation { (continuation: CheckedContinuation<Data?, Never>) in
+        let raw: RawRead = await withRaceTimeout("fetch", seconds: 5, fallback: .unreachable) { [log] in
+            await withCheckedContinuation { (continuation: CheckedContinuation<RawRead, Never>) in
                 let resume = SingleResume(continuation)
                 guard let proxy = self.proxy({ error in
                     os_log("fetch error: %{public}@", log: log, type: .error, error.localizedDescription)
-                    resume.finish(nil)
+                    resume.finish(.unreachable)
                 }) else {
-                    resume.finish(nil)
+                    resume.finish(.unreachable)
                     return
                 }
-                proxy.fetchVault(id: key) { data in resume.finish(data) }
+                proxy.fetchVault(id: key) { data in
+                    resume.finish(data.map(RawRead.payload) ?? .empty)
+                }
             }
         }
 
-        guard let payload else {
+        switch raw {
+        case .unreachable:
+            return .unreachable
+        case .empty:
             os_log("fetch — vault holds no payload for %{public}@", log: log, type: .default, key)
-            return nil
+            return .missing
+        case .payload(let data):
+            guard let config = try? JSONDecoder().decode(TunnelConfig.self, from: data) else {
+                os_log("fetch — payload for %{public}@ FAILED to decode", log: log, type: .error, key)
+                return .missing
+            }
+            return .config(config)
         }
-        return try? JSONDecoder().decode(TunnelConfig.self, from: payload)
+    }
+
+    /// Reads, retrying only what is worth retrying. A vault that
+    /// answers "missing" is believed the first time; one that cannot
+    /// be reached is given a few more chances, spaced out, because
+    /// waking the extension is what usually costs the first attempt.
+    /// `onAttempt` reports each try so a view can show its progress,
+    /// and cancelling the caller's task stops the loop — leaving the
+    /// screen ends the retries with it.
+    func read(
+        id: UUID,
+        attempts: Int,
+        onAttempt: @MainActor @escaping (Int) -> Void = { _ in }
+    ) async -> Read {
+        var result = Read.unreachable
+
+        for attempt in 1...max(1, attempts) {
+            if Task.isCancelled { return result }
+            onAttempt(attempt)
+
+            result = await read(id: id)
+            if case .unreachable = result {} else { return result }
+
+            if attempt < attempts {
+                try? await Task.sleep(for: .milliseconds(600 * attempt))
+            }
+        }
+
+        return result
     }
 
     @discardableResult
@@ -124,24 +175,40 @@ class TunnelVaultClient {
         }
     }
 
-    /// Every configuration the vault holds. The vault outlives the
-    /// system's NetworkExtension preferences — macOS drops a tunnel's
-    /// configuration when its provider extension is uninstalled — so
-    /// this is what the recovery pass reads to find payloads whose
-    /// system entry is gone.
-    func fetchAll() async -> [TunnelConfig] {
-        let payloads: [Data]? = await withRaceTimeout("fetchAll", seconds: 5, fallback: nil) { [log] in
-            await withCheckedContinuation { (continuation: CheckedContinuation<[Data]?, Never>) in
+    /// Outcome of reading the whole vault. As with a single read the
+    /// two outcomes must stay apart, and here it matters far more: an
+    /// empty answer means the vault owns nothing, while an unreachable
+    /// vault means we know nothing at all. Reconcile deletes system
+    /// entries the vault does not back, so mistaking the second for
+    /// the first would wipe every tunnel on the machine.
+    enum ReadAll {
+        case configs([TunnelConfig])
+        case unreachable
+    }
+
+    /// Every configuration the vault holds for this user. The vault
+    /// outlives the system's NetworkExtension preferences — macOS
+    /// drops a tunnel's configuration when its provider extension is
+    /// uninstalled — so this is what reconcile compares against.
+    func readAll() async -> ReadAll {
+        let raw: RawReadAll = await withRaceTimeout("fetchAll", seconds: 5, fallback: .unreachable) { [log] in
+            await withCheckedContinuation { (continuation: CheckedContinuation<RawReadAll, Never>) in
                 let resume = SingleResume(continuation)
                 guard let proxy = self.proxy({ error in
                     os_log("fetchAll error: %{public}@", log: log, type: .error, error.localizedDescription)
-                    resume.finish(nil)
+                    resume.finish(.unreachable)
                 }) else {
-                    resume.finish(nil)
+                    resume.finish(.unreachable)
                     return
                 }
-                proxy.fetchAllVaults { data in resume.finish(data) }
+                // The daemon answers `nil` for an empty vault, so the
+                // reply block firing at all is what proves it spoke.
+                proxy.fetchAllVaults { data in resume.finish(.payloads(data ?? [])) }
             }
+        }
+
+        guard case .payloads(let payloads) = raw else {
+            return .unreachable
         }
 
         // A payload only counts once it decodes — that is the gate for
@@ -150,7 +217,7 @@ class TunnelVaultClient {
         // sudden count is the signal that a schema moved underneath us.
         var configs: [TunnelConfig] = []
         var undecodable = 0
-        for payload in payloads ?? [] {
+        for payload in payloads {
             if let config = try? JSONDecoder().decode(TunnelConfig.self, from: payload) {
                 configs.append(config)
             } else {
@@ -163,7 +230,7 @@ class TunnelVaultClient {
             os_log("fetchAll — %{public}d payload(s) FAILED to decode and were ignored",
                    log: log, type: .error, undecodable)
         }
-        return configs
+        return .configs(configs)
     }
 
     // MARK: - Race-Timeout Helper
@@ -194,6 +261,22 @@ class TunnelVaultClient {
             }
         }
     }
+}
+
+/// What came back over the wire, before it is interpreted: the reply
+/// block firing with no data means the vault is empty, which is a very
+/// different thing from the reply block never firing at all.
+private enum RawRead {
+    case payload(Data)
+    case empty
+    case unreachable
+}
+
+/// Same distinction for the bulk read: an answered-but-empty vault is
+/// a fact, a silent one is an absence of facts.
+private enum RawReadAll {
+    case payloads([Data])
+    case unreachable
 }
 
 /// Guards a continuation that several callbacks may reach — the XPC

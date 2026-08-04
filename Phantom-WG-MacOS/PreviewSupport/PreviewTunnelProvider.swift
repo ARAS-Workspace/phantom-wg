@@ -170,8 +170,8 @@ final class PreviewVaultClient: TunnelVaultClient {
         return true
     }
 
-    override func fetch(id: UUID) async -> TunnelConfig? {
-        payloads[id]
+    override func read(id: UUID) async -> Read {
+        payloads[id].map(Read.config) ?? .missing
     }
 
     override func delete(id: UUID) async -> Bool {
@@ -179,8 +179,8 @@ final class PreviewVaultClient: TunnelVaultClient {
         return true
     }
 
-    override func fetchAll() async -> [TunnelConfig] {
-        Array(payloads.values)
+    override func readAll() async -> ReadAll {
+        .configs(Array(payloads.values))
     }
 
 }

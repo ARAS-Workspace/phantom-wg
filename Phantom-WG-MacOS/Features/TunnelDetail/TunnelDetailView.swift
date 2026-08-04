@@ -15,11 +15,17 @@ struct TunnelDetailView: View {
     @Environment(LocalizationManager.self) var loc
     @Environment(\.dismiss) var dismiss
 
-    /// Vault payload. `nil` before the first fetch completes, and
-    /// after a fetch that found nothing — `configLoaded` separates
-    /// those two states.
+    /// Vault payload, once it arrives. Reads are retried while the
+    /// screen is open — the extension is spawned on demand and the
+    /// first attempt after it has been idle can lose the race, which
+    /// is not something to report as a broken configuration.
     @State var config: TunnelConfig?
     @State var configLoaded = false
+    @State var readAttempt = 0
+
+    /// How many times a read is tried before the screen calls the
+    /// configuration unreadable.
+    static let vaultReadAttempts = 3
 
     @State var showingEdit = false
     @State var showingDeleteConfirmation = false
@@ -124,22 +130,51 @@ struct TunnelDetailView: View {
             PeerSection(config: config.wireguard.peer)
         } else if configLoaded {
             Section {
-                Label(loc.t("detail_config_unavailable"), systemImage: "lock.slash")
-                    .foregroundStyle(.secondary)
-                    .accessibilityIdentifier(AXID.TunnelDetail.configUnavailable)
+                VStack(alignment: .leading, spacing: 8) {
+                    Label(loc.t("detail_config_unavailable"), systemImage: "lock.slash")
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .accessibilityIdentifier(AXID.TunnelDetail.configUnavailable)
+
+                    Button(loc.t("detail_config_retry")) {
+                        Task { await loadConfig() }
+                    }
+                    .controlSize(.small)
+                    .accessibilityIdentifier(AXID.TunnelDetail.configRetry)
+                }
+                .padding(.vertical, 2)
             }
         } else {
             Section {
                 HStack(spacing: 8) {
                     ProgressView().controlSize(.small)
-                    Text(loc.t("app_loading")).foregroundStyle(.secondary)
+                    Text(readAttempt > 1
+                         ? loc.t("detail_config_retrying", readAttempt, Self.vaultReadAttempts)
+                         : loc.t("detail_config_loading"))
+                        .foregroundStyle(.secondary)
                 }
             }
         }
     }
 
+    /// Reads the vault, retrying a few times before giving up. The
+    /// loop lives in the screen's task, so walking away cancels it.
     private func loadConfig() async {
-        config = await vault.fetch(id: tunnel.id)
+        configLoaded = false
+        readAttempt = 0
+
+        let result = await vault.read(
+            id: tunnel.id,
+            attempts: Self.vaultReadAttempts,
+            onAttempt: { readAttempt = $0 }
+        )
+
+        switch result {
+        case .config(let loaded):
+            config = loaded
+        case .missing, .unreachable:
+            config = nil
+        }
         configLoaded = true
     }
 }

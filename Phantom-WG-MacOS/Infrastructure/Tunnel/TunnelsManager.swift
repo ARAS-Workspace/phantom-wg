@@ -100,19 +100,24 @@ class TunnelsManager {
 
     // MARK: - Reconcile
 
-    /// Brings the system store in line with the vault, which is the
-    /// source of truth: it holds each tunnel's whole configuration
-    /// and outlives what the system keeps — macOS drops a tunnel's
-    /// NetworkExtension configuration when its provider extension is
-    /// uninstalled. Anything in the vault without a system entry is
-    /// recreated here, unprompted: the user has nothing to decide,
-    /// the tunnel exists and the system simply forgot it.
+    /// Makes the system store agree with the vault, in both
+    /// directions, because the vault is the source of truth: it holds
+    /// each tunnel's whole configuration and outlives what the system
+    /// keeps — macOS drops a tunnel's NetworkExtension configuration
+    /// when its provider extension is uninstalled.
     ///
-    /// There is no reverse direction. Deleting a tunnel deletes its
-    /// payload in the same breath, so a payload with no entry can
-    /// only mean the system lost it. Entries keep their original id
-    /// and creation date; macOS asks once to allow each restored VPN
-    /// configuration.
+    /// A payload with no system entry is recreated, unprompted: the
+    /// user has nothing to decide, the tunnel exists and the system
+    /// simply forgot it. An entry with no payload is removed just as
+    /// quietly — it cannot start, and telling the operator to repair
+    /// something that is by definition unrepairable is worse than
+    /// clearing it away. Nothing is destroyed by that removal: the
+    /// entry pointed at a payload that is already gone.
+    ///
+    /// Both directions rest on the vault having actually answered. A
+    /// vault that cannot be reached teaches us nothing, and acting on
+    /// that silence would delete every tunnel on the machine, so the
+    /// pass simply does not run.
     @discardableResult
     func reconcileFromVault() async -> Int {
         // Idempotent by construction — it only ever creates entries the
@@ -124,8 +129,15 @@ class TunnelsManager {
         isReconciling = true
         defer { isReconciling = false }
 
+        guard case .configs(let payloads) = await vault.readAll() else {
+            NSLog("[vault] reconcile skipped — the vault did not answer")
+            return 0
+        }
+
+        await dropEntriesWithoutPayload(vaultIds: Set(payloads.map(\.id)))
+
         let known = Set(tunnels.map(\.id))
-        let missing = await vault.fetchAll()
+        let missing = payloads
             .filter { !known.contains($0.id) }
             .sorted { $0.createdAt < $1.createdAt }
 
@@ -160,6 +172,31 @@ class TunnelsManager {
         return restored
     }
 
+    /// Removes system entries the vault does not back. Such an entry
+    /// is a pointer to nothing: it cannot start, and no repair exists
+    /// for it, so it is cleared instead of being shown as a fault.
+    ///
+    /// Two guards keep this from ever removing something real. A
+    /// tunnel that is not idle is left alone — the running session
+    /// owns its configuration and this is no moment to pull the entry
+    /// out from under it. And every candidate is confirmed with its
+    /// own read: the bulk answer is a snapshot, and a tunnel imported
+    /// while this pass was in flight would look absent in it.
+    private func dropEntriesWithoutPayload(vaultIds: Set<UUID>) async {
+        for tunnel in tunnels where !vaultIds.contains(tunnel.id) {
+            guard tunnel.status == .inactive else { continue }
+            guard case .missing = await vault.read(id: tunnel.id) else { continue }
+
+            do {
+                try await tunnel.tunnelProvider.removePreferences()
+                tunnels.removeAll { $0.id == tunnel.id }
+                NSLog("[vault] dropped system entry \(tunnel.id) — the vault holds no payload for it")
+            } catch {
+                NSLog("[vault] could not drop system entry \(tunnel.id): \(error.localizedDescription)")
+            }
+        }
+    }
+
     /// Drops any *other* payload that already claims this tunnel's
     /// name. Names are unique among listed tunnels, but a payload can
     /// outlive its entry — and one of those, holding a name the user
@@ -170,7 +207,9 @@ class TunnelsManager {
     private func purgeVaultDuplicates(of config: TunnelConfig) async {
         let name = config.name.trimmingCharacters(in: .whitespacesAndNewlines)
 
-        for other in await vault.fetchAll() where other.id != config.id {
+        guard case .configs(let payloads) = await vault.readAll() else { return }
+
+        for other in payloads where other.id != config.id {
             let otherName = other.name.trimmingCharacters(in: .whitespacesAndNewlines)
             guard otherName.caseInsensitiveCompare(name) == .orderedSame else { continue }
             await vault.delete(id: other.id)
@@ -236,15 +275,25 @@ class TunnelsManager {
     }
 
     func remove(tunnel: TunnelContainer) async throws {
+        // The payload goes first, and its failure stops everything.
+        //
+        // Removing the system entry first looks tidier but loses the
+        // race with our own machinery: that removal makes the system
+        // broadcast a configuration change, which reconciles, which
+        // finds a payload with no entry and dutifully puts the entry
+        // back. Taking the truth away first means every later pass
+        // agrees the tunnel is gone. And if the vault cannot be
+        // reached, refusing outright leaves the tunnel whole rather
+        // than half-deleted.
+        guard await vault.delete(id: tunnel.id) else {
+            throw TunnelManagementError.vaultUnavailable
+        }
+
         do {
             try await tunnel.tunnelProvider.removePreferences()
         } catch {
             throw TunnelManagementError.vpnSystemErrorOnRemoveTunnel(systemError: error)
         }
-
-        // Secrets go last: dropping the vault before the entry would
-        // leave a listable tunnel that can never start.
-        await vault.delete(id: tunnel.id)
 
         if let index = tunnels.firstIndex(where: { $0.id == tunnel.id }) {
             tunnels.remove(at: index)
