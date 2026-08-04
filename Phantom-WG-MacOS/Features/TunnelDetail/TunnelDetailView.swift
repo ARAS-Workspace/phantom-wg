@@ -181,7 +181,7 @@ struct TunnelDetailView: View {
 
 // MARK: - Previews
 
-#Preview("Active ghost") {
+#Preview("Active ghost — Light") {
     let manager = PreviewFixtures.tunnelsManager(providers: [
         PreviewFixtures.provider(
             config: PreviewFixtures.ghostConfig(),
@@ -192,7 +192,22 @@ struct TunnelDetailView: View {
     return NavigationStack {
         TunnelDetailView(tunnel: manager.tunnels[0])
     }
-    .previewEnvironment(tunnels: manager)
+    .previewEnvironment(tunnels: manager, scheme: .light)
+    .frame(width: 560, height: 720)
+}
+
+#Preview("Active ghost — Dark") {
+    let manager = PreviewFixtures.tunnelsManager(providers: [
+        PreviewFixtures.provider(
+            config: PreviewFixtures.ghostConfig(),
+            status: .connected,
+            logLines: PreviewFixtures.logLines
+        )
+    ])
+    return NavigationStack {
+        TunnelDetailView(tunnel: manager.tunnels[0])
+    }
+    .previewEnvironment(tunnels: manager, scheme: .dark)
     .frame(width: 560, height: 720)
 }
 

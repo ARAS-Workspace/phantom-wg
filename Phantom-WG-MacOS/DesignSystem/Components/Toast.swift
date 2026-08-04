@@ -146,7 +146,7 @@ extension View {
 
 // MARK: - Previews
 
-#Preview("Banner kinds") {
+#Preview("Banner kinds — Light") {
     VStack(spacing: 12) {
         ToastBanner(toast: Toast(kind: .info, message: "Interface switched to automatic selection."), onDismiss: {})
         ToastBanner(toast: Toast(kind: .success, message: "Tunnel configuration saved."), onDismiss: {})
@@ -155,6 +155,19 @@ extension View {
     }
     .padding(24)
     .frame(width: 560)
+    .preferredColorScheme(.light)
+}
+
+#Preview("Banner kinds — Dark") {
+    VStack(spacing: 12) {
+        ToastBanner(toast: Toast(kind: .info, message: "Interface switched to automatic selection."), onDismiss: {})
+        ToastBanner(toast: Toast(kind: .success, message: "Tunnel configuration saved."), onDismiss: {})
+        ToastBanner(toast: Toast(kind: .warning, message: "Selected interface is unavailable."), onDismiss: {})
+        ToastBanner(toast: Toast(kind: .error, message: "The extension refused the configuration."), onDismiss: {})
+    }
+    .padding(24)
+    .frame(width: 560)
+    .preferredColorScheme(.dark)
 }
 
 /// Interactive: each button routes through the environment's

@@ -202,13 +202,24 @@ struct TunnelEditView: View {
 /// Fully interactive against the in-memory manager: reshape the
 /// prefilled `.conf` (drop the `[Wstunnel]` block, break a key…) and
 /// Save exercises the real parse → validate → modify chain.
-#Preview {
+#Preview("Light") {
     let manager = PreviewFixtures.tunnelsManager(providers: [
         PreviewFixtures.provider(config: PreviewFixtures.ghostConfig())
     ])
     return NavigationStack {
         TunnelEditView(tunnel: manager.tunnels[0])
     }
-    .previewEnvironment(tunnels: manager)
+    .previewEnvironment(tunnels: manager, scheme: .light)
+    .frame(width: 560, height: 720)
+}
+
+#Preview("Dark") {
+    let manager = PreviewFixtures.tunnelsManager(providers: [
+        PreviewFixtures.provider(config: PreviewFixtures.ghostConfig())
+    ])
+    return NavigationStack {
+        TunnelEditView(tunnel: manager.tunnels[0])
+    }
+    .previewEnvironment(tunnels: manager, scheme: .dark)
     .frame(width: 560, height: 720)
 }

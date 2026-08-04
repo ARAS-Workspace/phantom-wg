@@ -17,7 +17,8 @@ extension View {
         gate: ExtensionGateCoordinator? = nil,
         splitStore: SplitTunnelingStore? = nil,
         vaultSession: TunnelVaultSession? = nil,
-        sessionState: SplitTunnelingSessionCoordinator.State = .stopped
+        sessionState: SplitTunnelingSessionCoordinator.State = .stopped,
+        scheme: ColorScheme? = nil
     ) -> some View {
         let manager = tunnels ?? PreviewFixtures.tunnelsManager()
         let coordinator = gate ?? PreviewFixtures.gateCoordinator()
@@ -41,6 +42,9 @@ extension View {
             .environment(PhysicalInterfaceResolver())
             .environment(ToastCenter())
             .tint(Color.accentColor)
+            // `nil` follows the system appearance — pass a scheme only
+            // in the paired Light/Dark preview variants.
+            .preferredColorScheme(scheme)
     }
 }
 

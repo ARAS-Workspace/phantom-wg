@@ -60,13 +60,24 @@ struct InterfaceUnavailableBanner: View {
 
 // MARK: - Previews
 
-#Preview {
+#Preview("Light") {
     InterfaceUnavailableBanner(
         selectionLabel: "Ethernet (en5)",
         onSwitchToAuto: {},
         onDisable: {}
     )
     .padding(24)
-    .previewEnvironment()
+    .previewEnvironment(scheme: .light)
+    .frame(width: 560)
+}
+
+#Preview("Dark") {
+    InterfaceUnavailableBanner(
+        selectionLabel: "Ethernet (en5)",
+        onSwitchToAuto: {},
+        onDisable: {}
+    )
+    .padding(24)
+    .previewEnvironment(scheme: .dark)
     .frame(width: 560)
 }

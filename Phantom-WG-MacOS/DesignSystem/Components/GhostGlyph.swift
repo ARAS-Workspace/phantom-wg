@@ -48,7 +48,7 @@ struct GhostGlyph: Shape {
 
 // MARK: - Previews
 
-#Preview {
+#Preview("Light") {
     HStack(spacing: 24) {
         GhostGlyph()
             .fill(.green, style: FillStyle(eoFill: true))
@@ -61,4 +61,21 @@ struct GhostGlyph: Shape {
             .frame(width: 48, height: 48)
     }
     .padding(40)
+    .preferredColorScheme(.light)
+}
+
+#Preview("Dark") {
+    HStack(spacing: 24) {
+        GhostGlyph()
+            .fill(.green, style: FillStyle(eoFill: true))
+            .frame(width: 18, height: 18)
+        GhostGlyph()
+            .fill(.orange, style: FillStyle(eoFill: true))
+            .frame(width: 24, height: 24)
+        GhostGlyph()
+            .fill(.secondary, style: FillStyle(eoFill: true))
+            .frame(width: 48, height: 48)
+    }
+    .padding(40)
+    .preferredColorScheme(.dark)
 }

@@ -19,9 +19,15 @@ struct TunnelVaultGateView: View {
 
             switch session.state {
             case .connecting, .ready:
-                ProgressView(loc.t("vault_gate_connecting"))
-                    .tint(.secondary)
-                    .accessibilityIdentifier(AXID.VaultGate.connecting)
+                // The spinner stays untinted: layering a translucent
+                // secondary over its already-translucent segments made
+                // it vanish on light backgrounds.
+                ProgressView {
+                    Text(loc.t("vault_gate_connecting"))
+                        .foregroundStyle(.secondary)
+                        .padding(.top, 8)
+                }
+                .accessibilityIdentifier(AXID.VaultGate.connecting)
             case .silent:
                 failure(
                     title: "vault_gate_silent_title",
@@ -67,20 +73,38 @@ struct TunnelVaultGateView: View {
 
 // MARK: - Previews
 
-#Preview("Connecting") {
+#Preview("Connecting — Light") {
     TunnelVaultGateView()
-        .previewEnvironment(vaultSession: PreviewFixtures.vaultSession(state: .connecting))
+        .previewEnvironment(vaultSession: PreviewFixtures.vaultSession(state: .connecting), scheme: .light)
         .frame(width: 560, height: 720)
 }
 
-#Preview("Extension silent") {
+#Preview("Connecting — Dark") {
     TunnelVaultGateView()
-        .previewEnvironment(vaultSession: PreviewFixtures.vaultSession(state: .silent))
+        .previewEnvironment(vaultSession: PreviewFixtures.vaultSession(state: .connecting), scheme: .dark)
         .frame(width: 560, height: 720)
 }
 
-#Preview("Vault door failed") {
+#Preview("Extension silent — Light") {
     TunnelVaultGateView()
-        .previewEnvironment(vaultSession: PreviewFixtures.vaultSession(state: .doorFailed))
+        .previewEnvironment(vaultSession: PreviewFixtures.vaultSession(state: .silent), scheme: .light)
+        .frame(width: 560, height: 720)
+}
+
+#Preview("Extension silent — Dark") {
+    TunnelVaultGateView()
+        .previewEnvironment(vaultSession: PreviewFixtures.vaultSession(state: .silent), scheme: .dark)
+        .frame(width: 560, height: 720)
+}
+
+#Preview("Vault door failed — Light") {
+    TunnelVaultGateView()
+        .previewEnvironment(vaultSession: PreviewFixtures.vaultSession(state: .doorFailed), scheme: .light)
+        .frame(width: 560, height: 720)
+}
+
+#Preview("Vault door failed — Dark") {
+    TunnelVaultGateView()
+        .previewEnvironment(vaultSession: PreviewFixtures.vaultSession(state: .doorFailed), scheme: .dark)
         .frame(width: 560, height: 720)
 }

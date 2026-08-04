@@ -157,10 +157,18 @@ struct TunnelImportView: View {
 /// Fully interactive against the in-memory manager: paste a `.conf`
 /// (`PreviewFixtures.ghostConfig().asConfString()` shape) and the
 /// import round-trips through parse → validate → add.
-#Preview {
+#Preview("Light") {
     NavigationStack {
         TunnelImportView()
     }
-    .previewEnvironment(tunnels: PreviewFixtures.tunnelsManager(providers: []))
+    .previewEnvironment(tunnels: PreviewFixtures.tunnelsManager(providers: []), scheme: .light)
+    .frame(width: 560, height: 720)
+}
+
+#Preview("Dark") {
+    NavigationStack {
+        TunnelImportView()
+    }
+    .previewEnvironment(tunnels: PreviewFixtures.tunnelsManager(providers: []), scheme: .dark)
     .frame(width: 560, height: 720)
 }

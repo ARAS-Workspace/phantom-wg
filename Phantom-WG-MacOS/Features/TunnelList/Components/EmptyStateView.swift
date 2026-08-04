@@ -60,10 +60,18 @@ struct EmptyStateView: View {
 
 // MARK: - Previews
 
-#Preview {
+#Preview("Light") {
     PreviewBindingHost(false) { showingImport in
         EmptyStateView(showingImport: showingImport)
     }
-    .previewEnvironment()
+    .previewEnvironment(scheme: .light)
+    .frame(width: 560, height: 720)
+}
+
+#Preview("Dark") {
+    PreviewBindingHost(false) { showingImport in
+        EmptyStateView(showingImport: showingImport)
+    }
+    .previewEnvironment(scheme: .dark)
     .frame(width: 560, height: 720)
 }

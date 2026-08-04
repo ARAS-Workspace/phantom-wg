@@ -80,11 +80,19 @@ struct ExtensionGateView: View {
 
 // MARK: - Previews
 
-#Preview("First run") {
+#Preview("First run — Light") {
     ExtensionGateView()
         .previewEnvironment(gate: PreviewFixtures.gateCoordinator(
             tunnel: .notInstalled, split: .notInstalled, dns: .notInstalled
-        ))
+        ), scheme: .light)
+        .frame(width: 560, height: 720)
+}
+
+#Preview("First run — Dark") {
+    ExtensionGateView()
+        .previewEnvironment(gate: PreviewFixtures.gateCoordinator(
+            tunnel: .notInstalled, split: .notInstalled, dns: .notInstalled
+        ), scheme: .dark)
         .frame(width: 560, height: 720)
 }
 

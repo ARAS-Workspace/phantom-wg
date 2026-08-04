@@ -185,9 +185,15 @@ struct TunnelListView: View {
 
 // MARK: - Previews
 
-#Preview("Tunnels") {
+#Preview("Tunnels — Light") {
     TunnelListView()
-        .previewEnvironment()
+        .previewEnvironment(scheme: .light)
+        .frame(width: 560, height: 720)
+}
+
+#Preview("Tunnels — Dark") {
+    TunnelListView()
+        .previewEnvironment(scheme: .dark)
         .frame(width: 560, height: 720)
 }
 

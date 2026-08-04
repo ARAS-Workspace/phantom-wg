@@ -29,8 +29,14 @@ struct TunnelContentView: View {
                         .resizable()
                         .scaledToFit()
                         .frame(width: 160, height: 160)
-                    ProgressView(loc.t("app_loading"))
-                        .tint(.secondary)
+                    // Untinted spinner — a translucent secondary tint
+                    // over its translucent segments disappears on
+                    // light backgrounds.
+                    ProgressView {
+                        Text(loc.t("app_loading"))
+                            .foregroundStyle(.secondary)
+                            .padding(.top, 8)
+                    }
                 }
                 .task { await loader.load(vault: vault) }
             }
@@ -49,10 +55,18 @@ struct TunnelContentView: View {
         .frame(width: 560, height: 720)
 }
 
-#Preview("Load error") {
+#Preview("Load error — Light") {
     let loader = TunnelsManagerLoader()
     loader.loadError = "The VPN preferences could not be read."
     return TunnelContentView(loader: loader)
-        .previewEnvironment()
+        .previewEnvironment(scheme: .light)
+        .frame(width: 560, height: 720)
+}
+
+#Preview("Load error — Dark") {
+    let loader = TunnelsManagerLoader()
+    loader.loadError = "The VPN preferences could not be read."
+    return TunnelContentView(loader: loader)
+        .previewEnvironment(scheme: .dark)
         .frame(width: 560, height: 720)
 }
