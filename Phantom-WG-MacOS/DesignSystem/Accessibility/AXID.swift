@@ -50,10 +50,6 @@ enum AXID {
         static let activeError  = "tunnel-list.active.activation-error"
         static let activeNone   = "tunnel-list.active.none"
         static let listCount    = "tunnel-list.count"
-        static let recovery     = "tunnel-list.recovery"
-
-        static func recoveryRestore(_ id: String) -> String { "tunnel-list.recovery.\(id).restore" }
-        static func recoveryDiscard(_ id: String) -> String { "tunnel-list.recovery.\(id).discard" }
 
         static func row(_ name: String) -> String { "tunnel-row.\(name)" }
         static func rowToggle(_ name: String) -> String { "tunnel-row.\(name).toggle" }
@@ -74,7 +70,6 @@ enum AXID {
         static let resetCancel       = "split-tunneling.reset-confirm.cancel"
         static let errorAlertOK      = "split-tunneling.error-alert.ok"
 
-        static let logsLink          = "split-tunneling.logs-link"
         static let logsCount         = "split-tunneling.logs-count"
         static let logsSave          = "split-tunneling.logs-save"
         static let logsClear         = "split-tunneling.logs-clear"

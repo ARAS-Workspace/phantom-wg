@@ -4,7 +4,6 @@ import os.log
 
 let bootLog = OSLog(subsystem: "com.remrearas.Phantom-WG-MacOS.PhantomTunnel", category: "boot")
 os_log("PhantomTunnel system extension BOOT", log: bootLog, type: .default)
-NSLog("PhantomTunnel system extension BOOT (NSLog)")
 
 // Custody server first: the app stores a tunnel's secrets at import
 // time, long before that tunnel is ever activated, so the listener
@@ -20,6 +19,5 @@ autoreleasepool {
 }
 
 os_log("PhantomTunnel entering dispatchMain", log: bootLog, type: .default)
-NSLog("PhantomTunnel entering dispatchMain (NSLog)")
 
 dispatchMain()

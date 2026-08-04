@@ -20,8 +20,8 @@ import Foundation
     /// gone, including when it was already absent.
     func deleteVault(id: String, reply: @escaping (Bool) -> Void)
 
-    /// Every payload the vault holds — the app's recovery path when
-    /// the system's NetworkExtension preferences lose tunnel entries.
+    /// Every payload the vault holds — what the app's reconcile pass
+    /// compares the system's NetworkExtension preferences against.
     func fetchAllVaults(reply: @escaping ([Data]?) -> Void)
 
 }

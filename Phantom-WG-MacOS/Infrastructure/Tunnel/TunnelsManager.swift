@@ -120,9 +120,10 @@ class TunnelsManager {
     /// pass simply does not run.
     @discardableResult
     func reconcileFromVault() async -> Int {
-        // Idempotent by construction — it only ever creates entries the
-        // vault has and the system lacks, so a second pass over an
-        // unchanged world does nothing. The flag is about overlap, not
+        // Idempotent by construction — it only creates entries the
+        // vault backs and the system lacks, and only removes entries
+        // the vault does not back, so a second pass over an unchanged
+        // world does nothing. The flag is about overlap, not
         // repetition: a pass in flight must finish before the next one
         // reads the list it is still adding to.
         guard !isReconciling else { return 0 }
@@ -301,33 +302,6 @@ class TunnelsManager {
 
         if waitingTunnel?.id == tunnel.id {
             waitingTunnel = nil
-        }
-    }
-
-    /// Deactivate any active tunnel and remove all VPN configurations.
-    /// Used during full uninstall. Errors on individual tunnels are
-    /// collected and the first one is thrown at the end — partial
-    /// cleanup is preferred over abort on first failure.
-    func removeAll() async throws {
-        for tunnel in tunnels where tunnel.status != .inactive {
-            startDeactivation(of: tunnel)
-        }
-
-        var firstError: Error?
-        for tunnel in tunnels {
-            do {
-                try await tunnel.tunnelProvider.removePreferences()
-            } catch {
-                if firstError == nil { firstError = error }
-            }
-            await vault.delete(id: tunnel.id)
-        }
-
-        tunnels.removeAll()
-        waitingTunnel = nil
-
-        if let firstError {
-            throw TunnelManagementError.vpnSystemErrorOnRemoveTunnel(systemError: firstError)
         }
     }
 

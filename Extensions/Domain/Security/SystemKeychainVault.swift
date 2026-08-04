@@ -127,8 +127,8 @@ enum SystemKeychainVault {
         return status == errSecSuccess || status == errSecItemNotFound
     }
 
-    /// Every payload belonging to `owner`. The recovery pass uses it to
-    /// find tunnels whose system entry is gone — macOS drops a
+    /// Every payload belonging to `owner`. The reconcile pass uses it
+    /// to find tunnels whose system entry is gone — macOS drops a
     /// tunnel's NetworkExtension configuration when its provider
     /// extension is uninstalled, and the vault outlives that.
     static func fetchAll(owner: uid_t) -> [Data] {
