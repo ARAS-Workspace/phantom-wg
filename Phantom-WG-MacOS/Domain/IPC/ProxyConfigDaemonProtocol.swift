@@ -18,6 +18,12 @@ import Foundation
 
     /// Manual flush of the ring buffer.
     func clearLogs(reply: @escaping (Bool) -> Void)
+
+    /// The extension's build identity (`ExtensionIdentity.current`).
+    /// The extension gate reads it to decide whether an activation —
+    /// a replacement that kills the extension's running sessions — is
+    /// needed at all.
+    func fetchIdentity(reply: @escaping (String) -> Void)
 }
 
 /// Mach service names, one per proxy extension. Each must literally

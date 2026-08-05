@@ -174,4 +174,10 @@ final class ProxyConfigDaemon: NSObject, NSXPCListenerDelegate, ProxyConfigDaemo
         RingBufferLogger.shared.clear()
         reply(true)
     }
+
+    func fetchIdentity(reply: @escaping (String) -> Void) {
+        let identity = ExtensionIdentity.current
+        os_log("RPC fetchIdentity -> %{public}@", log: log, type: .default, identity)
+        reply(identity)
+    }
 }

@@ -34,11 +34,14 @@ import Foundation
     /// peer to ask.
     func purgeVault(reply: @escaping (Bool) -> Void)
 
-    /// Session probe — proves the custody chain end to end: launchd
-    /// waking this extension answers the call at all, and the vault
-    /// door check answers the first argument. The count is how many
-    /// payloads the caller owns; no secret material moves.
-    func pingVault(reply: @escaping (Bool, Int) -> Void)
+    /// Session and identity probe in one endpoint — launchd waking
+    /// this extension answers the call at all, the identity is the
+    /// extension's `ExtensionIdentity.current` (what the gate compares
+    /// before deciding an activation is needed), the Bool is the vault
+    /// door check, and the count is how many payloads the caller owns.
+    /// No secret material moves. One RPC serves both locks so the
+    /// launch path never asks the same daemon twice.
+    func pingIdentity(reply: @escaping (String, Bool, Int) -> Void)
 
 }
 

@@ -126,15 +126,16 @@ private final class TunnelVaultEndpoint: NSObject, TunnelVaultDaemonProtocol {
         reply(SystemKeychainVault.purge(owner: owner))
     }
 
-    func pingVault(reply: @escaping (Bool, Int) -> Void) {
+    func pingIdentity(reply: @escaping (String, Bool, Int) -> Void) {
+        let identity = ExtensionIdentity.current
         if let count = SystemKeychainVault.count(owner: owner) {
-            os_log("RPC pingVault (uid=%{public}d) -> ready, %{public}d payload(s)",
-                   log: log, type: .default, owner, count)
-            reply(true, count)
+            os_log("RPC pingIdentity (uid=%{public}d) -> %{public}@, ready, %{public}d payload(s)",
+                   log: log, type: .default, owner, identity, count)
+            reply(identity, true, count)
         } else {
-            os_log("RPC pingVault (uid=%{public}d) -> vault door FAILED",
-                   log: log, type: .error, owner)
-            reply(false, 0)
+            os_log("RPC pingIdentity (uid=%{public}d) -> %{public}@, vault door FAILED",
+                   log: log, type: .error, owner, identity)
+            reply(identity, false, 0)
         }
     }
 }

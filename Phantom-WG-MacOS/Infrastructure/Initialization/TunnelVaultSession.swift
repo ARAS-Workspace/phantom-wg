@@ -68,7 +68,7 @@ final class TunnelVaultSession {
 
         for attempt in 1...Self.attempts {
             switch await vault.ping() {
-            case .ready(let payloads):
+            case .ready(let payloads, _):
                 os_log("session ready — %{public}d payload(s) in custody",
                        log: log, type: .default, payloads)
                 state = .ready

@@ -116,6 +116,37 @@ class ProxyConfigDaemonClient {
         }
     }
 
+    /// The extension's build identity, or `nil` when the daemon does
+    /// not answer — an old extension that predates the RPC, a missing
+    /// extension, or a transport failure all land there; the gate's
+    /// fallback tree tells them apart via properties. 5s timeout.
+    func identity() async -> String? {
+        await withRaceTimeout(seconds: 5, fallback: nil) {
+            await self.identityRPC()
+        }
+    }
+
+    private func identityRPC() async -> String? {
+        if connection == nil { connect() }
+        guard let conn = connection else { return nil }
+
+        return await withCheckedContinuation { (continuation: CheckedContinuation<String?, Never>) in
+            let proxy = conn.remoteObjectProxyWithErrorHandler { [weak self] error in
+                os_log("fetchIdentity error: %{public}@",
+                       log: self?.log ?? OSLog.default, type: .error, error.localizedDescription)
+                continuation.resume(returning: nil)
+            } as? ProxyConfigDaemonProtocol
+
+            guard let proxy else {
+                continuation.resume(returning: nil)
+                return
+            }
+            proxy.fetchIdentity { identity in
+                continuation.resume(returning: identity)
+            }
+        }
+    }
+
     /// Flush the daemon's ring buffer. 2s timeout.
     @discardableResult
     func clearLogs() async -> Bool {

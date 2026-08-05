@@ -207,11 +207,14 @@ class TunnelVaultClient {
 
     /// Outcome of the session probe. Three stories the gate tells
     /// apart: the extension answering with a closed vault door is not
-    /// the extension being asleep.
+    /// the extension being asleep. Both answered arms carry the
+    /// extension's build identity — an answer proves liveness whatever
+    /// the door says, and the extension gate reads the identity off
+    /// the same probe the vault session uses.
     enum Ping {
-        case ready(payloads: Int)
+        case ready(payloads: Int, identity: String)
         /// The extension answered; the System keychain did not.
-        case doorFailed
+        case doorFailed(identity: String)
         /// No answer at all — the extension is not awake (yet).
         case unreachable
     }
@@ -230,8 +233,10 @@ class TunnelVaultClient {
                     resume.finish(.unreachable)
                     return
                 }
-                proxy.pingVault { ready, count in
-                    resume.finish(ready ? .ready(payloads: count) : .doorFailed)
+                proxy.pingIdentity { identity, ready, count in
+                    resume.finish(ready
+                        ? .ready(payloads: count, identity: identity)
+                        : .doorFailed(identity: identity))
                 }
             }
         }

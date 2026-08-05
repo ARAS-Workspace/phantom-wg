@@ -225,11 +225,11 @@ enum PreviewFixtures {
         case .connecting:
             client.pingAnswer = nil
         case .ready:
-            client.pingAnswer = .ready(payloads: 0)
+            client.pingAnswer = .ready(payloads: 0, identity: ExtensionIdentity.current)
         case .silent:
             client.pingAnswer = .unreachable
         case .doorFailed:
-            client.pingAnswer = .doorFailed
+            client.pingAnswer = .doorFailed(identity: ExtensionIdentity.current)
         }
         return TunnelVaultSession(vault: client, state: state)
     }

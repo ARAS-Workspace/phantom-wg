@@ -85,7 +85,7 @@ targets:
           - "-Wl,-w"
         SWIFT_VERSION: "5.0"
         MARKETING_VERSION: "2.0.0"
-        CURRENT_PROJECT_VERSION: 1
+        CURRENT_PROJECT_VERSION: 2
         CODE_SIGN_IDENTITY: "Developer ID Application"
         PROVISIONING_PROFILE_SPECIFIER: Phantom-WG Mac DeveloperID
       configs:
@@ -145,6 +145,7 @@ targets:
       - path: Phantom-WG-MacOS/Domain/Configuration/SplitTunnelingConfiguration.swift
       - path: Phantom-WG-MacOS/Infrastructure/Persistence/NETunnelProviderProtocol+Config.swift
       - path: Phantom-WG-MacOS/Domain/IPC/TunnelVaultDaemonProtocol.swift
+      - path: Phantom-WG-MacOS/Domain/IPC/ExtensionIdentity.swift
       - path: Phantom-WG-MacOS/Shared/SharedConstants.swift
       - path: Phantom-WG-MacOS/Shared/WstunnelBridge.swift
       # Extension-only shared domain — flow matching engine, and the
@@ -194,7 +195,7 @@ targets:
         ALWAYS_EMBED_SWIFT_STANDARD_LIBRARIES: YES
         SWIFT_VERSION: "5.0"
         MARKETING_VERSION: "2.0.0"
-        CURRENT_PROJECT_VERSION: 1
+        CURRENT_PROJECT_VERSION: 2
         LIBRARY_SEARCH_PATHS:
           - "$(PROJECT_DIR)/Libraries/WstunnelKit"
           - "$(PROJECT_DIR)/Libraries/WireGuardKit/Sources/WireGuardKitGo/out"
@@ -247,6 +248,7 @@ targets:
       # crosses the App/extension boundary.
       - path: Phantom-WG-MacOS/Domain/Configuration/SplitTunnelingConfiguration.swift
       - path: Phantom-WG-MacOS/Domain/IPC/ProxyConfigDaemonProtocol.swift
+      - path: Phantom-WG-MacOS/Domain/IPC/ExtensionIdentity.swift
       - path: Extensions/Domain/IPC/ProxyConfigDaemon.swift
       - path: Phantom-WG-MacOS/Shared/SharedConstants.swift
       # Extension-only shared domain — ring-buffer logger, matching
@@ -274,7 +276,7 @@ targets:
         ALWAYS_EMBED_SWIFT_STANDARD_LIBRARIES: YES
         SWIFT_VERSION: "5.0"
         MARKETING_VERSION: "2.0.0"
-        CURRENT_PROJECT_VERSION: 1
+        CURRENT_PROJECT_VERSION: 2
     info:
       path: PhantomSplitTunnel/Info.plist
       properties:
@@ -319,6 +321,7 @@ targets:
       # SplitTunnel carves out via excludedNetworkRules.
       - path: Phantom-WG-MacOS/Domain/Configuration/SplitTunnelingConfiguration.swift
       - path: Phantom-WG-MacOS/Domain/IPC/ProxyConfigDaemonProtocol.swift
+      - path: Phantom-WG-MacOS/Domain/IPC/ExtensionIdentity.swift
       - path: Extensions/Domain/IPC/ProxyConfigDaemon.swift
       - path: Phantom-WG-MacOS/Shared/SharedConstants.swift
       # Extension-only shared domain — ring-buffer logger, matching
@@ -347,7 +350,7 @@ targets:
         ALWAYS_EMBED_SWIFT_STANDARD_LIBRARIES: YES
         SWIFT_VERSION: "5.0"
         MARKETING_VERSION: "2.0.0"
-        CURRENT_PROJECT_VERSION: 1
+        CURRENT_PROJECT_VERSION: 2
     info:
       path: PhantomDNSProxy/Info.plist
       properties:
