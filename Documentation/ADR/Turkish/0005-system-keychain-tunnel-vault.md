@@ -2,7 +2,7 @@
 
 ## Durum
 
-Önerildi — 2026-08-04
+Kabul Edildi — 2026-08-05
 
 Bu ADR, daha önce kabul edilmiş bir anlaşmanın yerini alır. Bu anlaşma, "**Sistem Uzantısı (System Extension)** Keychain tarafına erişemiyor." sonucuna dayanıyordu. Bu nedenden dolayı geliştirme süreçlerinde tünelin temel katma değerine odaklandığımdan bunu daha stabil hale getireceğim bir çözüme ulaşana kadar beklettim. Bu zamana kadar `NETunnelProviderProtocol.providerConfiguration` sözlüğü içinde özel anahtarlar düz base64 olarak saklanıyordu. Bu tavsiye edilen ve uygun bir yöntem değildi. 
 

@@ -2,7 +2,7 @@
 
 ## Status
 
-Proposed — 2026-07-19
+Accepted — 2026-08-05
 
 This ADR supersedes the following parts of ADR-0003 (***Split-Tunneling and DNS-Proxy Architecture***):
 

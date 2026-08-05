@@ -2,7 +2,7 @@
 
 ## Durum
 
-Önerildi — 2026-07-19
+Kabul Edildi — 2026-08-05
 
 Bu ADR, ADR-0003'ün (***Split-Tunneling ve DNS-Proxy Mimarisi***) aşağıdaki bölümlerinin yerini alır:
 

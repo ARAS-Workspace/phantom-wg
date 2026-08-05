@@ -2,7 +2,7 @@
 
 ## Status
 
-Proposed — 2026-08-04
+Accepted — 2026-08-05
 
 This ADR supersedes a previously accepted agreement. That agreement rested on the conclusion that "the **System Extension** cannot reach the Keychain." Because of it, focused on the tunnel's core value during development, I deferred the matter until I could reach a solution that would make it more stable. Until then, private keys were stored as plain base64 inside the `NETunnelProviderProtocol.providerConfiguration` dictionary. This was neither a recommended nor a suitable method.
 
