@@ -49,9 +49,10 @@ struct WstunnelSection: View {
 // MARK: - Previews
 
 #Preview {
-    List {
+    Form {
         WstunnelSection(config: PreviewFixtures.ghostConfig().wstunnel!)
     }
+    .formStyle(.grouped)
     .previewEnvironment()
     .frame(width: 560)
 }

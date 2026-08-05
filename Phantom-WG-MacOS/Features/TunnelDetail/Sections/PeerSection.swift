@@ -46,9 +46,10 @@ struct PeerSection: View {
 // MARK: - Previews
 
 #Preview("With preshared key") {
-    List {
+    Form {
         PeerSection(config: PreviewFixtures.ghostConfig().wireguard.peer)
     }
+    .formStyle(.grouped)
     .previewEnvironment()
     .frame(width: 560)
 }
@@ -56,9 +57,10 @@ struct PeerSection: View {
 #Preview("Without preshared key") {
     var peer = PreviewFixtures.ghostConfig().wireguard.peer
     peer.presharedKey = nil
-    return List {
+    return Form {
         PeerSection(config: peer)
     }
+    .formStyle(.grouped)
     .previewEnvironment()
     .frame(width: 560)
 }

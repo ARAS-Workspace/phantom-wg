@@ -91,7 +91,7 @@ struct ActionsSection: View {
 #Preview("Active — reset enabled") {
     let manager = PreviewFixtures.tunnelsManager()
     return PreviewBindingHost(false) { showingDelete in
-        List {
+        Form {
             ActionsSection(
                 tunnel: manager.tunnels[0],
                 canCopy: true,
@@ -101,6 +101,7 @@ struct ActionsSection: View {
                 showingDeleteConfirmation: showingDelete
             )
         }
+        .formStyle(.grouped)
     }
     .previewEnvironment(tunnels: manager)
     .frame(width: 560)
@@ -109,7 +110,7 @@ struct ActionsSection: View {
 #Preview("Inactive — delete enabled") {
     let manager = PreviewFixtures.tunnelsManager()
     return PreviewBindingHost(false) { showingDelete in
-        List {
+        Form {
             ActionsSection(
                 tunnel: manager.tunnels[1],
                 canCopy: true,
@@ -119,6 +120,7 @@ struct ActionsSection: View {
                 showingDeleteConfirmation: showingDelete
             )
         }
+        .formStyle(.grouped)
     }
     .previewEnvironment(tunnels: manager)
     .frame(width: 560)

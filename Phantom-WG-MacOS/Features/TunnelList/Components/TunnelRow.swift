@@ -56,12 +56,12 @@ struct TunnelRow: View {
 #Preview("Row states") {
     let manager = PreviewFixtures.tunnelsManager()
     manager.tunnels[1].status = .activating
-    return List {
+    return Form {
         ForEach(manager.tunnels) { tunnel in
             TunnelRow(tunnel: tunnel)
         }
     }
-    .listStyle(.inset)
+    .formStyle(.grouped)
     .previewEnvironment(tunnels: manager)
     .frame(width: 560)
 }

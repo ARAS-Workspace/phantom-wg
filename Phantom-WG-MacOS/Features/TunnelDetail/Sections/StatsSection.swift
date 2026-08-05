@@ -26,17 +26,19 @@ struct StatsSection: View {
 // MARK: - Previews
 
 #Preview("Live values") {
-    List {
+    Form {
         StatsSection(handshake: "12 seconds ago", rxBytes: "45.12 MB", txBytes: "8.79 MB")
     }
+    .formStyle(.grouped)
     .previewEnvironment()
     .frame(width: 560)
 }
 
 #Preview("Idle") {
-    List {
+    Form {
         StatsSection(handshake: "—", rxBytes: "—", txBytes: "—")
     }
+    .formStyle(.grouped)
     .previewEnvironment()
     .frame(width: 560)
 }

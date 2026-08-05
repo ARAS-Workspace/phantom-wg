@@ -44,11 +44,11 @@ struct TunnelDetailView: View {
     }
 
     var body: some View {
-        // A form rather than a list: this screen only displays and
-        // navigates, and the list container is the one that keeps
-        // leaving a band of empty space above its first row after a
-        // navigation push. Every form-based screen in the app has
-        // been free of that.
+        // A form rather than a list: the List container was the one
+        // that kept leaving a band of empty space above its first
+        // row after a navigation push. Form never showed it — which
+        // is why every screen in the app, the tunnel list included,
+        // renders in one.
         Form {
             StatusSection(tunnel: tunnel, isGhost: tunnel.isGhost)
 

@@ -38,9 +38,10 @@ struct InterfaceSection: View {
 // MARK: - Previews
 
 #Preview {
-    List {
+    Form {
         InterfaceSection(config: PreviewFixtures.ghostConfig().wireguard.interface)
     }
+    .formStyle(.grouped)
     .previewEnvironment()
     .frame(width: 560)
 }

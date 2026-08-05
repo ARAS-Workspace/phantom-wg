@@ -1,5 +1,4 @@
 import SwiftUI
-import AppKit
 
 struct TunnelListView: View {
     @Environment(TunnelsManager.self) private var tunnelsManager
@@ -51,7 +50,12 @@ struct TunnelListView: View {
             EmptyStateView(showingImport: $showingImport)
         } else {
             VStack(spacing: 0) {
-                List {
+                // A grouped form on purpose — List's NSTableView
+                // bridge intermittently left a phantom band around
+                // the header after a navigation pop when content
+                // changed while the screen was covered. Forms never
+                // showed it anywhere in the app. Keep it a Form.
+                Form {
                     ActiveTunnelSection(activeTunnel: activeTunnel)
 
                     Section {
@@ -60,7 +64,6 @@ struct TunnelListView: View {
                                 TunnelRow(tunnel: tunnel)
                             }
                         }
-                        .onDelete { offsets in deleteTunnels(at: offsets) }
                     } header: {
                         HStack {
                             Label(loc.t("tunnel_list_section_header"), systemImage: "list.bullet")
@@ -79,7 +82,7 @@ struct TunnelListView: View {
                         .padding(.bottom, 6)
                     }
                 }
-                .listStyle(.inset)
+                .formStyle(.grouped)
 
                 Divider()
 
@@ -107,7 +110,7 @@ struct TunnelListView: View {
         }
     }
 
-    /// Fixed footer — the list above scrolls as it grows inside the
+    /// Fixed footer — the form above scrolls as it grows inside the
     /// app's fixed window, the links stay put. Mirrors the empty
     /// state's bottom-link styling.
     private var bottomLinks: some View {
@@ -160,24 +163,6 @@ struct TunnelListView: View {
                 uninstalling = false
                 errorMessage = error.localizedDescription
                 showingError = true
-            }
-        }
-    }
-
-    private func deleteTunnels(at offsets: IndexSet) {
-        let visible = tunnelsManager.tunnels
-        let tunnelsToDelete = offsets.map { visible[$0] }
-        for tunnel in tunnelsToDelete {
-            if tunnel.status != .inactive {
-                tunnelsManager.startDeactivation(of: tunnel)
-            }
-            Task {
-                do {
-                    try await tunnelsManager.remove(tunnel: tunnel)
-                } catch {
-                    errorMessage = error.localizedDescription
-                    showingError = true
-                }
             }
         }
     }

@@ -85,13 +85,12 @@ struct TunnelStatusRow: View {
 
 /// Top block of the tunnel detail view — the shared status row.
 ///
-/// Headerless on purpose. A section header in the **first** slot of a
-/// `List` intermittently leaves a band of empty space above its own
-/// content after a navigation push; it showed up here and, before
-/// that, on the tunnel list's active-tunnel block. Later sections are
-/// unaffected, so the house rule is: the first section of a list
-/// carries no header. The block reads fine without one — it is the
-/// status summary, sitting directly under the navigation title.
+/// Headerless on purpose: it is the status summary, sitting directly
+/// under the navigation title, and needs no caption. (Historically
+/// the omission was forced — a section header in a `List`'s first
+/// slot left intermittent phantom spacing after navigation pushes,
+/// here and on the tunnel list's active block. Both screens render
+/// in `Form` now, which never showed the band.)
 struct StatusSection: View {
     var tunnel: TunnelContainer
     let isGhost: Bool
@@ -114,10 +113,11 @@ struct StatusSection: View {
 #Preview {
     let manager = PreviewFixtures.tunnelsManager()
     manager.tunnels[1].lastActivationError = PreviewFixtures.activationError
-    return List {
+    return Form {
         StatusSection(tunnel: manager.tunnels[0], isGhost: true)
         StatusSection(tunnel: manager.tunnels[1], isGhost: false)
     }
+    .formStyle(.grouped)
     .previewEnvironment(tunnels: manager)
     .frame(width: 560)
 }

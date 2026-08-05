@@ -22,9 +22,10 @@ struct NameSection: View {
 // MARK: - Previews
 
 #Preview {
-    List {
+    Form {
         NameSection(name: "Istanbul Edge")
     }
+    .formStyle(.grouped)
     .previewEnvironment()
     .frame(width: 560)
 }

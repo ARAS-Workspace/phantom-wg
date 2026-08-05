@@ -91,7 +91,7 @@ private struct AppIconView: View {
 // MARK: - Previews
 
 #Preview {
-    List {
+    Form {
         ForEach(PreviewFixtures.appEntries) { entry in
             AppEntryRow(entry: entry, onRemove: {})
         }
@@ -105,6 +105,7 @@ private struct AppIconView: View {
             onRemove: {}
         )
     }
+    .formStyle(.grouped)
     .previewEnvironment()
     .frame(width: 560)
 }

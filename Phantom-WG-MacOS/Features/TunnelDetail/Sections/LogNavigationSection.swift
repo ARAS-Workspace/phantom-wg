@@ -38,9 +38,10 @@ struct LogNavigationSection: View {
     let store = LogStore(tunnel: nil)
     store.entries = PreviewFixtures.logEntries
     return NavigationStack {
-        List {
+        Form {
             LogNavigationSection(logStore: store)
         }
+        .formStyle(.grouped)
     }
     .previewEnvironment()
     .frame(width: 560)
