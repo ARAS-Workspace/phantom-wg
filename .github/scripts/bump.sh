@@ -34,10 +34,12 @@ NEW="${MAJOR}.${MINOR}.${PATCH}"
 # Update all MARKETING_VERSION occurrences in project.yml
 sed -i '' "s/MARKETING_VERSION: \"${CURRENT}\"/MARKETING_VERSION: \"${NEW}\"/g" "$PROJECT_YML"
 
-# Verify
+# Verify — the app and all three extension targets carry the pair,
+# and ExtensionIdentity derives the activation stamp from it, so a
+# partial update means a stale extension would survive the release.
 COUNT=$(grep -c "MARKETING_VERSION: \"${NEW}\"" "$PROJECT_YML")
-if [[ "$COUNT" -ne 2 ]]; then
-    echo "WARNING: Expected 2 MARKETING_VERSION entries, found ${COUNT}"
+if [[ "$COUNT" -ne 4 ]]; then
+    echo "WARNING: Expected 4 MARKETING_VERSION entries, found ${COUNT}"
 fi
 
 echo "${CURRENT} → ${NEW}"
