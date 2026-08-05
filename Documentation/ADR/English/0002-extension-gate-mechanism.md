@@ -4,6 +4,8 @@
 
 Accepted — 2026-05-09
 
+The following parts of this ADR have been superseded by ADR-0006 (***Measured Activation***): the closing paragraph of item 1 (the principle that state changes are exclusively user-driven), the "idempotent at the OS level" qualifier in item 4, and item 6's list of sources. The remaining decisions stay in force.
+
 ## Context
 
 Phantom-WG Mac depends on three macOS system extensions that ship alongside the host app:

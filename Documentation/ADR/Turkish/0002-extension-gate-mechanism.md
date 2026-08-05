@@ -4,6 +4,8 @@
 
 Kabul Edildi — 2026-05-09
 
+Bu ADR'ın aşağıdaki bölümlerinin yerini ADR-0006 (***Ölçülen Aktivasyon***) aldı: madde 1'in kapanış paragrafı (durum değişikliklerinin yalnızca kullanıcı kaynaklı olduğu ilkesi), madde 4'teki "OS seviyesinde idempotent" nitelemesi ve madde 6'nın kaynak listesi. Kalan kararlar yürürlüktedir.
+
 ## Bağlam
 
 Phantom-WG Mac uygulaması, ana uygulamayla birlikte gelen üç macOS sistem uzantısına bağlıdır:

@@ -10,6 +10,8 @@ Measurements and research prompted by that interim solution required revisiting 
 
 This ADR changes only **where the secrets live**, the alignment between the two stores, and the condition under which the app connects to that store. It touches no other architectural decision.
 
+ADR-0006 (***Measured Activation***) widened the session probe's RPC surface in item 7: the `pingVault` call's name and payload became `pingIdentity`. The semantics of the session lock remain in force.
+
 ## Context
 
 ### The Tunnel Configuration Model

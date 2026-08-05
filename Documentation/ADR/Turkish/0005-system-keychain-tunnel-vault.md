@@ -10,6 +10,8 @@ Bir önceki geçici çözüme istinaden ölçüm ve araştırmalar, bu varılan 
 
 Bu ADR yalnızca **sırların nerede durduğunu**, iki depo arasındaki hizalamayı ve uygulamanın bu depoya bağlanma koşulunu değiştirir. Diğer mimari kararlara dokunmaz.
 
+ADR-0006 (***Ölçülen Aktivasyon***), 7. maddedeki oturum sondasının RPC yüzeyini genişletti: `pingVault` çağrısının adı ve yükü `pingIdentity` olmuştur. Oturum kilidinin semantiği yürürlüktedir.
+
 ## Bağlam
 
 ### Tünel Konfigürasyonunun Modeli
