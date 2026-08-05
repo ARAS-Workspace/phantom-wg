@@ -21,13 +21,21 @@ struct PhantomApp: App {
 
     init() {
         let loc = LocalizationManager.shared
-        let coordinator = ExtensionGateCoordinator()
         let tunnelsManager = TunnelsManagerLoader()
         let splitTunnelingStore = SplitTunnelingStore()
         let splitProviderManager = SplitTunnelProviderManager()
         let dnsProviderManager = DNSProxyProviderManager()
         let dnsDaemonClient = DNSProxyDaemonClient()
         let splitDaemonClient = SplitTunnelDaemonClient()
+        let vaultClient = TunnelVaultClient()
+        // The gate needs the daemon clients: each controller carries an
+        // identity probe so the boot pass can measure instead of
+        // blindly activating.
+        let coordinator = ExtensionGateCoordinator(
+            vault: vaultClient,
+            splitDaemon: splitDaemonClient,
+            dnsDaemon: dnsDaemonClient
+        )
         let sessionCoordinator = SplitTunnelingSessionCoordinator(
             split: splitProviderManager,
             dns: dnsProviderManager,
@@ -44,7 +52,6 @@ struct PhantomApp: App {
         _splitProviderManager = State(initialValue: splitProviderManager)
         _dnsProviderManager = State(initialValue: dnsProviderManager)
         _interfaceResolver = State(initialValue: PhysicalInterfaceResolver())
-        let vaultClient = TunnelVaultClient()
         _toastCenter = State(initialValue: ToastCenter())
         _vaultClient = State(initialValue: vaultClient)
         _vaultSession = State(initialValue: TunnelVaultSession(vault: vaultClient))

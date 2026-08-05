@@ -34,12 +34,48 @@ final class ExtensionGateController: NSObject, OSSystemExtensionRequestDelegate 
         case failed(String)
     }
 
+    /// One measurement of the installed extension's build identity.
+    /// Answers `ExtensionIdentity.current` as computed inside the
+    /// running extension, or `nil` when the daemon did not answer.
+    typealias IdentityProbe = @MainActor () async -> String?
+
     let bundleID: String
     let displayName: String
 
     private(set) var status: Status = .unknown
 
+    /// True while `settle()` is measuring. `checkAll()` skips a
+    /// settling controller so a foreground refresh landing mid-
+    /// measurement cannot write a transient verdict over the tree.
+    private(set) var isSettling = false
+
     @ObservationIgnored private var deactivationContinuation: CheckedContinuation<Void, Error>?
+
+    /// The daemon probe injected at composition. `nil` (previews, or
+    /// a composition without clients) makes `settle()` fall back to a
+    /// plain `activate()` — the pre-measurement boot behavior.
+    @ObservationIgnored private let identityProbe: IdentityProbe?
+
+    /// One-shot bridge between `settle()` and the delegate: the
+    /// properties request `settle` submits is remembered by object
+    /// identity, and its callbacks resolve this continuation with raw
+    /// facts instead of running the normal status interpretation —
+    /// the measurement tree owns the verdict while it is settling.
+    @ObservationIgnored private var settleContinuation: CheckedContinuation<PropsVerdict, Never>?
+    @ObservationIgnored private var settlePropsRequest: OSSystemExtensionRequest?
+
+    /// Raw facts a settle-issued properties query can answer with.
+    private enum PropsVerdict {
+        /// No live registration — nothing is running for this bundle.
+        case noLive
+        /// Registered but awaiting approval or toggled off in System
+        /// Settings; activation cannot repair either.
+        case awaiting
+        /// Registered and enabled — the extension should be alive.
+        case enabled
+        /// The query itself failed; teaches nothing.
+        case inconclusive
+    }
 
     /// True between an activation request resolving `.completed` and
     /// the follow-up `propertiesRequest` arriving. Apple returns an
@@ -71,7 +107,12 @@ final class ExtensionGateController: NSObject, OSSystemExtensionRequestDelegate 
     /// Production always starts at `.unknown` and lets the delegate
     /// callbacks settle the real state; previews pass a fixed `status`
     /// to render a specific gate scenario.
-    init(bundleID: String, displayName: String, status: Status = .unknown) {
+    init(
+        bundleID: String,
+        displayName: String,
+        status: Status = .unknown,
+        identityProbe: IdentityProbe? = nil
+    ) {
         self.bundleID = bundleID
         self.displayName = displayName
         self.oslog = OSLog(
@@ -79,6 +120,7 @@ final class ExtensionGateController: NSObject, OSSystemExtensionRequestDelegate 
             category: "gate.\(displayName)"
         )
         self.status = status
+        self.identityProbe = identityProbe
         super.init()
     }
 
@@ -87,6 +129,85 @@ final class ExtensionGateController: NSObject, OSSystemExtensionRequestDelegate 
     }
 
     // MARK: - Public Surface
+
+    /// Measured boot entry. `activate()` on an installed extension is
+    /// not a no-op — the OS stages a full replacement even for a
+    /// byte-identical bundle and kills its running sessions — so the
+    /// boot pass measures first and activates only when the
+    /// measurement demands it:
+    ///
+    /// - probe answers, identity matches → `.activated`, nothing else
+    /// - probe answers, identity differs → stale binary → `activate()`
+    /// - probe silent → one properties query decides: no registration
+    ///   means activating harms nobody; awaiting/disabled means the
+    ///   gate guides the user (activation cannot repair it); enabled
+    ///   means transient — retry with patience
+    ///
+    /// Silence alone never activates immediately. The one bounded
+    /// exception: an extension that stays silent through every patient
+    /// round while properties call it enabled is a daemon that cannot
+    /// speak identity — a binary from before the identity contract, or
+    /// a wedged process. Both are exactly what a replacement repairs.
+    func settle() async {
+        guard let identityProbe else {
+            log("settle: no probe injected → activate()")
+            activate()
+            return
+        }
+        guard !isSettling else { return }
+        isSettling = true
+        defer { isSettling = false }
+
+        for attempt in 1...Self.settleAttempts {
+            if let identity = await identityProbe() {
+                if identity == ExtensionIdentity.current {
+                    log("settle: identity match (\(identity)) — activation skipped")
+                    status = .activated
+                } else {
+                    log("settle: identity mismatch — installed \(identity), expected \(ExtensionIdentity.current) → activate()")
+                    activate()
+                }
+                return
+            }
+
+            switch await propertiesVerdict() {
+            case .noLive:
+                log("settle: probe silent + no live entry → activate()")
+                activate()
+                return
+            case .awaiting:
+                log("settle: probe silent + awaiting/disabled → .needsApproval")
+                status = .needsApproval
+                return
+            case .enabled, .inconclusive:
+                log("settle: probe silent though properties enabled — attempt \(attempt)/\(Self.settleAttempts)")
+                if attempt < Self.settleAttempts {
+                    try? await Task.sleep(for: .milliseconds(600 * attempt))
+                }
+            }
+        }
+
+        log("settle: measurement exhausted — daemon cannot speak identity → activate()")
+        activate()
+    }
+
+    private static let settleAttempts = 3
+
+    /// One-shot properties query owned by the settle tree. The
+    /// delegate resolves it with raw facts via `settlePropsRequest`
+    /// identity instead of the normal status interpretation.
+    private func propertiesVerdict() async -> PropsVerdict {
+        await withCheckedContinuation { (continuation: CheckedContinuation<PropsVerdict, Never>) in
+            settleContinuation = continuation
+            let request = OSSystemExtensionRequest.propertiesRequest(
+                forExtensionWithIdentifier: bundleID,
+                queue: .main
+            )
+            settlePropsRequest = request
+            request.delegate = self
+            OSSystemExtensionManager.shared.submitRequest(request)
+        }
+    }
 
     /// Submit an activation request. Idempotent at the OS level: if
     /// the extension isn't built yet macOS installs it, if approval
@@ -161,6 +282,25 @@ final class ExtensionGateController: NSObject, OSSystemExtensionRequestDelegate 
         foundProperties properties: [OSSystemExtensionProperties]
     ) {
         Task { @MainActor in
+            // A settle-issued query resolves the measurement tree's
+            // continuation with raw facts; the normal interpretation
+            // below serves refresh()/checkAll() only.
+            if request === settlePropsRequest {
+                settlePropsRequest = nil
+                let live = properties.filter { !$0.isUninstalling }
+                let verdict: PropsVerdict
+                if let liveProp = pickLive(from: live) {
+                    verdict = (liveProp.isAwaitingUserApproval || !liveProp.isEnabled)
+                        ? .awaiting : .enabled
+                } else {
+                    verdict = .noLive
+                }
+                log("foundProperties (settle) total=\(properties.count) live=\(live.count) → \(verdict)")
+                settleContinuation?.resume(returning: verdict)
+                settleContinuation = nil
+                return
+            }
+
             // `propertiesRequest` returns *every* extension version
             // the system has seen for this bundle ID — including
             // historical orphans that are still draining out of the
@@ -285,6 +425,12 @@ final class ExtensionGateController: NSObject, OSSystemExtensionRequestDelegate 
         let domain = nsError.domain
         Task { @MainActor in
             log("didFailWithError: domain=\(domain) code=\(code) — \(error.localizedDescription)")
+            if request === settlePropsRequest {
+                settlePropsRequest = nil
+                settleContinuation?.resume(returning: .inconclusive)
+                settleContinuation = nil
+                return
+            }
             if deactivationContinuation != nil {
                 resumeDeactivation(with: .failure(error))
                 return

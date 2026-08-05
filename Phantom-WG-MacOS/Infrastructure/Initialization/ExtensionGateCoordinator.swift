@@ -30,17 +30,16 @@ final class ExtensionGateCoordinator {
     )
     @ObservationIgnored private var foregroundObserver: NSObjectProtocol?
 
-    /// One boot activation per process. `activate()` on an already-
-    /// installed extension is not a no-op: the OS stages a full
-    /// replacement even for a byte-identical bundle (field-measured:
-    /// the extension-store version count grows by one per pass and
-    /// every live provider is killed with `providerDisabled`). The
-    /// window's `onAppear` re-runs `start()` on every re-creation, so
-    /// without this guard each Dock-click reopen tears down running
-    /// tunnel sessions. Later calls fall through to `checkAll()` —
-    /// the read-only path; re-activation stays a user action on the
+    /// One boot measurement per process. The window's `onAppear`
+    /// re-runs `start()` on every re-creation, so without this guard
+    /// each Dock-click reopen would re-measure — harmless but noisy —
+    /// and, on the fallback paths, resubmit activations that tear
+    /// down running tunnel sessions (field-measured: the OS stages a
+    /// full replacement even for a byte-identical bundle and kills
+    /// every live provider). Later calls fall through to `checkAll()`
+    /// — the read-only path; re-activation stays a user action on the
     /// gate panel's buttons.
-    @ObservationIgnored private var hasSubmittedBootActivation = false
+    @ObservationIgnored private var hasRunBootMeasurement = false
 
     /// Designated initializer with explicit controllers — previews
     /// inject controllers frozen at specific statuses through this.
@@ -50,21 +49,40 @@ final class ExtensionGateCoordinator {
         self.dns = dns
     }
 
-    /// Production composition: the app's three system extensions.
-    convenience init() {
+    /// Production composition: the app's three system extensions,
+    /// each with its own identity probe. One signal per extension, no
+    /// cross-inference — the daemons live and die independently. The
+    /// tunnel probe rides the same `pingIdentity` endpoint the vault
+    /// session uses, so the launch path never asks that daemon twice;
+    /// an answer proves liveness whatever the vault door says.
+    convenience init(
+        vault: TunnelVaultClient,
+        splitDaemon: SplitTunnelDaemonClient,
+        dnsDaemon: DNSProxyDaemonClient
+    ) {
         let loc = LocalizationManager.shared
         self.init(
             tunnel: ExtensionGateController(
                 bundleID: "com.remrearas.Phantom-WG-MacOS.PhantomTunnel",
-                displayName: loc.t("gate_ext_tunnel")
+                displayName: loc.t("gate_ext_tunnel"),
+                identityProbe: {
+                    switch await vault.ping() {
+                    case .ready(_, let identity), .doorFailed(let identity):
+                        return identity
+                    case .unreachable:
+                        return nil
+                    }
+                }
             ),
             split: ExtensionGateController(
                 bundleID: "com.remrearas.Phantom-WG-MacOS.PhantomSplitTunnel",
-                displayName: loc.t("gate_ext_split")
+                displayName: loc.t("gate_ext_split"),
+                identityProbe: { await splitDaemon.identity() }
             ),
             dns: ExtensionGateController(
                 bundleID: "com.remrearas.Phantom-WG-MacOS.PhantomDNSProxy",
-                displayName: loc.t("gate_ext_dns")
+                displayName: loc.t("gate_ext_dns"),
+                identityProbe: { await dnsDaemon.identity() }
             )
         )
     }
@@ -89,14 +107,11 @@ final class ExtensionGateCoordinator {
 
     /// Boot-time wiring. Subscribes to `didBecomeActive` so the gate
     /// re-checks every extension when the user returns from System
-    /// Settings, then submits an activation request for each
-    /// controller. `activate()` is the more reliable boot signal:
-    /// `propertiesRequest` returns an empty array for extensions
-    /// that are registered but disabled in System Settings, while
-    /// `activate()` resolves through `.completed` /
-    /// `requestNeedsUserApproval` / `didFailWithError` and gives
-    /// each controller enough context to settle on the right state.
-    /// The submission runs once per process; window re-creations
+    /// Settings, then runs the measured settle on each controller:
+    /// probe the extension's daemon for its build identity and
+    /// activate only when the measurement demands it — see
+    /// `ExtensionGateController.settle()` for the tree. The
+    /// measurement runs once per process; window re-creations
     /// re-enter here via `onAppear` and drop to `checkAll()`.
     func start() {
         if foregroundObserver == nil {
@@ -111,15 +126,15 @@ final class ExtensionGateCoordinator {
                 }
             }
         }
-        guard !hasSubmittedBootActivation else {
-            log("start() — boot activation already submitted → checkAll()")
+        guard !hasRunBootMeasurement else {
+            log("start() — boot measurement already run → checkAll()")
             checkAll()
             return
         }
-        hasSubmittedBootActivation = true
-        log("start() — boot activate for all controllers")
+        hasRunBootMeasurement = true
+        log("start() — measured settle for all controllers")
         for controller in controllers {
-            controller.activate()
+            Task { await controller.settle() }
         }
     }
 
@@ -128,10 +143,12 @@ final class ExtensionGateCoordinator {
     /// Pull ground-truth state from the OS for every controller. The
     /// top-level "Tekrar Kontrol Et" button and the foreground
     /// observer both bind to this; per-row buttons bind to the
-    /// individual controller's `activate()`.
+    /// individual controller's `activate()`. Controllers still inside
+    /// their boot measurement are skipped — the settle tree owns the
+    /// verdict until it returns.
     func checkAll() {
         log("checkAll() — refresh all controllers (allReady=\(allReady))")
-        for controller in controllers {
+        for controller in controllers where !controller.isSettling {
             controller.refresh()
         }
     }
