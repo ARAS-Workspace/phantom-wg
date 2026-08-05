@@ -2,7 +2,7 @@
 
 ## Durum
 
-Önerildi — 2026-08-05
+Kabul Edildi — 2026-08-05
 
 Bu ADR, ADR-0002'nin (***Extension Gate Mekanizması***) aşağıdaki bölümlerinin yerini alır:
 
