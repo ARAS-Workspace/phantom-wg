@@ -16,11 +16,12 @@ import os.log
 /// installed-but-disabled-in-System-Settings, replacement upgrade,
 /// uninstall, and every documented `OSSystemExtensionError` code.
 ///
-/// State changes are user-driven: every transition is the result of
-/// a button press (`activate()` / `refresh()` / `deactivate()`) or a
-/// delegate callback. There is no background polling and no
-/// notification observer; the coordinator re-checks on app foreground
-/// for runtime drop-back detection.
+/// State changes come from two doors only: the boot measurement
+/// (`settle()`, once per process) and user actions (`activate()` /
+/// `refresh()` / `deactivate()`), each resolved through delegate
+/// callbacks. There is no background polling and no notification
+/// observer; the coordinator re-checks on app foreground for runtime
+/// drop-back detection.
 @Observable
 @MainActor
 final class ExtensionGateController: NSObject, OSSystemExtensionRequestDelegate {
@@ -209,13 +210,15 @@ final class ExtensionGateController: NSObject, OSSystemExtensionRequestDelegate 
         }
     }
 
-    /// Submit an activation request. Idempotent at the OS level: if
-    /// the extension isn't built yet macOS installs it, if approval
-    /// is missing macOS surfaces the prompt, if everything is in
-    /// place the request resolves immediately. The follow-up
-    /// `propertiesRequest` is the authority on actual enabled state
-    /// because Apple resolves `.completed` even for installed-but-
-    /// disabled extensions.
+    /// Submit an activation request. Not a harmless no-op: even for a
+    /// byte-identical installed bundle the OS stages a full
+    /// replacement and kills the extension's running sessions
+    /// (field-measured) — which is why `settle()` measures before
+    /// calling this. If the extension is missing macOS installs it,
+    /// if approval is missing macOS surfaces the prompt. The
+    /// follow-up `propertiesRequest` is the authority on actual
+    /// enabled state because Apple resolves `.completed` even for
+    /// installed-but-disabled extensions.
     func activate() {
         log("activate() submitted (bundleID=\(bundleID), status=\(status))")
         pendingActivationCompleted = false
