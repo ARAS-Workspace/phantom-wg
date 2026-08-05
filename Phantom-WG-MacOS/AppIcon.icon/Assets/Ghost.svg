@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg id="Phantom_Composer_Ghost" data-name="Phantom Composer Ghost" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" class="phantom-logo phantom-icon">
+  <defs>
+    <style>
+      .ghost { fill: #E5E7EB;
+      }
+    </style>
+  </defs>
+
+  <!-- SYMBOL GROUP — delikli gozler (even-odd), optik merkez gomulu: x +8pt, y -28.1pt -->
+  <g id="Symbol" class="phantom-symbol" transform="translate(-128.93 -105.40) scale(2.9754)">
+    <path id="Ghost" class="ghost" fill-rule="evenodd" d="M218.1,69c-66.59,0-118.96,52.37-118.96,118.96v139.16l41.15-41.15,41.15,41.15,36.67-41.15,36.67,41.15,41.15-41.15,41.15,41.15v-139.16c0-66.59-52.37-118.96-118.96-118.96Z M145.9,166.26 a28.06,28.06 0 1,0 56.12,0 a28.06,28.06 0 1,0 -56.12,0 Z M234.2,166.26 a28.06,28.06 0 1,0 56.12,0 a28.06,28.06 0 1,0 -56.12,0 Z"/>
+  </g>
+</svg>
