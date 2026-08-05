@@ -51,6 +51,21 @@ final class ExtensionGateController: NSObject, OSSystemExtensionRequestDelegate 
     /// must re-enable it in Settings.
     @ObservationIgnored private var pendingActivationCompleted = false
 
+    /// Count of activation requests submitted and not yet resolved by
+    /// a terminal callback (`didFinishWithResult` / `didFailWithError`).
+    /// While non-zero, `foundProperties` must not promote to
+    /// `.activated`: during a replacement the properties query happily
+    /// reports the outgoing extension as enabled, and an early
+    /// promotion reopens the gate while the provider kill is still in
+    /// flight (field-measured: `allReady` flipped, downstream boot
+    /// logic ran, and `stopTunnel` landed moments later). The
+    /// promotion belongs to the completion path — `didFinishWithResult`
+    /// → `refresh()` → here, with this counter back at zero. A counter
+    /// rather than a flag so a second `activate()` superseding the
+    /// first keeps its own protection when the first request's failure
+    /// callback lands.
+    @ObservationIgnored private var activationsInFlight = 0
+
     @ObservationIgnored private let oslog: OSLog
 
     /// Production always starts at `.unknown` and lets the delegate
@@ -83,6 +98,7 @@ final class ExtensionGateController: NSObject, OSSystemExtensionRequestDelegate 
     func activate() {
         log("activate() submitted (bundleID=\(bundleID), status=\(status))")
         pendingActivationCompleted = false
+        activationsInFlight += 1
         if status != .needsApproval {
             status = .activating
         }
@@ -186,6 +202,13 @@ final class ExtensionGateController: NSObject, OSSystemExtensionRequestDelegate 
                 return
             }
             if liveProp.isEnabled {
+                // Only the promotion is held — `.needsApproval` /
+                // `.notInstalled` transitions above stay live so the
+                // approval flow never deadlocks on this counter.
+                guard activationsInFlight == 0 else {
+                    log("→ live.isEnabled=true, activation in flight → holding \(status)")
+                    return
+                }
                 log("→ live.isEnabled=true → .activated")
                 status = .activated
             } else {
@@ -232,6 +255,7 @@ final class ExtensionGateController: NSObject, OSSystemExtensionRequestDelegate 
                 resumeDeactivation(with: .success(()))
                 return
             }
+            activationsInFlight = max(0, activationsInFlight - 1)
             switch result {
             case .completed:
                 // `.completed` only signals that the activation
@@ -265,6 +289,7 @@ final class ExtensionGateController: NSObject, OSSystemExtensionRequestDelegate 
                 resumeDeactivation(with: .failure(error))
                 return
             }
+            activationsInFlight = max(0, activationsInFlight - 1)
             guard domain == OSSystemExtensionErrorDomain else {
                 status = .failed(error.localizedDescription)
                 return

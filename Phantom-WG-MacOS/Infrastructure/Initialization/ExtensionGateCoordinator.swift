@@ -30,6 +30,18 @@ final class ExtensionGateCoordinator {
     )
     @ObservationIgnored private var foregroundObserver: NSObjectProtocol?
 
+    /// One boot activation per process. `activate()` on an already-
+    /// installed extension is not a no-op: the OS stages a full
+    /// replacement even for a byte-identical bundle (field-measured:
+    /// the extension-store version count grows by one per pass and
+    /// every live provider is killed with `providerDisabled`). The
+    /// window's `onAppear` re-runs `start()` on every re-creation, so
+    /// without this guard each Dock-click reopen tears down running
+    /// tunnel sessions. Later calls fall through to `checkAll()` —
+    /// the read-only path; re-activation stays a user action on the
+    /// gate panel's buttons.
+    @ObservationIgnored private var hasSubmittedBootActivation = false
+
     /// Designated initializer with explicit controllers — previews
     /// inject controllers frozen at specific statuses through this.
     init(tunnel: ExtensionGateController, split: ExtensionGateController, dns: ExtensionGateController) {
@@ -84,8 +96,9 @@ final class ExtensionGateCoordinator {
     /// `activate()` resolves through `.completed` /
     /// `requestNeedsUserApproval` / `didFailWithError` and gives
     /// each controller enough context to settle on the right state.
+    /// The submission runs once per process; window re-creations
+    /// re-enter here via `onAppear` and drop to `checkAll()`.
     func start() {
-        log("start() — boot activate for all controllers")
         if foregroundObserver == nil {
             foregroundObserver = NotificationCenter.default.addObserver(
                 forName: NSApplication.didBecomeActiveNotification,
@@ -98,6 +111,13 @@ final class ExtensionGateCoordinator {
                 }
             }
         }
+        guard !hasSubmittedBootActivation else {
+            log("start() — boot activation already submitted → checkAll()")
+            checkAll()
+            return
+        }
+        hasSubmittedBootActivation = true
+        log("start() — boot activate for all controllers")
         for controller in controllers {
             controller.activate()
         }
