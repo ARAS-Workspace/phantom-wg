@@ -53,8 +53,9 @@ final class ExtensionGateCoordinator {
     /// each with its own identity probe. One signal per extension, no
     /// cross-inference — the daemons live and die independently. The
     /// tunnel probe rides the same `pingIdentity` endpoint the vault
-    /// session uses, so the launch path never asks that daemon twice;
-    /// an answer proves liveness whatever the vault door says.
+    /// session uses — one endpoint serves both locks, no separate
+    /// identity RPC exists on the vault daemon; an answer proves
+    /// liveness whatever the vault door says.
     convenience init(
         vault: TunnelVaultClient,
         splitDaemon: SplitTunnelDaemonClient,
