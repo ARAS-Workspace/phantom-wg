@@ -4,6 +4,8 @@
 
 Kabul Edildi — 2026-05-09
 
+Bu ADR'ın aşağıdaki bölümlerinin yerini ADR-0004 (***Birleşik Proxy Config Daemon***) aldı: madde 3'ün *Yeniden yapılandır* evresi, madde 4, madde 5, madde 7 ve Bağlam'daki birinci mermaid. Kontrol kanalı dışındaki kararlar yürürlüktedir.
+
 ## Bağlam
 
 Phantom-WG Mac uygulamasındaki Split-Tunneling özelliği, kullanıcının seçtiği uygulamaların trafiğini fiziksel arayüzden (örn. kullanıcının yerel ağı) çıkarır. Geri kalan uygulamalar VPN tüneli üzerinden akmaya devam eder. Split-Tunneling bu durumu karşılayabilmek için asimetrik ve birbirinden bağımsız ancak birbirini tamamlayarak çalışan `PhantomSplitTunnel` ve `PhantomDNSProxy` sistem uzantılarını kullanır. 

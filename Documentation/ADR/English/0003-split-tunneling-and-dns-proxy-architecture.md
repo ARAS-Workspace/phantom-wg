@@ -4,6 +4,8 @@
 
 Accepted — 2026-05-09
 
+The following parts of this ADR have been superseded by ADR-0004 (***Unified Proxy Config Daemon***): the *Reconfigure* phase of item 3, item 4, item 5, item 7, and the first mermaid in Context. Every decision outside the control channel remains in force.
+
 ## Context
 
 The Split-Tunneling feature in Phantom-WG Mac sends the traffic of user-selected applications out through a physical interface (e.g. the user's local network). The remaining applications continue to flow through the VPN tunnel. To meet this, Split-Tunneling relies on two asymmetric, independent yet complementary system extensions: `PhantomSplitTunnel` and `PhantomDNSProxy`.

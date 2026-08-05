@@ -2,8 +2,8 @@ import Foundation
 
 /// Thread-safe in-memory ring buffer (capacity 500). Each system
 /// extension binary owns its own `shared` instance — the host app
-/// drains them via the extensions' respective channels (opcode 0x01
-/// for SplitTunnel, XPC `fetchLogs` for DNSProxy).
+/// drains both over XPC `fetchLogs`, each through its own
+/// `ProxyConfigDaemon` channel.
 final class RingBufferLogger {
 
     static let shared = RingBufferLogger()
