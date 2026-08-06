@@ -36,7 +36,6 @@ class TunnelContainer: Identifiable {
     // Activation tracking (used by TunnelsManager). These are internal
     // state — excluded from observation tracking so they don't invalidate
     // views that have no visibility into activation bookkeeping.
-    @ObservationIgnored var onDeactivated: ((TunnelContainer) -> Void)?
     @ObservationIgnored var isAttemptingActivation = false
     @ObservationIgnored var activationAttemptId: String?
     @ObservationIgnored var activationTask: Task<Void, Never>?

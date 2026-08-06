@@ -1,6 +1,10 @@
 import SwiftUI
 import AVFoundation
 
+/// Camera sheet for the import flow — scans a QR code carrying a
+/// WireGuard `.conf` and hands the decoded string to `onScan`. The
+/// capture session stops after the first hit so a lingering camera
+/// frame can never double-submit.
 struct QRScannerView: UIViewControllerRepresentable {
     let onScan: (String) -> Void
 

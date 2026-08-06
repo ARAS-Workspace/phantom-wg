@@ -48,13 +48,4 @@ enum ActivateOnDemandOption: Equatable {
             provider.isOnDemandEnabled = true
         }
     }
-
-    var localizedDescription: String {
-        switch self {
-        case .off: return "Off"
-        case .wifiOnly: return "Wi-Fi Only"
-        case .cellularOnly: return "Cellular Only"
-        case .wifiOrCellular: return "Wi-Fi or Cellular"
-        }
-    }
 }

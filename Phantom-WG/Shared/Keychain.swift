@@ -73,13 +73,4 @@ enum Keychain {
     static func deleteReference(called ref: Data) {
         SecItemDelete([kSecValuePersistentRef: ref] as CFDictionary)
     }
-
-    static func deleteAllReferences() {
-        let query: [CFString: Any] = [
-            kSecClass: kSecClassGenericPassword,
-            kSecAttrService: service,
-            kSecAttrAccessGroup: accessGroup
-        ]
-        SecItemDelete(query as CFDictionary)
-    }
 }

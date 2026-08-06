@@ -1,9 +1,10 @@
 import SwiftUI
 
-/// Activate-on-demand toggle — keeps the tunnel alive even when the
-/// app is closed. The binding is supplied by the parent so the
-/// side-effect (save preferences, apply on-demand rules) lives with
-/// the tunnel orchestration.
+/// Activate-on-demand toggle — when on, the system starts the tunnel
+/// whenever a network connection is available and keeps it up, with
+/// the app closed and across device restarts included. The binding is
+/// supplied by the parent so the side-effect (save preferences, apply
+/// on-demand rules) lives with the tunnel orchestration.
 struct OnDemandSection: View {
     @Binding var onDemandEnabled: Bool
     @Environment(LocalizationManager.self) private var loc

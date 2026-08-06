@@ -20,10 +20,11 @@ enum FieldValidationError: Equatable {
 
 // MARK: - Draft Types
 
-/// Mutable, string-backed editing surface for a tunnel configuration.
-/// Form fields bind directly to draft properties. `validate()` produces
-/// a typed `TunnelConfig` plus a per-field error map the UI can use to
-/// highlight individual fields.
+/// String-backed staging value between the raw `.conf` text and the
+/// typed configuration: `ConfParser` fills one from parsed text, and
+/// `validate()` turns it into a `TunnelConfig` plus a per-field error
+/// map for the banner. Both raw-text surfaces — import and
+/// `TunnelEditView` — run through it.
 struct TunnelDraft: Equatable {
     let id: UUID
     var name: String
@@ -147,9 +148,9 @@ struct WireguardDraft: Equatable {
 
 struct InterfaceDraft: Equatable {
     var privateKey: String
-    var addresses: String      // comma-separated, user-editable
-    var dnsServers: String     // comma-separated, user-editable
-    var mtu: String            // string-backed for numeric field binding
+    var addresses: String      // comma-separated
+    var dnsServers: String     // comma-separated
+    var mtu: String            // raw text; range-checked in validate()
 
     init(privateKey: String, addresses: String, dnsServers: String, mtu: String) {
         self.privateKey = privateKey

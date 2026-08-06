@@ -192,10 +192,6 @@ class TunnelsManager {
         }
     }
 
-    func refreshStatuses() {
-        tunnels.forEach { $0.refreshStatus() }
-    }
-
     // MARK: - Private Activation
 
     private func startActivation(of tunnel: TunnelContainer, at retryIndex: Int) {
@@ -345,10 +341,6 @@ class TunnelsManager {
             tunnel.status = newStatus
 
             if newStatus == .inactive {
-                let onDeactivated = tunnel.onDeactivated
-                tunnel.onDeactivated = nil
-                onDeactivated?(tunnel)
-
                 activateWaitingTunnelIfNeeded()
             }
         }
