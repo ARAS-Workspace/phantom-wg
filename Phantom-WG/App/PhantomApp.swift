@@ -27,7 +27,9 @@ struct PhantomApp: App {
         }
     }
 
-    private var loadingView: some View {
+    // Internal, not private: the #Preview blocks below live outside
+    // the type and could not reach a private member.
+    var loadingView: some View {
         VStack(spacing: 20) {
             Image("PhantomLogo")
                 .resizable()
@@ -37,4 +39,35 @@ struct PhantomApp: App {
                 .tint(.secondary)
         }
     }
+}
+
+// MARK: - Previews
+
+#Preview("Loading — Light") {
+    PhantomApp().loadingView
+        .preferredColorScheme(.light)
+}
+
+#Preview("Loading — Dark") {
+    PhantomApp().loadingView
+        .preferredColorScheme(.dark)
+}
+
+/// Faithful stand-in for the system launch screen: `UILaunchScreen`
+/// centers `PhantomLogo` at its intrinsic size on the system
+/// background — exactly this layout, no scaling anywhere.
+#Preview("Launch — Light") {
+    ZStack {
+        Color(.systemBackground).ignoresSafeArea()
+        Image("PhantomLogo")
+    }
+    .preferredColorScheme(.light)
+}
+
+#Preview("Launch — Dark") {
+    ZStack {
+        Color(.systemBackground).ignoresSafeArea()
+        Image("PhantomLogo")
+    }
+    .preferredColorScheme(.dark)
 }
