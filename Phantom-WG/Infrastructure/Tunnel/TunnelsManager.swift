@@ -83,6 +83,15 @@ class TunnelsManager {
             throw TunnelManagementError.vpnSystemErrorOnAddTunnel(systemError: error)
         }
 
+        // The save above already fired `NEVPNConfigurationChange`, and
+        // `reload()` can win the race during the awaits — putting its
+        // own container for this configuration into the list first.
+        // Appending unconditionally would then duplicate the ForEach
+        // identity ("ID occurs multiple times").
+        if let existing = tunnels.first(where: { $0.id == config.id }) {
+            return existing
+        }
+
         let tunnel = TunnelContainer(tunnel: provider)
         tunnels.append(tunnel)
         tunnels = Self.sortedByCreatedAt(tunnels)
@@ -364,11 +373,15 @@ class TunnelsManager {
     private func reload() async {
         guard let providers = try? await providerFactory.loadAllFromPreferences() else { return }
 
-        // Update existing tunnels, add new ones, remove deleted ones
+        // Update existing tunnels, add new ones, remove deleted ones.
+        // Matching goes by persisted identity, not manager instance —
+        // `loadAllFromPreferences` hands back fresh objects every call,
+        // and an instance comparison would discard the containers the
+        // views are already holding (and race `add` into duplicates).
         var newTunnels: [TunnelContainer] = []
 
         for provider in providers {
-            if let existing = tunnels.first(where: { $0.tunnelProvider.isEqual(to: provider) }) {
+            if let existing = tunnels.first(where: { $0.id == provider.tunnelConfig?.id }) {
                 existing.name = provider.localizedDescription ?? ""
                 existing.refreshStatus()
                 newTunnels.append(existing)

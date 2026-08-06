@@ -113,12 +113,6 @@ final class PreviewTunnelProvider: TunnelProviding {
         (notification.object as? PreviewTunnelProvider) === self
     }
 
-    // MARK: - Equality
-
-    func isEqual(to other: TunnelProviding) -> Bool {
-        (other as? PreviewTunnelProvider) === self
-    }
-
     // MARK: - Status Simulation
 
     private func transition(to status: NEVPNStatus) {

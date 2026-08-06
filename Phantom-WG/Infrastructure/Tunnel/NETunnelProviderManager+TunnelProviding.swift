@@ -65,11 +65,4 @@ extension NETunnelProviderManager: TunnelProviding {
         guard let session = notification.object as? NETunnelProviderSession else { return false }
         return connection === session
     }
-
-    // MARK: - Equality
-
-    func isEqual(to other: TunnelProviding) -> Bool {
-        guard let otherManager = other as? NETunnelProviderManager else { return false }
-        return self == otherManager
-    }
 }

@@ -43,11 +43,6 @@ protocol TunnelProviding: AnyObject {
 
     /// Returns true if the given NEVPNStatusDidChange notification originated from this provider.
     func matchesNotification(_ notification: Notification) -> Bool
-
-    // MARK: - Equality
-
-    /// Used by TunnelsManager.reload() to match existing tunnels with reloaded providers.
-    func isEqual(to other: TunnelProviding) -> Bool
 }
 
 // MARK: - Async Persistence (default implementations wrapping callback-based methods)
