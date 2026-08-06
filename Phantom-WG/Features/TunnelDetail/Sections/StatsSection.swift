@@ -22,3 +22,29 @@ struct StatsSection: View {
         }
     }
 }
+
+// MARK: - Previews
+
+#Preview("Live values — Light") {
+    Form {
+        StatsSection(handshake: "12 seconds ago", rxBytes: "45.12 MB", txBytes: "8.79 MB")
+    }
+    .formStyle(.grouped)
+    .previewEnvironment(scheme: .light)
+}
+
+#Preview("Live values — Dark") {
+    Form {
+        StatsSection(handshake: "12 seconds ago", rxBytes: "45.12 MB", txBytes: "8.79 MB")
+    }
+    .formStyle(.grouped)
+    .previewEnvironment(scheme: .dark)
+}
+
+#Preview("Idle") {
+    Form {
+        StatsSection(handshake: "—", rxBytes: "—", txBytes: "—")
+    }
+    .formStyle(.grouped)
+    .previewEnvironment()
+}

@@ -1,7 +1,9 @@
 import NetworkExtension
 
-/// Factory for creating and loading tunnel providers.
-/// Production uses RealTunnelProviderFactory; tests inject MockTunnelProviderFactory.
+/// Factory for creating and loading tunnel providers — the seam that
+/// lets `TunnelsManager` run against something other than the live
+/// NE preferences store. Production uses RealTunnelProviderFactory;
+/// previews inject PreviewTunnelProviderFactory.
 protocol TunnelProviderFactory {
     func makeProvider() -> TunnelProviding
     func loadAllFromPreferences() async throws -> [TunnelProviding]

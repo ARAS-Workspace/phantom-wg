@@ -22,11 +22,37 @@ struct LogNavigationSection: View {
                         .padding(.vertical, 2)
                         .background(
                             Capsule()
-                                .fill(Color(.systemGray5))
+                                .fill(Color.secondary.opacity(0.15))
                         )
                 }
             }
             .accessibilityIdentifier(AXID.TunnelDetail.logsLink)
         }
     }
+}
+
+// MARK: - Previews
+
+#Preview("Light") {
+    let store = LogStore(tunnel: nil)
+    store.entries = PreviewFixtures.logEntries
+    return NavigationStack {
+        Form {
+            LogNavigationSection(logStore: store)
+        }
+        .formStyle(.grouped)
+    }
+    .previewEnvironment(scheme: .light)
+}
+
+#Preview("Dark") {
+    let store = LogStore(tunnel: nil)
+    store.entries = PreviewFixtures.logEntries
+    return NavigationStack {
+        Form {
+            LogNavigationSection(logStore: store)
+        }
+        .formStyle(.grouped)
+    }
+    .previewEnvironment(scheme: .dark)
 }

@@ -1,10 +1,11 @@
 import SwiftUI
 
-/// Raw-paste import surface. The user pastes a WireGuard `.conf` (or
-/// scans a QR encoding one), enters a tunnel name, and imports.
-/// Structural and field-level errors are surfaced in a single inline
-/// banner above the inputs — no detail form is shown here. Editing
-/// individual fields is done later via `TunnelDetailView`.
+/// Raw-paste import surface, pushed from the tunnel list like its
+/// macOS counterpart. The user pastes a WireGuard `.conf` (or scans
+/// a QR encoding one), enters a tunnel name, and imports. Structural
+/// and field-level errors are surfaced in a single inline banner
+/// above the inputs. Later edits go through `TunnelEditView` — the
+/// same raw-text shape as this screen.
 struct TunnelImportView: View {
     @Environment(TunnelsManager.self) private var tunnelsManager
     @Environment(LocalizationManager.self) private var loc
@@ -21,38 +22,32 @@ struct TunnelImportView: View {
     }
 
     var body: some View {
-        NavigationStack {
-            VStack(spacing: 0) {
-                if !errorMessages.isEmpty {
-                    errorBanner
-                }
+        VStack(spacing: 0) {
+            if !errorMessages.isEmpty {
+                errorBanner
+            }
 
-                Form {
-                    nameSection
-                    rawInputSection
-                    quickActionsSection
-                }
+            Form {
+                nameSection
+                rawInputSection
+                quickActionsSection
             }
-            .navigationTitle(loc.t("import_title"))
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button(loc.t("cancel")) { dismiss() }
-                        .accessibilityIdentifier(AXID.TunnelImport.cancelButton)
-                }
-                ToolbarItem(placement: .confirmationAction) {
-                    Button(loc.t("import_button")) { submit() }
-                        .fontWeight(.semibold)
-                        .disabled(!canSubmit)
-                        .accessibilityIdentifier(AXID.TunnelImport.submitButton)
-                }
+        }
+        .navigationTitle(loc.t("import_title"))
+        .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            ToolbarItem(placement: .confirmationAction) {
+                Button(loc.t("import_button")) { submit() }
+                    .fontWeight(.semibold)
+                    .disabled(!canSubmit)
+                    .accessibilityIdentifier(AXID.TunnelImport.submitButton)
             }
-            .sheet(isPresented: $showingQRScanner) {
-                QRScannerView { scanned in
-                    showingQRScanner = false
-                    inputText = scanned
-                    submit()
-                }
+        }
+        .sheet(isPresented: $showingQRScanner) {
+            QRScannerView { scanned in
+                showingQRScanner = false
+                inputText = scanned
+                submit()
             }
         }
     }
@@ -151,7 +146,7 @@ struct TunnelImportView: View {
         do {
             draft = try ConfParser.parse(trimmedInput)
         } catch let error as ConfParser.ParseError {
-            errorMessages = [parseErrorMessage(error)]
+            errorMessages = [ConfEditorMessages.parseMessage(error, loc: loc)]
             return
         } catch {
             errorMessages = [error.localizedDescription]
@@ -163,7 +158,7 @@ struct TunnelImportView: View {
         // in the banner; the form itself never appears during import.
         let result = draft.validate()
         guard let config = result.config else {
-            errorMessages = fieldErrorMessages(result.errors)
+            errorMessages = ConfEditorMessages.fieldMessages(result.errors, loc: loc)
             return
         }
 
@@ -176,99 +171,20 @@ struct TunnelImportView: View {
             }
         }
     }
-
-    // MARK: - Error Formatting
-
-    private func fieldErrorMessages(
-        _ errors: [TunnelDraft.Field: FieldValidationError]
-    ) -> [String] {
-        TunnelDraft.Field.allImportOrder.compactMap { field in
-            guard let error = errors[field] else { return nil }
-            return "\(localizedFieldLabel(field)): \(error.localizedMessage(loc))"
-        }
-    }
-
-    private func localizedFieldLabel(_ field: TunnelDraft.Field) -> String {
-        switch field {
-        case .name:
-            return loc.t("detail_name")
-        case .interfacePrivateKey, .interfaceAddresses,
-             .interfaceDnsServers, .interfaceMTU:
-            return interfaceLabel(field)
-        case .peerPublicKey, .peerPresharedKey, .peerAllowedIPs,
-             .peerEndpoint, .peerPersistentKeepalive:
-            return peerLabel(field)
-        case .wstunnelUrl, .wstunnelSecret, .wstunnelLocalHost,
-             .wstunnelLocalPort, .wstunnelRemoteHost, .wstunnelRemotePort:
-            return wstunnelLabel(field)
-        }
-    }
-
-    private func interfaceLabel(_ field: TunnelDraft.Field) -> String {
-        switch field {
-        case .interfacePrivateKey:  return loc.t("detail_private_key")
-        case .interfaceAddresses:   return loc.t("detail_address")
-        case .interfaceDnsServers:  return loc.t("detail_dns")
-        case .interfaceMTU:         return loc.t("detail_mtu")
-        default:                    return ""
-        }
-    }
-
-    private func peerLabel(_ field: TunnelDraft.Field) -> String {
-        switch field {
-        case .peerPublicKey:            return loc.t("detail_public_key")
-        case .peerPresharedKey:         return loc.t("detail_preshared_key")
-        case .peerAllowedIPs:           return loc.t("detail_allowed_ips")
-        case .peerEndpoint:             return loc.t("detail_endpoint")
-        case .peerPersistentKeepalive:  return loc.t("detail_keepalive")
-        default:                        return ""
-        }
-    }
-
-    private func wstunnelLabel(_ field: TunnelDraft.Field) -> String {
-        switch field {
-        case .wstunnelUrl:          return loc.t("detail_server_url")
-        case .wstunnelSecret:       return loc.t("detail_secret")
-        case .wstunnelLocalHost:    return loc.t("detail_local_host")
-        case .wstunnelLocalPort:    return loc.t("detail_local_port")
-        case .wstunnelRemoteHost:   return loc.t("detail_remote_host")
-        case .wstunnelRemotePort:   return loc.t("detail_remote_port")
-        default:                    return ""
-        }
-    }
-
-    private func parseErrorMessage(_ error: ConfParser.ParseError) -> String {
-        switch error {
-        case .emptyInput:
-            return loc.t("parse_err_empty_input")
-        case .noInterfaceSection:
-            return loc.t("parse_err_no_interface")
-        case .noPeerSection:
-            return loc.t("parse_err_no_peer")
-        case .missingKey(let section, let key):
-            return loc.t("parse_err_missing_key", section, key)
-        case .invalidTunnelFormat(let section, let key):
-            return loc.t("parse_err_invalid_tunnel", section, key)
-        }
-    }
 }
 
-// MARK: - Import Field Ordering
+// MARK: - Previews
 
-private extension TunnelDraft.Field {
-    /// Stable ordering used when listing validation errors in the
-    /// import banner — matches the visual order of the source `.conf`
-    /// so the operator reads errors top-down.
-    static var allImportOrder: [TunnelDraft.Field] {
-        [
-            .name,
-            .wstunnelUrl, .wstunnelSecret,
-            .wstunnelLocalHost, .wstunnelLocalPort,
-            .wstunnelRemoteHost, .wstunnelRemotePort,
-            .interfacePrivateKey, .interfaceAddresses,
-            .interfaceDnsServers, .interfaceMTU,
-            .peerPublicKey, .peerPresharedKey,
-            .peerAllowedIPs, .peerEndpoint, .peerPersistentKeepalive
-        ]
+#Preview("Light") {
+    NavigationStack {
+        TunnelImportView()
     }
+    .previewEnvironment(scheme: .light)
+}
+
+#Preview("Dark") {
+    NavigationStack {
+        TunnelImportView()
+    }
+    .previewEnvironment(scheme: .dark)
 }

@@ -1,24 +1,38 @@
 import SwiftUI
 
-/// Tunnel display name input. Single editable field with the standard
-/// error treatment; becomes read-only while the tunnel is active.
+/// Tunnel display name, read-only. The name is edited together with
+/// the raw configuration in `TunnelEditView`.
 struct NameSection: View {
-    @Binding var name: String
-    let isEditable: Bool
-    let errorMessage: String?
+    let name: String
     @Environment(LocalizationManager.self) private var loc
 
     var body: some View {
         Section {
-            PhantomTextField(
+            PhantomStaticField(
                 label: loc.t("detail_name"),
-                text: $name,
-                isDisabled: !isEditable,
-                errorMessage: errorMessage,
+                value: name,
                 axIdentifier: AXID.TunnelDetail.Name.field
             )
         } header: {
             Label(loc.t("detail_general"), systemImage: "gearshape")
         }
     }
+}
+
+// MARK: - Previews
+
+#Preview("Light") {
+    Form {
+        NameSection(name: "Istanbul Edge")
+    }
+    .formStyle(.grouped)
+    .previewEnvironment(scheme: .light)
+}
+
+#Preview("Dark") {
+    Form {
+        NameSection(name: "Istanbul Edge")
+    }
+    .formStyle(.grouped)
+    .previewEnvironment(scheme: .dark)
 }

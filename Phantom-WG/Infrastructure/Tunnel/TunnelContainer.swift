@@ -20,6 +20,11 @@ class TunnelContainer: Identifiable {
         tunnelProvider.tunnelConfig
     }
 
+    /// Ghost when the persisted config carries a wstunnel bridge.
+    var isGhost: Bool {
+        tunnelConfig?.isGhostMode ?? false
+    }
+
     var activateOnDemandSetting: ActivateOnDemandOption {
         ActivateOnDemandOption.from(provider: tunnelProvider)
     }

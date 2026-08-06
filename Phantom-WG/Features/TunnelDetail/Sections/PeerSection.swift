@@ -1,52 +1,72 @@
 import SwiftUI
 
-/// WireGuard peer configuration — public/preshared keys, allowed IPs,
-/// endpoint, and keepalive. Editable only while the tunnel is inactive.
+/// WireGuard peer configuration, read-only — public/preshared keys,
+/// allowed IPs, endpoint, and keepalive. The preshared row only
+/// appears when the config carries one. Values change only through
+/// `TunnelEditView`'s raw-text editor.
 struct PeerSection: View {
-    @Binding var draft: PeerDraft
-    let isEditable: Bool
-    let fieldErrors: [TunnelDraft.Field: FieldValidationError]
+    let config: PeerConfig
     @Environment(LocalizationManager.self) private var loc
 
     var body: some View {
         Section {
-            PhantomTextField(
+            PhantomStaticField(
                 label: loc.t("detail_public_key"),
-                text: $draft.publicKey,
-                isDisabled: !isEditable,
-                errorMessage: fieldErrors[.peerPublicKey]?.localizedMessage(loc),
+                value: config.publicKey.textual,
                 axIdentifier: AXID.TunnelDetail.Peer.publicKey
             )
-            PhantomTextField(
-                label: loc.t("detail_preshared_key"),
-                text: $draft.presharedKey,
-                isDisabled: !isEditable,
-                errorMessage: fieldErrors[.peerPresharedKey]?.localizedMessage(loc),
-                axIdentifier: AXID.TunnelDetail.Peer.presharedKey
-            )
-            PhantomTextField(
+            if let preshared = config.presharedKey {
+                PhantomStaticField(
+                    label: loc.t("detail_preshared_key"),
+                    value: preshared.textual,
+                    axIdentifier: AXID.TunnelDetail.Peer.presharedKey
+                )
+            }
+            PhantomStaticField(
                 label: loc.t("detail_allowed_ips"),
-                text: $draft.allowedIPs,
-                isDisabled: !isEditable,
-                errorMessage: fieldErrors[.peerAllowedIPs]?.localizedMessage(loc),
+                value: config.allowedIPs.map(\.textual).joined(separator: ", "),
                 axIdentifier: AXID.TunnelDetail.Peer.allowedIPs
             )
-            PhantomTextField(
+            PhantomStaticField(
                 label: loc.t("detail_endpoint"),
-                text: $draft.endpoint,
-                isDisabled: !isEditable,
-                errorMessage: fieldErrors[.peerEndpoint]?.localizedMessage(loc),
+                value: config.endpoint.textual,
                 axIdentifier: AXID.TunnelDetail.Peer.endpoint
             )
-            PhantomStringNumericField(
+            PhantomStaticField(
                 label: loc.t("detail_keepalive"),
-                text: $draft.persistentKeepalive,
-                isDisabled: !isEditable,
-                errorMessage: fieldErrors[.peerPersistentKeepalive]?.localizedMessage(loc),
+                value: String(config.persistentKeepalive),
                 axIdentifier: AXID.TunnelDetail.Peer.keepalive
             )
         } header: {
             Label(loc.t("detail_peer"), systemImage: "point.3.connected.trianglepath.dotted")
         }
     }
+}
+
+// MARK: - Previews
+
+#Preview("With preshared key — Light") {
+    Form {
+        PeerSection(config: PreviewFixtures.ghostConfig().wireguard.peer)
+    }
+    .formStyle(.grouped)
+    .previewEnvironment(scheme: .light)
+}
+
+#Preview("With preshared key — Dark") {
+    Form {
+        PeerSection(config: PreviewFixtures.ghostConfig().wireguard.peer)
+    }
+    .formStyle(.grouped)
+    .previewEnvironment(scheme: .dark)
+}
+
+#Preview("Without preshared key") {
+    var peer = PreviewFixtures.ghostConfig().wireguard.peer
+    peer.presharedKey = nil
+    return Form {
+        PeerSection(config: peer)
+    }
+    .formStyle(.grouped)
+    .previewEnvironment()
 }

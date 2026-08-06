@@ -88,8 +88,6 @@ enum WstunnelBridge {
             wstunnel_config_free(handle)
         }
 
-        // ─── Required ────────────────────────────────
-
         /// Remote wstunnel server URL (e.g. "wss://example.com:443")
         @discardableResult
         func setRemoteURL(_ url: String) throws -> Config {
@@ -98,8 +96,6 @@ enum WstunnelBridge {
             return self
         }
 
-        // ─── Connection / Path ───────────────────────
-
         /// HTTP upgrade path prefix. Default "v1". Used as secret in Ghost Mode.
         @discardableResult
         func setHTTPUpgradePathPrefix(_ prefix: String) throws -> Config {
@@ -107,8 +103,6 @@ enum WstunnelBridge {
             if result != 0 { throw WstunnelError(code: result) }
             return self
         }
-
-        // ─── Tunnel Rules (equivalent to CLI -L) ────
 
         /// Add UDP tunnel: -L udp://localHost:localPort:remoteHost:remotePort
         @discardableResult
@@ -125,8 +119,6 @@ enum WstunnelBridge {
             if result != 0 { throw WstunnelError(code: result) }
             return self
         }
-
-        // ─── Start ──────────────────────────────────
 
         /// Start the wstunnel client with this config.
         /// Internally calls wstunnel::run_client() exactly like wstunnel-cli.

@@ -57,3 +57,19 @@ struct EmptyStateView: View {
         .padding()
     }
 }
+
+// MARK: - Previews
+
+#Preview("Light") {
+    PreviewBindingHost(false) { showingImport in
+        EmptyStateView(showingImport: showingImport)
+    }
+    .previewEnvironment(scheme: .light)
+}
+
+#Preview("Dark") {
+    PreviewBindingHost(false) { showingImport in
+        EmptyStateView(showingImport: showingImport)
+    }
+    .previewEnvironment(scheme: .dark)
+}

@@ -32,8 +32,15 @@ targets:
         excludes:
           - "**/.DS_Store"
           - Localization/translations
+          - AppIcon.icon
       - path: Phantom-WG/Localization/translations
         type: folder
+        buildPhase: resources
+      # Icon Composer package — xcodegen does not know the .icon
+      # bundle, so it must enter the project as a single file or its
+      # contents get flattened into loose resources.
+      - path: Phantom-WG/AppIcon.icon
+        type: file
         buildPhase: resources
     dependencies:
       - target: PhantomTunnel
@@ -97,7 +104,7 @@ targets:
       # Shared files from main app
       - path: Phantom-WG/Domain/TunnelConfig.swift
       - path: Phantom-WG/Domain/ConfigTypes.swift
-      - path: Phantom-WG/Infrastructure/Persistence/TunnelConfig+Keychain.swift
+      - path: Phantom-WG/Infrastructure/Persistence/NETunnelProviderProtocol+Keychain.swift
       - path: Phantom-WG/Shared/SharedConstants.swift
       - path: Phantom-WG/Shared/WstunnelBridge.swift
       - path: Phantom-WG/Shared/Keychain.swift

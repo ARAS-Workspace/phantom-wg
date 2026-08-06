@@ -19,7 +19,11 @@ enum AXID {
         static let addButton         = "tunnel-list.add-button"
         static let emptyImportButton = "tunnel-list.empty.import-button"
         static let languageToggle    = "tunnel-list.language-toggle"
-        static let errorAlertOK      = "tunnel-list.error-alert.ok"
+
+        static let activeToggle = "tunnel-list.active.toggle"
+        static let activeError  = "tunnel-list.active.activation-error"
+        static let activeNone   = "tunnel-list.active.none"
+        static let listCount    = "tunnel-list.count"
 
         static func row(_ name: String) -> String { "tunnel-row.\(name)" }
         static func rowToggle(_ name: String) -> String { "tunnel-row.\(name).toggle" }
@@ -33,19 +37,19 @@ enum AXID {
         static let pasteButton  = "tunnel-import.paste-button"
         static let qrScanButton = "tunnel-import.qr-scan-button"
         static let submitButton = "tunnel-import.submit-button"
-        static let cancelButton = "tunnel-import.cancel-button"
         static let errorBanner  = "tunnel-import.error-banner"
     }
 
     // MARK: Tunnel Detail
 
     enum TunnelDetail {
-        static let statusToggle    = "tunnel-detail.status-toggle"
-        static let onDemandToggle  = "tunnel-detail.on-demand-toggle"
-        static let logsLink        = "tunnel-detail.logs-link"
-        static let errorAlertOK    = "tunnel-detail.error-alert.ok"
-        static let activationError = "tunnel-detail.status.activation-error"
-        static let modeBadge       = "tunnel-detail.status.mode-badge"
+        static let statusToggle      = "tunnel-detail.status-toggle"
+        static let onDemandToggle    = "tunnel-detail.on-demand-toggle"
+        static let logsLink          = "tunnel-detail.logs-link"
+        static let errorAlertOK      = "tunnel-detail.error-alert.ok"
+        static let activationError   = "tunnel-detail.status.activation-error"
+        static let modeBadge         = "tunnel-detail.status.mode-badge"
+        static let configUnavailable = "tunnel-detail.config-unavailable"
 
         enum Stats {
             static let handshake = "tunnel-detail.stats.handshake"
@@ -82,8 +86,8 @@ enum AXID {
         }
 
         enum Actions {
-            static let copyConf      = "tunnel-detail.actions.copy-conf"
-            static let copyLogs      = "tunnel-detail.actions.copy-logs"
+            static let copyButton    = "tunnel-detail.actions.copy"
+            static let editButton    = "tunnel-detail.actions.edit"
             static let resetButton   = "tunnel-detail.actions.reset"
             static let deleteButton  = "tunnel-detail.actions.delete"
             static let deleteConfirm = "tunnel-detail.delete-confirm.confirm"
@@ -91,11 +95,21 @@ enum AXID {
         }
     }
 
+    // MARK: Tunnel Edit
+
+    enum TunnelEdit {
+        static let nameField   = "tunnel-edit.name-field"
+        static let confEditor  = "tunnel-edit.conf-editor"
+        static let saveButton  = "tunnel-edit.save-button"
+        static let errorBanner = "tunnel-edit.error-banner"
+    }
+
     // MARK: Log View
 
     enum LogView {
         static let emptyState  = "log-view.empty-state"
         static let list        = "log-view.list"
+        static let copyButton  = "log-view.copy-button"
         static let clearButton = "log-view.clear-button"
     }
 }

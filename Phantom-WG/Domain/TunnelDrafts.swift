@@ -81,15 +81,6 @@ struct TunnelDraft: Equatable {
         self.wstunnel = config.wstunnel.map(WstunnelDraft.init(from:))
     }
 
-    /// Empty draft — used when the user begins an import with blank fields.
-    static func empty() -> TunnelDraft {
-        TunnelDraft(
-            name: "",
-            wireguard: WireguardDraft.empty(),
-            wstunnel: nil
-        )
-    }
-
     // MARK: Validate
 
     func validate() -> ValidationResult {
@@ -141,10 +132,6 @@ struct WireguardDraft: Equatable {
     var interface: InterfaceDraft
     var peer: PeerDraft
 
-    static func empty() -> WireguardDraft {
-        WireguardDraft(interface: InterfaceDraft.empty(), peer: PeerDraft.empty())
-    }
-
     init(interface: InterfaceDraft, peer: PeerDraft) {
         self.interface = interface
         self.peer = peer
@@ -163,15 +150,6 @@ struct InterfaceDraft: Equatable {
     var addresses: String      // comma-separated, user-editable
     var dnsServers: String     // comma-separated, user-editable
     var mtu: String            // string-backed for numeric field binding
-
-    static func empty() -> InterfaceDraft {
-        InterfaceDraft(
-            privateKey: "",
-            addresses: "",
-            dnsServers: "1.1.1.1, 9.9.9.9",
-            mtu: "1420"
-        )
-    }
 
     init(privateKey: String, addresses: String, dnsServers: String, mtu: String) {
         self.privateKey = privateKey
@@ -239,16 +217,6 @@ struct PeerDraft: Equatable {
     var allowedIPs: String       // comma-separated
     var endpoint: String
     var persistentKeepalive: String
-
-    static func empty() -> PeerDraft {
-        PeerDraft(
-            publicKey: "",
-            presharedKey: "",
-            allowedIPs: "0.0.0.0/0, ::/0",
-            endpoint: "",
-            persistentKeepalive: "25"
-        )
-    }
 
     init(
         publicKey: String,
@@ -370,17 +338,6 @@ struct WstunnelDraft: Equatable {
     var localPort: String
     var remoteHost: String
     var remotePort: String
-
-    static func empty() -> WstunnelDraft {
-        WstunnelDraft(
-            url: "",
-            secret: "",
-            localHost: "127.0.0.1",
-            localPort: "51820",
-            remoteHost: "127.0.0.1",
-            remotePort: "51820"
-        )
-    }
 
     init(
         url: String,

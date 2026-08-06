@@ -63,7 +63,10 @@ class TunnelsManager {
 
         let provider = providerFactory.makeProvider()
         provider.localizedDescription = name
-        provider.isEnabled = true
+        // Deliberately saved disabled: iOS keeps a single enabled VPN
+        // configuration per app, so enabling a new one here would
+        // disable — and disconnect — a currently running tunnel.
+        // Activation enables the manager right before it starts.
 
         do {
             try provider.configure(with: config)
@@ -100,7 +103,10 @@ class TunnelsManager {
         }
 
         tunnel.tunnelProvider.localizedDescription = name
-        tunnel.tunnelProvider.isEnabled = true
+        // `isEnabled` is left untouched for the same reason as in
+        // `add`: flipping it on while another tunnel runs would tear
+        // that session down. Edits require an inactive tunnel, and
+        // activation enables the manager itself.
 
         do {
             try tunnel.tunnelProvider.configure(with: config)

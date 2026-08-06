@@ -42,3 +42,29 @@ struct TunnelRow: View {
         }
     }
 }
+
+// MARK: - Previews
+
+#Preview("Row states — Light") {
+    let manager = PreviewFixtures.tunnelsManager()
+    manager.tunnels[1].status = .activating
+    return Form {
+        ForEach(manager.tunnels) { tunnel in
+            TunnelRow(tunnel: tunnel)
+        }
+    }
+    .formStyle(.grouped)
+    .previewEnvironment(tunnels: manager, scheme: .light)
+}
+
+#Preview("Row states — Dark") {
+    let manager = PreviewFixtures.tunnelsManager()
+    manager.tunnels[1].status = .activating
+    return Form {
+        ForEach(manager.tunnels) { tunnel in
+            TunnelRow(tunnel: tunnel)
+        }
+    }
+    .formStyle(.grouped)
+    .previewEnvironment(tunnels: manager, scheme: .dark)
+}

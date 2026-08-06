@@ -1,60 +1,65 @@
 import SwiftUI
 
-/// Ghost-mode section — only present when `TunnelConfig.wstunnel` is
-/// non-nil. Exposes the six wstunnel bridge fields; fields remain
-/// editable only while the tunnel is inactive.
+/// Ghost-mode section, read-only — only present when
+/// `TunnelConfig.wstunnel` is non-nil. Shows the six wstunnel bridge
+/// fields; adding, changing, or removing the bridge happens in
+/// `TunnelEditView`'s raw-text editor.
 struct WstunnelSection: View {
-    @Binding var draft: WstunnelDraft
-    let isEditable: Bool
-    let fieldErrors: [TunnelDraft.Field: FieldValidationError]
+    let config: WstunnelConfig
     @Environment(LocalizationManager.self) private var loc
 
     var body: some View {
         Section {
-            PhantomTextField(
+            PhantomStaticField(
                 label: loc.t("detail_server_url"),
-                text: $draft.url,
-                isDisabled: !isEditable,
-                errorMessage: fieldErrors[.wstunnelUrl]?.localizedMessage(loc),
+                value: config.url.textual,
                 axIdentifier: AXID.TunnelDetail.Wstunnel.url
             )
-            PhantomTextField(
+            PhantomStaticField(
                 label: loc.t("detail_secret"),
-                text: $draft.secret,
-                isDisabled: !isEditable,
-                errorMessage: fieldErrors[.wstunnelSecret]?.localizedMessage(loc),
+                value: config.secret,
                 axIdentifier: AXID.TunnelDetail.Wstunnel.secret
             )
-            PhantomTextField(
+            PhantomStaticField(
                 label: loc.t("detail_local_host"),
-                text: $draft.localHost,
-                isDisabled: !isEditable,
-                errorMessage: fieldErrors[.wstunnelLocalHost]?.localizedMessage(loc),
+                value: config.localHost,
                 axIdentifier: AXID.TunnelDetail.Wstunnel.localHost
             )
-            PhantomStringNumericField(
+            PhantomStaticField(
                 label: loc.t("detail_local_port"),
-                text: $draft.localPort,
-                isDisabled: !isEditable,
-                errorMessage: fieldErrors[.wstunnelLocalPort]?.localizedMessage(loc),
+                value: String(config.localPort),
                 axIdentifier: AXID.TunnelDetail.Wstunnel.localPort
             )
-            PhantomTextField(
+            PhantomStaticField(
                 label: loc.t("detail_remote_host"),
-                text: $draft.remoteHost,
-                isDisabled: !isEditable,
-                errorMessage: fieldErrors[.wstunnelRemoteHost]?.localizedMessage(loc),
+                value: config.remoteHost,
                 axIdentifier: AXID.TunnelDetail.Wstunnel.remoteHost
             )
-            PhantomStringNumericField(
+            PhantomStaticField(
                 label: loc.t("detail_remote_port"),
-                text: $draft.remotePort,
-                isDisabled: !isEditable,
-                errorMessage: fieldErrors[.wstunnelRemotePort]?.localizedMessage(loc),
+                value: String(config.remotePort),
                 axIdentifier: AXID.TunnelDetail.Wstunnel.remotePort
             )
         } header: {
             Label(loc.t("detail_wstunnel"), systemImage: "network.badge.shield.half.filled")
         }
     }
+}
+
+// MARK: - Previews
+
+#Preview("Light") {
+    Form {
+        WstunnelSection(config: PreviewFixtures.ghostConfig().wstunnel!)
+    }
+    .formStyle(.grouped)
+    .previewEnvironment(scheme: .light)
+}
+
+#Preview("Dark") {
+    Form {
+        WstunnelSection(config: PreviewFixtures.ghostConfig().wstunnel!)
+    }
+    .formStyle(.grouped)
+    .previewEnvironment(scheme: .dark)
 }

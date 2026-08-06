@@ -19,3 +19,25 @@ struct OnDemandSection: View {
         }
     }
 }
+
+// MARK: - Previews
+
+#Preview("Light") {
+    PreviewBindingHost(true) { enabled in
+        Form {
+            OnDemandSection(onDemandEnabled: enabled)
+        }
+        .formStyle(.grouped)
+    }
+    .previewEnvironment(scheme: .light)
+}
+
+#Preview("Dark") {
+    PreviewBindingHost(true) { enabled in
+        Form {
+            OnDemandSection(onDemandEnabled: enabled)
+        }
+        .formStyle(.grouped)
+    }
+    .previewEnvironment(scheme: .dark)
+}

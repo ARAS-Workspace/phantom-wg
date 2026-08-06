@@ -18,3 +18,25 @@ struct StatRow: View {
         }
     }
 }
+
+// MARK: - Previews
+
+#Preview("Light") {
+    Form {
+        StatRow(icon: "hand.wave", label: "Latest Handshake", value: "12 seconds ago")
+        StatRow(icon: "arrow.down.circle", label: "Data Received", value: "45.12 MB", valueColor: .green)
+        StatRow(icon: "arrow.up.circle", label: "Data Sent", value: "8.79 MB", valueColor: .blue)
+    }
+    .formStyle(.grouped)
+    .preferredColorScheme(.light)
+}
+
+#Preview("Dark") {
+    Form {
+        StatRow(icon: "hand.wave", label: "Latest Handshake", value: "12 seconds ago")
+        StatRow(icon: "arrow.down.circle", label: "Data Received", value: "45.12 MB", valueColor: .green)
+        StatRow(icon: "arrow.up.circle", label: "Data Sent", value: "8.79 MB", valueColor: .blue)
+    }
+    .formStyle(.grouped)
+    .preferredColorScheme(.dark)
+}

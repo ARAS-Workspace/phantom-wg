@@ -1,10 +1,12 @@
 import SwiftUI
 
-/// Tunnel detail + editor. Orchestrates the draft/original/errors
-/// state machine and dispatches each visual slice to a dedicated
-/// section view. Field edits are validated on commit (Enter on any
-/// field); invalid commits revert the draft and surface per-field
-/// errors for a short grace period.
+/// Tunnel detail — read-only presentation of the saved configuration
+/// plus live status, stats, and logs. The configuration is read
+/// synchronously off the provider's Keychain reference, so the
+/// sections render instantly; `nil` means the Keychain entry itself
+/// is gone. Editing happens as raw text in `TunnelEditView`
+/// (Actions → Edit Config), enabled only while the tunnel is
+/// inactive — the macOS flow.
 struct TunnelDetailView: View {
     var tunnel: TunnelContainer
     @State var logStore: LogStore
@@ -12,14 +14,11 @@ struct TunnelDetailView: View {
     @Environment(LocalizationManager.self) var loc
     @Environment(\.dismiss) var dismiss
 
-    @State var draft: TunnelDraft = .empty()
-    @State var originalDraft: TunnelDraft = .empty()
-    @State var fieldErrors: [TunnelDraft.Field: FieldValidationError] = [:]
-    @State var fieldErrorClearTask: Task<Void, Never>?
-    /// Distinguishes a programmatic revert (rejection of an invalid
-    /// commit) from a user edit. Set to `true` just before reverting
-    /// the draft; the next `onChange(of: draft)` consumes and resets it.
-    @State var programmaticRevert: Bool = false
+    /// Live read — stays current across edits without any reload
+    /// choreography because the provider is the storage.
+    var config: TunnelConfig? { tunnel.tunnelConfig }
+
+    @State var showingEdit = false
     @State var showingDeleteConfirmation = false
     @State var errorMessage: String?
     @State var showingError = false
@@ -30,92 +29,47 @@ struct TunnelDetailView: View {
     @State var txBytes: String = "—"
     @State var statsPollingTask: Task<Void, Never>?
 
-    /// Config fields are only editable while the tunnel is inactive.
-    var isEditable: Bool { tunnel.status == .inactive }
-
     init(tunnel: TunnelContainer) {
         self.tunnel = tunnel
         _logStore = State(wrappedValue: LogStore(tunnel: tunnel))
     }
 
     var body: some View {
-        List {
-            StatusSection(tunnel: tunnel, isGhost: draft.wstunnel != nil)
+        // A grouped form to match the macOS presentation — every
+        // screen on both platforms renders in one.
+        Form {
+            StatusSection(tunnel: tunnel, isGhost: tunnel.isGhost)
 
             StatsSection(handshake: lastHandshake, rxBytes: rxBytes, txBytes: txBytes)
 
             OnDemandSection(onDemandEnabled: onDemandBinding)
 
-            NameSection(
-                name: $draft.name,
-                isEditable: isEditable,
-                errorMessage: fieldErrors[.name]?.localizedMessage(loc)
-            )
-
-            if let wstunnelBinding = Binding($draft.wstunnel) {
-                WstunnelSection(
-                    draft: wstunnelBinding,
-                    isEditable: isEditable,
-                    fieldErrors: fieldErrors
-                )
-            }
-
-            InterfaceSection(
-                draft: $draft.wireguard.interface,
-                isEditable: isEditable,
-                fieldErrors: fieldErrors
-            )
-
-            PeerSection(
-                draft: $draft.wireguard.peer,
-                isEditable: isEditable,
-                fieldErrors: fieldErrors
-            )
+            configSections
 
             LogNavigationSection(logStore: logStore)
 
             ActionsSection(
                 tunnel: tunnel,
-                copyConfAction: copyConf,
-                copyLogsAction: copyLogs,
+                canCopy: config != nil,
+                copyAction: copyConf,
+                editAction: { showingEdit = true },
                 resetAction: resetConnection,
                 showingDeleteConfirmation: $showingDeleteConfirmation
             )
         }
-        .navigationTitle(draft.name.isEmpty ? loc.t("detail_tunnel") : draft.name)
+        .formStyle(.grouped)
+        .navigationTitle(tunnel.name.isEmpty ? loc.t("detail_tunnel") : tunnel.name)
         .navigationBarTitleDisplayMode(.inline)
-        .onChange(of: draft) { _, _ in
-            // Skip the clearing side-effect when the change originated
-            // from a programmatic revert (invalid commit rollback) so
-            // the accompanying error banner can still be seen.
-            if programmaticRevert {
-                programmaticRevert = false
-                return
-            }
-            // User edit: drop stale errors and cancel the auto-dismiss
-            // timer — the next commit re-validates the full draft.
-            if !fieldErrors.isEmpty {
-                fieldErrors = [:]
-                fieldErrorClearTask?.cancel()
-                fieldErrorClearTask = nil
-            }
-        }
-        .onSubmit {
-            // Native form commit: when any field's Enter fires, validate
-            // the draft and persist if it's clean. Invalid fields show
-            // their errors inline; the draft itself remains editable.
-            commitDraft()
+        .navigationDestination(isPresented: $showingEdit) {
+            TunnelEditView(tunnel: tunnel)
         }
         .onAppear {
-            loadDraft()
             logStore.startPolling()
             if tunnel.status == .active { startStatsPolling() }
         }
         .onDisappear {
             logStore.stopPolling()
             stopStatsPolling()
-            fieldErrorClearTask?.cancel()
-            fieldErrorClearTask = nil
         }
         .alert(loc.t("detail_delete_confirm_title"),
                isPresented: $showingDeleteConfirmation) {
@@ -141,4 +95,79 @@ struct TunnelDetailView: View {
             }
         }
     }
+
+    // MARK: - Configuration
+
+    @ViewBuilder
+    private var configSections: some View {
+        if let config {
+            NameSection(name: config.name)
+
+            if let wstunnel = config.wstunnel {
+                WstunnelSection(config: wstunnel)
+            }
+
+            InterfaceSection(config: config.wireguard.interface)
+
+            PeerSection(config: config.wireguard.peer)
+        } else {
+            Section {
+                Label(loc.t("detail_config_unavailable"), systemImage: "lock.slash")
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .accessibilityIdentifier(AXID.TunnelDetail.configUnavailable)
+            }
+        }
+    }
+}
+
+// MARK: - Previews
+
+#Preview("Active ghost — Light") {
+    let manager = PreviewFixtures.tunnelsManager(providers: [
+        PreviewFixtures.provider(
+            config: PreviewFixtures.ghostConfig(),
+            status: .connected,
+            logLines: PreviewFixtures.logLines
+        )
+    ])
+    return NavigationStack {
+        TunnelDetailView(tunnel: manager.tunnels[0])
+    }
+    .previewEnvironment(tunnels: manager, scheme: .light)
+}
+
+#Preview("Active ghost — Dark") {
+    let manager = PreviewFixtures.tunnelsManager(providers: [
+        PreviewFixtures.provider(
+            config: PreviewFixtures.ghostConfig(),
+            status: .connected,
+            logLines: PreviewFixtures.logLines
+        )
+    ])
+    return NavigationStack {
+        TunnelDetailView(tunnel: manager.tunnels[0])
+    }
+    .previewEnvironment(tunnels: manager, scheme: .dark)
+}
+
+#Preview("Inactive standalone") {
+    let manager = PreviewFixtures.tunnelsManager(providers: [
+        PreviewFixtures.provider(config: PreviewFixtures.wireguardConfig())
+    ])
+    return NavigationStack {
+        TunnelDetailView(tunnel: manager.tunnels[0])
+    }
+    .previewEnvironment(tunnels: manager)
+}
+
+#Preview("Activation error") {
+    let manager = PreviewFixtures.tunnelsManager(providers: [
+        PreviewFixtures.provider(config: PreviewFixtures.ghostConfig())
+    ])
+    manager.tunnels[0].lastActivationError = PreviewFixtures.activationError
+    return NavigationStack {
+        TunnelDetailView(tunnel: manager.tunnels[0])
+    }
+    .previewEnvironment(tunnels: manager)
 }

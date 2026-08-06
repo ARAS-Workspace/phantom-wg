@@ -2,6 +2,7 @@ import SwiftUI
 
 struct LogView: View {
     var logStore: any LogEntryProvider
+    @State private var copied = false
     @Environment(LocalizationManager.self) private var loc
 
     var body: some View {
@@ -41,6 +42,26 @@ struct LogView: View {
         .navigationTitle(loc.t("detail_logs"))
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
+            // Copy is the only practical way to get logs off the
+            // device, so it lives here next to the entries — on
+            // macOS the same lines are selectable text on screen.
+            ToolbarItem(placement: .topBarTrailing) {
+                Button {
+                    UIPasteboard.general.string = logStore.entries
+                        .map { $0.text }
+                        .joined(separator: "\n")
+                    copied = true
+                    Task {
+                        try? await Task.sleep(for: .seconds(2))
+                        copied = false
+                    }
+                } label: {
+                    Label(loc.t("log_copy"),
+                          systemImage: copied ? "checkmark.circle.fill" : "doc.on.doc")
+                }
+                .disabled(logStore.entries.isEmpty)
+                .accessibilityIdentifier(AXID.LogView.copyButton)
+            }
             ToolbarItem(placement: .topBarTrailing) {
                 Button {
                     Task { await logStore.clear() }
@@ -72,4 +93,31 @@ struct LogView: View {
         default:    return .secondary
         }
     }
+}
+
+// MARK: - Previews
+
+#Preview("Streaming — Light") {
+    let store = LogStore(tunnel: nil)
+    store.entries = PreviewFixtures.logEntries
+    return NavigationStack {
+        LogView(logStore: store)
+    }
+    .previewEnvironment(scheme: .light)
+}
+
+#Preview("Streaming — Dark") {
+    let store = LogStore(tunnel: nil)
+    store.entries = PreviewFixtures.logEntries
+    return NavigationStack {
+        LogView(logStore: store)
+    }
+    .previewEnvironment(scheme: .dark)
+}
+
+#Preview("Empty") {
+    NavigationStack {
+        LogView(logStore: LogStore(tunnel: nil))
+    }
+    .previewEnvironment()
 }

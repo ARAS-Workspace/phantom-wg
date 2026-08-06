@@ -1,16 +1,23 @@
 import SwiftUI
 
-/// Footer actions — copy config (.conf), copy logs, and destructive
-/// delete. The copy buttons own their own "Copied!" feedback timer
-/// locally; delete is routed back to the parent's confirmation dialog
-/// via a binding so the destructive action lives at the view root.
-/// Log clearing now lives in `LogView`'s toolbar, symmetrical with
-/// the macOS counterpart and reachable from the same screen where
-/// the entries are shown.
+/// Footer actions — copy-to-clipboard, edit, reset connection, and
+/// delete.
+///
+/// - Copy owns its own "Copied!" feedback timer locally.
+/// - Edit opens `TunnelEditView` (raw-text editing, the WireGuard app
+///   pattern) and is enabled only while the tunnel is inactive.
+/// - Reset is enabled only while the tunnel is active/reasserting;
+///   tapping it asks the extension to restart the tunnel layer in
+///   place (wstunnel + WireGuard in ghost mode, WireGuard alone in
+///   standalone) without touching utun — so no packet escapes to the
+///   physical interface during the reset window.
+/// - Delete is routed back to the parent's confirmation dialog via a
+///   binding so the destructive action lives at the view root.
 struct ActionsSection: View {
     var tunnel: TunnelContainer
-    let copyConfAction: () -> Void
-    let copyLogsAction: () -> Void
+    let canCopy: Bool
+    let copyAction: () -> Void
+    let editAction: () -> Void
     let resetAction: () -> Void
     @Binding var showingDeleteConfirmation: Bool
     @State private var copiedItem: String?
@@ -18,10 +25,15 @@ struct ActionsSection: View {
 
     var body: some View {
         Section {
-            copyButton(loc.t("detail_copy_conf"), icon: "doc.plaintext", id: "conf") { copyConfAction() }
-                .accessibilityIdentifier(AXID.TunnelDetail.Actions.copyConf)
-            copyButton(loc.t("detail_copy_logs"), icon: "text.quote", id: "logs") { copyLogsAction() }
-                .accessibilityIdentifier(AXID.TunnelDetail.Actions.copyLogs)
+            copyButton(loc.t("detail_copy_conf"), icon: "doc.text", id: "conf") { copyAction() }
+                .disabled(!canCopy)
+                .accessibilityIdentifier(AXID.TunnelDetail.Actions.copyButton)
+
+            Button(action: editAction) {
+                Label(loc.t("detail_edit_conf"), systemImage: "square.and.pencil")
+            }
+            .disabled(!canEdit)
+            .accessibilityIdentifier(AXID.TunnelDetail.Actions.editButton)
 
             Button(action: resetAction) {
                 Label(loc.t("detail_reset_connection"), systemImage: "arrow.clockwise")
@@ -41,12 +53,17 @@ struct ActionsSection: View {
         }
     }
 
-    /// Reset is only meaningful while the tunnel is running (or
-    /// already reasserting from a previous reset). Outside that
-    /// window the layer has no in-flight state to restart and no
-    /// `utun` surface to preserve; the button collapses to disabled.
+    /// Reset only applies when the extension is holding the tunnel
+    /// surface. Inactive / deactivating states have no utun to
+    /// preserve; the button collapses to disabled.
     private var canReset: Bool {
         tunnel.status == .active || tunnel.status == .reasserting
+    }
+
+    /// Config edits require a fully stopped tunnel — mirrors the
+    /// delete gate.
+    private var canEdit: Bool {
+        tunnel.status == .inactive
     }
 
     private func copyButton(_ title: String, icon: String, id: String, action: @escaping () -> Void) -> some View {
@@ -63,4 +80,60 @@ struct ActionsSection: View {
             .foregroundStyle(copiedItem == id ? .green : .accentColor)
         }
     }
+}
+
+// MARK: - Previews
+
+#Preview("Active — Light") {
+    let manager = PreviewFixtures.tunnelsManager()
+    return PreviewBindingHost(false) { showingDelete in
+        Form {
+            ActionsSection(
+                tunnel: manager.tunnels[0],
+                canCopy: true,
+                copyAction: {},
+                editAction: {},
+                resetAction: {},
+                showingDeleteConfirmation: showingDelete
+            )
+        }
+        .formStyle(.grouped)
+    }
+    .previewEnvironment(tunnels: manager, scheme: .light)
+}
+
+#Preview("Active — Dark") {
+    let manager = PreviewFixtures.tunnelsManager()
+    return PreviewBindingHost(false) { showingDelete in
+        Form {
+            ActionsSection(
+                tunnel: manager.tunnels[0],
+                canCopy: true,
+                copyAction: {},
+                editAction: {},
+                resetAction: {},
+                showingDeleteConfirmation: showingDelete
+            )
+        }
+        .formStyle(.grouped)
+    }
+    .previewEnvironment(tunnels: manager, scheme: .dark)
+}
+
+#Preview("Inactive — delete enabled") {
+    let manager = PreviewFixtures.tunnelsManager()
+    return PreviewBindingHost(false) { showingDelete in
+        Form {
+            ActionsSection(
+                tunnel: manager.tunnels[1],
+                canCopy: true,
+                copyAction: {},
+                editAction: {},
+                resetAction: {},
+                showingDeleteConfirmation: showingDelete
+            )
+        }
+        .formStyle(.grouped)
+    }
+    .previewEnvironment(tunnels: manager)
 }
