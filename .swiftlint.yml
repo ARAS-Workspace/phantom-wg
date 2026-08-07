@@ -34,13 +34,9 @@ identifier_name:
     error: 60
   excluded:
     - id    # Identifiable protocol
-    - db    # database (SharedLogger)
-    - ts    # timestamp
     - tr    # Turkish locale
     - en    # English locale
     - vc    # view controller
-    - ok    # boolean result
-    - v     # closure parameter (Binding get/set)
     - f     # formatter
     - h     # hours
     - m     # minutes

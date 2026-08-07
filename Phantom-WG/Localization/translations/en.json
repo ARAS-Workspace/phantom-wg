@@ -5,20 +5,18 @@
   "ok": "OK",
   "cancel": "Cancel",
   "delete": "Delete",
-
   "tunnel_list_empty_title": "No Tunnels",
   "tunnel_list_empty_description": "Import a config to get started.",
   "tunnel_list_section_header": "Tunnel List",
   "tunnel_list_no_active": "No active tunnel",
   "website": "Website",
   "documentation": "Documentation",
-
   "detail_transfer": "Transfer",
   "detail_handshake": "Handshake",
   "detail_received": "Received",
   "detail_sent": "Sent",
   "detail_on_demand": "Activate On Demand",
-  "detail_on_demand_footer": "The system starts the tunnel automatically whenever a network connection is available and keeps it up — even while the app is closed and after the device restarts. Turning the tunnel switch off also disables this rule.",
+  "detail_on_demand_footer": "The system starts the tunnel automatically whenever a network connection is available and keeps it up — even while the app is closed and after the device restarts. Turning the tunnel switch off also disables this rule. Starting another tunnel also disables this rule.",
   "detail_general": "General",
   "detail_name": "Name",
   "detail_wstunnel": "Wstunnel",
@@ -54,24 +52,19 @@
   "log_empty_description": "Logs will appear here when the tunnel is active.",
   "log_copy": "Copy Logs",
   "log_clear": "Clear",
-
   "edit_title": "Edit Tunnel",
   "edit_save": "Save",
   "edit_footer": "Edit the configuration freely; saving runs it through the same validation steps as import.",
-
   "time_just_now": "just now",
   "time_seconds_ago": "%ds ago",
   "time_minutes_seconds_ago": "%dm %ds ago",
   "time_hours_minutes_ago": "%dh %dm ago",
-
   "status_inactive": "Inactive",
   "status_activating": "Activating",
   "status_active": "Active",
   "status_deactivating": "Deactivating",
   "status_reasserting": "Reasserting",
-  "status_restarting": "Restarting",
   "status_waiting": "Waiting",
-
   "import_title": "Import Tunnel",
   "import_configuration": "Configuration",
   "import_name_section": "Tunnel Name",
@@ -81,17 +74,13 @@
   "import_scan_qr": "Scan QR Code",
   "import_paste": "Paste from Clipboard",
   "import_button": "Import",
-
   "import_err_empty_name": "Configuration name is required.",
-
   "parse_err_empty_input": "Configuration is empty.",
   "parse_err_no_interface": "Missing [Interface] section.",
   "parse_err_no_peer": "Missing [Peer] section.",
   "parse_err_missing_key": "[%@] missing required key: %@",
   "parse_err_invalid_tunnel": "[%@] invalid %@: expected udp://host:port:host:port",
-
   "field_err_empty": "Required.",
-  "field_err_name_exists": "A tunnel with this name already exists.",
   "field_err_key_not_base64": "Not valid base64.",
   "field_err_key_wrong_length": "Expected 32 bytes, got %d.",
   "field_err_list_entry": "Entry %d: %@",
@@ -109,7 +98,6 @@
   "field_err_url_missing_host": "URL is missing the host component.",
   "field_err_int_not_parsed": "'%@' is not a valid integer.",
   "field_err_int_out_of_range": "Value %d out of range [%d...%d].",
-
   "error_starting_failed": "Could not activate tunnel. %@",
   "error_saving_failed": "Could not save tunnel configuration. %@",
   "error_loading_failed": "Could not load tunnel configuration. %@",

@@ -35,6 +35,11 @@ final class PreviewTunnelProvider: TunnelProviding {
 
     private(set) var connectionStatus: NEVPNStatus
 
+    /// When set, `startTunnel` drops the session instead of
+    /// connecting and `fetchLastDisconnectError` reports this —
+    /// the canvas twin of the system's disconnect record.
+    var disconnectError: Error?
+
     // MARK: - Canned Telemetry
 
     private var logLines: [LogLine]
@@ -69,7 +74,7 @@ final class PreviewTunnelProvider: TunnelProviding {
 
     func startTunnel() throws {
         transition(to: .connecting)
-        scheduleTransition(to: .connected, after: 0.8)
+        scheduleTransition(to: disconnectError == nil ? .connected : .disconnected, after: 0.8)
     }
 
     func stopTunnel() {
@@ -85,7 +90,7 @@ final class PreviewTunnelProvider: TunnelProviding {
             responseHandler(try? JSONEncoder().encode(logLines))
         case 2:
             logLines.removeAll()
-            responseHandler(Data())
+            responseHandler(Data([2]))
         case 3:
             responseHandler(Data())
         default:
@@ -115,9 +120,8 @@ final class PreviewTunnelProvider: TunnelProviding {
 
     // MARK: - Diagnostics
 
-    /// Previews never simulate a system-side disconnect record.
     func fetchLastDisconnectError(completion: @escaping @Sendable (Error?) -> Void) {
-        completion(nil)
+        completion(disconnectError)
     }
 
     // MARK: - Status Simulation

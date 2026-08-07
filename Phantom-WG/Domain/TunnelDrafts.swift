@@ -8,7 +8,6 @@ import Foundation
 /// one place (the view).
 enum FieldValidationError: Equatable {
     case empty
-    case nameAlreadyExists
     case wireGuardKey(WireGuardKey.ParseError)
     case address(AddressWithPrefix.ParseError, atIndex: Int)
     case ipAddress(IPAddressEntry.ParseError, atIndex: Int)
@@ -54,8 +53,6 @@ struct TunnelDraft: Equatable {
     struct ValidationResult {
         let config: TunnelConfig?
         let errors: [Field: FieldValidationError]
-
-        var isValid: Bool { config != nil }
     }
 
     // MARK: Init

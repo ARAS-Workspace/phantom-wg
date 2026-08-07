@@ -9,7 +9,9 @@ class TunnelContainer: Identifiable {
     /// Stable identity captured at init. Using the persisted `TunnelConfig.id`
     /// keeps `ForEach` diffing correct across renames — unlike the display
     /// name, the UUID never changes once the tunnel is saved. A fresh UUID
-    /// is used as fallback for transient states where no config is attached.
+    /// is the fallback for a tunnel whose Keychain payload cannot be
+    /// read — and since it is minted per container, reload never matches
+    /// such a tunnel by identity again.
     let id: UUID
 
     var name: String

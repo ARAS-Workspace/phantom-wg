@@ -12,9 +12,6 @@ extension FieldValidationError {
         case .empty:
             return loc.t("field_err_empty")
 
-        case .nameAlreadyExists:
-            return loc.t("field_err_name_exists")
-
         case .wireGuardKey(let err):
             return wireGuardKeyErrorMessage(err, loc: loc)
 

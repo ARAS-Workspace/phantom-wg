@@ -12,9 +12,9 @@ class TunnelsManager {
     @ObservationIgnored private var configObservationToken: AnyObject?
     @ObservationIgnored private var waitingTunnel: TunnelContainer?
 
-    // Activation parameters (overridable for tests)
-    @ObservationIgnored var retryInterval: TimeInterval = 5.0
-    @ObservationIgnored var maxRetries: Int = 8
+    // Activation pacing
+    let retryInterval: TimeInterval = 5.0
+    let maxRetries: Int = 8
 
     // MARK: - Factory
 

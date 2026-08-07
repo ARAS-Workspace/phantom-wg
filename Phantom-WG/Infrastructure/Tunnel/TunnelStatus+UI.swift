@@ -8,7 +8,7 @@ extension TunnelStatus {
         switch self {
         case .active:
             return .green
-        case .activating, .waiting, .reasserting, .restarting, .deactivating:
+        case .activating, .waiting, .reasserting, .deactivating:
             return .orange
         case .inactive:
             return .secondary
@@ -20,7 +20,7 @@ extension TunnelStatus {
         switch self {
         case .active:
             return "shield.checkered"
-        case .activating, .waiting, .reasserting, .restarting:
+        case .activating, .waiting, .reasserting:
             return "arrow.triangle.2.circlepath"
         case .deactivating:
             return "arrow.down.circle"
@@ -32,7 +32,7 @@ extension TunnelStatus {
     /// Toggle switch ON state derived from the status.
     var isToggleOn: Bool {
         switch self {
-        case .active, .activating, .waiting, .reasserting, .restarting:
+        case .active, .activating, .waiting, .reasserting:
             return true
         case .inactive, .deactivating:
             return false

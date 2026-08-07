@@ -7,7 +7,6 @@ enum TunnelStatus: Equatable {
     case active
     case deactivating
     case reasserting
-    case restarting
     case waiting
 
     init(from systemStatus: NEVPNStatus) {
@@ -37,7 +36,6 @@ enum TunnelStatus: Equatable {
         case .active: return loc.t("status_active")
         case .deactivating: return loc.t("status_deactivating")
         case .reasserting: return loc.t("status_reasserting")
-        case .restarting: return loc.t("status_restarting")
         case .waiting: return loc.t("status_waiting")
         }
     }
