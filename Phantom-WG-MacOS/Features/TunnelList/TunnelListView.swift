@@ -4,6 +4,8 @@ struct TunnelListView: View {
     @Environment(TunnelsManager.self) private var tunnelsManager
     @Environment(LocalizationManager.self) private var loc
     @Environment(ExtensionGateCoordinator.self) private var gateCoordinator
+    @Environment(SplitTunnelingSessionCoordinator.self) private var sessionCoordinator
+    @Environment(SplitTunnelingStore.self) private var splitTunnelingStore
 
     @State private var showingImport = false
     @State private var errorMessage: String?
@@ -144,16 +146,24 @@ struct TunnelListView: View {
                 // follows does not bring the tunnels back.
                 try await tunnelsManager.purgeVault()
 
+                // Split-tunneling leaves nothing behind either: the
+                // running session stops, both proxy preference entries
+                // and the App Group config file are deleted —
+                // best-effort, since whatever survives is exactly what
+                // the uninstall copy tells the user to remove by hand.
+                await sessionCoordinator.purgeForUninstall()
+                splitTunnelingStore.purgePersistedConfiguration()
+
                 // Sequential deactivation of all three system
                 // extensions (Tunnel + Split-Tunnel + DNSProxy).
-                // VPN configurations stored in
-                // NETunnelProviderManager preferences are left in
-                // place: every `removeFromPreferences` triggers an
-                // "Allow VPN Configurations" consent prompt with no
-                // API to batch them; without the system extensions
-                // the configurations are inert — and should the
-                // extensions ever return, reconcile clears the
-                // now-unbacked entries. On success every
+                // Tunnel (VPN) configurations stored in
+                // NETunnelProviderManager preferences are the one
+                // thing left in place: every `removeFromPreferences`
+                // triggers an "Allow VPN Configurations" consent
+                // prompt with no API to batch them; without the
+                // system extensions the configurations are inert —
+                // and should the extensions ever return, reconcile
+                // clears the now-unbacked entries. On success every
                 // controller settles to `.notInstalled`,
                 // `coordinator.allReady` flips to false and
                 // `PhantomApp` falls back to `ExtensionGateView`.

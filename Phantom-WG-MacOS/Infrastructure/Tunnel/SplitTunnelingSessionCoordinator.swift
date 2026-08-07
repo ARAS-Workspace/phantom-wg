@@ -136,6 +136,19 @@ final class SplitTunnelingSessionCoordinator {
         log("stop: state = .stopped")
     }
 
+    // MARK: - Uninstall
+
+    /// Uninstall-path cleanup: stops a running session, then deletes
+    /// both proxy preference entries. Best-effort by design — whatever
+    /// survives is exactly what the uninstall copy already tells the
+    /// user how to remove by hand.
+    func purgeForUninstall() async {
+        await stop()
+        await split.remove()
+        await dns.remove()
+        log("purgeForUninstall: proxy preference entries removed")
+    }
+
     /// Live config change. App pushes the new payload to both
     /// extensions independently via XPC `applyConfig` — SplitTunnel
     /// and DNSProxy each through their own daemon client.
