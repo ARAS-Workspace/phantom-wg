@@ -80,7 +80,12 @@ struct TunnelConfig: Codable, Identifiable, Equatable {
             lines.append("PresharedKey = \(psk.textual)")
         }
         lines.append("AllowedIPs = \(wireguard.peer.allowedIPs.map(\.textual).joined(separator: ", "))")
-        lines.append("Endpoint = \(wireguard.peer.endpoint.textual)")
+        // Ghost rule: the endpoint is system-defined from the wstunnel
+        // listener, so it is never serialized next to a [Wstunnel]
+        // section — not even when a legacy config still carries one.
+        if wstunnel == nil, let endpoint = wireguard.peer.endpoint {
+            lines.append("Endpoint = \(endpoint.textual)")
+        }
         lines.append("PersistentKeepalive = \(wireguard.peer.persistentKeepalive)")
 
         return lines.joined(separator: "\n")
@@ -112,7 +117,12 @@ struct PeerConfig: Codable, Equatable {
     var publicKey: WireGuardKey
     var presharedKey: WireGuardKey?
     var allowedIPs: [AddressWithPrefix]
-    var endpoint: IPEndpoint
+    /// Absent in Ghost mode: with a wstunnel bridge in front, the
+    /// WireGuard endpoint is system-defined as the bridge's local
+    /// listener (`localHost:localPort`) and is never user data.
+    /// Legacy blobs that still carry one decode fine; the value is
+    /// simply not consulted while a `[Wstunnel]` section exists.
+    var endpoint: IPEndpoint?
     var persistentKeepalive: Int
 
     enum CodingKeys: String, CodingKey {

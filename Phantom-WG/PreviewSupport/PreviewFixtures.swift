@@ -29,12 +29,14 @@ enum PreviewFixtures {
 
     // MARK: - Tunnel Configs
 
-    /// Ghost-mode config: WireGuard riding a wstunnel bridge.
+    /// Ghost-mode config: WireGuard riding a wstunnel bridge. Carries
+    /// no peer endpoint — in Ghost mode the endpoint is system-defined
+    /// from the wstunnel listener.
     static func ghostConfig(name: String = "Istanbul Edge") -> TunnelConfig {
         TunnelConfig(
             name: name,
             createdAt: Date(timeIntervalSinceReferenceDate: 790_000_000),
-            wireguard: wireguardPayload(seed: 10),
+            wireguard: wireguardPayload(seed: 10, endpoint: nil),
             wstunnel: WstunnelConfig(
                 url: parsed(try WstunnelURL(parsing: "wss://edge.phantom.tc")),
                 secret: "preview-secret",
@@ -51,11 +53,14 @@ enum PreviewFixtures {
         TunnelConfig(
             name: name,
             createdAt: Date(timeIntervalSinceReferenceDate: 789_000_000),
-            wireguard: wireguardPayload(seed: 40)
+            wireguard: wireguardPayload(
+                seed: 40,
+                endpoint: parsed(try IPEndpoint(parsing: "192.0.2.10:51820"))
+            )
         )
     }
 
-    private static func wireguardPayload(seed: UInt8) -> WireguardConfig {
+    private static func wireguardPayload(seed: UInt8, endpoint: IPEndpoint?) -> WireguardConfig {
         WireguardConfig(
             interface: InterfaceConfig(
                 privateKey: key(seed: seed),
@@ -76,7 +81,7 @@ enum PreviewFixtures {
                     parsed(try AddressWithPrefix(parsing: "0.0.0.0/0")),
                     parsed(try AddressWithPrefix(parsing: "::/0"))
                 ],
-                endpoint: parsed(try IPEndpoint(parsing: "192.0.2.10:51820")),
+                endpoint: endpoint,
                 persistentKeepalive: 25
             )
         )

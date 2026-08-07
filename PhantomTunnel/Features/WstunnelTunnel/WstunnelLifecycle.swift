@@ -5,9 +5,10 @@ enum WstunnelLifecycle {
     private static var isStarted = false
 
     /// Starts the wstunnel local UDP proxy with the given configuration.
-    /// All fields are pre-validated by `WstunnelConfig`'s typed init —
-    /// non-empty URL, resolvable host, and ports in the UInt16 range
-    /// are guaranteed at this point.
+    /// The UDP listener binds to `localHost:localPort` — the same pair
+    /// Ghost mode builds the WireGuard endpoint from — so the two sides
+    /// meet by construction. Fields arrive decoded straight from the
+    /// Keychain blob, not through the draft validator, hence the guard.
     static func start(config: WstunnelConfig) throws {
         guard !config.remoteHost.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
             TunnelLogger.log(.wstunnel, "ERROR: empty remoteHost")
@@ -30,6 +31,7 @@ enum WstunnelLifecycle {
             try wsConfig.setRemoteURL(config.url.textual)
             try wsConfig.setHTTPUpgradePathPrefix(config.secret)
             try wsConfig.addTunnelUDP(
+                localHost: config.localHost,
                 localPort: config.localPort,
                 remoteHost: config.remoteHost,
                 remotePort: config.remotePort
