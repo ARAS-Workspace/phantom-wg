@@ -96,13 +96,6 @@ final class ProxyConfigDaemon: NSObject, NSXPCListenerDelegate, ProxyConfigDaemo
         os_log("daemon listening", log: log, type: .default)
     }
 
-    func stop() {
-        guard isStarted else { return }
-        listener.invalidate()
-        isStarted = false
-        os_log("daemon stopped", log: log, type: .default)
-    }
-
     // MARK: - NSXPCListenerDelegate
 
     func listener(

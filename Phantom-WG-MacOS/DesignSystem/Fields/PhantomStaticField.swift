@@ -27,7 +27,7 @@ struct PhantomStaticField: View {
 
 // MARK: - Previews
 
-#Preview {
+#Preview("Light") {
     Form {
         Section {
             PhantomStaticField(label: "Endpoint", value: "edge.phantom.tc:51820")
@@ -36,4 +36,17 @@ struct PhantomStaticField: View {
     }
     .formStyle(.grouped)
     .frame(width: 560)
+    .preferredColorScheme(.light)
+}
+
+#Preview("Dark") {
+    Form {
+        Section {
+            PhantomStaticField(label: "Endpoint", value: "edge.phantom.tc:51820")
+            PhantomStaticField(label: "MTU", value: "1420")
+        }
+    }
+    .formStyle(.grouped)
+    .frame(width: 560)
+    .preferredColorScheme(.dark)
 }

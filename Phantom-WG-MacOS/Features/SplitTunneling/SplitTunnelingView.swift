@@ -7,7 +7,6 @@ import Network
 struct SplitTunnelingView: View {
     @Environment(SplitTunnelingStore.self) private var store
     @Environment(SplitTunnelingSessionCoordinator.self) private var sessionCoordinator
-    @Environment(SplitTunnelProviderManager.self) private var providerManager
     @Environment(DNSProxyProviderManager.self) private var dnsProviderManager
     @Environment(DNSProxyDaemonClient.self) private var dnsDaemonClient
     @Environment(SplitTunnelDaemonClient.self) private var splitDaemonClient

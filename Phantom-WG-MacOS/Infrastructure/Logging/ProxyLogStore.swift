@@ -62,7 +62,6 @@ final class ProxyLogStore: LogEntryProvider {
                 LogEntry(
                     id: index,
                     tag: tag,
-                    timestamp: "",
                     text: String(line)
                 )
             }

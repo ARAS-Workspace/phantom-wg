@@ -1,6 +1,5 @@
 import Network
 import NetworkExtension
-import os.log
 
 /// One UDP flow can send datagrams to many destinations from a single
 /// socket (DNS, QUIC, game servers, …), so we maintain a per-endpoint
@@ -27,11 +26,6 @@ final class UDPFlowRelay {
     /// the relay after `FlowRelay.relay` returns, so we anchor ourselves
     /// until `close()` fires.
     private var selfRef: UDPFlowRelay?
-
-    private let log = OSLog(
-        subsystem: "com.remrearas.Phantom-WG-MacOS.PhantomSplitTunnel",
-        category: "relay.udp"
-    )
 
     init(
         flow: NEAppProxyUDPFlow,

@@ -142,8 +142,8 @@ final class ExtensionGateCoordinator {
     // MARK: - Actions
 
     /// Pull ground-truth state from the OS for every controller. The
-    /// top-level "Tekrar Kontrol Et" button and the foreground
-    /// observer both bind to this; per-row buttons bind to the
+    /// top-level check-again button (`gate_check_again`) and the
+    /// foreground observer both bind to this; per-row buttons bind to the
     /// individual controller's `activate()`. Controllers still inside
     /// their boot measurement are skipped — the settle tree owns the
     /// verdict until it returns.

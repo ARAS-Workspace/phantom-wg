@@ -81,8 +81,8 @@ enum AppBundleValidator {
     /// common name. Apple's Developer ID certs look like
     /// "Developer ID Application: Apple Inc. (APPLECOMPUTER)" — we
     /// strip the prefix and the parenthesised team ID so the user sees
-    /// just "Apple Inc.". Nil when parsing fails; the UI falls back to
-    /// the team identifier in that case.
+    /// just "Apple Inc.". Nil when parsing fails; the app-list row
+    /// then simply omits its team line.
     private static func extractTeamName(from info: [String: Any]) -> String? {
         guard let certs = info["certificates"] as? [SecCertificate],
               let leaf = certs.first else {

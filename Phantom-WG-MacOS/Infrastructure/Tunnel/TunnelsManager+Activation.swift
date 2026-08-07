@@ -122,10 +122,10 @@ extension TunnelsManager {
     /// rebuilt. Triggered by the user's "Reset Connection" button
     /// when the tunnel appears stuck.
     ///
-    /// Extension uses opcode `3`; the handler runs the stop/start
-    /// sequence asynchronously. This wrapper returns as soon as the
-    /// message is acknowledged — the full reset may take a second
-    /// or two after the ACK while WireGuard renegotiates.
+    /// Extension uses opcode `3`; the handler replies only after the
+    /// full stop/start sequence completes, so this wrapper returning
+    /// means the layer has been rebuilt (the WireGuard handshake
+    /// itself may still be settling).
     func resetConnection(of tunnel: TunnelContainer) async throws {
         guard tunnel.status == .active || tunnel.status == .reasserting else { return }
 

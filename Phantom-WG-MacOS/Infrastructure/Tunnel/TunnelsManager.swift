@@ -302,7 +302,7 @@ class TunnelsManager {
     }
 
     /// Creates and persists the system entry for a config, then adds
-    /// it to the list. Shared by `add` and `restore`.
+    /// it to the list. Shared by `add` and the reconcile restore path.
     private func createEntry(for config: TunnelConfig) async throws -> TunnelContainer {
         let provider = providerFactory.makeProvider()
         provider.localizedDescription = config.name
@@ -457,10 +457,6 @@ class TunnelsManager {
             tunnel.status = newStatus
 
             if newStatus == .inactive {
-                let onDeactivated = tunnel.onDeactivated
-                tunnel.onDeactivated = nil
-                onDeactivated?(tunnel)
-
                 activateWaitingTunnelIfNeeded()
             }
         }

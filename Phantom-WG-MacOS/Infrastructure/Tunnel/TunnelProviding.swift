@@ -16,7 +16,6 @@ protocol TunnelProviding: AnyObject {
 
     /// Identity only — a tunnel's secrets live in the extension's
     /// System keychain vault, reached through `TunnelVaultClient`.
-    var protocolConfiguration: NEVPNProtocol? { get set }
     var tunnelIdentity: TunnelIdentity? { get }
     func configure(with identity: TunnelIdentity)
 

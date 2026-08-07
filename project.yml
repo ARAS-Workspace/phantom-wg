@@ -115,11 +115,11 @@ targets:
         com.apple.security.network.client: true
         com.apple.security.files.user-selected.read-write: true
         # Two app-groups: the conventional `group.<id>` shared
-        # container, plus the TeamID-prefixed wildcard `9C5SL5H7CM.*`
-        # that authorizes this sandboxed app to look up Mach services
-        # whose name starts with the team identifier — needed for
-        # `NSXPCConnection` to the DNSProxy sysex's daemon (registered
-        # as `9C5SL5H7CM.com.remrearas.Phantom-WG-MacOS.PhantomDNSProxy`).
+        # container — its literal also prefixes every sysex Mach
+        # service name (`….tunnelvault` / `….splittunnel` /
+        # `….dnsproxy`), which is what authorizes this sandboxed
+        # app's `NSXPCConnection` lookups — plus the TeamID-prefixed
+        # wildcard `9C5SL5H7CM.*` carried by the provisioning profile.
         com.apple.security.application-groups:
           - group.com.remrearas.phantom-wg-macos
           - 9C5SL5H7CM.*
@@ -139,18 +139,15 @@ targets:
         excludes:
           - "**/.DS_Store"
       # App↔extension shared interface — config models, persistence
-      # bridge, group ID, wstunnel bridge.
+      # bridge, wstunnel bridge.
       - path: Phantom-WG-MacOS/Domain/Configuration/TunnelConfig.swift
       - path: Phantom-WG-MacOS/Domain/Configuration/ConfigTypes.swift
-      - path: Phantom-WG-MacOS/Domain/Configuration/SplitTunnelingConfiguration.swift
       - path: Phantom-WG-MacOS/Infrastructure/Persistence/NETunnelProviderProtocol+Config.swift
       - path: Phantom-WG-MacOS/Domain/IPC/TunnelVaultDaemonProtocol.swift
       - path: Phantom-WG-MacOS/Domain/IPC/ExtensionIdentity.swift
-      - path: Phantom-WG-MacOS/Shared/SharedConstants.swift
       - path: Phantom-WG-MacOS/Shared/WstunnelBridge.swift
-      # Extension-only shared domain — flow matching engine, and the
-      # System-keychain vault that holds every tunnel's secrets.
-      - path: Extensions/Domain/Matching/FlowDecisionEngine.swift
+      # Extension-only shared domain — the System-keychain vault
+      # that holds every tunnel's secrets.
       - path: Extensions/Domain/Security/SystemKeychainVault.swift
     dependencies:
       - package: WireGuardKit
@@ -244,13 +241,12 @@ targets:
         excludes:
           - "**/.DS_Store"
       # App↔extension shared interface — model + Mach service
-      # contract + group ID. Lives under the App tree because it
-      # crosses the App/extension boundary.
+      # contract. Lives under the App tree because it crosses the
+      # App/extension boundary.
       - path: Phantom-WG-MacOS/Domain/Configuration/SplitTunnelingConfiguration.swift
       - path: Phantom-WG-MacOS/Domain/IPC/ProxyConfigDaemonProtocol.swift
       - path: Phantom-WG-MacOS/Domain/IPC/ExtensionIdentity.swift
       - path: Extensions/Domain/IPC/ProxyConfigDaemon.swift
-      - path: Phantom-WG-MacOS/Shared/SharedConstants.swift
       # Extension-only shared domain — ring-buffer logger, matching
       # engine, interface watcher.
       - path: Extensions/Domain/Logging/RingBufferLogger.swift
@@ -317,13 +313,12 @@ targets:
         excludes:
           - "**/.DS_Store"
       # App↔extension shared interface — model + Mach service
-      # contract + group ID. DNSProxy absorbs the port 53 flows
-      # SplitTunnel carves out via excludedNetworkRules.
+      # contract. DNSProxy absorbs the port 53 flows SplitTunnel
+      # carves out via excludedNetworkRules.
       - path: Phantom-WG-MacOS/Domain/Configuration/SplitTunnelingConfiguration.swift
       - path: Phantom-WG-MacOS/Domain/IPC/ProxyConfigDaemonProtocol.swift
       - path: Phantom-WG-MacOS/Domain/IPC/ExtensionIdentity.swift
       - path: Extensions/Domain/IPC/ProxyConfigDaemon.swift
-      - path: Phantom-WG-MacOS/Shared/SharedConstants.swift
       # Extension-only shared domain — ring-buffer logger, matching
       # engine, interface watcher.
       - path: Extensions/Domain/Logging/RingBufferLogger.swift
@@ -369,8 +364,8 @@ targets:
           # NE framework publishes this Mach service to launchd at
           # sysex activation, bridging the user-namespace ↔
           # system-namespace bootstrap split. The constant on the
-          # Swift side (`DNSProxyDaemonConfig.machServiceName`)
-          # carries the byte-identical string.
+          # Swift side (`ProxyConfigService.dnsProxy`) carries the
+          # byte-identical string.
           NEMachServiceName: group.com.remrearas.phantom-wg-macos.dnsproxy
           NEProviderClasses:
             com.apple.networkextension.dns-proxy: $(PRODUCT_MODULE_NAME).DNSProxyProvider
@@ -381,14 +376,12 @@ targets:
           - dns-proxy-systemextension
         com.apple.security.app-sandbox: true
         # Two app-groups: the conventional `group.<id>` one for the
-        # shared container, plus the TeamID-prefixed wildcard
-        # `9C5SL5H7CM.*` that authorizes this sandboxed sysex to
-        # register a Mach service whose name starts with the team
-        # identifier (per the embedded provisioning profile, which
-        # already permits this wildcard). Without the wildcard
-        # claim the sysex declares a Mach service in Info.plist
-        # that its entitlements aren't authorized for, and OS sysex
-        # validation rejects activation with `validationFailed`.
+        # shared container — its literal also prefixes this sysex's
+        # Mach service name (`….dnsproxy`, NEMachServiceName above) —
+        # plus the TeamID-prefixed wildcard `9C5SL5H7CM.*` (per the
+        # embedded provisioning profile, which already permits it).
+        # Field observation: without the wildcard claim, OS sysex
+        # validation rejected activation with `validationFailed`.
         com.apple.security.application-groups:
           - group.com.remrearas.phantom-wg-macos
           - 9C5SL5H7CM.*

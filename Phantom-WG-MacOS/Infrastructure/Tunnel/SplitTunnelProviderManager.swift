@@ -26,8 +26,10 @@ class SplitTunnelProviderManager {
 
     // MARK: - Load
 
-    /// Discovers or creates the preference entry. Must be called
-    /// after the system extension reports `.activated`.
+    /// Finds the existing preference entry, or falls back to a fresh
+    /// in-memory manager — the entry itself is first persisted by
+    /// `enable()`'s save. Production caller is the session
+    /// coordinator's `boot(with:)`.
     func load() async {
         do {
             let managers = try await NETransparentProxyManager.loadAllFromPreferences()
@@ -35,7 +37,7 @@ class SplitTunnelProviderManager {
             attachStatusObserver()
             refreshSessionStatus()
         } catch {
-            // load is non-fatal — the gate retries via reload.
+            // load is non-fatal — the next boot()/start() pass retries.
         }
     }
 

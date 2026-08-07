@@ -4,8 +4,8 @@ import AppKit
 /// Root-level gate panel rendered whenever any of the three required
 /// system extensions is not in `.activated`. Lists the three
 /// extensions, surfaces the per-row status with a contextual action
-/// button, and offers a single "Tekrar Kontrol Et" entry that
-/// re-pulls ground-truth state for all three at once.
+/// button, and offers a single check-again entry (`gate_check_again`)
+/// that re-pulls ground-truth state for all three at once.
 struct ExtensionGateView: View {
     @Environment(ExtensionGateCoordinator.self) private var coordinator
     @Environment(LocalizationManager.self) private var loc

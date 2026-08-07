@@ -7,8 +7,8 @@ private let extLog = OSLog(subsystem: "com.remrearas.Phantom-WG-MacOS.PhantomTun
 class PacketTunnelProvider: NEPacketTunnelProvider {
 
     private lazy var adapter: WireGuardAdapter = {
-        WireGuardAdapter(with: self) { logLevel, message in
-            wg_log(logLevel.osLogLevel, message: message)
+        WireGuardAdapter(with: self) { _, message in
+            wg_log(message: message)
         }
     }()
 

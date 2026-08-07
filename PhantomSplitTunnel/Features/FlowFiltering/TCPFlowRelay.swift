@@ -8,9 +8,10 @@ import os.log
 /// Faithfully propagates NWError to the flow on failure so the source
 /// app sees the real network error rather than a synthetic reset.
 ///
-/// The relay retains itself via the closures passed to flow/connection
-/// callbacks. When `close(error:)` fires it drops those callbacks and
-/// the instance deallocates naturally — no manual lifecycle wiring.
+/// The relay keeps itself alive through an explicit `selfRef` anchor
+/// (documented below) for as long as the flow runs; the callbacks all
+/// capture `self` weakly, and `close(error:)` nils the anchor so ARC
+/// reclaims the instance once the flow ends.
 final class TCPFlowRelay {
 
     private let flow: NEAppProxyTCPFlow

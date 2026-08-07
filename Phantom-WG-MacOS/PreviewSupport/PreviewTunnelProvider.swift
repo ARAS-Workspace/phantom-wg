@@ -26,7 +26,6 @@ final class PreviewTunnelProvider: TunnelProviding {
 
     var localizedDescription: String?
     var isEnabled: Bool = true
-    var protocolConfiguration: NEVPNProtocol?
 
     private(set) var config: TunnelConfig?
     var tunnelIdentity: TunnelIdentity? { config?.identity }

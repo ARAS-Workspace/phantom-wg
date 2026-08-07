@@ -154,7 +154,6 @@ enum PreviewFixtures {
             LogEntry(
                 id: index,
                 tag: line.tag,
-                timestamp: line.timestamp,
                 text: "[\(line.timestamp)][\(line.tag)] \(line.message)"
             )
         }

@@ -2,12 +2,11 @@ import SwiftUI
 import AppKit
 import UniformTypeIdentifiers
 
-/// Active log channel. Tag rawValues double as filename stems for
-/// the Save flow.
-enum LogChannel: String, CaseIterable, Identifiable {
+/// Active log channel. The Save flow derives its filename stem from
+/// the selected case directly.
+enum LogChannel {
     case split
     case dns
-    var id: String { rawValue }
 }
 
 /// Tabbed log panel hosting SplitTunnel relay logs and DNSProxy
@@ -200,14 +199,14 @@ struct LogTabsSection: View {
 #Preview {
     let splitStore = ProxyLogStore(daemonClient: SplitTunnelDaemonClient(), tag: "SPL")
     splitStore.entries = [
-        LogEntry(id: 0, tag: "SPL", timestamp: "", text: "[12:04:12] flow com.apple.Safari → en0 (bypass)"),
-        LogEntry(id: 1, tag: "SPL", timestamp: "", text: "[12:04:13] flow org.videolan.vlc → en0 (bypass)"),
-        LogEntry(id: 2, tag: "SPL", timestamp: "", text: "[12:04:15] flow com.example.app → default route")
+        LogEntry(id: 0, tag: "SPL", text: "[12:04:12] flow com.apple.Safari → en0 (bypass)"),
+        LogEntry(id: 1, tag: "SPL", text: "[12:04:13] flow org.videolan.vlc → en0 (bypass)"),
+        LogEntry(id: 2, tag: "SPL", text: "[12:04:15] flow com.example.app → default route")
     ]
     let dnsStore = ProxyLogStore(daemonClient: DNSProxyDaemonClient(), tag: "DNS")
     dnsStore.entries = [
-        LogEntry(id: 0, tag: "DNS", timestamp: "", text: "[12:04:12] query safari.apple.com A via en0"),
-        LogEntry(id: 1, tag: "DNS", timestamp: "", text: "[12:04:14] query update.vlc.org AAAA via en0")
+        LogEntry(id: 0, tag: "DNS", text: "[12:04:12] query safari.apple.com A via en0"),
+        LogEntry(id: 1, tag: "DNS", text: "[12:04:14] query update.vlc.org AAAA via en0")
     ]
     return Form {
         LogTabsSection(splitLogStore: splitStore, dnsLogStore: dnsStore)

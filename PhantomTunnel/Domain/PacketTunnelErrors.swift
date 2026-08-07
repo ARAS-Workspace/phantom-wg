@@ -1,6 +1,3 @@
-import os.log
-import WireGuardKit
-
 enum PacketTunnelProviderError: String, Error {
     case savedProtocolConfigurationIsInvalid
     case invalidWstunnelConfig
@@ -8,15 +5,8 @@ enum PacketTunnelProviderError: String, Error {
     case couldNotStartWireGuard
 }
 
-extension WireGuardLogLevel {
-    var osLogLevel: OSLogType {
-        switch self {
-        case .verbose: return .debug
-        case .error: return .error
-        }
-    }
-}
-
-func wg_log(_ type: OSLogType, message: String) {
+/// WireGuard adapter log sink. Severity is deliberately flattened —
+/// the ring buffer stores plain tagged lines only.
+func wg_log(message: String) {
     TunnelLogger.log(.wireGuard, message)
 }

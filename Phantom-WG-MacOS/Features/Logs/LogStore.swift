@@ -6,7 +6,6 @@ import Foundation
 struct LogEntry: Identifiable, Hashable {
     let id: Int
     let tag: String
-    let timestamp: String
     let text: String
 }
 
@@ -18,9 +17,8 @@ protocol LogEntryProvider: AnyObject, Observable {
     var entries: [LogEntry] { get }
     func startPolling()
     func stopPolling()
-    /// Flushes both the in-extension ring buffer (via opcode message)
-    /// and the main-app's mirror array. Re-emits existing polling —
-    /// new lines from the extension continue streaming normally.
+    /// Flushes the backing log source and the main-app's mirror
+    /// array; polling keeps running, so new lines keep streaming.
     func clear() async
 }
 
@@ -85,7 +83,6 @@ final class LogStore: LogEntryProvider {
                 LogEntry(
                     id: index,
                     tag: entry.tag,
-                    timestamp: entry.timestamp,
                     text: "[\(entry.timestamp)][\(entry.tag)] \(entry.message)"
                 )
             }
