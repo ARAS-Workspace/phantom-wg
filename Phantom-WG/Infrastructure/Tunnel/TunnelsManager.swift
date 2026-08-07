@@ -209,8 +209,11 @@ class TunnelsManager {
             tunnel.activationTask?.cancel()
             tunnel.activationTask = nil
             tunnel.status = .inactive
+            // Every attempt started without throwing and the system
+            // never reported connected or disconnected — there is no
+            // system error to show, only the timeout itself.
             tunnel.lastActivationError = .retryLimitReached(
-                lastSystemError: NSError(domain: NEVPNErrorDomain, code: 1))
+                lastSystemError: Self.noSystemDetail(LocalizationManager.shared.t("error_detail_timeout")))
             return
         }
 
@@ -282,6 +285,17 @@ class TunnelsManager {
         tunnel.tunnelProvider.stopTunnel()
     }
 
+    /// Stand-in for the rare paths where the system hands us no error
+    /// object; carries a localized description so the alert's `%@`
+    /// slot stays honest instead of printing a fabricated code.
+    private static func noSystemDetail(_ description: String) -> NSError {
+        NSError(
+            domain: "PhantomWG",
+            code: -1,
+            userInfo: [NSLocalizedDescriptionKey: description]
+        )
+    }
+
     private func activateWaitingTunnelIfNeeded() {
         guard let waitingTunnel else { return }
         self.waitingTunnel = nil
@@ -328,8 +342,20 @@ class TunnelsManager {
                 tunnel.status = .inactive
 
                 if tunnel.lastActivationError == nil {
-                    tunnel.lastActivationError = .failedWhileActivating(
-                        systemError: NSError(domain: NEVPNErrorDomain, code: 0))
+                    // The system dropped the session mid-activation.
+                    // Its own record of why — the extension's start
+                    // failure — beats any synthesized stand-in; the
+                    // attemptId guard keeps a slow fetch from writing
+                    // over a newer activation round.
+                    let attemptId = tunnel.activationAttemptId
+                    Task { @MainActor in
+                        let systemError = await tunnel.tunnelProvider.fetchLastDisconnectError()
+                        guard tunnel.activationAttemptId == attemptId,
+                              tunnel.lastActivationError == nil else { return }
+                        tunnel.lastActivationError = .failedWhileActivating(
+                            systemError: systemError
+                                ?? Self.noSystemDetail(LocalizationManager.shared.t("error_detail_session_ended")))
+                    }
                 }
 
             case .connecting:

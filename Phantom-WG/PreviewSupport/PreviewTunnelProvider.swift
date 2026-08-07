@@ -113,6 +113,13 @@ final class PreviewTunnelProvider: TunnelProviding {
         (notification.object as? PreviewTunnelProvider) === self
     }
 
+    // MARK: - Diagnostics
+
+    /// Previews never simulate a system-side disconnect record.
+    func fetchLastDisconnectError(completion: @escaping @Sendable (Error?) -> Void) {
+        completion(nil)
+    }
+
     // MARK: - Status Simulation
 
     private func transition(to status: NEVPNStatus) {

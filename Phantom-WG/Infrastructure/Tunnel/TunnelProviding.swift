@@ -43,6 +43,12 @@ protocol TunnelProviding: AnyObject {
 
     /// Returns true if the given NEVPNStatusDidChange notification originated from this provider.
     func matchesNotification(_ notification: Notification) -> Bool
+
+    // MARK: - Diagnostics
+
+    /// The system's record of why the last session ended, when it has
+    /// one — the extension's `startTunnel` failure surfaces here.
+    func fetchLastDisconnectError(completion: @escaping @Sendable (Error?) -> Void)
 }
 
 // MARK: - Async Persistence (default implementations wrapping callback-based methods)
@@ -70,6 +76,12 @@ extension TunnelProviding {
             removePreferences { error in
                 if let error { continuation.resume(throwing: error) } else { continuation.resume() }
             }
+        }
+    }
+
+    func fetchLastDisconnectError() async -> Error? {
+        await withCheckedContinuation { continuation in
+            fetchLastDisconnectError { continuation.resume(returning: $0) }
         }
     }
 }

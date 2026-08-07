@@ -115,6 +115,8 @@
   "error_loading_failed": "Tünel yapılandırması yüklenemedi. %@",
   "error_retry_limit": "Etkinleştirme deneme sınırı aşıldı. %@",
   "error_activation_failed": "Etkinleştirme başarısız oldu. %@",
+  "error_detail_timeout": "Bağlantı zaman aşımına uğradı.",
+  "error_detail_session_ended": "Oturum sistem tarafından sonlandırıldı.",
   "error_duplicate_name": "Bu adla zaten bir tünel mevcut.",
   "error_invalid_name": "Tünel adı geçersiz.",
   "error_add_tunnel": "Tünel oluşturulamadı. %@",

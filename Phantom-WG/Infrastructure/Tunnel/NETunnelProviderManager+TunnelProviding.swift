@@ -65,4 +65,10 @@ extension NETunnelProviderManager: TunnelProviding {
         guard let session = notification.object as? NETunnelProviderSession else { return false }
         return connection === session
     }
+
+    // MARK: - Diagnostics
+
+    func fetchLastDisconnectError(completion: @escaping @Sendable (Error?) -> Void) {
+        connection.fetchLastDisconnectError(completionHandler: completion)
+    }
 }

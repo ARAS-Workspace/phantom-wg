@@ -115,6 +115,8 @@
   "error_loading_failed": "Could not load tunnel configuration. %@",
   "error_retry_limit": "Activation attempt limit exceeded. %@",
   "error_activation_failed": "Activation failed. %@",
+  "error_detail_timeout": "The connection timed out.",
+  "error_detail_session_ended": "The session was ended by the system.",
   "error_duplicate_name": "A tunnel with that name already exists.",
   "error_invalid_name": "The tunnel name is invalid.",
   "error_add_tunnel": "Unable to create the tunnel. %@",
