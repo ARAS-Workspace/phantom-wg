@@ -2,6 +2,17 @@ import Foundation
 import AppKit
 import NetworkExtension
 
+/// Source of truth for the tunnel list. Owns the pairing between the
+/// system's NetworkExtension preferences (identity-only projections)
+/// and the extension's TunnelVault (the payloads): `reconcileFromVault`
+/// restores vault payloads the system lost, drops system entries the
+/// vault does not back, and realigns drifted projections —
+/// `creatingIds` keeps a pass from minting an entry for a tunnel
+/// mid-import, and the debounced refresh coalesces the system's
+/// change-notification bursts into single reload+reconcile passes.
+/// Activation lives in `TunnelsManager+Activation`: one active tunnel
+/// at a time — a newly toggled tunnel waits out the previous one's
+/// deactivation before it starts.
 @Observable
 @MainActor
 class TunnelsManager {

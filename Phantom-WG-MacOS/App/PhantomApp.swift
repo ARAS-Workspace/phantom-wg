@@ -104,10 +104,9 @@ struct PhantomApp: App {
             }
             .task(id: coordinator.allReady) {
                 // Boot reconcile once the gate clears. The session
-                // coordinator reads the live extension state (NE
-                // session can survive across app close/reopen and
-                // system reboots) and adopts it as the initial
-                // coordinator state. Honors persisted intent
+                // coordinator reads the live extension state (an NE
+                // session survives app close/reopen) and adopts it
+                // as the initial coordinator state. Honors persisted intent
                 // (`config.isEnabled`) only when no live session
                 // is found — the UI must always mirror what the
                 // extensions are actually doing, not a separate
