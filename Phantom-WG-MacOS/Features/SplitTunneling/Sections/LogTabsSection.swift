@@ -123,7 +123,7 @@ struct LogTabsSection: View {
             ScrollView {
                 LazyVStack(alignment: .leading, spacing: 2) {
                     if entries.isEmpty {
-                        Text(loc.t("log_empty_description"))
+                        Text(loc.t("split_tunneling_log_empty"))
                             .font(.caption)
                             .foregroundStyle(.secondary)
                             .padding(.horizontal, 12)

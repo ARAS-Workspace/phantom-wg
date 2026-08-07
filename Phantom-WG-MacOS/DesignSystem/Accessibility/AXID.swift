@@ -111,6 +111,7 @@ enum AXID {
         static let activationError = "tunnel-detail.status.activation-error"
         static let modeBadge       = "tunnel-detail.status.mode-badge"
         static let configUnavailable = "tunnel-detail.config-unavailable"
+        static let configUnreachable = "tunnel-detail.config-unreachable"
         static let configRetry       = "tunnel-detail.config-retry"
 
         enum Stats {

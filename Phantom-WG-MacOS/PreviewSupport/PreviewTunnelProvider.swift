@@ -169,8 +169,13 @@ final class PreviewVaultClient: TunnelVaultClient {
         return true
     }
 
+    /// When set, every `read(id:)` answers with this instead of the
+    /// payload map — lets previews stage the unreachable banner.
+    var readOverride: Read?
+
     override func read(id: UUID) async -> Read {
-        payloads[id].map(Read.config) ?? .missing
+        if let readOverride { return readOverride }
+        return payloads[id].map(Read.config) ?? .missing
     }
 
     override func delete(id: UUID) async -> Bool {

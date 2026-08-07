@@ -23,6 +23,12 @@ struct TunnelDetailView: View {
     @State var configLoaded = false
     @State var readAttempt = 0
 
+    /// Which way the last read failed. The vault's definitive
+    /// "missing" and a vault that could not be reached tell different
+    /// stories, and only the first may blame the configuration.
+    enum ConfigLoadFailure { case missing, unreachable }
+    @State var loadFailure: ConfigLoadFailure?
+
     /// How many times a read is tried before the screen calls the
     /// configuration unreadable.
     static let vaultReadAttempts = 3
@@ -131,10 +137,17 @@ struct TunnelDetailView: View {
         } else if configLoaded {
             Section {
                 VStack(alignment: .leading, spacing: 8) {
-                    Label(loc.t("detail_config_unavailable"), systemImage: "lock.slash")
-                        .foregroundStyle(.secondary)
-                        .fixedSize(horizontal: false, vertical: true)
-                        .accessibilityIdentifier(AXID.TunnelDetail.configUnavailable)
+                    if loadFailure == .unreachable {
+                        Label(loc.t("detail_config_unreachable"), systemImage: "bolt.horizontal.circle")
+                            .foregroundStyle(.secondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                            .accessibilityIdentifier(AXID.TunnelDetail.configUnreachable)
+                    } else {
+                        Label(loc.t("detail_config_unavailable"), systemImage: "lock.slash")
+                            .foregroundStyle(.secondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                            .accessibilityIdentifier(AXID.TunnelDetail.configUnavailable)
+                    }
 
                     Button(loc.t("detail_config_retry")) {
                         Task { await loadConfig() }
@@ -172,8 +185,13 @@ struct TunnelDetailView: View {
         switch result {
         case .config(let loaded):
             config = loaded
-        case .missing, .unreachable:
+            loadFailure = nil
+        case .missing:
             config = nil
+            loadFailure = .missing
+        case .unreachable:
+            config = nil
+            loadFailure = .unreachable
         }
         configLoaded = true
     }
@@ -219,6 +237,30 @@ struct TunnelDetailView: View {
         TunnelDetailView(tunnel: manager.tunnels[0])
     }
     .previewEnvironment(tunnels: manager)
+    .frame(width: 560, height: 720)
+}
+
+#Preview("Config unreachable — Light") {
+    let manager = PreviewFixtures.tunnelsManager(providers: [
+        PreviewFixtures.provider(config: PreviewFixtures.ghostConfig())
+    ])
+    (manager.vault as? PreviewVaultClient)?.readOverride = .unreachable
+    return NavigationStack {
+        TunnelDetailView(tunnel: manager.tunnels[0])
+    }
+    .previewEnvironment(tunnels: manager, scheme: .light)
+    .frame(width: 560, height: 720)
+}
+
+#Preview("Config unreachable — Dark") {
+    let manager = PreviewFixtures.tunnelsManager(providers: [
+        PreviewFixtures.provider(config: PreviewFixtures.ghostConfig())
+    ])
+    (manager.vault as? PreviewVaultClient)?.readOverride = .unreachable
+    return NavigationStack {
+        TunnelDetailView(tunnel: manager.tunnels[0])
+    }
+    .previewEnvironment(tunnels: manager, scheme: .dark)
     .frame(width: 560, height: 720)
 }
 
