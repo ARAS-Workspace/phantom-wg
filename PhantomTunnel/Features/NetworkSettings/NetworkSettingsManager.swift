@@ -1,5 +1,10 @@
 import NetworkExtension
 
+/// Ghost-mode route carve-out: the wstunnel server's resolved
+/// addresses are excluded from the tunnel so the WebSocket carrier
+/// rides the physical interface — if its packets entered the tunnel
+/// they would loop back into the very transport that carries them.
+/// Standalone tunnels need no carve-out and pass through untouched.
 enum NetworkSettingsManager {
 
     static func apply(

@@ -1,6 +1,15 @@
 import Foundation
 import Security
 
+/// Custody of tunnel secrets in the app-group Keychain — WireGuard's
+/// persistent-reference pattern: the whole `TunnelConfig` JSON is
+/// sealed into one item and only the opaque reference travels in
+/// `providerConfiguration`, so secrets never sit in the NE
+/// preferences. Items are written `kSecAttrAccessibleAfterFirstUnlock`
+/// so the extension can read them for on-demand and post-reboot
+/// starts. The access group is what lets the app write what the
+/// extension later reads. Note: updates rewrite only the value, so an
+/// item keeps the accessibility class it was created under.
 enum Keychain {
 
     private static let accessGroup = "group.com.remrearas.phantom-wg"

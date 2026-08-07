@@ -6,11 +6,13 @@ struct TunnelListView: View {
 
     @State private var showingImport = false
 
-    /// The tunnel the top section mirrors. `TunnelsManager` enforces a
-    /// single non-inactive tunnel at a time (activation queues behind
-    /// deactivation), so "first non-inactive" is the whole story. The
-    /// list itself stays in plain newest-first order — no active-first
-    /// pinning; the top section is where the running tunnel surfaces.
+    /// The tunnel the top section mirrors. One non-inactive tunnel at
+    /// a time: `TunnelsManager` queues activation behind deactivation,
+    /// and the OS's single-enabled-configuration rule backs the same
+    /// invariant from below — so "first non-inactive" is the whole
+    /// story. The list itself stays in plain newest-first order — no
+    /// active-first pinning; the top section is where the running
+    /// tunnel surfaces.
     private var activeTunnel: TunnelContainer? {
         tunnelsManager.tunnels.first { $0.status != .inactive }
     }

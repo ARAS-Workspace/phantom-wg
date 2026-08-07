@@ -1,5 +1,18 @@
 import NetworkExtension
 
+/// UI-facing projection of a manager's on-demand rule set.
+///
+/// `from(provider:)` tolerates rule sets this app never writes —
+/// `.wifiOnly` / `.cellularOnly` exist so an externally authored
+/// configuration still reads back faithfully; the app itself only
+/// installs `.off` or `.wifiOrCellular` (one
+/// `NEOnDemandRuleConnect(.any)`).
+///
+/// `apply(on:)` deliberately touches only the on-demand fields, not
+/// `isEnabled` — enabling the configuration is the activation path's
+/// job. On a tunnel that was never activated, an armed rule stays
+/// dormant until the system enables the configuration: the switch
+/// reflects stored intent, not a live guarantee.
 enum ActivateOnDemandOption: Equatable {
     case off
     case wifiOnly

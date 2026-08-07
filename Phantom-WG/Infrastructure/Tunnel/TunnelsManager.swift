@@ -1,6 +1,18 @@
 import Foundation
 import NetworkExtension
 
+/// Source of truth for the tunnel list, over the system's
+/// NetworkExtension preferences. iOS keeps a single enabled VPN
+/// configuration per app, and everything here bends around that rule:
+/// `isEnabled` is written only at activation — never on add/modify,
+/// so an import cannot drop a running tunnel — activating one tunnel
+/// disarms every other tunnel's on-demand rule, and one tunnel runs
+/// at a time, a newly toggled tunnel waiting out the active one's
+/// deactivation. Containers pair with configurations by persisted
+/// `TunnelConfig.id` (add is id-guarded, reload matches by identity),
+/// so the system's change notifications can race an add without
+/// duplicating rows. Secrets live in the Keychain; the preferences
+/// carry only a persistent reference.
 @Observable
 @MainActor
 class TunnelsManager {
