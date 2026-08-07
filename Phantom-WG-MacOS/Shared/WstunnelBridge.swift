@@ -105,9 +105,12 @@ enum WstunnelBridge {
         }
 
         /// Add UDP tunnel: -L udp://localHost:localPort:remoteHost:remotePort
+        /// No listener default on purpose: the WireGuard endpoint is
+        /// built from the same host/port pair, so the caller must pass
+        /// the pair explicitly to keep the two sides identical.
         @discardableResult
         func addTunnelUDP(
-            localHost: String = "127.0.0.1",
+            localHost: String,
             localPort: UInt16,
             remoteHost: String,
             remotePort: UInt16,

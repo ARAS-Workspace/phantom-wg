@@ -9,6 +9,10 @@ import Foundation
 /// structurally decompose (missing sections, missing required keys,
 /// malformed `Tunnel = udp://h:p:h:p`).
 ///
+/// Ghost rule: when a `[Wstunnel]` section is present, the peer
+/// `Endpoint` is system-defined (the wstunnel listener), so the key
+/// becomes optional and is ignored even when written.
+///
 /// The draft's `name` is left empty; the caller sets it before
 /// validation.
 enum ConfParser {
@@ -59,7 +63,7 @@ enum ConfParser {
         }
 
         let interfaceDraft = try parseInterface(interfaceAttrs)
-        let peerDraft = try parsePeer(peerAttrs)
+        let peerDraft = try parsePeer(peerAttrs, endpointRequired: wstunnelDraft == nil)
 
         return TunnelDraft(
             name: "",
@@ -160,12 +164,21 @@ enum ConfParser {
 
     // MARK: - Peer
 
-    private static func parsePeer(_ attrs: [String: String]) throws -> PeerDraft {
+    private static func parsePeer(_ attrs: [String: String], endpointRequired: Bool) throws -> PeerDraft {
         guard let publicKey = attrs["publickey"], !publicKey.isEmpty else {
             throw ParseError.missingKey(section: "Peer", key: "PublicKey")
         }
-        guard let endpoint = attrs["endpoint"], !endpoint.isEmpty else {
-            throw ParseError.missingKey(section: "Peer", key: "Endpoint")
+
+        // Ghost configs never carry the user's Endpoint into the
+        // draft — the system defines it from the wstunnel listener.
+        let endpoint: String
+        if endpointRequired {
+            guard let value = attrs["endpoint"], !value.isEmpty else {
+                throw ParseError.missingKey(section: "Peer", key: "Endpoint")
+            }
+            endpoint = value
+        } else {
+            endpoint = ""
         }
 
         return PeerDraft(

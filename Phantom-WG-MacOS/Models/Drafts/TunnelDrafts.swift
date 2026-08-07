@@ -83,7 +83,9 @@ struct TunnelDraft: Equatable {
         let (interfaceConfig, interfaceErrors) = wireguard.interface.validate()
         interfaceErrors.forEach { errors[$0.key] = $0.value }
 
-        let (peerConfig, peerErrors) = wireguard.peer.validate()
+        // The endpoint is user data only for standalone configs; in
+        // Ghost mode the system defines it from the wstunnel listener.
+        let (peerConfig, peerErrors) = wireguard.peer.validate(endpointRequired: wstunnel == nil)
         peerErrors.forEach { errors[$0.key] = $0.value }
 
         // Wstunnel (optional)
@@ -183,13 +185,15 @@ struct PeerDraft: Equatable {
     var endpoint: String
     var persistentKeepalive: String
 
-    func validate() -> (PeerConfig?, [TunnelDraft.Field: FieldValidationError]) {
+    func validate(endpointRequired: Bool) -> (PeerConfig?, [TunnelDraft.Field: FieldValidationError]) {
         var errors: [TunnelDraft.Field: FieldValidationError] = [:]
 
         let pubKey = parseRequiredKey(publicKey, field: .peerPublicKey, into: &errors)
         let psk = parseOptionalKey(presharedKey, field: .peerPresharedKey, into: &errors)
         let parsedAllowed = parseAddresses(allowedIPs, into: &errors, field: .peerAllowedIPs)
-        let parsedEndpoint = parseEndpoint(endpoint, into: &errors)
+        // Ghost rule: whatever the user typed as Endpoint is not
+        // carried — the system builds it from the wstunnel listener.
+        let parsedEndpoint = endpointRequired ? parseEndpoint(endpoint, into: &errors) : nil
         let parsedKeepalive = parseInt(
             persistentKeepalive, range: 0...65535, default: 25,
             into: &errors, field: .peerPersistentKeepalive
@@ -198,7 +202,6 @@ struct PeerDraft: Equatable {
         guard errors.isEmpty,
               let pubKey,
               let allowed = parsedAllowed,
-              let parsedEndpoint,
               let keepalive = parsedKeepalive else {
             return (nil, errors)
         }

@@ -2,8 +2,10 @@ import SwiftUI
 
 /// WireGuard peer configuration, read-only — public/preshared keys,
 /// allowed IPs, endpoint, and keepalive. The preshared row only
-/// appears when the config carries one. Values change only through
-/// `TunnelEditView`'s raw-text editor.
+/// appears when the config carries one; the endpoint row only for
+/// standalone configs — in Ghost mode the endpoint is system-defined
+/// from the wstunnel listener and is not part of the peer data.
+/// Values change only through `TunnelEditView`'s raw-text editor.
 struct PeerSection: View {
     let config: PeerConfig
     @Environment(LocalizationManager.self) private var loc
@@ -27,11 +29,13 @@ struct PeerSection: View {
                 value: config.allowedIPs.map(\.textual).joined(separator: ", "),
                 axIdentifier: AXID.TunnelDetail.Peer.allowedIPs
             )
-            PhantomStaticField(
-                label: loc.t("detail_endpoint"),
-                value: config.endpoint.textual,
-                axIdentifier: AXID.TunnelDetail.Peer.endpoint
-            )
+            if let endpoint = config.endpoint {
+                PhantomStaticField(
+                    label: loc.t("detail_endpoint"),
+                    value: endpoint.textual,
+                    axIdentifier: AXID.TunnelDetail.Peer.endpoint
+                )
+            }
             PhantomStaticField(
                 label: loc.t("detail_keepalive"),
                 value: String(config.persistentKeepalive),
@@ -59,6 +63,15 @@ struct PeerSection: View {
     peer.presharedKey = nil
     return Form {
         PeerSection(config: peer)
+    }
+    .formStyle(.grouped)
+    .previewEnvironment()
+    .frame(width: 560)
+}
+
+#Preview("Standalone — endpoint row") {
+    Form {
+        PeerSection(config: PreviewFixtures.wireguardConfig().wireguard.peer)
     }
     .formStyle(.grouped)
     .previewEnvironment()

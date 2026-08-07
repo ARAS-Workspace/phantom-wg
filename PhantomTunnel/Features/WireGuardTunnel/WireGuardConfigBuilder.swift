@@ -5,11 +5,15 @@ import WireGuardKit
 enum WireGuardConfigBuilder {
 
     /// Converts `WireguardConfig` + optional `WstunnelConfig` into
-    /// WireGuardKit's `TunnelConfiguration`. All fields arrive already
-    /// validated via the typed model, so the work here is mainly
-    /// bridging between Phantom's types and WireGuardKit's.
+    /// WireGuardKit's `TunnelConfiguration`. Inputs normally come out
+    /// of the validated model, but the extension decodes them straight
+    /// from the vault payload — so this builder re-checks what
+    /// WireGuardKit cannot represent and throws instead of trusting
+    /// the payload.
     ///
-    /// - Ghost mode: endpoint rewritten to the wstunnel loopback proxy
+    /// - Ghost mode: endpoint is system-defined as the wstunnel
+    ///   listener (`localHost:localPort`); a user endpoint is never
+    ///   consulted
     /// - Standalone: endpoint used verbatim from peer config
     static func build(wireguard: WireguardConfig, wstunnel: WstunnelConfig?) throws -> TunnelConfiguration {
         let interfaceConfig = try buildInterface(from: wireguard)
@@ -73,14 +77,19 @@ enum WireGuardConfigBuilder {
 
         TunnelLogger.log(.wireGuard, "AllowedIPs: \(peer.allowedIPs.count) entries")
 
-        // Endpoint: Ghost mode -> wstunnel loopback proxy, standalone -> direct peer
+        // Endpoint: Ghost mode -> wstunnel listener (system-defined),
+        // standalone -> the peer's own endpoint. A standalone config
+        // without one can only be a hand-damaged payload — refuse to start.
         let endpointString: String
         if let ws = wstunnel {
             endpointString = "\(ws.localHost):\(ws.localPort)"
             TunnelLogger.log(.wireGuard, "Endpoint (Ghost): \(endpointString)")
-        } else {
-            endpointString = config.peer.endpoint.textual
+        } else if let peerEndpoint = config.peer.endpoint {
+            endpointString = peerEndpoint.textual
             TunnelLogger.log(.wireGuard, "Endpoint (standalone): \(endpointString)")
+        } else {
+            TunnelLogger.log(.wireGuard, "ERROR: Standalone config without endpoint")
+            throw PacketTunnelProviderError.savedProtocolConfigurationIsInvalid
         }
 
         guard let endpoint = Endpoint(from: endpointString) else {
