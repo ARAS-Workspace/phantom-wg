@@ -77,11 +77,17 @@ final class SplitTunnelingStore {
         scheduleReload()
     }
 
-    /// Clear every field back to first-run baseline.
+    /// Clear every field back to first-run baseline. The confirmation
+    /// promises "disable the feature", so a running session is stopped
+    /// the same way the master toggle does it — no config push: a
+    /// stopping session has nothing to apply, and the next start reads
+    /// the baseline from storage anyway.
     func reset() {
         configuration = .default
         persist()
-        scheduleReload()
+        Task { [weak sessionCoordinator] in
+            await sessionCoordinator?.stop()
+        }
     }
 
     // MARK: - System DNS Resolver Toggle
