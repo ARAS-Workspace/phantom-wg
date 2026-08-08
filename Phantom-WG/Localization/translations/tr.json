@@ -15,8 +15,6 @@
   "detail_handshake": "El Sıkışma",
   "detail_received": "Alınan",
   "detail_sent": "Gönderilen",
-  "detail_on_demand": "İsteğe Bağlı Etkinleştir",
-  "detail_on_demand_footer": "Sistem, ağ bağlantısı varken tüneli otomatik olarak başlatır ve açık tutar — uygulama kapalıyken ve cihaz yeniden başlatıldıktan sonra da. Tünel anahtarını kapatmak bu kuralı da devre dışı bırakır. Başka bir tüneli başlatmak da bu kuralı devre dışı bırakır.",
   "detail_general": "Genel",
   "detail_name": "Ad",
   "detail_wstunnel": "Wstunnel",

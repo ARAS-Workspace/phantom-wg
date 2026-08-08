@@ -42,8 +42,6 @@ struct TunnelDetailView: View {
 
             StatsSection(handshake: lastHandshake, rxBytes: rxBytes, txBytes: txBytes)
 
-            OnDemandSection(onDemandEnabled: onDemandBinding)
-
             configSections
 
             LogNavigationSection(logStore: logStore)

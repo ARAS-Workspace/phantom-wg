@@ -164,7 +164,7 @@ struct TunnelImportView: View {
 
         Task {
             do {
-                _ = try await tunnelsManager.add(config: config, activateOnDemand: .off)
+                _ = try await tunnelsManager.add(config: config)
                 dismiss()
             } catch {
                 errorMessages = [error.localizedDescription]

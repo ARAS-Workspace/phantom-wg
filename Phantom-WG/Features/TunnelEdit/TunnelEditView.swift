@@ -172,8 +172,7 @@ struct TunnelEditView: View {
 
         Task {
             do {
-                try await tunnelsManager.modify(tunnel: tunnel, with: config,
-                                                onDemand: tunnel.activateOnDemandSetting)
+                try await tunnelsManager.modify(tunnel: tunnel, with: config)
                 dismiss()
             } catch {
                 errorMessages = [error.localizedDescription]

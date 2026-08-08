@@ -101,21 +101,4 @@ extension TunnelDetailView {
             lastHandshake = "—"
         }
     }
-
-    // MARK: - On-Demand Binding
-
-    var onDemandBinding: Binding<Bool> {
-        Binding(
-            get: { tunnel.isActivateOnDemandEnabled },
-            set: { isOn in
-                let option: ActivateOnDemandOption = isOn ? .wifiOrCellular : .off
-                let provider = tunnel.tunnelProvider
-                option.apply(on: provider)
-                Task {
-                    try? await provider.savePreferences()
-                    try? await provider.loadPreferences()
-                }
-            }
-        )
-    }
 }

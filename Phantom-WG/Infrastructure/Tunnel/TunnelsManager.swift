@@ -5,8 +5,12 @@ import NetworkExtension
 /// NetworkExtension preferences. iOS keeps a single enabled VPN
 /// configuration per app, and everything here bends around that rule:
 /// `isEnabled` is written only at activation — never on add/modify,
-/// so an import cannot drop a running tunnel — activating one tunnel
-/// disarms every other tunnel's on-demand rule, and one tunnel runs
+/// so an import cannot drop a running tunnel. Every activation also
+/// silently arms the recovery rule (one connect-on-any-network
+/// on-demand rule): an activated tunnel is one the user wants back,
+/// so the system revives it across reboots, app termination, and
+/// network loss. Deactivation stands the rule down, and activating
+/// one tunnel disarms every other tunnel's rule. One tunnel runs
 /// at a time, a newly toggled tunnel waiting out the active one's
 /// deactivation. Containers pair with configurations by persisted
 /// `TunnelConfig.id` (add is id-guarded, reload matches by identity),
@@ -64,7 +68,7 @@ class TunnelsManager {
 
     // MARK: - CRUD
 
-    func add(config: TunnelConfig, activateOnDemand: ActivateOnDemandOption = .off) async throws -> TunnelContainer {
+    func add(config: TunnelConfig) async throws -> TunnelContainer {
         let name = config.name.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !name.isEmpty else {
             throw TunnelManagementError.tunnelInvalidName
@@ -85,8 +89,6 @@ class TunnelsManager {
         } catch {
             throw TunnelManagementError.vpnSystemErrorOnAddTunnel(systemError: error)
         }
-
-        activateOnDemand.apply(on: provider)
 
         do {
             try await provider.savePreferences()
@@ -110,8 +112,7 @@ class TunnelsManager {
         return tunnel
     }
 
-    func modify(tunnel: TunnelContainer, with config: TunnelConfig,
-                onDemand: ActivateOnDemandOption) async throws {
+    func modify(tunnel: TunnelContainer, with config: TunnelConfig) async throws {
         let name = config.name.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !name.isEmpty else {
             throw TunnelManagementError.tunnelInvalidName
@@ -134,8 +135,6 @@ class TunnelsManager {
         } catch {
             throw TunnelManagementError.vpnSystemErrorOnModifyTunnel(systemError: error)
         }
-
-        onDemand.apply(on: tunnel.tunnelProvider)
 
         do {
             try await tunnel.tunnelProvider.savePreferences()
@@ -185,7 +184,8 @@ class TunnelsManager {
             return
         }
 
-        // Disable on-demand on all other tunnels before activating
+        // Disarm every other tunnel's recovery rule first — recovery
+        // belongs to the tunnel being activated now
         tunnels.filter { $0.id != tunnel.id && $0.isActivateOnDemandEnabled }.forEach { other in
             other.tunnelProvider.isOnDemandEnabled = false
             other.tunnelProvider.savePreferences { _ in }
@@ -197,7 +197,8 @@ class TunnelsManager {
     func startDeactivation(of tunnel: TunnelContainer) {
         guard tunnel.status != .inactive && tunnel.status != .deactivating else { return }
 
-        // Disable on-demand first, otherwise system will reconnect
+        // Stand the recovery rule down first — with it armed, the
+        // system would reconnect the moment the tunnel drops.
         if tunnel.isActivateOnDemandEnabled {
             tunnel.tunnelProvider.isOnDemandEnabled = false
             Task {
@@ -205,7 +206,10 @@ class TunnelsManager {
                     try await tunnel.tunnelProvider.savePreferences()
                     performDeactivation(of: tunnel)
                 } catch {
-                    // Save failed, skip deactivation
+                    // The tunnel keeps running and stays armed — a
+                    // fact, not a choice: the stop request could not
+                    // be persisted. Surface it instead of pretending.
+                    tunnel.lastActivationError = .savingFailed(systemError: error)
                 }
             }
         } else {
@@ -214,6 +218,17 @@ class TunnelsManager {
     }
 
     // MARK: - Private Activation
+
+    /// The recovery rule: one connect-on-any-network on-demand rule,
+    /// armed on every activation. There is no user-facing switch —
+    /// starting a tunnel is the recovery intent, stopping it withdraws
+    /// it (`startDeactivation` disarms before it stops).
+    private static func armRecovery(on provider: TunnelProviding) {
+        let rule = NEOnDemandRuleConnect()
+        rule.interfaceTypeMatch = .any
+        provider.onDemandRules = [rule]
+        provider.isOnDemandEnabled = true
+    }
 
     private func startActivation(of tunnel: TunnelContainer, at retryIndex: Int) {
         guard retryIndex < maxRetries else {
@@ -238,8 +253,12 @@ class TunnelsManager {
         let attemptId = UUID().uuidString
         tunnel.activationAttemptId = attemptId
 
-        // Ensure manager is enabled and save
+        // Enable the manager and arm recovery in the same save. An
+        // activated tunnel is one the user wants back: the system
+        // restarts it whenever a network returns — across reboots
+        // and app termination included.
         tunnel.tunnelProvider.isEnabled = true
+        Self.armRecovery(on: tunnel.tunnelProvider)
         Task {
             do {
                 try await tunnel.tunnelProvider.savePreferences()

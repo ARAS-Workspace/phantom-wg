@@ -27,10 +27,8 @@ class TunnelContainer: Identifiable {
         tunnelConfig?.isGhostMode ?? false
     }
 
-    var activateOnDemandSetting: ActivateOnDemandOption {
-        ActivateOnDemandOption.from(provider: tunnelProvider)
-    }
-
+    /// Whether the recovery rule is armed (NE's `isOnDemandEnabled`) —
+    /// true for the tunnel the system is committed to reviving.
     var isActivateOnDemandEnabled: Bool {
         tunnelProvider.isOnDemandEnabled
     }

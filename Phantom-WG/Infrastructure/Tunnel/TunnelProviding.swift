@@ -18,8 +18,10 @@ protocol TunnelProviding: AnyObject {
     var tunnelConfig: TunnelConfig? { get }
     func configure(with config: TunnelConfig) throws
 
-    // MARK: - On-Demand
+    // MARK: - Recovery (NE on-demand)
 
+    /// Storage for the recovery rule — armed on activation, stood
+    /// down on deactivation; see `TunnelsManager.armRecovery`.
     var isOnDemandEnabled: Bool { get set }
     var onDemandRules: [NEOnDemandRule]? { get set }
 

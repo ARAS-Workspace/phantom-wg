@@ -15,8 +15,6 @@
   "detail_handshake": "Handshake",
   "detail_received": "Received",
   "detail_sent": "Sent",
-  "detail_on_demand": "Activate On Demand",
-  "detail_on_demand_footer": "The system starts the tunnel automatically whenever a network connection is available and keeps it up — even while the app is closed and after the device restarts. Turning the tunnel switch off also disables this rule. Starting another tunnel also disables this rule.",
   "detail_general": "General",
   "detail_name": "Name",
   "detail_wstunnel": "Wstunnel",
