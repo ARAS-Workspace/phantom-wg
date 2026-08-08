@@ -312,7 +312,12 @@ class TunnelsManager {
         for other in payloads where other.id != config.id {
             let otherName = other.name.trimmingCharacters(in: .whitespacesAndNewlines)
             guard otherName.caseInsensitiveCompare(name) == .orderedSame else { continue }
-            await vault.delete(id: other.id)
+            // A failed delete must abort the write: letting it proceed
+            // past an unanswered dedup is the one way a name collision
+            // can be born — exactly what this method's contract forbids.
+            guard await vault.delete(id: other.id) else {
+                throw TunnelManagementError.vaultUnavailable
+            }
             NSLog("[vault] dropped stale payload \(other.id) that claimed the name '\(name)'")
         }
     }

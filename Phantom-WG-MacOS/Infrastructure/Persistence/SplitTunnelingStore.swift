@@ -196,10 +196,30 @@ final class SplitTunnelingStore {
 
     private static func loadFromDisk(fileURL: URL?) -> SplitTunnelingConfiguration? {
         let url = fileURL ?? SharedConstants.splitTunnelingConfigurationFileURL
-        guard let url, let data = try? Data(contentsOf: url) else {
-            return nil
+        guard let url else { return nil }
+
+        // A missing file is a legitimate first run — fall back to
+        // `.default` quietly.
+        guard let data = try? Data(contentsOf: url) else { return nil }
+
+        if let config = try? JSONDecoder().decode(SplitTunnelingConfiguration.self, from: data) {
+            return config
         }
-        return try? JSONDecoder().decode(SplitTunnelingConfiguration.self, from: data)
+
+        // The file exists but does not decode (corruption, a schema
+        // change). Falling straight through to `.default` would let the
+        // next persist() overwrite the user's real app list with the
+        // baseline. Move the bad file aside so it stays recoverable,
+        // then start from `.default`.
+        let quarantine = url.appendingPathExtension("corrupt")
+        try? FileManager.default.removeItem(at: quarantine)
+        do {
+            try FileManager.default.moveItem(at: url, to: quarantine)
+            NSLog("[split-tunneling] config \(url.lastPathComponent) failed to decode; moved to \(quarantine.lastPathComponent)")
+        } catch {
+            NSLog("[split-tunneling] config failed to decode and could not be quarantined: \(error)")
+        }
+        return nil
     }
 
     private static func resolveDisplayName(bundle: Bundle, url: URL) -> String? {
