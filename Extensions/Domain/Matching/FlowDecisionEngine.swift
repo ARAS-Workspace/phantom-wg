@@ -36,7 +36,13 @@ enum FlowDecisionEngine {
     /// (decline the flow) so the OS falls back to default routing.
     static func isOwnProcess(signingIdentifier: String?) -> Bool {
         guard let id = signingIdentifier, !id.isEmpty else { return false }
-        return id.hasPrefix(selfSigningPrefix)
+        // Segment-anchored: exact match, or a subordinate namespace
+        // under it. A bare `hasPrefix` would accept a foreign app that
+        // merely starts with our identifier — a signing identifier is
+        // attacker-chosen, so "…Phantom-WG-MacOSEvil" would be taken
+        // for ourselves and routed to the OS default, outside the
+        // tunnel. This is the same anchoring `matches` enforces below.
+        return id == selfSigningPrefix || id.hasPrefix(selfSigningPrefix + ".")
     }
 
     /// Two-pass match: first against the exact signing identifier (with
@@ -48,6 +54,14 @@ enum FlowDecisionEngine {
     /// signed with a different team prefix). Adding the main app once
     /// routes all children of that bundle-ID namespace through bypass.
     static func matches(signingID: String, against app: AppEntry) -> Bool {
+        // Malformed or empty entry data must never match: an empty
+        // signing identifier would anchor-match every flow, and an
+        // empty bundle ID would turn the namespace pass into a prefix
+        // on "." that captures unrelated apps.
+        guard !signingID.isEmpty,
+              !app.signingIdentifier.isEmpty,
+              !app.bundleIdentifier.isEmpty else { return false }
+
         // Exact signing identifier, plus subordinate-namespace prefix
         // (e.g. entry "TEAM.com.vendor.Browser" matches flow
         // "TEAM.com.vendor.Browser.helper").
@@ -90,8 +104,13 @@ enum FlowDecisionEngine {
     static func withoutTeamPrefix(_ signingID: String) -> String {
         guard let dot = signingID.firstIndex(of: ".") else { return signingID }
         let head = signingID[..<dot]
+        // Apple team IDs are strictly ASCII [A-Z0-9]{10}. Without the
+        // ASCII guard, `isNumber`/`isUppercase` accept non-ASCII digits
+        // and letters, so a 10-char non-ASCII segment would be stripped
+        // as if it were a team ID and let the remainder anchor-match a
+        // victim bundle ID.
         let isTeamID = head.count == 10 && head.allSatisfy {
-            $0.isNumber || ($0.isLetter && $0.isUppercase)
+            $0.isASCII && ($0.isNumber || ($0.isLetter && $0.isUppercase))
         }
         return isTeamID ? String(signingID[signingID.index(after: dot)...]) : signingID
     }
