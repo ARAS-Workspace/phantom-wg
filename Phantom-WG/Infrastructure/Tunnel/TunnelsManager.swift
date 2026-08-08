@@ -197,6 +197,16 @@ class TunnelsManager {
     func startDeactivation(of tunnel: TunnelContainer) {
         guard tunnel.status != .inactive && tunnel.status != .deactivating else { return }
 
+        // A waiting tunnel has not started yet: toggling it off cancels
+        // the queued activation. Sending stop to a session the system
+        // never brought up draws no status callback, so it would strand
+        // in `.deactivating` — clear the queue slot and return to idle.
+        if tunnel.status == .waiting {
+            if waitingTunnel?.id == tunnel.id { waitingTunnel = nil }
+            tunnel.status = .inactive
+            return
+        }
+
         // Stand the recovery rule down first — with it armed, the
         // system would reconnect the moment the tunnel drops.
         if tunnel.isActivateOnDemandEnabled {
@@ -388,6 +398,11 @@ class TunnelsManager {
                                 ?? Self.noSystemDetail(LocalizationManager.shared.t("error_detail_session_ended")))
                     }
                 }
+
+                // This tunnel may be the one a queued tunnel was waiting
+                // to replace; its failure is that tunnel's turn — the
+                // same hand-off the non-attempting `.inactive` path does.
+                activateWaitingTunnelIfNeeded()
 
             case .connecting:
                 tunnel.status = .activating
