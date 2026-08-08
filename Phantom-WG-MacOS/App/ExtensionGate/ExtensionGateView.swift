@@ -20,16 +20,18 @@ struct ExtensionGateView: View {
                         controller: controller,
                         onActivate: { controller.activate() },
                         onOpenSettings: {
-                            // Defensive existence + approval check
-                            // before sending the user to Settings.
-                            // `activate()` is idempotent at the OS
-                            // level: missing extension reinstalls,
-                            // pending approval re-surfaces the prompt,
-                            // already-active is a silent `.completed`.
-                            // This way the toggle the user is about
-                            // to look for is guaranteed to exist in
-                            // the Network Extensions pane.
-                            controller.activate()
+                            // Only (re)submit an activation when the
+                            // extension is actually missing or awaiting
+                            // approval. Activation is NOT a free no-op
+                            // for a live extension: ADR-0006 measured
+                            // that even a byte-identical bundle stages a
+                            // full replacement and tears down the running
+                            // session. For an already-active (or still
+                            // settling) extension, just open Settings.
+                            if controller.status == .notInstalled
+                                || controller.status == .needsApproval {
+                                controller.activate()
+                            }
                             openSystemSettings()
                         },
                         onRetry: { controller.activate() }
