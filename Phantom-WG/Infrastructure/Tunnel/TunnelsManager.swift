@@ -240,6 +240,18 @@ class TunnelsManager {
         provider.isOnDemandEnabled = true
     }
 
+    /// Stands the recovery rule down and persists it. Used only on the
+    /// give-up paths that failed *locally* — a config that cannot load,
+    /// or whose `startTunnel` throws, would fail the same way on every
+    /// system-initiated on-demand retry, so leaving it armed is a loop
+    /// trap. A timeout or a dropped session is the opposite case: that
+    /// is the transient condition the recovery rule exists to ride out,
+    /// so those paths leave it armed on purpose.
+    private static func disarmRecovery(on provider: TunnelProviding) async {
+        provider.isOnDemandEnabled = false
+        try? await provider.savePreferences()
+    }
+
     private func startActivation(of tunnel: TunnelContainer, at retryIndex: Int) {
         guard retryIndex < maxRetries else {
             tunnel.isAttemptingActivation = false
@@ -248,7 +260,9 @@ class TunnelsManager {
             tunnel.status = .inactive
             // Every attempt started without throwing and the system
             // never reported connected or disconnected — there is no
-            // system error to show, only the timeout itself.
+            // system error to show, only the timeout itself. Recovery
+            // stays armed on purpose: a timeout is transient (no network
+            // or an unreachable server), exactly what on-demand rides out.
             tunnel.lastActivationError = .retryLimitReached(
                 lastSystemError: Self.noSystemDetail(LocalizationManager.shared.t("error_detail_timeout")))
             // A give-up path like the others: a queued tunnel takes the
@@ -295,6 +309,9 @@ class TunnelsManager {
             tunnel.isAttemptingActivation = false
             tunnel.status = .inactive
             tunnel.lastActivationError = .loadingFailed(systemError: error)
+            // Local failure — stand recovery down so the OS does not
+            // keep relaunching a config that cannot load.
+            await Self.disarmRecovery(on: tunnel.tunnelProvider)
             activateWaitingTunnelIfNeeded()
             return
         }
@@ -307,6 +324,9 @@ class TunnelsManager {
             tunnel.isAttemptingActivation = false
             tunnel.status = .inactive
             tunnel.lastActivationError = .startingFailed(systemError: error)
+            // Local failure — stand recovery down so the OS does not
+            // keep relaunching a tunnel whose start throws.
+            await Self.disarmRecovery(on: tunnel.tunnelProvider)
             activateWaitingTunnelIfNeeded()
             return
         }
