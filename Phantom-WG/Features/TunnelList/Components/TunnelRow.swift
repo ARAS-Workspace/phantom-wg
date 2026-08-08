@@ -6,7 +6,6 @@ import SwiftUI
 struct TunnelRow: View {
     var tunnel: TunnelContainer
     @Environment(TunnelsManager.self) private var tunnelsManager
-    @Environment(LocalizationManager.self) private var loc
 
     var body: some View {
         HStack(spacing: 12) {
