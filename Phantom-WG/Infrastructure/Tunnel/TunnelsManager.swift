@@ -251,6 +251,11 @@ class TunnelsManager {
             // system error to show, only the timeout itself.
             tunnel.lastActivationError = .retryLimitReached(
                 lastSystemError: Self.noSystemDetail(LocalizationManager.shared.t("error_detail_timeout")))
+            // A give-up path like the others: a queued tunnel takes the
+            // turn of the one that just failed. Unlike the `.disconnected`
+            // observer, these direct exits draw no status callback, so
+            // the hand-off has to be made here.
+            activateWaitingTunnelIfNeeded()
             return
         }
 
@@ -278,6 +283,7 @@ class TunnelsManager {
                 tunnel.isAttemptingActivation = false
                 tunnel.status = .inactive
                 tunnel.lastActivationError = .savingFailed(systemError: error)
+                activateWaitingTunnelIfNeeded()
             }
         }
     }
@@ -289,6 +295,7 @@ class TunnelsManager {
             tunnel.isAttemptingActivation = false
             tunnel.status = .inactive
             tunnel.lastActivationError = .loadingFailed(systemError: error)
+            activateWaitingTunnelIfNeeded()
             return
         }
 
@@ -300,6 +307,7 @@ class TunnelsManager {
             tunnel.isAttemptingActivation = false
             tunnel.status = .inactive
             tunnel.lastActivationError = .startingFailed(systemError: error)
+            activateWaitingTunnelIfNeeded()
             return
         }
 
