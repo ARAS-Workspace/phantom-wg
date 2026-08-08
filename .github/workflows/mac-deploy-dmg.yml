@@ -298,7 +298,7 @@ jobs:
             CODE_SIGN_IDENTITY="Developer ID Application" \
             DEVELOPMENT_TEAM="$TEAM_ID" \
             ARCHS=x86_64 \
-            ONLY_ACTIVE_ARCH=YES
+            ONLY_ACTIVE_ARCH=NO
 
           xcodebuild -exportArchive \
             -archivePath "$RUNNER_TEMP/x86_64.xcarchive" \
