@@ -21,11 +21,14 @@ final class TunnelVaultDaemon: NSObject, NSXPCListenerDelegate {
     /// Process-local singleton, assigned by `main.swift`.
     static var shared: TunnelVaultDaemon?
 
-    /// Peers must be signed by our own team. Enforced off the kernel
-    /// audit token — race-free and immune to the PID-reuse window a
-    /// manual processIdentifier check carries. Set before `resume()`.
+    /// Peers must be the host app, signed by our own team. Pinning the
+    /// identifier as well as the team keeps any *other* binary the team
+    /// signs — a debug build, a test harness, an unrelated shipping
+    /// product — from reaching these key-custody RPCs. Enforced off the
+    /// kernel audit token, race-free and immune to the PID-reuse window
+    /// a manual processIdentifier check carries. Set before `resume()`.
     private static let peerCodeRequirement =
-        #"anchor apple generic and certificate leaf[subject.OU] = "9C5SL5H7CM""#
+        #"identifier "com.remrearas.Phantom-WG-MacOS" and anchor apple generic and certificate leaf[subject.OU] = "9C5SL5H7CM""#
 
     private let listener: NSXPCListener
     private let log: OSLog

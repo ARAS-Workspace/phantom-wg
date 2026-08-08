@@ -84,6 +84,19 @@ enum SystemKeychainVault {
             break
         }
 
+        // Read the current payload before disturbing the slot. This is
+        // the only copy of the tunnel's keys, so a failed `SecItemAdd`
+        // below must be able to put back exactly what was there rather
+        // than leaving the caller a `false` and an empty slot.
+        // `Self.` is required: the `payload` parameter shadows the
+        // `payload(for:)` reader inside this function.
+        let previous: Data?
+        if case .payload(let data) = Self.payload(for: id) {
+            previous = data
+        } else {
+            previous = nil
+        }
+
         SecItemDelete(query(id: id) as CFDictionary)
 
         var attributes = query(id: id)
@@ -93,6 +106,16 @@ enum SystemKeychainVault {
 
         let status = SecItemAdd(attributes as CFDictionary, nil)
         report("store", id: id, status: status)
+
+        if status != errSecSuccess, let previous {
+            // Roll the old payload back so a failed rewrite is not an
+            // irreversible loss of the tunnel's secrets.
+            var restore = query(id: id)
+            restore[kSecAttrDescription as String] = String(owner)
+            restore[kSecAttrLabel as String] = "Phantom-WG Tunnel (\(id))"
+            restore[kSecValueData as String] = previous
+            report("store(rollback)", id: id, status: SecItemAdd(restore as CFDictionary, nil))
+        }
         return status == errSecSuccess
     }
 
@@ -171,10 +194,23 @@ enum SystemKeychainVault {
         // accounts first and then read each payload with the
         // single-item query that is known to work.
         guard let accounts = accounts(of: owner) else { return nil }
-        return accounts.compactMap { account -> Data? in
-            guard case .payload(let data) = payload(for: account) else { return nil }
-            return data
+        var payloads: [Data] = []
+        for account in accounts {
+            switch payload(for: account) {
+            case .payload(let data):
+                payloads.append(data)
+            case .missing:
+                // Raced a delete between enumerate and read — skipping
+                // it is honest, the item is genuinely gone.
+                continue
+            case .failed:
+                // A real read failure must never shrink the vault into a
+                // shorter-but-valid list the reconcile pass would trust:
+                // the whole enumeration is unusable.
+                return nil
+            }
         }
+        return payloads
     }
 
     /// Deletes every payload belonging to `owner`. The uninstall flow
