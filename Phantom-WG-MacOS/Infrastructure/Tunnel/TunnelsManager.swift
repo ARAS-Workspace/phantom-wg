@@ -480,6 +480,11 @@ class TunnelsManager {
                     }
                 }
 
+                // This tunnel may be the one a queued tunnel was waiting
+                // to replace; its failure is that tunnel's turn — the
+                // same hand-off the non-attempting `.inactive` path does.
+                activateWaitingTunnelIfNeeded()
+
             case .connecting:
                 tunnel.status = .activating
 
