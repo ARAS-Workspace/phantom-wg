@@ -12,7 +12,12 @@ import NetworkExtension
 /// change-notification bursts into single reload+reconcile passes.
 /// Activation lives in `TunnelsManager+Activation`: one active tunnel
 /// at a time — a newly toggled tunnel waits out the previous one's
-/// deactivation before it starts.
+/// deactivation before it starts. Every activation also silently arms
+/// the recovery rule (one connect-on-any-network on-demand rule): an
+/// activated tunnel is one the user wants back, so the system revives
+/// it across reboots, app termination, and network loss. Deactivation
+/// stands the rule down, and activating one tunnel disarms every
+/// other tunnel's rule.
 @Observable
 @MainActor
 class TunnelsManager {

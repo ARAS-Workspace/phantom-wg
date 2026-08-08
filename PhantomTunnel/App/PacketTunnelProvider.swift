@@ -126,6 +126,12 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
             TunnelLogger.log(.tunnel, "Tunnel disconnected")
             completionHandler()
 
+            // Exiting does not stand recovery down — the on-demand
+            // rule lives in the system's preferences, not in this
+            // process. The app's stop path disarms before it stops;
+            // a stop from outside the app (System Settings) leaves
+            // the rule armed, so the system may start this tunnel
+            // again.
             #if os(macOS)
             exit(0)
             #endif

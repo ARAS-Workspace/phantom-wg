@@ -26,6 +26,8 @@ final class PreviewTunnelProvider: TunnelProviding {
 
     var localizedDescription: String?
     var isEnabled: Bool = true
+    var isOnDemandEnabled: Bool = false
+    var onDemandRules: [NEOnDemandRule]?
 
     private(set) var config: TunnelConfig?
     var tunnelIdentity: TunnelIdentity? { config?.identity }

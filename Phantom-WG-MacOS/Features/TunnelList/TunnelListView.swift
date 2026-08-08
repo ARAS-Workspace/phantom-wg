@@ -137,7 +137,14 @@ struct TunnelListView: View {
         uninstalling = true
         Task {
             do {
-                // The vault empties first, while the tunnel extension
+                // Recovery rules stand down before anything else: the
+                // tunnel entries stay behind after uninstall, and an
+                // armed rule on an orphaned entry would keep asking
+                // the system to revive a tunnel whose extension is
+                // about to be gone.
+                await tunnelsManager.disarmAllRecovery()
+
+                // The vault empties next, while the tunnel extension
                 // is still there to answer — deactivation removes the
                 // XPC peer. A failed purge stops the uninstall whole:
                 // better than reporting clean while secrets stay in

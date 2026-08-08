@@ -18,15 +18,64 @@ extension TunnelsManager {
             return
         }
 
+        // Disarm every other tunnel's recovery rule first — recovery
+        // belongs to the tunnel being activated now
+        tunnels.filter { $0.id != tunnel.id && $0.isActivateOnDemandEnabled }.forEach { other in
+            other.tunnelProvider.isOnDemandEnabled = false
+            other.tunnelProvider.savePreferences { _ in }
+        }
+
         startActivation(of: tunnel, at: 0)
     }
 
     func startDeactivation(of tunnel: TunnelContainer) {
         guard tunnel.status != .inactive && tunnel.status != .deactivating else { return }
-        performDeactivation(of: tunnel)
+
+        // Stand the recovery rule down first — with it armed, the
+        // system would reconnect the moment the tunnel drops.
+        if tunnel.isActivateOnDemandEnabled {
+            tunnel.tunnelProvider.isOnDemandEnabled = false
+            Task {
+                do {
+                    try await tunnel.tunnelProvider.savePreferences()
+                    performDeactivation(of: tunnel)
+                } catch {
+                    // The tunnel keeps running and stays armed — a
+                    // fact, not a choice: the stop request could not
+                    // be persisted. Surface it instead of pretending.
+                    tunnel.lastActivationError = .savingFailed(systemError: error)
+                }
+            }
+        } else {
+            performDeactivation(of: tunnel)
+        }
+    }
+
+    /// Uninstall-path sweep: stands every tunnel's recovery rule down.
+    /// The tunnel entries themselves stay behind (removing each would
+    /// raise its own consent prompt), and an armed rule on an orphaned
+    /// entry would keep asking the system to revive a tunnel whose
+    /// extension is about to be gone. Best-effort, like the rest of
+    /// the uninstall path.
+    func disarmAllRecovery() async {
+        for tunnel in tunnels where tunnel.isActivateOnDemandEnabled {
+            tunnel.tunnelProvider.isOnDemandEnabled = false
+            try? await tunnel.tunnelProvider.savePreferences()
+        }
     }
 
     // MARK: - Private
+
+    /// The recovery rule: one connect-on-any-network on-demand rule,
+    /// armed on every activation. There is no user-facing switch —
+    /// starting a tunnel is the recovery intent, stopping it withdraws
+    /// it (`startDeactivation` disarms before it stops).
+    private static func armRecovery(on provider: TunnelProviding) {
+        let rule = NEOnDemandRuleConnect()
+        rule.interfaceTypeMatch = .any
+        provider.onDemandRules = [rule]
+        provider.isOnDemandEnabled = true
+    }
 
     func startActivation(of tunnel: TunnelContainer, at retryIndex: Int) {
         guard retryIndex < maxRetries else {
@@ -51,7 +100,12 @@ extension TunnelsManager {
         let attemptId = UUID().uuidString
         tunnel.activationAttemptId = attemptId
 
+        // Enable the manager and arm recovery in the same save. An
+        // activated tunnel is one the user wants back: the system
+        // restarts it whenever a network returns — across reboots
+        // and app termination included.
         tunnel.tunnelProvider.isEnabled = true
+        Self.armRecovery(on: tunnel.tunnelProvider)
         Task {
             do {
                 try await tunnel.tunnelProvider.savePreferences()

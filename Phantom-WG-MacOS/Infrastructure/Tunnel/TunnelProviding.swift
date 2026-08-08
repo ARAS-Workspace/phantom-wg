@@ -19,6 +19,13 @@ protocol TunnelProviding: AnyObject {
     var tunnelIdentity: TunnelIdentity? { get }
     func configure(with identity: TunnelIdentity)
 
+    // MARK: - Recovery (NE on-demand)
+
+    /// Storage for the recovery rule — armed on activation, stood
+    /// down on deactivation; see `TunnelsManager.armRecovery`.
+    var isOnDemandEnabled: Bool { get set }
+    var onDemandRules: [NEOnDemandRule]? { get set }
+
     // MARK: - Connection
 
     var connectionStatus: NEVPNStatus { get }

@@ -27,6 +27,12 @@ class TunnelContainer: Identifiable {
         identity?.isGhost ?? false
     }
 
+    /// Whether the recovery rule is armed (NE's `isOnDemandEnabled`) —
+    /// true for the tunnel the system is committed to reviving.
+    var isActivateOnDemandEnabled: Bool {
+        tunnelProvider.isOnDemandEnabled
+    }
+
     // Activation tracking (used by TunnelsManager). These are internal
     // state — excluded from observation tracking so they don't invalidate
     // views that have no visibility into activation bookkeeping.
