@@ -412,6 +412,18 @@ class TunnelsManager {
         }
     }
 
+    /// Stand-in for the rare paths where the system hands us no error
+    /// object; carries a localized description so the alert's `%@`
+    /// slot stays honest instead of printing a fabricated code.
+    /// Internal, not private: `TunnelsManager+Activation` shares it.
+    static func noSystemDetail(_ description: String) -> NSError {
+        NSError(
+            domain: "PhantomWG",
+            code: -1,
+            userInfo: [NSLocalizedDescriptionKey: description]
+        )
+    }
+
     // MARK: - Status Observation
 
     private func startObservingTunnelStatuses() {
@@ -447,8 +459,20 @@ class TunnelsManager {
                 tunnel.status = .inactive
 
                 if tunnel.lastActivationError == nil {
-                    tunnel.lastActivationError = .failedWhileActivating(
-                        systemError: NSError(domain: NEVPNErrorDomain, code: 0))
+                    // The system dropped the session mid-activation.
+                    // Its own record of why — the extension's start
+                    // failure — beats any synthesized stand-in; the
+                    // attemptId guard keeps a slow fetch from writing
+                    // over a newer activation round.
+                    let attemptId = tunnel.activationAttemptId
+                    Task { @MainActor in
+                        let systemError = await tunnel.tunnelProvider.fetchLastDisconnectError()
+                        guard tunnel.activationAttemptId == attemptId,
+                              tunnel.lastActivationError == nil else { return }
+                        tunnel.lastActivationError = .failedWhileActivating(
+                            systemError: systemError
+                                ?? Self.noSystemDetail(LocalizationManager.shared.t("error_detail_session_ended")))
+                    }
                 }
 
             case .connecting:
@@ -522,10 +546,16 @@ class TunnelsManager {
     private func reload() async {
         guard let providers = try? await providerFactory.loadAllFromPreferences() else { return }
 
+        // Update existing tunnels, add new ones, remove deleted ones.
+        // Matching goes by persisted identity, not manager instance —
+        // `loadAllFromPreferences` hands back fresh objects every call,
+        // and an instance comparison would discard the containers the
+        // views are already holding, resetting their activation
+        // bookkeeping mid-flight.
         var newTunnels: [TunnelContainer] = []
 
         for provider in providers {
-            if let existing = tunnels.first(where: { $0.tunnelProvider.isEqual(to: provider) }) {
+            if let existing = tunnels.first(where: { $0.id == provider.tunnelIdentity?.id }) {
                 existing.name = provider.localizedDescription ?? ""
                 existing.refreshStatus()
                 newTunnels.append(existing)

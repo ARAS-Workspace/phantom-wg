@@ -61,10 +61,9 @@ extension NETunnelProviderManager: TunnelProviding {
         return connection === session
     }
 
-    // MARK: - Equality
+    // MARK: - Diagnostics
 
-    func isEqual(to other: TunnelProviding) -> Bool {
-        guard let otherManager = other as? NETunnelProviderManager else { return false }
-        return self == otherManager
+    func fetchLastDisconnectError(completion: @escaping @Sendable (Error?) -> Void) {
+        connection.fetchLastDisconnectError(completionHandler: completion)
     }
 }

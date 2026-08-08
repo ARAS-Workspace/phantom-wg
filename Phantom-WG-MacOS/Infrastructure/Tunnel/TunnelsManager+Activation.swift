@@ -34,8 +34,11 @@ extension TunnelsManager {
             tunnel.activationTask?.cancel()
             tunnel.activationTask = nil
             tunnel.status = .inactive
+            // Every attempt started without throwing and the system
+            // never reported connected or disconnected — there is no
+            // system error to show, only the timeout itself.
             tunnel.lastActivationError = .retryLimitReached(
-                lastSystemError: NSError(domain: NEVPNErrorDomain, code: 1))
+                lastSystemError: TunnelsManager.noSystemDetail(LocalizationManager.shared.t("error_detail_timeout")))
             return
         }
 

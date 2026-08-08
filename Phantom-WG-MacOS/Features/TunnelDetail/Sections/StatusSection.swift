@@ -121,3 +121,25 @@ struct StatusSection: View {
     .previewEnvironment(tunnels: manager)
     .frame(width: 560)
 }
+
+/// Live twin of the real-disconnect flow: flip the toggle and the
+/// session drops after a beat, surfacing the provider's own record
+/// through the same fetch path production uses. The sample mirrors
+/// `PacketTunnelProviderError.couldNotStartWstunnel` — a listener
+/// that fails to open is a real start-time throw; an unreachable
+/// server is not (wstunnel connects lazily and never fails start).
+#Preview("Failing activation — live") {
+    let provider = PreviewFixtures.provider(config: PreviewFixtures.ghostConfig(name: "Broken Edge"))
+    provider.disconnectError = NSError(
+        domain: "PhantomTunnel",
+        code: 3,
+        userInfo: [NSLocalizedDescriptionKey: "The wstunnel proxy could not be started."]
+    )
+    let manager = PreviewFixtures.tunnelsManager(providers: [provider])
+    return Form {
+        StatusSection(tunnel: manager.tunnels[0], isGhost: true)
+    }
+    .formStyle(.grouped)
+    .previewEnvironment(tunnels: manager)
+    .frame(width: 560)
+}
