@@ -162,10 +162,10 @@ final class VaultIntegrityWorkflow: TestWorkflow {
 
     /// A payload present in the vault but not decodable must not read
     /// the same as one that is truly absent — otherwise reconcile,
-    /// which trusts "missing" as "the vault owns nothing here", can
-    /// drop a real entry and orphan its secret. Today read(id) maps a
-    /// decode failure to `.missing`, so this is expected to be the
-    /// finding until a distinct outcome exists.
+    /// which trusts "missing" as "the vault owns nothing here", would
+    /// drop a real entry and orphan its secret. read(id) reports a
+    /// decode failure as `.undecodable`, distinct from `.missing`; this
+    /// guards that distinction.
     private func undecodableRead() async {
         let corruptId = UUID()
         let absentId = UUID() // never written — the honest "absent" baseline
@@ -209,8 +209,9 @@ final class VaultIntegrityWorkflow: TestWorkflow {
     /// Corrupt a real tunnel's payload in place, then reconcile. The
     /// entry — and the secret bytes — must survive: a broken payload is
     /// a custody problem to surface, not a licence to delete the entry.
-    /// Today reconcile compares against readAll's DECODABLE set, so the
-    /// entry is dropped and the payload orphaned — the finding.
+    /// reconcile's drop path consults read(id), which reports
+    /// `.undecodable` rather than `.missing`, so the entry is preserved;
+    /// this guards against a regression that would orphan the secret.
     private func corruptionSurvival() async {
         let name = "TE-Corrupt-\(runTag)"
         guard let cfg = TestConfigFactory.throwaway(name: name) else {

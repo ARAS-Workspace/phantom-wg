@@ -2,19 +2,20 @@
 import Foundation
 
 /// Two config-shape contracts that only bite when a hostile or damaged
-/// payload reaches the tunnel layer. Both are expected to expose a real
-/// gap on the first run — they are written as the specification the
-/// product must meet, and the failing step is the finding.
+/// payload reaches the tunnel layer. Each guards a shipped behaviour and
+/// fails only if that behaviour regresses.
 ///
 /// 1. Empty AllowedIPs: a peer that routes nothing must be refused. If
-///    such a config reaches `.active`, WireGuard has no cryptokey
-///    route and every packet leaves the utun in the clear — a total
-///    leak behind a green status. The check is a real activation of a
-///    config the typed model permits but no user should run.
+///    such a config reached `.active`, WireGuard would have no cryptokey
+///    route and every packet would leave the utun in the clear — a
+///    total leak behind a green status. The builder now throws on empty
+///    AllowedIPs; this activates a config the typed model permits but
+///    no user should run and proves it never goes active.
 /// 2. Multi-[Peer] import: a `.conf` with two `[Peer]` sections must
-///    not silently collapse into one damaged peer. Either the parser
-///    preserves both, or it rejects the input — a quiet merge is the
-///    failure.
+///    not silently collapse into one working tunnel. The parser merges
+///    same-named sections, so the merged result must be rejected (or,
+///    if ever accepted, preserve both peers) — a quiet merge that then
+///    activates is the failure.
 final class ConfigContractWorkflow: TestWorkflow {
     override var displayName: String { "Config Contract (Leak + Parse Guards)" }
 
@@ -25,9 +26,6 @@ final class ConfigContractWorkflow: TestWorkflow {
         ]
     }
 
-    private var planted: TunnelContainer?
-    private var plantedId: UUID?
-
     // MARK: - Steps
 
     private func emptyAllowedIPs() async {
@@ -36,17 +34,13 @@ final class ConfigContractWorkflow: TestWorkflow {
             fail("factory produced no config")
             return
         }
-        plantedId = cfg.id
+        let t: TunnelContainer
         do {
-            planted = try await tunnels.add(config: cfg)
+            t = try await tunnels.add(config: cfg)
         } catch {
             // Refusing at import is one valid way to honour the guard.
             log("import refused a no-route config: \(error.localizedDescription)", .ok)
             check(true, "no-route config never became a runnable tunnel")
-            return
-        }
-        guard let t = planted else {
-            fail("added but no container")
             return
         }
         tunnels.startActivation(of: t)
@@ -72,8 +66,9 @@ final class ConfigContractWorkflow: TestWorkflow {
         do {
             let draft = try ConfParser.parse(text)
             // Parser accepted it — the only acceptable acceptance keeps
-            // BOTH peers. The current section model merges same-named
-            // sections, so a single collapsed peer is the finding.
+            // BOTH peers. The section model merges same-named sections,
+            // so acceptance with a single collapsed peer would be the
+            // failure; validation currently rejects the merged result.
             let result = draft.validate()
             if let cfg = result.config {
                 check(cfg.wireguard.peer.allowedIPs.count >= 4,

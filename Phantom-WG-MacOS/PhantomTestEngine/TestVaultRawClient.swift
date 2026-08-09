@@ -1,6 +1,5 @@
 #if DEBUG
 import Foundation
-import os.log
 
 /// Raw XPC path to the vault daemon, below the app's `TunnelVaultClient`.
 /// The production client only ever encodes a valid `TunnelConfig`, so
@@ -16,7 +15,6 @@ import os.log
 final class TestVaultRawClient {
 
     private var connection: NSXPCConnection?
-    private let log = OSLog(subsystem: "com.remrearas.Phantom-WG-MacOS", category: "vault-raw-test")
 
     private func proxy(_ onError: @escaping @Sendable (Error) -> Void) -> TunnelVaultDaemonProtocol? {
         if connection == nil {
