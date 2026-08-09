@@ -9,6 +9,10 @@ enum TestCatalog {
     static var workflows: [TestWorkflow] {
         [
             SanityWorkflow(),
+            VaultIntegrityWorkflow(),
+            PhantomTunnelWorkflow(.standalone),
+            PhantomTunnelWorkflow(.ghost),
+            UnreachableWorkflow(),
             // ← register new workflows here
         ]
     }

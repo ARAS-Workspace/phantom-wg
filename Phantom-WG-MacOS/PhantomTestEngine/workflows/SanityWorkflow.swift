@@ -6,11 +6,10 @@ import Foundation
 /// app identity, and ghost vs standalone is read correctly. No server.
 ///
 /// A model workflow: each `steps` entry names a step method; the method
-/// bodies are pure logic using the inherited helpers (log/check/pass/fail
+/// bodies are pure logic using the inherited helpers (log/check/fail/skip
 /// and the service shortcuts). No context or reporter is threaded in.
 final class SanityWorkflow: TestWorkflow {
     override var displayName: String { "Sanity Check" }
-    override var needsServer: Bool { false }
 
     override var steps: [WorkflowStep] {
         [

@@ -25,6 +25,7 @@ struct TestEngineView: View {
     @Environment(\.dismiss) private var dismiss
 
     @State private var engine = PhantomTestEngine()
+    @State private var runTask: Task<Void, Never>?
     @State private var savingError: String?
     @State private var showingSaveError = false
 
@@ -53,13 +54,16 @@ struct TestEngineView: View {
                     Button(s.close) { dismiss() }
                 }
             }
-            .alert(s.gateTitle, isPresented: $showingSaveError) {
-                Button("OK") {}
+            .alert(s.saveErrorTitle, isPresented: $showingSaveError) {
+                Button(s.ok) {}
             } message: {
                 Text(savingError ?? "")
             }
         }
         .frame(minWidth: 560, minHeight: 600)
+        // A dismissed sheet must not keep driving live tunnels: the run
+        // is cancelled with the view, and the runner reports "stopped".
+        .onDisappear { runTask?.cancel() }
     }
 
     // MARK: - Runner (control bar + flat log)
@@ -68,7 +72,7 @@ struct TestEngineView: View {
         VStack(spacing: 0) {
             HStack(spacing: 10) {
                 Button {
-                    Task { await engine.run(TestCatalog.workflows, ctx) }
+                    runTask = Task { await engine.run(TestCatalog.workflows, ctx) }
                 } label: {
                     Label(s.run, systemImage: "play.fill")
                 }
@@ -76,6 +80,11 @@ struct TestEngineView: View {
                 .disabled(engine.isRunning)
 
                 if engine.isRunning {
+                    Button {
+                        runTask?.cancel()
+                    } label: {
+                        Label(s.stop, systemImage: "stop.fill")
+                    }
                     ProgressView().controlSize(.small)
                 }
                 Spacer()
@@ -191,6 +200,9 @@ struct TestEngineView: View {
 
     private func timestamp() -> String {
         let formatter = DateFormatter()
+        // Fixed-format output must not drift with the user's calendar
+        // or numbering system.
+        formatter.locale = Locale(identifier: "en_US_POSIX")
         formatter.dateFormat = "yyyy-MM-dd-HHmmss"
         return formatter.string(from: Date())
     }
@@ -216,6 +228,7 @@ struct TestEngineView: View {
         case .ok:      return .green
         case .warn:    return .orange
         case .error:   return .red
+        case .skip:    return .orange
         case .result:  return .secondary
         }
     }

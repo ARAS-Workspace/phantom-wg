@@ -1,8 +1,51 @@
 #if DEBUG
 import Foundation
 
+/// Reply from the tunnel extension's app-message surface. The two
+/// negative shapes are different claims and must not be told the same
+/// way: `.empty` is the extension answering "no" (its documented
+/// contract for empty and unknown messages), `.unanswered` is nobody
+/// answering at all — the session refused the send or the reply never
+/// came within the timeout.
+enum ProviderReply: Equatable {
+    case data(Data)
+    case empty
+    case unanswered
+
+    var label: String {
+        switch self {
+        case .data(let d): return "data(\(d.count) bytes)"
+        case .empty: return "empty"
+        case .unanswered: return "unanswered"
+        }
+    }
+}
+
+/// DEBUG-local mirror of the vault client's private `SingleResume`:
+/// guards a continuation against the race between a late XPC reply and
+/// the timeout task — the first finish wins, the rest are dropped.
+private final class StepResume<T>: @unchecked Sendable {
+    private let continuation: CheckedContinuation<T, Never>
+    private let lock = NSLock()
+    private var done = false
+
+    init(_ continuation: CheckedContinuation<T, Never>) {
+        self.continuation = continuation
+    }
+
+    func finish(_ value: T) {
+        lock.lock()
+        let first = !done
+        done = true
+        lock.unlock()
+        if first { continuation.resume(returning: value) }
+    }
+}
+
 /// One step: an English title and a pure async body. The body uses the
-/// workflow's inherited helpers; nothing is threaded in.
+/// workflow's inherited helpers; nothing is threaded in. A body does
+/// its work inline (await) — never in a spawned Task — so log lines
+/// and the PASS/FAIL verdict attribute to the right step.
 struct WorkflowStep {
     let title: String
     let body: @MainActor () async -> Void
@@ -23,15 +66,16 @@ class TestWorkflow {
     private var context: TestContext!
     private weak var engine: PhantomTestEngine?
     private var stepFailed = false
+    private var stepSkipReason: String?
 
     // MARK: - Subclass surface (override these)
 
     /// The run title (English).
     var displayName: String { "" }
-    /// True when the workflow needs a reachable endpoint. Declared for the
-    /// catalog; server-free workflows run unconditionally.
-    var needsServer: Bool { false }
-    /// The ordered steps: an English title + a step method each.
+    /// The ordered steps: an English title + a step method each. A
+    /// server-dependent claim does not need declaring up front: the
+    /// step that owns it reports `skip("environment: …")` when the
+    /// answer never comes.
     var steps: [WorkflowStep] { [] }
 
     // MARK: - Everything the app exposes to the user (no plumbing)
@@ -65,6 +109,69 @@ class TestWorkflow {
         if !condition { stepFailed = true }
         return condition
     }
+    /// Marks the step as skipped: for claims whose precondition is not
+    /// met — usually the environment (a server that did not answer).
+    /// A skip is honest reporting, not a failure; `fail` outranks it.
+    func skip(_ reason: String) {
+        stepSkipReason = reason
+    }
+
+    // MARK: - Live-surface helpers (timeout-guarded, English)
+
+    /// Polls the container's status until it reaches `target` or the
+    /// budget runs out, logging every transition with elapsed time.
+    /// Activation is fire-and-forget by design, so polling the observed
+    /// status IS the user's perspective — and the budget guarantees a
+    /// hung transition can never wedge the runner.
+    ///
+    /// Observer-only, on evidence: the manager's own status observation
+    /// keeps `status` current, and a `refreshStatus()` here proved
+    /// harmful on the first live run — it stomped the manager's
+    /// optimistic `.activating` with the system's stale value and
+    /// logged a transition that never happened. The harness observes
+    /// shared state, it never writes it.
+    @discardableResult
+    func awaitStatus(_ tunnel: TunnelContainer, is target: TunnelStatus, within seconds: Double) async -> Bool {
+        let start = Date()
+        var last = tunnel.status
+        while Date().timeIntervalSince(start) < seconds {
+            if Task.isCancelled { return false }
+            if tunnel.status != last {
+                log("status: \(last) → \(tunnel.status) (t=\(Self.elapsed(start)))")
+                last = tunnel.status
+            }
+            if tunnel.status == target { return true }
+            try? await Task.sleep(for: .milliseconds(200))
+        }
+        log("status stayed \(tunnel.status) — no \(target) within \(Int(seconds))s", .warn)
+        return false
+    }
+
+    /// Sends one app message to the tunnel extension and races the
+    /// reply against a timeout, so a mute extension can never wedge
+    /// the runner. `NETunnelProviderSession` RPCs aren't cancellable;
+    /// a late reply after a timeout win is simply dropped.
+    func providerMessage(_ tunnel: TunnelContainer, _ bytes: [UInt8], timeout: Double = 5) async -> ProviderReply {
+        await withCheckedContinuation { continuation in
+            let resume = StepResume(continuation)
+            do {
+                try tunnel.tunnelProvider.sendProviderMessage(Data(bytes)) { data in
+                    resume.finish(data.map(ProviderReply.data) ?? .empty)
+                }
+            } catch {
+                resume.finish(.unanswered)
+                return
+            }
+            Task {
+                try? await Task.sleep(for: .seconds(timeout))
+                resume.finish(.unanswered)
+            }
+        }
+    }
+
+    private static func elapsed(_ start: Date) -> String {
+        String(format: "%.1fs", Date().timeIntervalSince(start))
+    }
 
     // MARK: - Runner entry (not for subclasses)
 
@@ -74,11 +181,18 @@ class TestWorkflow {
     }
     func _run() async {
         for step in steps {
+            if Task.isCancelled { break }
             stepFailed = false
+            stepSkipReason = nil
             engine?.emit("  • \(step.title)", .step)
             await step.body()
-            engine?.emit(stepFailed ? "    ✗ FAIL" : "    ✓ PASS",
-                         stepFailed ? .error : .ok)
+            if stepFailed {
+                engine?.emit("    ✗ FAIL", .error)
+            } else if let reason = stepSkipReason {
+                engine?.emit("    ◦ SKIP (\(reason))", .skip)
+            } else {
+                engine?.emit("    ✓ PASS", .ok)
+            }
         }
     }
 }
