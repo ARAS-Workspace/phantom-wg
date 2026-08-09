@@ -26,7 +26,7 @@ struct TunnelDetailView: View {
     /// Which way the last read failed. The vault's definitive
     /// "missing" and a vault that could not be reached tell different
     /// stories, and only the first may blame the configuration.
-    enum ConfigLoadFailure { case missing, unreachable }
+    enum ConfigLoadFailure { case missing, unreachable, undecodable }
     @State var loadFailure: ConfigLoadFailure?
 
     /// How many times a read is tried before the screen calls the
@@ -189,6 +189,13 @@ struct TunnelDetailView: View {
         case .missing:
             config = nil
             loadFailure = .missing
+        case .undecodable:
+            // The payload is there but corrupt — shown with the same
+            // "unavailable" banner as a miss (both mean "no config to
+            // show"), while the vault layer keeps the two apart so
+            // reconcile never drops a broken-but-present secret.
+            config = nil
+            loadFailure = .undecodable
         case .unreachable:
             config = nil
             loadFailure = .unreachable

@@ -108,6 +108,13 @@ class TunnelVaultClient {
         case config(TunnelConfig)
         /// The vault answered and had nothing usable for this tunnel.
         case missing
+        /// The vault holds a payload for this id, but it does not
+        /// decode into a `TunnelConfig`. Distinct from `.missing` on
+        /// purpose: the secret is present but unreadable, so reconcile
+        /// must NOT treat the entry as unbacked and drop it — that
+        /// would orphan the secret. A custody problem to surface, not
+        /// a licence to delete.
+        case undecodable
         /// The vault could not be reached, did not answer in time, or
         /// answered that it could not look.
         case unreachable
@@ -149,8 +156,8 @@ class TunnelVaultClient {
             return .missing
         case .payload(let data):
             guard let config = try? JSONDecoder().decode(TunnelConfig.self, from: data) else {
-                os_log("fetch — payload for %{public}@ FAILED to decode", log: log, type: .error, key)
-                return .missing
+                os_log("fetch — payload for %{public}@ FAILED to decode (present but unreadable)", log: log, type: .error, key)
+                return .undecodable
             }
             return .config(config)
         }
