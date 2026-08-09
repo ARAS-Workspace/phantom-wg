@@ -78,6 +78,26 @@ class TunnelVaultClient {
         }
     }
 
+    /// Stores with the same patience `read(id:attempts:)` gives reads.
+    /// The vault listener lives in the tunnel extension process, so a
+    /// mutation issued right after a tunnel deactivation can lose the
+    /// teardown/respawn race on its first try — caught live by the
+    /// in-app test engine (an import right after a deactivation failed
+    /// its one-shot store). The Bool cannot tell "unreachable" from
+    /// "refused", but a store is an idempotent upsert, so retrying a
+    /// refusal is harmless.
+    @discardableResult
+    func store(_ config: TunnelConfig, attempts: Int) async -> Bool {
+        for attempt in 1...max(1, attempts) {
+            if Task.isCancelled { return false }
+            if await store(config) { return true }
+            if attempt < attempts {
+                try? await Task.sleep(for: .milliseconds(600 * attempt))
+            }
+        }
+        return false
+    }
+
     /// Outcome of a single read. The two failures are different
     /// stories and callers must not tell them the same way: the vault
     /// answering "no such payload" is final, while failing to reach
@@ -182,6 +202,20 @@ class TunnelVaultClient {
                 proxy.deleteVault(id: key) { ok in resume.finish(ok) }
             }
         }
+    }
+
+    /// Delete-by-id is idempotent the same way — see `store(_:attempts:)`
+    /// for why a plain Bool retry is safe here.
+    @discardableResult
+    func delete(id: UUID, attempts: Int) async -> Bool {
+        for attempt in 1...max(1, attempts) {
+            if Task.isCancelled { return false }
+            if await delete(id: id) { return true }
+            if attempt < attempts {
+                try? await Task.sleep(for: .milliseconds(600 * attempt))
+            }
+        }
+        return false
     }
 
     /// Empties the vault — every payload this user owns. The uninstall

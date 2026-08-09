@@ -123,7 +123,7 @@ class TunnelsManager {
         // Secrets first. A tunnel entry whose vault payload is missing
         // cannot start, so the vault write gates the whole operation —
         // and a failure here leaves the system exactly as it was.
-        guard await vault.store(config) else {
+        guard await vault.store(config, attempts: 3) else {
             throw TunnelManagementError.vaultUnavailable
         }
 
@@ -132,7 +132,7 @@ class TunnelsManager {
         } catch {
             // Roll the vault back so a failed add leaves no orphaned
             // secrets behind.
-            await vault.delete(id: config.id)
+            await vault.delete(id: config.id, attempts: 3)
             throw error
         }
     }
@@ -315,7 +315,7 @@ class TunnelsManager {
             // A failed delete must abort the write: letting it proceed
             // past an unanswered dedup is the one way a name collision
             // can be born — exactly what this method's contract forbids.
-            guard await vault.delete(id: other.id) else {
+            guard await vault.delete(id: other.id, attempts: 3) else {
                 throw TunnelManagementError.vaultUnavailable
             }
             NSLog("[vault] dropped stale payload \(other.id) that claimed the name '\(name)'")
@@ -361,7 +361,7 @@ class TunnelsManager {
         // this, the vault holds the edit while the identity projection
         // stays stale — the tunnel still starts from the new payload,
         // and the next reconcile pass realigns the projection.
-        guard await vault.store(config) else {
+        guard await vault.store(config, attempts: 3) else {
             throw TunnelManagementError.vaultUnavailable
         }
 
@@ -390,7 +390,7 @@ class TunnelsManager {
         // agrees the tunnel is gone. And if the vault cannot be
         // reached, refusing outright leaves the tunnel whole rather
         // than half-deleted.
-        guard await vault.delete(id: tunnel.id) else {
+        guard await vault.delete(id: tunnel.id, attempts: 3) else {
             throw TunnelManagementError.vaultUnavailable
         }
 
