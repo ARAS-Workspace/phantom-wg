@@ -75,6 +75,18 @@ enum WireGuardConfigBuilder {
             IPAddressRange(from: $0.textual)
         }
 
+        // A peer with no allowed IPs installs no cryptokey route, so the
+        // utun captures nothing and every packet egresses on the
+        // physical NIC in the clear while the tunnel shows Active — a
+        // silent full leak. The import path already rejects an empty
+        // AllowedIPs, but a hand-edited or malformed vault payload can
+        // still arrive here with none; refuse to start rather than run
+        // a tunnel that routes nothing.
+        guard !peer.allowedIPs.isEmpty else {
+            TunnelLogger.log(.wireGuard, "ERROR: Peer has no usable AllowedIPs — refusing to start (no-route leak guard)")
+            throw PacketTunnelProviderError.savedProtocolConfigurationIsInvalid
+        }
+
         TunnelLogger.log(.wireGuard, "AllowedIPs: \(peer.allowedIPs.count) entries")
 
         // Endpoint: Ghost mode -> wstunnel listener (system-defined),
