@@ -33,6 +33,7 @@ final class PhantomTunnelWorkflow: TestWorkflow {
             WorkflowStep("XPC 1: Log Buffer Streams", logBufferStreams),
             WorkflowStep("XPC 2: Flush Round-Trip", flushRoundTrip),
             WorkflowStep("XPC 3: Layer Reset In Place", layerResetInPlace),
+            WorkflowStep("XPC 3 x2: Concurrent Reset Converges", concurrentReset),
             WorkflowStep("Negative: Empty and Unknown Opcode Rejected", negativeContract),
             WorkflowStep("Deactivate + Disarm Sweep", deactivateAndSweep),
         ]
@@ -183,10 +184,13 @@ final class PhantomTunnelWorkflow: TestWorkflow {
             skip("session not up")
             return
         }
-        do {
-            try await tunnels.resetConnection(of: t)
-        } catch {
-            fail("reset threw: \(error.localizedDescription)")
+        // The app's reset wrapper carries no timeout of its own, so a
+        // mute extension would wedge here — race it under a ceiling.
+        let done: Void? = await race(15) {
+            try? await self.tunnels.resetConnection(of: t)
+        }
+        guard done != nil else {
+            fail("reset did not return within 15s — extension may be wedged")
             return
         }
         log("reset returned — layer rebuilt in place", .ok)
@@ -217,6 +221,28 @@ final class PhantomTunnelWorkflow: TestWorkflow {
         // mechanical core of the reset (echo + return to active) was
         // already checked above.
         skip("environment: layer rebuilt, no fresh handshake within 30s")
+    }
+
+    /// Two resets fired without waiting between them. The extension
+    /// opens a fresh Task per opcode-3 message with no in-flight guard,
+    /// so their stop/start phases can interleave and fight over the
+    /// `reasserting` flag. Whatever the ordering, the tunnel must
+    /// converge to one consistent live state — never left down.
+    private func concurrentReset() async {
+        guard sessionUp, let t = target else {
+            skip("session not up")
+            return
+        }
+        async let first: Void? = race(20) { try? await self.tunnels.resetConnection(of: t) }
+        async let second: Void? = race(20) { try? await self.tunnels.resetConnection(of: t) }
+        let (a, b) = await (first, second)
+        guard a != nil, b != nil else {
+            fail("a concurrent reset did not return within 20s — wedge")
+            return
+        }
+        log("both concurrent resets returned", .ok)
+        check(await awaitStatus(t, is: .active, within: 30),
+              "converged to a single active state after overlapping resets — status=\(t.status)")
     }
 
     private func negativeContract() async {

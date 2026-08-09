@@ -24,7 +24,8 @@ enum ProviderReply: Equatable {
 /// DEBUG-local mirror of the vault client's private `SingleResume`:
 /// guards a continuation against the race between a late XPC reply and
 /// the timeout task — the first finish wins, the rest are dropped.
-private final class StepResume<T>: @unchecked Sendable {
+/// Shared by the step helpers and the raw vault client.
+final class StepResume<T>: @unchecked Sendable {
     private let continuation: CheckedContinuation<T, Never>
     private let lock = NSLock()
     private var done = false
@@ -92,6 +93,10 @@ class TestWorkflow {
     var splitClient: SplitTunnelDaemonClient { context.splitClient }
     var interfaceResolver: PhysicalInterfaceResolver { context.interfaceResolver }
     func tunnel(named name: String) -> TunnelContainer? { context.tunnel(named: name) }
+
+    /// Raw XPC vault path for injection steps — writes bytes the app's
+    /// encoder would never produce. Fresh per workflow.
+    let vaultRaw = TestVaultRawClient()
 
     // MARK: - Step helpers (English, indented under the current step)
 
@@ -166,6 +171,19 @@ class TestWorkflow {
                 try? await Task.sleep(for: .seconds(timeout))
                 resume.finish(.unanswered)
             }
+        }
+    }
+
+    /// Runs `operation` under a wall-clock ceiling. Returns its value,
+    /// or nil if the ceiling wins first — the harness must never await
+    /// an app call that itself carries no timeout (a mute extension
+    /// would wedge the runner otherwise). The losing operation keeps
+    /// running; only its result is dropped.
+    func race<T: Sendable>(_ seconds: Double, _ operation: @escaping @MainActor () async -> T) async -> T? {
+        await withCheckedContinuation { (continuation: CheckedContinuation<T?, Never>) in
+            let resume = StepResume(continuation)
+            Task { @MainActor in resume.finish(await operation()) }
+            Task { try? await Task.sleep(for: .seconds(seconds)); resume.finish(nil) }
         }
     }
 

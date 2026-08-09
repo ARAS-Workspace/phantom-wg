@@ -17,14 +17,24 @@ final class VaultIntegrityWorkflow: TestWorkflow {
             WorkflowStep("Rewrite Semantics", rewrite),
             WorkflowStep("Duty Separation (Same Name, Two IDs)", dutySeparation),
             WorkflowStep("Stress Interleave (10 Configs, 3 Rounds)", stressInterleave),
+            WorkflowStep("Undecodable Reported Distinctly (read id)", undecodableRead),
+            WorkflowStep("read(id) and readAll Agree On Undecodable", undecodableAgreement),
             WorkflowStep("Delete Proof", deleteProof),
             WorkflowStep("No Materialization", noMaterialization),
+            // Runs LAST, on a vault holding only the door configs: this
+            // is the only step that triggers a reconcile (via add), and
+            // keeping it after Delete Proof stops that reconcile from
+            // materialising the bulk throwaways this run had stored.
+            WorkflowStep("Entry Survives Corruption (Reconcile)", corruptionSurvival),
         ]
     }
 
     /// Everything this run ever stored — Delete Proof sweeps it all,
     /// even when an earlier step failed halfway.
     private var tracked: [TunnelConfig] = []
+    /// Ids written as RAW (undecodable) bytes via the injection client;
+    /// swept alongside `tracked` so no corrupt payload is left behind.
+    private var rawIds: [UUID] = []
     private let runTag = String(UUID().uuidString.prefix(8))
 
     // MARK: - Steps
@@ -57,6 +67,8 @@ final class VaultIntegrityWorkflow: TestWorkflow {
                 check(back == cfg, "\(cfg.name): read back equal to what was stored (ghost=\(cfg.isGhostMode))")
             case .missing:
                 fail("\(cfg.name): stored but read .missing")
+            case .undecodable:
+                fail("\(cfg.name): stored a valid config but read .undecodable")
             case .unreachable:
                 fail("\(cfg.name): read unreachable after store")
             }
@@ -81,6 +93,8 @@ final class VaultIntegrityWorkflow: TestWorkflow {
                   "same id reads back the rewritten payload (name=\(back.name)) — no stale read")
         case .missing:
             fail("payload vanished on rewrite")
+        case .undecodable:
+            fail("rewrote a valid config but read .undecodable")
         case .unreachable:
             fail("read unreachable after rewrite")
         }
@@ -146,7 +160,84 @@ final class VaultIntegrityWorkflow: TestWorkflow {
         await verifyExactSet(expected, "after re-storing 5")
     }
 
+    /// A payload present in the vault but not decodable must not read
+    /// the same as one that is truly absent — otherwise reconcile,
+    /// which trusts "missing" as "the vault owns nothing here", can
+    /// drop a real entry and orphan its secret. Today read(id) maps a
+    /// decode failure to `.missing`, so this is expected to be the
+    /// finding until a distinct outcome exists.
+    private func undecodableRead() async {
+        let corruptId = UUID()
+        let absentId = UUID() // never written — the honest "absent" baseline
+        guard await vaultRaw.storeRaw(Data("not-a-tunnelconfig".utf8), id: corruptId) else {
+            fail("raw store refused — vault unreachable")
+            return
+        }
+        rawIds.append(corruptId)
+        let corrupt = await vault.read(id: corruptId)
+        if case .unreachable = corrupt {
+            fail("vault unreachable")
+            return
+        }
+        let absent = await vault.read(id: absentId)
+        check(label(corrupt) != label(absent),
+              "undecodable distinct from absent — corrupt=\(label(corrupt)) absent=\(label(absent))")
+    }
+
+    /// The two app-facing read surfaces must not silently agree that an
+    /// undecodable payload is gone while it physically sits in the
+    /// vault. Today read(id)=.missing and readAll drops it from its
+    /// results — a matched pair of silent hides, which is the finding.
+    private func undecodableAgreement() async {
+        guard let id = rawIds.last else {
+            skip("no corrupt payload planted")
+            return
+        }
+        let byId = await vault.read(id: id)
+        guard case .configs(let all) = await vault.readAll() else {
+            fail("readAll unreachable")
+            return
+        }
+        let inReadAll = all.contains { $0.id == id }
+        let hiddenById = label(byId) == "missing"
+        check(!(hiddenById && !inReadAll),
+              "read(id) and readAll both silently hide the undecodable payload — read(id)=\(label(byId)) inReadAll=\(inReadAll)")
+    }
+
+    /// Corrupt a real tunnel's payload in place, then reconcile. The
+    /// entry — and the secret bytes — must survive: a broken payload is
+    /// a custody problem to surface, not a licence to delete the entry.
+    /// Today reconcile compares against readAll's DECODABLE set, so the
+    /// entry is dropped and the payload orphaned — the finding.
+    private func corruptionSurvival() async {
+        let name = "TE-Corrupt-\(runTag)"
+        guard let cfg = TestConfigFactory.throwaway(name: name) else {
+            fail("factory produced no config")
+            return
+        }
+        guard (try? await tunnels.add(config: cfg)) != nil else {
+            fail("add failed for the corruption base")
+            return
+        }
+        guard await vaultRaw.storeRaw(Data("corrupt".utf8), id: cfg.id) else {
+            fail("raw corrupt store refused")
+            return
+        }
+        _ = await tunnels.reconcileFromVault()
+        let survived = tunnel(named: name) != nil
+        check(survived, survived
+            ? "entry survived a corrupted payload through reconcile"
+            : "entry DROPPED after payload corruption — secret orphaned (reconcile read undecodable as absent)")
+        if let t = tunnel(named: name) {
+            try? await tunnels.remove(tunnel: t)
+        }
+        await vault.delete(id: cfg.id, attempts: 3)
+    }
+
     private func deleteProof() async {
+        for id in rawIds {
+            await vault.delete(id: id, attempts: 3)
+        }
         guard !tracked.isEmpty else {
             skip("nothing was stored")
             return
@@ -171,6 +262,15 @@ final class VaultIntegrityWorkflow: TestWorkflow {
     }
 
     // MARK: - Shared
+
+    private func label(_ read: TunnelVaultClient.Read) -> String {
+        switch read {
+        case .config:      return "config"
+        case .missing:     return "missing"
+        case .undecodable: return "undecodable"
+        case .unreachable: return "unreachable"
+        }
+    }
 
     /// The read(id) ↔ readAll divergence gate: the enumeration must be
     /// EXACTLY the expected id set — nothing missing, nothing extra,

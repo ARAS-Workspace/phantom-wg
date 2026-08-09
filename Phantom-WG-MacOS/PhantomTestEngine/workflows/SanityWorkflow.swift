@@ -53,6 +53,9 @@ final class SanityWorkflow: TestWorkflow {
             case .missing:
                 fail("vault: missing")
                 return
+            case .undecodable:
+                fail("vault: undecodable payload for a door config")
+                return
             case .unreachable:
                 log("vault: unreachable (attempt \(attempt)/3)", .warn)
                 try? await Task.sleep(for: .milliseconds(400))
