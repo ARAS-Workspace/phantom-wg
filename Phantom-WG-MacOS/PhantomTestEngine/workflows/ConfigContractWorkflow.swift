@@ -63,22 +63,28 @@ final class ConfigContractWorkflow: TestWorkflow {
 
     private func multiPeer() async {
         let text = TestConfigFactory.multiPeerConfText()
+        var draft: TunnelDraft
         do {
-            let draft = try ConfParser.parse(text)
-            // Parser accepted it — the only acceptable acceptance keeps
-            // BOTH peers. The section model merges same-named sections,
-            // so acceptance with a single collapsed peer would be the
-            // failure; validation currently rejects the merged result.
-            let result = draft.validate()
-            if let cfg = result.config {
-                check(cfg.wireguard.peer.allowedIPs.count >= 4,
-                      "both peers preserved — allowedIPs entries=\(cfg.wireguard.peer.allowedIPs.count) (2 peers x 2 ranges expected)")
-            } else {
-                // Rejected at validation is also acceptable (explicit refusal).
-                check(true, "multi-peer config rejected at validation (explicit) — errors=\(result.errors.count)")
-            }
+            draft = try ConfParser.parse(text)
         } catch {
-            check(true, "multi-peer config rejected at parse (explicit) — \(error)")
+            // Explicit rejection at parse is the correct guard — the
+            // collapse happens in the section merge, so this is where
+            // it must be caught.
+            check(true, "multi-peer config rejected at parse (explicit) — \(error.localizedDescription)")
+            return
+        }
+        // Parser accepted it. Give the draft a name FIRST, so validation
+        // runs the real import path — an unnamed draft fails on the empty
+        // name and that rejection would masquerade as a multi-peer guard.
+        // The only acceptable acceptance keeps BOTH peers; a single
+        // collapsed peer (one key, both ranges) is the failure.
+        draft.name = "TE-MultiPeer-\(UUID().uuidString.prefix(8))"
+        let result = draft.validate()
+        if let cfg = result.config {
+            check(cfg.wireguard.peer.allowedIPs.count >= 4,
+                  "both peers preserved — allowedIPs entries=\(cfg.wireguard.peer.allowedIPs.count) (a single collapsed peer would be < 4)")
+        } else {
+            fail("named multi-peer config still failed validation — collapsed silently rather than being rejected outright (errors=\(result.errors.count))")
         }
     }
 }
