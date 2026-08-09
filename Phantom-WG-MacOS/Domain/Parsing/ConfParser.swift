@@ -21,6 +21,7 @@ enum ConfParser {
         case emptyInput
         case noInterfaceSection
         case noPeerSection
+        case duplicateSection(String)
         case missingKey(section: String, key: String)
         case invalidTunnelFormat(section: String, key: String)
 
@@ -32,6 +33,8 @@ enum ConfParser {
                 return "Missing [Interface] section"
             case .noPeerSection:
                 return "Missing [Peer] section"
+            case .duplicateSection(let section):
+                return "Duplicate [\(section)] section — only one is supported"
             case .missingKey(let section, let key):
                 return "[\(section)] missing required key: \(key)"
             case .invalidTunnelFormat(let section, let key):
@@ -46,7 +49,7 @@ enum ConfParser {
         let trimmed = input.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { throw ParseError.emptyInput }
 
-        let sections = splitSections(trimmed)
+        let sections = try splitSections(trimmed)
 
         guard let interfaceAttrs = sections["interface"] else {
             throw ParseError.noInterfaceSection
@@ -76,7 +79,7 @@ enum ConfParser {
 
     /// Collects key/value pairs per `[Section]`. Multi-entry keys
     /// (Address, AllowedIPs, DNS) are merged with comma separators.
-    private static func splitSections(_ input: String) -> [String: [String: String]] {
+    private static func splitSections(_ input: String) throws -> [String: [String: String]] {
         let lines = input.components(separatedBy: .newlines)
         var result: [String: [String: String]] = [:]
         var currentSection: String?
@@ -89,8 +92,17 @@ enum ConfParser {
             // Section header
             if stripped.hasPrefix("["), stripped.hasSuffix("]") {
                 let name = String(stripped.dropFirst().dropLast()).lowercased()
+                // Each section is a singleton here. A repeated header —
+                // most often a second [Peer] — used to merge into the
+                // first (last value wins per key), silently collapsing
+                // multiple peers into one carrying the wrong key, so
+                // traffic for the dropped peer would encrypt to it.
+                // Reject the ambiguity instead of resolving it blindly.
+                guard result[name] == nil else {
+                    throw ParseError.duplicateSection(name.capitalized)
+                }
+                result[name] = [:]
                 currentSection = name
-                if result[name] == nil { result[name] = [:] }
                 continue
             }
 

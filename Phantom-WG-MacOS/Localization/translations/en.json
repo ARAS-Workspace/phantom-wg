@@ -99,6 +99,7 @@
   "parse_err_empty_input": "Configuration is empty.",
   "parse_err_no_interface": "Missing [Interface] section.",
   "parse_err_no_peer": "Missing [Peer] section.",
+  "parse_err_duplicate_section": "Duplicate [%@] section — only one is supported.",
   "parse_err_missing_key": "[%@] missing required key: %@",
   "parse_err_invalid_tunnel": "[%@] invalid %@: expected udp://host:port:host:port",
   "field_err_empty": "Required.",

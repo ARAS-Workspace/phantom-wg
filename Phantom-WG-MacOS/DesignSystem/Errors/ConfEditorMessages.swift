@@ -30,6 +30,8 @@ enum ConfEditorMessages {
             return loc.t("parse_err_no_interface")
         case .noPeerSection:
             return loc.t("parse_err_no_peer")
+        case .duplicateSection(let section):
+            return loc.t("parse_err_duplicate_section", section)
         case .missingKey(let section, let key):
             return loc.t("parse_err_missing_key", section, key)
         case .invalidTunnelFormat(let section, let key):
