@@ -93,6 +93,11 @@ targets:
           CODE_SIGN_INJECT_BASE_ENTITLEMENTS: YES
         Release:
           CODE_SIGN_INJECT_BASE_ENTITLEMENTS: NO
+          # DEBUG-only in-app test harness — belt-and-suspenders with the
+          # per-file `#if DEBUG` guards: never compiled into Release.
+          EXCLUDED_SOURCE_FILE_NAMES:
+            - "*/PhantomTestEngine/*"
+            - "*/PhantomTestEngine/*/*"
     postBuildScripts:
       - name: Copy to Applications (Debug)
         script: |

@@ -8,6 +8,9 @@ struct SettingsMenu: View {
     @Binding var showingUninstallConfirm: Bool
     @Binding var showingSplitTunneling: Bool
     let isUninstalling: Bool
+    #if DEBUG
+    @Binding var showingTestEngine: Bool
+    #endif
     @Environment(LocalizationManager.self) private var loc
 
     var body: some View {
@@ -48,6 +51,17 @@ struct SettingsMenu: View {
             }
             .disabled(isUninstalling)
             .accessibilityIdentifier(AXID.TunnelList.settingsUninstall)
+
+            #if DEBUG
+            Divider()
+
+            Button {
+                showingTestEngine = true
+            } label: {
+                Label(TestEngineStrings.of(loc.current).menuEntry, systemImage: "ladybug")
+            }
+            .disabled(isUninstalling)
+            #endif
         } label: {
             Image(systemName: "gearshape")
         }
@@ -66,16 +80,21 @@ struct SettingsMenu: View {
 
 // MARK: - Previews
 
+#if DEBUG
 #Preview {
     PreviewBindingHost(false) { uninstall in
         PreviewBindingHost(false) { split in
-            SettingsMenu(
-                showingUninstallConfirm: uninstall,
-                showingSplitTunneling: split,
-                isUninstalling: false
-            )
+            PreviewBindingHost(false) { testEngine in
+                SettingsMenu(
+                    showingUninstallConfirm: uninstall,
+                    showingSplitTunneling: split,
+                    isUninstalling: false,
+                    showingTestEngine: testEngine
+                )
+            }
         }
     }
     .previewEnvironment()
     .padding(40)
 }
+#endif

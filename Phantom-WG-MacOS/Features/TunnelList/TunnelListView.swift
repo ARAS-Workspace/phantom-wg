@@ -13,6 +13,9 @@ struct TunnelListView: View {
     @State private var showingUninstallConfirm = false
     @State private var showingSplitTunneling = false
     @State private var uninstalling = false
+    #if DEBUG
+    @State private var showingTestEngine = false
+    #endif
 
     /// The tunnel the top section mirrors. `TunnelsManager` enforces a
     /// single non-inactive tunnel at a time (activation queues behind
@@ -36,6 +39,11 @@ struct TunnelListView: View {
                         SplitTunnelingView()
                     }
                 }
+                #if DEBUG
+                .sheet(isPresented: $showingTestEngine) {
+                    TestEngineView()
+                }
+                #endif
                 .modifier(UninstallAlerts(
                     errorMessage: $errorMessage,
                     showingError: $showingError,
@@ -96,11 +104,20 @@ struct TunnelListView: View {
     @ToolbarContentBuilder
     private var toolbarContent: some ToolbarContent {
         ToolbarItem(placement: .navigation) {
+            #if DEBUG
+            SettingsMenu(
+                showingUninstallConfirm: $showingUninstallConfirm,
+                showingSplitTunneling: $showingSplitTunneling,
+                isUninstalling: uninstalling,
+                showingTestEngine: $showingTestEngine
+            )
+            #else
             SettingsMenu(
                 showingUninstallConfirm: $showingUninstallConfirm,
                 showingSplitTunneling: $showingSplitTunneling,
                 isUninstalling: uninstalling
             )
+            #endif
         }
         ToolbarItem(placement: .primaryAction) {
             Button {
