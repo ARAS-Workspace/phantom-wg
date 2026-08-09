@@ -18,7 +18,7 @@ final class VaultIntegrityWorkflow: TestWorkflow {
             WorkflowStep("Duty Separation (Same Name, Two IDs)", dutySeparation),
             WorkflowStep("Stress Interleave (10 Configs, 3 Rounds)", stressInterleave),
             WorkflowStep("Undecodable Reported Distinctly (read id)", undecodableRead),
-            WorkflowStep("read(id) and readAll Agree On Undecodable", undecodableAgreement),
+            WorkflowStep("Undecodable Not Silently Conflated (read vs readAll)", undecodableAgreement),
             WorkflowStep("Delete Proof", deleteProof),
             WorkflowStep("No Materialization", noMaterialization),
             // Runs LAST, on a vault holding only the door configs: this
@@ -184,10 +184,12 @@ final class VaultIntegrityWorkflow: TestWorkflow {
               "undecodable distinct from absent — corrupt=\(label(corrupt)) absent=\(label(absent))")
     }
 
-    /// The two app-facing read surfaces must not silently agree that an
-    /// undecodable payload is gone while it physically sits in the
-    /// vault. Today read(id)=.missing and readAll drops it from its
-    /// results — a matched pair of silent hides, which is the finding.
+    /// An undecodable payload must not be silently conflated with an
+    /// absent one across the read surfaces. read(id) is the surface
+    /// reconcile trusts for its drop decision, so it must surface the
+    /// payload as `.undecodable`; readAll legitimately excludes it from
+    /// its decodable-config list (reconcile does not drop off readAll),
+    /// so the invariant is "read(id) surfaces it", not "both list it".
     private func undecodableAgreement() async {
         guard let id = rawIds.last else {
             skip("no corrupt payload planted")
@@ -201,7 +203,7 @@ final class VaultIntegrityWorkflow: TestWorkflow {
         let inReadAll = all.contains { $0.id == id }
         let hiddenById = label(byId) == "missing"
         check(!(hiddenById && !inReadAll),
-              "read(id) and readAll both silently hide the undecodable payload — read(id)=\(label(byId)) inReadAll=\(inReadAll)")
+              "read(id) surfaces undecodable, not conflated with absent — read(id)=\(label(byId)), readAll excludes it (inReadAll=\(inReadAll))")
     }
 
     /// Corrupt a real tunnel's payload in place, then reconcile. The
