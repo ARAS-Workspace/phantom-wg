@@ -217,7 +217,7 @@ struct TunnelListView: View {
         .frame(width: 560, height: 720)
 }
 
-#Preview("No active tunnel") {
+#Preview("Tunnels — WireGuard + Ghost") {
     TunnelListView()
         .previewEnvironment(tunnels: PreviewFixtures.tunnelsManager(providers: [
             PreviewFixtures.provider(config: PreviewFixtures.wireguardConfig()),

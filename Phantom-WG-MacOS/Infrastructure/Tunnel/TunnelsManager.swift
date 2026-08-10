@@ -31,9 +31,11 @@ class TunnelsManager {
     /// construction. The system extension and its NE configurations are
     /// system-wide, so `loadAllFromPreferences` hands back every local
     /// user's configs; the vault, by contrast, is owner-scoped to this
-    /// same uid. This identity is what the ingest boundary keys on to
-    /// keep another user's tunnels out of the model. Injected in tests
-    /// so the multi-user paths can be driven as any user.
+    /// same uid — and that owner-scoped `readAll` is what the ingest
+    /// boundary actually filters on. This value is the matching
+    /// identity, surfaced in the ownership-pass diagnostic; overridable
+    /// at construction so the multi-user paths could be driven as any
+    /// user.
     @ObservationIgnored let currentUser: uid_t
     @ObservationIgnored private var statusObservationToken: AnyObject?
     @ObservationIgnored private var configObservationToken: AnyObject?
