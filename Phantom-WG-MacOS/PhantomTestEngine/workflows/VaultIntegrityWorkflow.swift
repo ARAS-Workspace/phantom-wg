@@ -21,11 +21,14 @@ final class VaultIntegrityWorkflow: TestWorkflow {
             WorkflowStep("Undecodable Not Silently Conflated (read vs readAll)", undecodableAgreement),
             WorkflowStep("Delete Proof", deleteProof),
             WorkflowStep("No Materialization", noMaterialization),
-            // Runs LAST, on a vault holding only the door configs: this
-            // is the only step that triggers a reconcile (via add), and
-            // keeping it after Delete Proof stops that reconcile from
-            // materialising the bulk throwaways this run had stored.
+            // These two run LAST, on a vault holding only the door
+            // configs: they are the only steps that trigger a reconcile
+            // (via add) — and the visibility gate drives a full reload
+            // besides. Keeping them after Delete Proof stops those
+            // passes from materialising the bulk throwaways this run
+            // had stored.
             WorkflowStep("Entry Survives Corruption (Reconcile)", corruptionSurvival),
+            WorkflowStep("Undecodable Payload Stays Listed (Reload)", custodyVisibility),
         ]
     }
 
@@ -235,6 +238,62 @@ final class VaultIntegrityWorkflow: TestWorkflow {
             try? await tunnels.remove(tunnel: t)
         }
         await vault.delete(id: cfg.id, attempts: 3)
+    }
+
+    /// The visibility half of the custody contract. Corrupt a real
+    /// tunnel's payload, then run the user's reload path: the tunnel
+    /// must STAY in the list. readAll legitimately excludes an
+    /// undecodable payload from its decodable-config answer, so the
+    /// ingest ownership boundary — which scopes the list by that
+    /// answer — would, unaided, mistake our own broken payload for
+    /// another local user's entry and hide it. Hidden is broken
+    /// custody: the detail screen's "config unavailable" surface is
+    /// reachable only through the list row, so a vanished row strands
+    /// the secret with no path to see, delete, or re-import it.
+    private func custodyVisibility() async {
+        let name = "TE-Visible-\(runTag)"
+        guard let cfg = TestConfigFactory.throwaway(name: name) else {
+            fail("factory produced no config")
+            return
+        }
+        guard let container = try? await tunnels.add(config: cfg) else {
+            fail("add failed for the visibility base")
+            return
+        }
+        guard await vaultRaw.storeRaw(Data("corrupt".utf8), id: cfg.id) else {
+            fail("raw corrupt store refused")
+            await cleanupVisibilityBase(container, cfg.id)
+            return
+        }
+        // Precondition, proven not assumed: the payload now reads
+        // .undecodable — present but unreadable, distinct from absent.
+        guard case .undecodable = await vault.read(id: cfg.id) else {
+            fail("precondition broke — read(id) did not answer .undecodable after the corrupt write")
+            await cleanupVisibilityBase(container, cfg.id)
+            return
+        }
+        await tunnels.refresh()
+        let visible = tunnels.tunnels.contains { $0.id == cfg.id }
+        check(visible, visible
+            ? "tunnel stayed listed through a reload with an undecodable payload — custody remains visible"
+            : "tunnel VANISHED from the list after a reload — the ownership filter took an undecodable own payload for another user's entry")
+        await cleanupVisibilityBase(container, cfg.id)
+    }
+
+    /// Tears down the visibility base: payload first, entry second —
+    /// and only in that order, loudly. If the payload delete fails the
+    /// NE entry stays put on purpose: the row keeps rendering (custody),
+    /// so whatever stranded is still visible and clearable by hand. The
+    /// container ref survives ingest, so the entry comes down even
+    /// while the list hides the tunnel (this gate's RED state).
+    private func cleanupVisibilityBase(_ container: TunnelContainer, _ id: UUID) async {
+        guard await vault.delete(id: id, attempts: 3) else {
+            log("cleanup: vault delete failed — NE entry left in place so the custody row stays reachable", .warn)
+            return
+        }
+        if (try? await container.tunnelProvider.removePreferences()) == nil {
+            log("cleanup: NE entry removal failed — an unbacked entry may linger in System Settings > VPN", .warn)
+        }
     }
 
     private func deleteProof() async {

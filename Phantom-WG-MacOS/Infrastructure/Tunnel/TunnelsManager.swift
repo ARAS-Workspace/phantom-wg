@@ -560,6 +560,18 @@ class TunnelsManager {
         await reconcileFromVault()
     }
 
+    #if DEBUG
+    /// Runs one reload pass on demand — the harness's deterministic
+    /// stand-in for the debounced refresh triggers. Production reaches
+    /// `reload()` only through `scheduleRefresh`'s trailing window; a
+    /// test proving list behavior across a reload cannot hang its
+    /// verdict on wall-clock timing, so this exposes the exact same
+    /// pass, nothing more.
+    func refresh() async {
+        await reload()
+    }
+    #endif
+
     /// The single boundary where system-wide NE providers become THIS
     /// user's tunnels. The system extension and its NE configurations
     /// are system-wide, so `providers` can carry another local user's
