@@ -26,6 +26,15 @@ class TunnelsManager {
 
     @ObservationIgnored private let providerFactory: TunnelProviderFactory
     @ObservationIgnored let vault: TunnelVaultClient
+
+    /// The uid this app instance runs as, read from the system once at
+    /// construction. The system extension and its NE configurations are
+    /// system-wide, so `loadAllFromPreferences` hands back every local
+    /// user's configs; the vault, by contrast, is owner-scoped to this
+    /// same uid. This identity is what the ingest boundary keys on to
+    /// keep another user's tunnels out of the model. Injected in tests
+    /// so the multi-user paths can be driven as any user.
+    @ObservationIgnored let currentUser: uid_t
     @ObservationIgnored private var statusObservationToken: AnyObject?
     @ObservationIgnored private var configObservationToken: AnyObject?
     @ObservationIgnored private var foregroundObservationToken: AnyObject?
@@ -63,16 +72,23 @@ class TunnelsManager {
     static func create(vault: TunnelVaultClient) async throws -> TunnelsManager {
         let factory = RealTunnelProviderFactory()
         let providers = try await factory.loadAllFromPreferences()
-        return TunnelsManager(tunnelProviders: providers, providerFactory: factory, vault: vault)
+        // Build empty, then ingest through the ownership boundary so the
+        // boot list is already scoped to this user — no foreign entry is
+        // ever shown, not even for the first frame.
+        let manager = TunnelsManager(tunnelProviders: [], providerFactory: factory, vault: vault)
+        await manager.ingest(providers)
+        return manager
     }
 
     init(
         tunnelProviders: [TunnelProviding],
         providerFactory: TunnelProviderFactory = RealTunnelProviderFactory(),
-        vault: TunnelVaultClient
+        vault: TunnelVaultClient,
+        currentUser: uid_t = getuid()
     ) {
         self.providerFactory = providerFactory
         self.vault = vault
+        self.currentUser = currentUser
         tunnels = Self.sortedByCreatedAt(tunnelProviders.map { TunnelContainer(tunnel: $0) })
         startObservingTunnelStatuses()
         startObservingTunnelConfigurations()
@@ -560,16 +576,25 @@ class TunnelsManager {
 
     private func reload() async {
         guard let providers = try? await providerFactory.loadAllFromPreferences() else { return }
+        await ingest(providers)
+        // The list now mirrors this user's slice of the system store;
+        // put back whatever the vault says should be in it.
+        await reconcileFromVault()
+    }
 
-        // Update existing tunnels, add new ones, remove deleted ones.
-        // Matching goes by persisted identity, not manager instance —
-        // `loadAllFromPreferences` hands back fresh objects every call,
-        // and an instance comparison would discard the containers the
-        // views are already holding, resetting their activation
-        // bookkeeping mid-flight.
+    /// The single boundary where system-wide NE providers become THIS
+    /// user's tunnels. The system extension and its NE configurations
+    /// are system-wide, so `providers` can carry another local user's
+    /// entries; only those the owner-scoped vault confirms as ours are
+    /// materialized. Foreign entries never enter the model, so nothing
+    /// downstream — the list, the detail/control surface, or reconcile's
+    /// drop pass — can show, drive, or delete them. Matching stays by
+    /// persisted identity so containers the views already hold survive.
+    private func ingest(_ providers: [TunnelProviding]) async {
+        let mine = await ownedProviders(among: providers)
+
         var newTunnels: [TunnelContainer] = []
-
-        for provider in providers {
+        for provider in mine {
             if let existing = tunnels.first(where: { $0.id == provider.tunnelIdentity?.id }) {
                 existing.name = provider.localizedDescription ?? ""
                 existing.refreshStatus()
@@ -578,11 +603,36 @@ class TunnelsManager {
                 newTunnels.append(TunnelContainer(tunnel: provider))
             }
         }
-
         tunnels = Self.sortedByCreatedAt(newTunnels)
+    }
 
-        // The list now mirrors the system store; put back whatever the
-        // vault says should be in it.
-        await reconcileFromVault()
+    /// Keeps only the providers whose configuration this user owns, per
+    /// the owner-scoped vault. When the vault cannot answer, ownership
+    /// is unverifiable, so it stays conservative: it keeps the providers
+    /// already known to be ours and reveals no unverified (possibly
+    /// foreign) one during that window, rather than flashing a stranger.
+    ///
+    /// The single line it logs when it actually drops something is the
+    /// field signal that isolation is doing its job on a shared machine
+    /// — quiet on a single-user Mac, and it names the uid it scoped to.
+    private func ownedProviders(among providers: [TunnelProviding]) async -> [TunnelProviding] {
+        let ownedIDs: Set<UUID>
+        let basis: String
+        switch await vault.readAll() {
+        case .configs(let mine):
+            ownedIDs = Set(mine.map(\.id))
+            basis = "vault"
+        case .unreachable:
+            ownedIDs = Set(tunnels.map(\.id))
+            basis = "cache (vault unreachable)"
+        }
+
+        let kept = providers.filter { provider in
+            provider.tunnelIdentity.map { ownedIDs.contains($0.id) } ?? false
+        }
+        if kept.count != providers.count {
+            NSLog("[vault] ingest uid \(currentUser): kept \(kept.count)/\(providers.count) via \(basis), \(providers.count - kept.count) not this user's")
+        }
+        return kept
     }
 }
