@@ -17,15 +17,6 @@ struct TunnelListView: View {
     @State private var showingTestEngine = false
     #endif
 
-    /// The tunnel the top section mirrors. `TunnelsManager` enforces a
-    /// single non-inactive tunnel at a time (activation queues behind
-    /// deactivation), so "first non-inactive" is the whole story. The
-    /// list itself stays in plain newest-first order — no active-first
-    /// pinning; the top section is where the running tunnel surfaces.
-    private var activeTunnel: TunnelContainer? {
-        tunnelsManager.tunnels.first { $0.status != .inactive }
-    }
-
     var body: some View {
         NavigationStack {
             listContent
@@ -60,14 +51,24 @@ struct TunnelListView: View {
             EmptyStateView(showingImport: $showingImport)
         } else {
             VStack(spacing: 0) {
+                // No "active tunnel" summary here, unlike iOS. On macOS
+                // the system extension and its NE configurations are
+                // system-wide, so a "currently active" line could
+                // truthfully belong to another local user's VPN — one
+                // this app is deliberately scoped out of. Rather than
+                // print a value that might be about someone else's
+                // session, we drop the claim entirely: this per-user
+                // list is the whole operator surface, and the machine's
+                // system-wide VPN state stays where it belongs, in
+                // System Settings > VPN. iOS is single-user, so it
+                // keeps the summary.
+                //
                 // A grouped form on purpose — List's NSTableView
                 // bridge intermittently left a phantom band around
                 // the header after a navigation pop when content
                 // changed while the screen was covered. Forms never
                 // showed it anywhere in the app. Keep it a Form.
                 Form {
-                    ActiveTunnelSection(activeTunnel: activeTunnel)
-
                     Section {
                         ForEach(tunnelsManager.tunnels) { tunnel in
                             NavigationLink(destination: TunnelDetailView(tunnel: tunnel)) {
