@@ -181,10 +181,13 @@ class TunnelsManager {
     @discardableResult
     func reconcileFromVault() async -> Int {
         // Idempotent by construction — it only creates entries the
-        // vault backs and the system lacks, only removes entries the
-        // vault does not back, and rewrites a projection only when it
-        // differs, so a second pass over an unchanged world does
-        // nothing. The flag is about overlap, not
+        // vault backs and the system lacks, and rewrites a projection
+        // only when it differs, so a second pass over an unchanged
+        // world does nothing. Purely additive: the ownership boundary
+        // in `ingest` already scopes the list to what this user's vault
+        // backs, so there is nothing to remove here — and an unbacked
+        // system entry could not be told apart from another local
+        // user's tunnel anyway. The flag is about overlap, not
         // repetition: a pass in flight must finish before the next one
         // reads the list it is still adding to.
         guard !isReconciling else { return 0 }
@@ -195,8 +198,6 @@ class TunnelsManager {
             NSLog("[vault] reconcile skipped — the vault did not answer")
             return 0
         }
-
-        await dropEntriesWithoutPayload(vaultIds: Set(payloads.map(\.id)))
 
         let known = Set(tunnels.map(\.id))
         let missing = payloads
@@ -280,31 +281,6 @@ class TunnelsManager {
                 NSLog("[vault] reconcile realigned \(config.id): the projection had gone stale")
             } catch {
                 NSLog("[vault] reconcile could not realign \(config.id): \(error.localizedDescription)")
-            }
-        }
-    }
-
-    /// Removes system entries the vault does not back. Such an entry
-    /// is a pointer to nothing: it cannot start, and no repair exists
-    /// for it, so it is cleared instead of being shown as a fault.
-    ///
-    /// Two guards keep this from ever removing something real. A
-    /// tunnel that is not idle is left alone — the running session
-    /// owns its configuration and this is no moment to pull the entry
-    /// out from under it. And every candidate is confirmed with its
-    /// own read: the bulk answer is a snapshot, and a tunnel imported
-    /// while this pass was in flight would look absent in it.
-    private func dropEntriesWithoutPayload(vaultIds: Set<UUID>) async {
-        for tunnel in tunnels where !vaultIds.contains(tunnel.id) {
-            guard tunnel.status == .inactive else { continue }
-            guard case .missing = await vault.read(id: tunnel.id) else { continue }
-
-            do {
-                try await tunnel.tunnelProvider.removePreferences()
-                tunnels.removeAll { $0.id == tunnel.id }
-                NSLog("[vault] dropped system entry \(tunnel.id) — the vault holds no payload for it")
-            } catch {
-                NSLog("[vault] could not drop system entry \(tunnel.id): \(error.localizedDescription)")
             }
         }
     }
