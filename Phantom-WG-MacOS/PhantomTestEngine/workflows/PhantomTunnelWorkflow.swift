@@ -235,7 +235,10 @@ final class PhantomTunnelWorkflow: TestWorkflow {
         }
         async let first: Void? = race(20) { try? await self.tunnels.resetConnection(of: t) }
         async let second: Void? = race(20) { try? await self.tunnels.resetConnection(of: t) }
-        let (a, b) = await (first, second)
+        // Void? is the race contract here, spelled out so the compiler
+        // does not warn about inferring it: nil = the 20s ceiling won
+        // (a wedged reset), non-nil = the reset call returned.
+        let (a, b): (Void?, Void?) = await (first, second)
         guard a != nil, b != nil else {
             fail("a concurrent reset did not return within 20s — wedge")
             return
