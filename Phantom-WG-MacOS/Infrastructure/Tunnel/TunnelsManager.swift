@@ -565,9 +565,9 @@ class TunnelsManager {
     /// are system-wide, so `providers` can carry another local user's
     /// entries; only those the owner-scoped vault confirms as ours are
     /// materialized. Foreign entries never enter the model, so nothing
-    /// downstream — the list, the detail/control surface, or reconcile's
-    /// drop pass — can show, drive, or delete them. Matching stays by
-    /// persisted identity so containers the views already hold survive.
+    /// downstream — the list, the detail/control surface, or reconcile
+    /// — can show, drive, or delete them. Matching stays by persisted
+    /// identity so containers the views already hold survive.
     private func ingest(_ providers: [TunnelProviding]) async {
         let mine = await ownedProviders(among: providers)
 
@@ -590,26 +590,76 @@ class TunnelsManager {
     /// already known to be ours and reveals no unverified (possibly
     /// foreign) one during that window, rather than flashing a stranger.
     ///
-    /// The single line it logs when it actually drops something is the
-    /// field signal that isolation is doing its job on a shared machine
-    /// — quiet on a single-user Mac, and it names the uid it scoped to.
+    /// readAll's answer is only the DECODED set — a payload that is
+    /// present but unreadable is excluded from it, and that is exactly
+    /// the payload custody must keep visible (the detail screen's
+    /// "config unavailable" surface is reachable only through the list
+    /// row). So a provider absent from the decoded set is not condemned
+    /// on that evidence alone: a per-id read disambiguates. The daemon
+    /// scopes reads by owner, so `.missing` is a verdict — not this
+    /// user's — while `.undecodable` means ours-but-broken, a custody
+    /// problem to surface, never an entry to hide. The probe costs one
+    /// XPC round-trip per unmatched provider, runs only when unmatched
+    /// providers exist at all, and the first dark answer short-circuits
+    /// the rest of the pass into the cached-keep rule so a respawning
+    /// vault costs one timeout, not one per entry.
+    ///
+    /// The single line it logs when it drops or rescues something is
+    /// the field signal that isolation is doing its job on a shared
+    /// machine — quiet on a single-user Mac, and it names the uid it
+    /// scoped to.
     private func ownedProviders(among providers: [TunnelProviding]) async -> [TunnelProviding] {
-        let ownedIDs: Set<UUID>
-        let basis: String
-        switch await vault.readAll() {
-        case .configs(let mine):
-            ownedIDs = Set(mine.map(\.id))
-            basis = "vault"
-        case .unreachable:
-            ownedIDs = Set(tunnels.map(\.id))
-            basis = "cache (vault unreachable)"
+        guard case .configs(let mine) = await vault.readAll() else {
+            let cached = Set(tunnels.map(\.id))
+            let kept = providers.filter { provider in
+                provider.tunnelIdentity.map { cached.contains($0.id) } ?? false
+            }
+            if kept.count != providers.count {
+                NSLog("[vault] ingest uid \(currentUser): kept \(kept.count)/\(providers.count) via cache (vault unreachable), \(providers.count - kept.count) unverified held back")
+            }
+            return kept
         }
 
-        let kept = providers.filter { provider in
-            provider.tunnelIdentity.map { ownedIDs.contains($0.id) } ?? false
+        let decodedIDs = Set(mine.map(\.id))
+        var kept: [TunnelProviding] = []
+        var foreign = 0
+        var custody = 0
+        var unverified = 0
+        var unattributed = 0
+        // One .unreachable verdict flips the rest of the pass to the
+        // same conservatism a failed readAll gets: a single timeout
+        // bounds the stall, and unproven entries hold back rather than
+        // pay their own timeout each — or flash a stranger.
+        var vaultWentDark = false
+        for provider in providers {
+            guard let id = provider.tunnelIdentity?.id else {
+                unattributed += 1
+                continue
+            }
+            if decodedIDs.contains(id) {
+                kept.append(provider)
+                continue
+            }
+            if vaultWentDark {
+                if tunnels.contains(where: { $0.id == id }) { kept.append(provider) } else { unverified += 1 }
+                continue
+            }
+            switch await vault.read(id: id) {
+            case .config:
+                // Landed between readAll and this probe — ours.
+                kept.append(provider)
+            case .undecodable:
+                custody += 1
+                kept.append(provider)
+            case .missing:
+                foreign += 1
+            case .unreachable:
+                vaultWentDark = true
+                if tunnels.contains(where: { $0.id == id }) { kept.append(provider) } else { unverified += 1 }
+            }
         }
-        if kept.count != providers.count {
-            NSLog("[vault] ingest uid \(currentUser): kept \(kept.count)/\(providers.count) via \(basis), \(providers.count - kept.count) not this user's")
+        if kept.count != providers.count || custody > 0 {
+            NSLog("[vault] ingest uid \(currentUser): kept \(kept.count)/\(providers.count) via vault — \(foreign) other users', \(custody) kept for custody (payload present, not decodable), \(unverified) unverified in a dark window, \(unattributed) without identity")
         }
         return kept
     }
