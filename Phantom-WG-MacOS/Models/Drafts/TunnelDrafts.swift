@@ -370,8 +370,17 @@ private func parseAddresses(
         errors[field] = .empty
         return nil
     }
+    // splitList drops empty fragments, so a comma/whitespace-only
+    // value ("," or ", ,") splits to nothing — refuse it exactly like
+    // empty input instead of answering a valid-looking empty list
+    // that only fails later, at activation.
+    let entries = splitList(trimmed)
+    if entries.isEmpty {
+        errors[field] = .empty
+        return nil
+    }
     var result: [AddressWithPrefix] = []
-    for (index, entry) in splitList(trimmed).enumerated() {
+    for (index, entry) in entries.enumerated() {
         do {
             let addr = try AddressWithPrefix(parsing: entry)
             result.append(addr)
@@ -398,8 +407,15 @@ private func parseIPList(
         errors[field] = .empty
         return nil
     }
+    // Same comma-only refusal as parseAddresses: an all-separator
+    // value must fail as empty here, not pass as an empty list.
+    let entries = splitList(trimmed)
+    if entries.isEmpty {
+        errors[field] = .empty
+        return nil
+    }
     var result: [IPAddressEntry] = []
-    for (index, entry) in splitList(trimmed).enumerated() {
+    for (index, entry) in entries.enumerated() {
         do {
             let addr = try IPAddressEntry(parsing: entry)
             result.append(addr)
