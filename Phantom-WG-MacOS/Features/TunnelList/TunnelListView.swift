@@ -5,7 +5,6 @@ struct TunnelListView: View {
     @Environment(LocalizationManager.self) private var loc
     @Environment(ExtensionGateCoordinator.self) private var gateCoordinator
     @Environment(SplitTunnelingSessionCoordinator.self) private var sessionCoordinator
-    @Environment(SplitTunnelingStore.self) private var splitTunnelingStore
 
     @State private var showingImport = false
     @State private var errorMessage: String?
@@ -155,46 +154,67 @@ struct TunnelListView: View {
         uninstalling = true
         Task {
             do {
-                // Recovery rules stand down before anything else: the
-                // tunnel entries stay behind after uninstall, and an
-                // armed rule on an orphaned entry would keep asking
-                // the system to revive a tunnel whose extension is
-                // about to be gone.
+                // Uninstall removes what the SYSTEM holds, never what
+                // the USER made: extensions deactivate and this user's
+                // VPN entries leave System Settings, while tunnel
+                // configurations and keys stay in the vault (and the
+                // split-tunneling list in its App Group file) — a
+                // reinstall brings everything back. Destroying
+                // configurations is the user's own act, in the app,
+                // before this flow.
+
+                // Classify while the vault still answers: only the
+                // entries whose payloads provably DECODE today are
+                // removable — that is exactly the set reinstall's
+                // reconcile restores. A custody row (payload present
+                // but undecodable) keeps its entry on purpose: the
+                // entry is the sole anchor that makes the broken
+                // payload visible again after a reinstall.
+                let removableIds = await tunnelsManager.removableEntryIds()
+
+                // Recovery rules stand down first: an armed rule on an
+                // entry would keep asking the system to revive a
+                // tunnel whose extension is about to be gone.
                 await tunnelsManager.disarmAllRecovery()
 
-                // The vault empties next, while the tunnel extension
-                // is still there to answer — deactivation removes the
-                // XPC peer. A failed purge stops the uninstall whole:
-                // better than reporting clean while secrets stay in
-                // the System keychain. The cost of the ordering: once
-                // the purge has run, cancelling the deactivation that
-                // follows does not bring the tunnels back.
-                try await tunnelsManager.purgeVault()
+                // The teardown owns the store from here. Entry
+                // removals fire configuration-change bursts, and a
+                // debounced reload sampling the vault mid-teardown
+                // would resurrect what this flow removes (reconcile
+                // restores any answered payload missing its entry).
+                tunnelsManager.suspendRefreshForUninstall()
 
-                // Split-tunneling leaves nothing behind either: the
-                // running session stops, both proxy preference entries
-                // and the App Group config file are deleted —
-                // best-effort, since whatever survives is exactly what
-                // the uninstall copy tells the user to remove by hand.
+                // Split-tunneling: the running session stops and both
+                // proxy preference entries go — NE-side holdings. The
+                // App Group configuration file stays: it is the user's
+                // list, and a reinstall picks it back up.
                 await sessionCoordinator.purgeForUninstall()
-                splitTunnelingStore.purgePersistedConfiguration()
 
                 // Sequential deactivation of all three system
-                // extensions (Tunnel + Split-Tunnel + DNSProxy).
-                // Tunnel (VPN) configurations stored in
-                // NETunnelProviderManager preferences are the one
-                // thing left in place: every `removeFromPreferences`
-                // triggers an "Allow VPN Configurations" consent
-                // prompt with no API to batch them; without the
-                // system extensions the configurations are inert —
-                // and should the extensions ever return, reconcile
-                // clears the now-unbacked entries. On success every
-                // controller settles to `.notInstalled`,
-                // `coordinator.allReady` flips to false and
-                // `PhantomApp` falls back to `ExtensionGateView`.
+                // extensions (Tunnel + Split-Tunnel + DNSProxy). On
+                // success every controller settles to `.notInstalled`,
+                // `coordinator.allReady` flips false and `PhantomApp`
+                // falls back to `ExtensionGateView` while this task
+                // finishes the cleanup below.
                 try await gateCoordinator.uninstallAll()
+
+                // LAST, with the extensions down: this user's
+                // removable entries leave the system store, matched
+                // against a FRESH system list so even an entry a
+                // mid-teardown pass managed to mint is caught. The
+                // refresh latch is the load-bearing guarantee here —
+                // this process runs no reconcile that could restore
+                // the removals — with the vault daemon's death as the
+                // second wall (a reboot-pending deactivation can
+                // leave the daemon answering until restart).
+                await tunnelsManager.removeEntriesForUninstall(removableIds)
                 uninstalling = false
             } catch {
+                // A failed teardown leaves this process in list-world
+                // with its entries intact; the latch must not outlive
+                // the flow it was raised for, or every self-heal
+                // stays dead until relaunch.
+                tunnelsManager.resumeRefresh()
                 uninstalling = false
                 errorMessage = error.localizedDescription
                 showingError = true

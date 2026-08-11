@@ -90,16 +90,6 @@ final class SplitTunnelingStore {
         }
     }
 
-    /// Uninstall counterpart to `persist()` — deletes the App Group
-    /// configuration file and resets memory to baseline, so a
-    /// cancelled uninstall doesn't keep serving stale data.
-    func purgePersistedConfiguration() {
-        configuration = .default
-        if let url = effectiveFileURL {
-            try? FileManager.default.removeItem(at: url)
-        }
-    }
-
     // MARK: - System DNS Resolver Toggle
 
     /// `true` when the synthetic mDNSResponder pair is in the app

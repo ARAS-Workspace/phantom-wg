@@ -190,11 +190,6 @@ final class PreviewVaultClient: TunnelVaultClient {
         return true
     }
 
-    override func purge() async -> Bool {
-        payloads.removeAll()
-        return true
-    }
-
     /// What `ping()` answers; `nil` never resolves, so the canvas can
     /// hold the gate's connecting state indefinitely.
     var pingAnswer: Ping? = .ready(payloads: 0, identity: ExtensionIdentity.current)

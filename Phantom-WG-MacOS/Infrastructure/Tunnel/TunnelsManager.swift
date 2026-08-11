@@ -69,6 +69,18 @@ class TunnelsManager {
     /// this guards repetition.
     @ObservationIgnored private var pendingRefresh: Task<Void, Never>?
 
+    /// Raised for the uninstall window. Entry removals fire
+    /// configuration-change bursts, and a reload pass sampling the
+    /// vault mid-teardown would resurrect what the flow is removing
+    /// (reconcile restores any answered payload missing its entry).
+    /// The teardown owns the store during this window; refreshes
+    /// stand down instead of racing it. Lowered again only at the two
+    /// provable returns to list-world — a failed teardown, or
+    /// extensions reactivated from the gate (`resumeRefresh`) — so a
+    /// process that comes back does not live on with every self-heal
+    /// silently dead.
+    @ObservationIgnored private var refreshSuspended = false
+
     @ObservationIgnored var waitingTunnel: TunnelContainer?
 
     // Activation retry pacing (consumed by TunnelsManager+Activation)
@@ -409,16 +421,64 @@ class TunnelsManager {
         }
     }
 
-    /// Empties the vault ahead of extension deactivation — the
-    /// uninstall flow's first step, and ordered before it by force:
-    /// the vault lives behind the tunnel extension, so once
-    /// deactivation starts there is no XPC peer left to ask, which is
-    /// exactly how payloads used to outlive the app. A vault that
-    /// cannot be emptied stops the uninstall whole rather than letting
-    /// it report clean while secrets stay behind.
-    func purgeVault() async throws {
-        guard await vault.purge() else {
-            throw TunnelManagementError.vaultPurgeFailed
+    /// The uninstall flow's hand on the refresh machinery: from this
+    /// call on, no debounced reload runs in this process until
+    /// `resumeRefresh()`. See `refreshSuspended` for why the teardown
+    /// must own the store.
+    func suspendRefreshForUninstall() {
+        refreshSuspended = true
+        pendingRefresh?.cancel()
+        pendingRefresh = nil
+    }
+
+    /// Lowers the uninstall latch when the process provably returns
+    /// to list-world — a failed teardown, or extensions reactivated
+    /// from the gate — and runs one refresh so the list re-proves
+    /// itself against the store it stopped watching.
+    func resumeRefresh() {
+        guard refreshSuspended else { return }
+        refreshSuspended = false
+        scheduleRefresh()
+    }
+
+    /// Uninstall support, computed while the vault still answers: the
+    /// ids whose entries the teardown may remove — exactly the set a
+    /// reinstall provably restores (reconcile rebuilds entries from
+    /// the DECODED payload set). A custody row's entry stays: it is
+    /// the only anchor that makes a present-but-undecodable payload
+    /// visible again after a reinstall — ingest rescues it off the
+    /// entry, reconcile could never restore it. Unverifiable reads
+    /// keep their entries for the same reason.
+    func removableEntryIds() async -> Set<UUID> {
+        var ids = Set<UUID>()
+        for tunnel in tunnels {
+            if case .config = await vault.read(id: tunnel.id) {
+                ids.insert(tunnel.id)
+            }
+        }
+        return ids
+    }
+
+    /// Uninstall's last step: removes the classified entries from the
+    /// system store, off a FRESH system list — so an entry a
+    /// mid-teardown pass managed to mint is caught too, and no stale
+    /// provider object is replayed. Best-effort by design: a survivor
+    /// is inert without the extensions, hidden from the list by
+    /// ingest, and self-heals on reinstall (payload present — an
+    /// existing entry is adopted, a missing one restored by
+    /// reconcile; both converge).
+    func removeEntriesForUninstall(_ removableIds: Set<UUID>) async {
+        guard let providers = try? await providerFactory.loadAllFromPreferences() else {
+            NSLog("[uninstall] entry removal skipped — the system list did not load")
+            return
+        }
+        for provider in providers {
+            guard let id = provider.tunnelIdentity?.id, removableIds.contains(id) else { continue }
+            do {
+                try await provider.removePreferences()
+            } catch {
+                NSLog("[uninstall] entry removal failed for \(provider.localizedDescription ?? id.uuidString): \(error.localizedDescription)")
+            }
         }
     }
 
@@ -572,6 +632,7 @@ class TunnelsManager {
     /// Trailing-edge debounce: a new trigger restarts the window, the
     /// pass runs once the burst goes quiet.
     private func scheduleRefresh() {
+        guard !refreshSuspended else { return }
         pendingRefresh?.cancel()
         pendingRefresh = Task { [weak self] in
             try? await Task.sleep(for: .milliseconds(400))

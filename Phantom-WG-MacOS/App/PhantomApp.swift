@@ -114,6 +114,12 @@ struct PhantomApp: App {
                 // entry must probe again rather than trust a stale
                 // `.ready`.
                 if !ready { vaultSession.invalidate() }
+                // Reactivation from the gate returns THIS process to
+                // the list. If an uninstall raised the refresh latch,
+                // lower it with the extensions' return — otherwise
+                // the reused manager lives on with every self-heal
+                // (restore, prune, realign) silently dead.
+                if ready { tunnelsManager.manager?.resumeRefresh() }
             }
             .task(id: vaultSession.state) {
                 // The slot verdict needs the vault to answer ownership,

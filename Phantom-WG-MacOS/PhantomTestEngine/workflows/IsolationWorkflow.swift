@@ -204,6 +204,17 @@ final class IsolationWorkflow: TestWorkflow {
         if !(await vault.delete(id: cfg.id, attempts: 3)) {
             log("cleanup: vault delete failed — '\(cfg.name)' may appear in the tunnel list; delete it there", .warn)
         }
+        // Belt for the drain race: a live reload that straddled the
+        // 600ms drain can have reconciled the throwaway into a REAL
+        // system entry mid-window. Remove it through the production
+        // path (the vault delete above makes remove()'s own delete an
+        // idempotent no-op, proven by Upsert Semantics) and prove the
+        // list is clean either way.
+        if let leaked = tunnel(named: cfg.name) {
+            log("drain race minted a real entry for '\(cfg.name)' — removing it through the production path", .warn)
+            try? await tunnels.remove(tunnel: leaked)
+        }
+        check(tunnel(named: cfg.name) == nil, "no residue row for '\(cfg.name)' in the live list")
     }
 
     private func preflightBlocks() async {

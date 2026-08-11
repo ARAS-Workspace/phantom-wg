@@ -47,6 +47,12 @@ extension TunnelsManager {
             tunnel.tunnelProvider.isOnDemandEnabled = false
             Task {
                 do {
+                    // A remove() can land while this save is queued —
+                    // persisting then would re-mint the just-removed
+                    // entry as a zombie in the system store. The list
+                    // is the liveness authority: a container no
+                    // longer listed has nothing left to persist.
+                    guard tunnels.contains(where: { $0.id == tunnel.id }) else { return }
                     try await tunnel.tunnelProvider.savePreferences()
                     performDeactivation(of: tunnel)
                 } catch {
@@ -61,12 +67,13 @@ extension TunnelsManager {
         }
     }
 
-    /// Uninstall-path sweep: stands every tunnel's recovery rule down.
-    /// The tunnel entries themselves stay behind (removing each would
-    /// raise its own consent prompt), and an armed rule on an orphaned
-    /// entry would keep asking the system to revive a tunnel whose
-    /// extension is about to be gone. Best-effort, like the rest of
-    /// the uninstall path.
+    /// Uninstall-path sweep: stands every tunnel's recovery rule down
+    /// before the extensions go, so the system does not fight the
+    /// teardown by reviving a tunnel mid-deactivation — and the
+    /// entries the flow deliberately leaves in place (custody rows
+    /// keep theirs as the anchor for their broken payloads) never
+    /// carry an armed rule into the extension-less void. Best-effort,
+    /// like the rest of the uninstall path.
     func disarmAllRecovery() async {
         for tunnel in tunnels where tunnel.isActivateOnDemandEnabled {
             tunnel.tunnelProvider.isOnDemandEnabled = false

@@ -225,27 +225,6 @@ class TunnelVaultClient {
         return false
     }
 
-    /// Empties the vault — every payload this user owns. The uninstall
-    /// flow calls it while the extension is still there to answer;
-    /// `false` means the vault could not be reached or a deletion
-    /// failed, and the caller must not treat the vault as clean.
-    @discardableResult
-    func purge() async -> Bool {
-        await withRaceTimeout("purge", seconds: 5, fallback: false) { [log] in
-            await withCheckedContinuation { (continuation: CheckedContinuation<Bool, Never>) in
-                let resume = SingleResume(continuation)
-                guard let proxy = self.proxy({ error in
-                    os_log("purge error: %{public}@", log: log, type: .error, error.localizedDescription)
-                    resume.finish(false)
-                }) else {
-                    resume.finish(false)
-                    return
-                }
-                proxy.purgeVault { ok in resume.finish(ok) }
-            }
-        }
-    }
-
     /// Outcome of the session probe. Three stories the gate tells
     /// apart: the extension answering with a closed vault door is not
     /// the extension being asleep. Both answered arms carry the

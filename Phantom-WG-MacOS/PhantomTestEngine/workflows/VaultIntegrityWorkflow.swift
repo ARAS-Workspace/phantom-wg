@@ -294,6 +294,11 @@ final class VaultIntegrityWorkflow: TestWorkflow {
         }
         if (try? await container.tunnelProvider.removePreferences()) == nil {
             log("cleanup: NE entry removal failed — an unbacked entry may linger in System Settings > VPN", .warn)
+        } else {
+            // Prune the hidden container deterministically: list
+            // hygiene must not depend on the debounced refresh being
+            // alive (an uninstall latch silences it for the process).
+            await tunnels.refresh()
         }
     }
 

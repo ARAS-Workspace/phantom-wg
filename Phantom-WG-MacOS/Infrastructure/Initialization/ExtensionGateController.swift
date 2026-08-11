@@ -394,6 +394,17 @@ final class ExtensionGateController: NSObject, OSSystemExtensionRequestDelegate 
         Task { @MainActor in
             log("didFinishWithResult: \(result.rawValue) (deactivating=\(deactivationContinuation != nil))")
             if deactivationContinuation != nil {
+                // `.willCompleteAfterReboot` is a legal deactivation
+                // outcome: the request succeeded but the provider may
+                // keep running until the machine restarts. The flow
+                // continues either way — preference entries are
+                // independent of the running provider — but the
+                // pending state is named instead of being folded
+                // silently into success; the gate's normal boot
+                // measurement re-proves reality on the next launch.
+                if result == .willCompleteAfterReboot {
+                    log("deactivation will complete after reboot — the provider may keep running until then")
+                }
                 status = .notInstalled
                 resumeDeactivation(with: .success(()))
                 return
