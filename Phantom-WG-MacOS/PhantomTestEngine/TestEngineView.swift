@@ -77,6 +77,7 @@ struct TestEngineView: View {
                     Label(s.run, systemImage: "play.fill")
                 }
                 .buttonStyle(.borderedProminent)
+                .prominentLabelLegibleWhenInactive()
                 .disabled(engine.isRunning)
 
                 if engine.isRunning {

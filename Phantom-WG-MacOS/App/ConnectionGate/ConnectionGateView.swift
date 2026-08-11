@@ -54,6 +54,7 @@ struct ConnectionGateView: View {
                     openVPNSettings()
                 }
                 .buttonStyle(.borderedProminent)
+                .prominentLabelLegibleWhenInactive()
                 .accessibilityIdentifier(AXID.ConnectionGate.openSettings)
 
                 Button(loc.t("gate_check_again")) {
@@ -79,13 +80,25 @@ struct ConnectionGateView: View {
 
 // MARK: - Previews
 
-#Preview("Held — named holder") {
+#Preview("Held — named holder — Light") {
     ConnectionGateView()
         .environment(ConnectionGateCoordinator(
             vault: PreviewVaultClient(configs: []),
             initialState: .slotHeld(holderName: "Home Lab")
         ))
         .environment(LocalizationManager.shared)
+        .preferredColorScheme(.light)
+        .frame(width: 560, height: 720)
+}
+
+#Preview("Held — named holder — Dark") {
+    ConnectionGateView()
+        .environment(ConnectionGateCoordinator(
+            vault: PreviewVaultClient(configs: []),
+            initialState: .slotHeld(holderName: "Home Lab")
+        ))
+        .environment(LocalizationManager.shared)
+        .preferredColorScheme(.dark)
         .frame(width: 560, height: 720)
 }
 

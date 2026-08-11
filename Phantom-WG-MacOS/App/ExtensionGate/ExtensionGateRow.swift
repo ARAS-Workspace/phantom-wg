@@ -97,11 +97,13 @@ struct ExtensionGateRow: View {
         case .notInstalled:
             Button(loc.t("gate_activate"), action: onActivate)
                 .buttonStyle(.borderedProminent)
+                .prominentLabelLegibleWhenInactive()
                 .controlSize(.small)
                 .accessibilityIdentifier(AXID.ExtensionGate.rowActivate(controller.bundleID))
         case .needsApproval:
             Button(loc.t("gate_open_settings"), action: onOpenSettings)
                 .buttonStyle(.borderedProminent)
+                .prominentLabelLegibleWhenInactive()
                 .controlSize(.small)
                 .accessibilityIdentifier(AXID.ExtensionGate.rowOpenSettings(controller.bundleID))
         case .failed:
@@ -117,8 +119,10 @@ struct ExtensionGateRow: View {
 
 // MARK: - Previews
 
-#Preview("All statuses") {
-    let statuses: [ExtensionGateController.Status] = [
+/// One row per status, so both prominent buttons and the plain retry
+/// are on the canvas at once.
+private struct ExtensionGateRowGallery: View {
+    private let statuses: [ExtensionGateController.Status] = [
         .unknown,
         .notInstalled,
         .activating,
@@ -126,17 +130,29 @@ struct ExtensionGateRow: View {
         .activated,
         .failed("The extension was blocked by system policy.")
     ]
-    return VStack(spacing: 10) {
-        ForEach(Array(statuses.enumerated()), id: \.offset) { _, status in
-            ExtensionGateRow(
-                controller: PreviewFixtures.gateController(titleKey: "gate_ext_tunnel", status: status),
-                onActivate: {},
-                onOpenSettings: {},
-                onRetry: {}
-            )
+
+    var body: some View {
+        VStack(spacing: 10) {
+            ForEach(Array(statuses.enumerated()), id: \.offset) { _, status in
+                ExtensionGateRow(
+                    controller: PreviewFixtures.gateController(titleKey: "gate_ext_tunnel", status: status),
+                    onActivate: {},
+                    onOpenSettings: {},
+                    onRetry: {}
+                )
+            }
         }
+        .padding(24)
+        .frame(width: 560)
     }
-    .padding(24)
-    .frame(width: 560)
-    .previewEnvironment()
+}
+
+#Preview("All statuses — Light") {
+    ExtensionGateRowGallery()
+        .previewEnvironment(scheme: .light)
+}
+
+#Preview("All statuses — Dark") {
+    ExtensionGateRowGallery()
+        .previewEnvironment(scheme: .dark)
 }

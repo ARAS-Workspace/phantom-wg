@@ -36,6 +36,7 @@ struct EmptyStateView: View {
                     .padding(.vertical, 12)
             }
             .buttonStyle(.borderedProminent)
+            .prominentLabelLegibleWhenInactive()
             .buttonBorderShape(.capsule)
             .accessibilityIdentifier(AXID.TunnelList.emptyImportButton)
 
