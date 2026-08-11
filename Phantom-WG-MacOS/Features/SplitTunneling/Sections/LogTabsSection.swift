@@ -196,22 +196,46 @@ struct LogTabsSection: View {
 
 // MARK: - Previews
 
-#Preview {
-    let splitStore = ProxyLogStore(daemonClient: SplitTunnelDaemonClient(), tag: "SPL")
-    splitStore.entries = [
-        LogEntry(id: 0, tag: "SPL", text: "[12:04:12] flow com.apple.Safari → en0 (bypass)"),
-        LogEntry(id: 1, tag: "SPL", text: "[12:04:13] flow org.videolan.vlc → en0 (bypass)"),
-        LogEntry(id: 2, tag: "SPL", text: "[12:04:15] flow com.example.app → default route")
-    ]
-    let dnsStore = ProxyLogStore(daemonClient: DNSProxyDaemonClient(), tag: "DNS")
-    dnsStore.entries = [
-        LogEntry(id: 0, tag: "DNS", text: "[12:04:12] query safari.apple.com A via en0"),
-        LogEntry(id: 1, tag: "DNS", text: "[12:04:14] query update.vlc.org AAAA via en0")
-    ]
-    return Form {
-        LogTabsSection(splitLogStore: splitStore, dnsLogStore: dnsStore)
+/// Preview-only host that owns the daemon clients strongly: the log
+/// store keeps its client `weak` on purpose (the app owns the clients'
+/// lifetime), so a client built inline in the preview closure would be
+/// gone before the canvas renders — and the compiler says so.
+private struct LogTabsPreviewHost: View {
+    private let splitClient = SplitTunnelDaemonClient()
+    private let dnsClient = DNSProxyDaemonClient()
+    private let splitStore: ProxyLogStore
+    private let dnsStore: ProxyLogStore
+
+    init() {
+        splitStore = ProxyLogStore(daemonClient: splitClient, tag: "SPL")
+        splitStore.entries = [
+            LogEntry(id: 0, tag: "SPL", text: "[12:04:12] flow com.apple.Safari → en0 (bypass)"),
+            LogEntry(id: 1, tag: "SPL", text: "[12:04:13] flow org.videolan.vlc → en0 (bypass)"),
+            LogEntry(id: 2, tag: "SPL", text: "[12:04:15] flow com.example.app → default route")
+        ]
+        dnsStore = ProxyLogStore(daemonClient: dnsClient, tag: "DNS")
+        dnsStore.entries = [
+            LogEntry(id: 0, tag: "DNS", text: "[12:04:12] query safari.apple.com A via en0"),
+            LogEntry(id: 1, tag: "DNS", text: "[12:04:14] query update.vlc.org AAAA via en0")
+        ]
     }
-    .formStyle(.grouped)
-    .previewEnvironment()
-    .frame(width: 560, height: 480)
+
+    var body: some View {
+        Form {
+            LogTabsSection(splitLogStore: splitStore, dnsLogStore: dnsStore)
+        }
+        .formStyle(.grouped)
+    }
+}
+
+#Preview("Light") {
+    LogTabsPreviewHost()
+        .previewEnvironment(scheme: .light)
+        .frame(width: 560, height: 480)
+}
+
+#Preview("Dark") {
+    LogTabsPreviewHost()
+        .previewEnvironment(scheme: .dark)
+        .frame(width: 560, height: 480)
 }
