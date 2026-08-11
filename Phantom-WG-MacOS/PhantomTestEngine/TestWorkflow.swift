@@ -1,5 +1,6 @@
 #if DEBUG
 import Foundation
+import Synchronization
 
 /// Reply from the tunnel extension's app-message surface. The two
 /// negative shapes are different claims and must not be told the same
@@ -24,21 +25,23 @@ enum ProviderReply: Equatable {
 /// DEBUG-local mirror of the vault client's private `SingleResume`:
 /// guards a continuation against the race between a late XPC reply and
 /// the timeout task — the first finish wins, the rest are dropped.
-/// Shared by the step helpers and the raw vault client.
-final class StepResume<T>: @unchecked Sendable {
+/// Shared by the step helpers and the raw vault client. The one-shot
+/// flag lives inside a `Mutex`, so the type is `Sendable` by compiler
+/// proof rather than by annotation.
+final class StepResume<T: Sendable>: Sendable {
     private let continuation: CheckedContinuation<T, Never>
-    private let lock = NSLock()
-    private var done = false
+    private let done = Mutex(false)
 
     init(_ continuation: CheckedContinuation<T, Never>) {
         self.continuation = continuation
     }
 
     func finish(_ value: T) {
-        lock.lock()
-        let first = !done
-        done = true
-        lock.unlock()
+        let first = done.withLock { done -> Bool in
+            guard !done else { return false }
+            done = true
+            return true
+        }
         if first { continuation.resume(returning: value) }
     }
 }

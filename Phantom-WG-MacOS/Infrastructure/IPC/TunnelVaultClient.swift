@@ -1,6 +1,7 @@
 import Foundation
 import Observation
 import os.log
+import Synchronization
 
 /// App-side XPC client for the tunnel extension's secret custody.
 ///
@@ -387,11 +388,12 @@ private enum RawReadAll {
 
 /// Guards a continuation that several callbacks may reach — the XPC
 /// error handler and the reply block both fire in some failure modes,
-/// and resuming twice traps.
-private final class SingleResume<T>: @unchecked Sendable {
+/// and resuming twice traps. The one-shot flag lives inside a
+/// `Mutex`, so the type is `Sendable` by compiler proof rather than
+/// by annotation.
+private final class SingleResume<T: Sendable>: Sendable {
     private let continuation: CheckedContinuation<T, Never>
-    private let lock = NSLock()
-    private var done = false
+    private let done = Mutex(false)
 
     init(_ continuation: CheckedContinuation<T, Never>) {
         self.continuation = continuation
@@ -401,11 +403,12 @@ private final class SingleResume<T>: @unchecked Sendable {
     /// timeout branch tell "I won" from "I was already beaten".
     @discardableResult
     func finish(_ value: T) -> Bool {
-        lock.lock()
-        defer { lock.unlock() }
-        guard !done else { return false }
-        done = true
-        continuation.resume(returning: value)
-        return true
+        let first = done.withLock { done -> Bool in
+            guard !done else { return false }
+            done = true
+            return true
+        }
+        if first { continuation.resume(returning: value) }
+        return first
     }
 }
