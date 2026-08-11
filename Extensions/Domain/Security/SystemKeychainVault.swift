@@ -51,9 +51,10 @@ enum SystemKeychainVault {
     private static let lock = NSLock()
 
     /// Outcome of a single payload read. Absence and failure are kept
-    /// apart on purpose: the reconcile pass drops system entries on
-    /// the strength of "the vault holds nothing here", and a keychain
-    /// that could not answer must never sound like that.
+    /// apart on purpose: the app's ownership probe reads "the vault
+    /// holds nothing here" as a verdict — not this user's tunnel, so
+    /// the entry is hidden from the list — and a keychain that could
+    /// not answer must never sound like that.
     enum FetchResult {
         case payload(Data)
         case missing
@@ -185,12 +186,12 @@ enum SystemKeychainVault {
     }
 
     /// Every payload belonging to `owner`, or `nil` when the
-    /// enumeration itself failed. The reconcile pass compares this
-    /// answer against the system store and deletes entries on
-    /// emptiness, so a failed enumeration must never read as an empty
-    /// vault. An item that enumerates but fails to read is dropped
-    /// from the answer; the app's per-candidate confirm keeps that
-    /// from costing a system entry.
+    /// enumeration itself failed. The answer is the app's inventory
+    /// of this user's payloads — the ingest ownership boundary scopes
+    /// the tunnel list by it and reconcile restores from it — so a
+    /// failed enumeration must never read as an empty vault, and an
+    /// item that enumerates but fails to read poisons the whole
+    /// answer rather than shrinking it (see the loop below).
     static func fetchAll(owner: uid_t) -> [Data]? {
         lock.lock()
         defer { lock.unlock() }
@@ -211,9 +212,10 @@ enum SystemKeychainVault {
                 // it is honest, the item is genuinely gone.
                 continue
             case .failed:
-                // A real read failure must never shrink the vault into a
-                // shorter-but-valid list the reconcile pass would trust:
-                // the whole enumeration is unusable.
+                // A real read failure must never shrink the vault into
+                // a shorter-but-valid list the callers would trust as
+                // this user's complete inventory: the whole enumeration
+                // is unusable.
                 return nil
             }
         }

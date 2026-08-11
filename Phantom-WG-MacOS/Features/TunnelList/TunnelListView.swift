@@ -50,17 +50,18 @@ struct TunnelListView: View {
             EmptyStateView(showingImport: $showingImport)
         } else {
             VStack(spacing: 0) {
-                // No "active tunnel" summary here, unlike iOS. On macOS
-                // the system extension and its NE configurations are
-                // system-wide, so a "currently active" line could
-                // truthfully belong to another local user's VPN — one
-                // this app is deliberately scoped out of. Rather than
-                // print a value that might be about someone else's
-                // session, we drop the claim entirely: this per-user
-                // list is the whole operator surface, and the machine's
-                // system-wide VPN state stays where it belongs, in
-                // System Settings > VPN. iOS is single-user, so it
-                // keeps the summary.
+                // No "active tunnel" summary here, unlike iOS. Under
+                // the ingest ownership boundary every row is already
+                // this user's, so a summary could only repeat what
+                // each row's status shows — while the machine-wide
+                // question ("is a VPN up on this Mac?") can truthfully
+                // be about another local user's session. That story
+                // belongs to the connection gate, which names a
+                // foreign holder only on the classifier's positive
+                // proof and at the moment it matters — when the slot
+                // blocks this user's activation — not to a passive
+                // banner guessing about someone else's session. iOS
+                // is single-user, so it keeps the summary.
                 //
                 // A grouped form on purpose — List's NSTableView
                 // bridge intermittently left a phantom band around

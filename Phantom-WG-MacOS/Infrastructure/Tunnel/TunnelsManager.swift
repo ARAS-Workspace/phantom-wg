@@ -175,27 +175,25 @@ class TunnelsManager {
 
     // MARK: - Reconcile
 
-    /// Makes the system store agree with the vault, in both
-    /// directions, because the vault is the source of truth: it holds
-    /// each tunnel's whole configuration and outlives what the system
-    /// keeps — macOS drops a tunnel's NetworkExtension configuration
-    /// when its provider extension is uninstalled.
+    /// Restores what the system lost from the vault, because the
+    /// vault is the source of truth: it holds each tunnel's whole
+    /// configuration and outlives what the system keeps — macOS drops
+    /// a tunnel's NetworkExtension configuration when its provider
+    /// extension is uninstalled.
     ///
     /// A payload with no system entry is recreated, unprompted: the
     /// user has nothing to decide, the tunnel exists and the system
-    /// simply forgot it. An entry with no payload is removed just as
-    /// quietly — it cannot start, and telling the operator to repair
-    /// something that is by definition unrepairable is worse than
-    /// clearing it away. Nothing is destroyed by that removal: the
-    /// entry pointed at a payload that is already gone. And a
-    /// projection that stopped matching its payload — a name or mode
-    /// the system store missed — is rewritten in place, the vault's
-    /// version winning.
+    /// simply forgot it. A projection that stopped matching its
+    /// payload — a name or mode the system store missed — is
+    /// rewritten in place, the vault's version winning. Nothing is
+    /// ever removed here: under the ownership boundary an entry the
+    /// vault does not back reads as another local user's tunnel, and
+    /// `ingest` has already kept it out of this list.
     ///
-    /// Both directions rest on the vault having actually answered. A
-    /// vault that cannot be reached teaches us nothing, and acting on
-    /// that silence would delete every tunnel on the machine, so the
-    /// pass simply does not run.
+    /// Every restore rests on the vault having actually answered. A
+    /// vault that cannot be reached teaches us nothing — there is no
+    /// telling what should be put back — so the pass simply does not
+    /// run.
     @discardableResult
     func reconcileFromVault() async -> Int {
         // Idempotent by construction — it only creates entries the

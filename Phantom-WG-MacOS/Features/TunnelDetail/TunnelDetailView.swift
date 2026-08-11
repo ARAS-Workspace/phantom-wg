@@ -191,8 +191,9 @@ struct TunnelDetailView: View {
             loadFailure = .missing
         case .undecodable:
             // The payload is present but unreadable. The vault layer
-            // keeps this distinct from truly-missing so reconcile never
-            // drops a broken-but-present secret; for the detail screen,
+            // keeps this distinct from truly-missing so the ingest
+            // boundary keeps the row listed (custody, not a stranger)
+            // and uninstall keeps its entry; for the detail screen,
             // "no config to show" is a single state, so it renders like
             // a miss.
             config = nil

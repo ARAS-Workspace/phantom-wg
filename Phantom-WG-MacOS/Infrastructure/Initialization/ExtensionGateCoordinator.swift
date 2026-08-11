@@ -155,10 +155,12 @@ final class ExtensionGateCoordinator {
     }
 
     /// Sequential deactivation of all three extensions. Used by the
-    /// settings menu's uninstall entry — the user removes the whole
-    /// app from the system in one action. Failures bubble up so the
-    /// caller can surface them; on success every controller settles
-    /// to `.notInstalled` and the root view falls back to the gate.
+    /// settings menu's uninstall entry — the flow takes down what the
+    /// SYSTEM holds (extensions, this user's VPN entries) while
+    /// configurations and keys stay by contract. Failures bubble up
+    /// so the caller can surface them; on success every controller
+    /// settles to `.notInstalled` and the root view falls back to the
+    /// gate.
     func uninstallAll() async throws {
         log("uninstallAll() — sequential deactivate")
         try await tunnel.deactivate()

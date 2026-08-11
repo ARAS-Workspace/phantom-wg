@@ -165,9 +165,10 @@ final class VaultIntegrityWorkflow: TestWorkflow {
     }
 
     /// A payload present in the vault but not decodable must not read
-    /// the same as one that is truly absent — otherwise reconcile,
-    /// which trusts "missing" as "the vault owns nothing here", would
-    /// drop a real entry and orphan its secret. read(id) reports a
+    /// the same as one that is truly absent — otherwise the ingest
+    /// ownership probe, which trusts "missing" as "not this user's",
+    /// would take our own broken payload for a stranger's entry and
+    /// hide the row that is its only surface. read(id) reports a
     /// decode failure as `.undecodable`, distinct from `.missing`; this
     /// guards that distinction.
     private func undecodableRead() async {
@@ -190,10 +191,12 @@ final class VaultIntegrityWorkflow: TestWorkflow {
 
     /// An undecodable payload must not be silently conflated with an
     /// absent one across the read surfaces. read(id) is the surface
-    /// reconcile trusts for its drop decision, so it must surface the
-    /// payload as `.undecodable`; readAll legitimately excludes it from
-    /// its decodable-config list (reconcile does not drop off readAll),
-    /// so the invariant is "read(id) surfaces it", not "both list it".
+    /// the ingest ownership probe (and the slot classifier) trusts
+    /// for its foreign-or-custody verdict, so it must surface the
+    /// payload as `.undecodable`; readAll legitimately excludes it
+    /// from its decoded answer (the per-id probe exists because it
+    /// does), so the invariant is "read(id) surfaces it", not "both
+    /// list it".
     private func undecodableAgreement() async {
         guard let id = rawIds.last else {
             skip("no corrupt payload planted")
@@ -213,9 +216,9 @@ final class VaultIntegrityWorkflow: TestWorkflow {
     /// Corrupt a real tunnel's payload in place, then reconcile. The
     /// entry — and the secret bytes — must survive: a broken payload is
     /// a custody problem to surface, not a licence to delete the entry.
-    /// reconcile's drop path consults read(id), which reports
-    /// `.undecodable` rather than `.missing`, so the entry is preserved;
-    /// this guards against a regression that would orphan the secret.
+    /// reconcile is purely additive — no path in it removes an entry —
+    /// and this step pins that shape from the outside; it guards
+    /// against a removal path growing back and orphaning the secret.
     private func corruptionSurvival() async {
         let name = "TE-Corrupt-\(runTag)"
         guard let cfg = TestConfigFactory.throwaway(name: name) else {
@@ -234,7 +237,7 @@ final class VaultIntegrityWorkflow: TestWorkflow {
         let survived = tunnel(named: name) != nil
         check(survived, survived
             ? "entry survived a corrupted payload through reconcile"
-            : "entry DROPPED after payload corruption — secret orphaned (reconcile read undecodable as absent)")
+            : "entry DROPPED after payload corruption — secret orphaned (a removal path has grown back into reconcile)")
         if let t = tunnel(named: name) {
             try? await tunnels.remove(tunnel: t)
         }

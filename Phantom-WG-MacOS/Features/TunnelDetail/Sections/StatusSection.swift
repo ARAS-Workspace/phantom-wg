@@ -1,16 +1,15 @@
 import SwiftUI
 
 /// Shared status row — indicator, localized status text, and the
-/// master activation toggle. Rendered by the detail's status section
-/// and mirrored at the top of the tunnel list for the active tunnel.
-/// A non-nil `title` puts the tunnel name above the status line and
-/// hides the mode badge — the list mirror needs the name as meta and
-/// the ghost/standalone signal comes from the indicator icon there;
-/// the detail keeps the badge and carries the name in its navigation
-/// title. Ghost tunnels show the brand ghost glyph instead of the
+/// master activation toggle. Rendered by the detail's status section;
+/// the tunnel list deliberately carries no active-tunnel mirror (see
+/// the ownership note in `TunnelListView`). A non-nil `title` puts
+/// the tunnel name above the status line and hides the mode badge —
+/// the compact shape for a surface that carries the name as meta
+/// instead of a navigation title; no shipping surface passes one
+/// today. Ghost tunnels show the brand ghost glyph instead of the
 /// shield status icon. Accessibility identifiers are caller-supplied
-/// so the two surfaces stay individually addressable when both are
-/// in the hierarchy.
+/// so the row never hard-codes which surface it is in.
 struct TunnelStatusRow: View {
     var tunnel: TunnelContainer
     let isGhost: Bool

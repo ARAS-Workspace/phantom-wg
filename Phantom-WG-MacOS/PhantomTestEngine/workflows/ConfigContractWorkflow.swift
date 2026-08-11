@@ -12,10 +12,11 @@ import Foundation
 ///    AllowedIPs; this activates a config the typed model permits but
 ///    no user should run and proves it never goes active.
 /// 2. Multi-[Peer] import: a `.conf` with two `[Peer]` sections must
-///    not silently collapse into one working tunnel. The parser merges
-///    same-named sections, so the merged result must be rejected (or,
-///    if ever accepted, preserve both peers) — a quiet merge that then
-///    activates is the failure.
+///    not silently collapse into one working tunnel. The parser
+///    refuses a repeated section outright (`.duplicateSection`); this
+///    proves the refusal holds — and should a future parser ever
+///    accept the shape, acceptance is only legal with BOTH peers
+///    preserved. A quiet merge that then activates is the failure.
 final class ConfigContractWorkflow: TestWorkflow {
     override var displayName: String { "Config Contract (Leak + Parse Guards)" }
 
@@ -67,9 +68,10 @@ final class ConfigContractWorkflow: TestWorkflow {
         do {
             draft = try ConfParser.parse(text)
         } catch {
-            // Explicit rejection at parse is the correct guard — the
-            // collapse happens in the section merge, so this is where
-            // it must be caught.
+            // Explicit rejection at parse is the correct guard — a
+            // repeated [Peer] would otherwise collapse in the
+            // section-keyed split, so parse time is where the
+            // ambiguity must be refused.
             check(true, "multi-peer config rejected at parse (explicit) — \(error.localizedDescription)")
             return
         }

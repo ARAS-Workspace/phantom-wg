@@ -21,8 +21,12 @@ protocol TunnelProviding: AnyObject {
 
     // MARK: - Recovery (NE on-demand)
 
-    /// Storage for the recovery rule — armed on activation, stood
-    /// down on deactivation; see `TunnelsManager.armRecovery`.
+    /// Storage for the recovery rule — armed on every activation that
+    /// passes the foreign-slot pre-flight; stands down on deactivation,
+    /// on local give-up failures, on a proven foreign slot holder (the
+    /// collision belts and the gate's engage sweep), and for the
+    /// uninstall sweep. See `TunnelsManager.armRecovery` /
+    /// `disarmRecovery`.
     var isOnDemandEnabled: Bool { get set }
     var onDemandRules: [NEOnDemandRule]? { get set }
 

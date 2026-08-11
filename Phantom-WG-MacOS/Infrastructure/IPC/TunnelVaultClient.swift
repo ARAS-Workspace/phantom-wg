@@ -106,14 +106,17 @@ class TunnelVaultClient {
     /// idle can lose the race.
     enum Read {
         case config(TunnelConfig)
-        /// The vault answered and had nothing usable for this tunnel.
+        /// The vault answered and holds no payload for this id — or
+        /// none this user owns: the daemon serves another account's
+        /// item as absence, so this is also the foreign verdict.
         case missing
         /// The vault holds a payload for this id, but it does not
         /// decode into a `TunnelConfig`. Distinct from `.missing` on
-        /// purpose: the secret is present but unreadable, so reconcile
-        /// must NOT treat the entry as unbacked and drop it — that
-        /// would orphan the secret. A custody problem to surface, not
-        /// a licence to delete.
+        /// purpose: `.missing` is the ownership verdict — not this
+        /// user's — while this secret is present, just unreadable, so
+        /// ingest must keep the row listed and uninstall must keep
+        /// its entry. A custody problem to surface, not an absence to
+        /// act on.
         case undecodable
         /// The vault could not be reached, did not answer in time, or
         /// answered that it could not look.
@@ -265,9 +268,11 @@ class TunnelVaultClient {
     /// Outcome of reading the whole vault. As with a single read the
     /// two outcomes must stay apart, and here it matters far more: an
     /// empty answer means the vault owns nothing, while an unreachable
-    /// or failing vault means we know nothing at all. Reconcile deletes system
-    /// entries the vault does not back, so mistaking the second for
-    /// the first would wipe every tunnel on the machine.
+    /// or failing vault means we know nothing at all. The decoded set
+    /// is the ownership evidence everything downstream scopes by —
+    /// the ingest boundary, the slot classifier, reconcile's restores
+    /// — and evidence that never arrived must not impersonate "this
+    /// user owns nothing".
     enum ReadAll {
         case configs([TunnelConfig])
         case unreachable
