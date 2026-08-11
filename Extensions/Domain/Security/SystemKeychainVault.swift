@@ -86,15 +86,20 @@ enum SystemKeychainVault {
         case .stamped(let existing) where existing != owner:
             report("store(denied — owned by \(existing))", id: id, status: errSecAuthFailed)
             return false
+        case .unstamped:
+            // Exists but is nobody's — claiming it would let the
+            // first writer steal a slot no one can vouch for.
+            report("store(denied — unowned slot)", id: id, status: errSecAuthFailed)
+            return false
         case .failed:
             return false
-        default:
+        case .stamped, .absent:
             break
         }
 
-        // The update carries the same three fields the add writes, so
-        // an item that predates ownership stamping leaves this call
-        // stamped either way.
+        // Both paths write the same three fields, so a slot this call
+        // is allowed to touch is always left stamped — an unstamped
+        // slot never gets this far, refused above rather than claimed.
         let fields: [String: Any] = [
             kSecAttrDescription as String: String(owner),
             kSecAttrLabel as String: "Phantom-WG Tunnel (\(id))",
@@ -121,9 +126,14 @@ enum SystemKeychainVault {
             // this caller's to know about.
             report("fetch(denied — not the owner)", id: id, status: errSecItemNotFound)
             return .missing
+        case .unstamped:
+            // Exists but cannot be attributed — served to no one, the
+            // same absence another account's item reads as.
+            report("fetch(denied — unowned slot)", id: id, status: errSecItemNotFound)
+            return .missing
         case .failed:
             return .failed
-        default:
+        case .stamped, .absent:
             return payload(for: id)
         }
     }
@@ -151,16 +161,21 @@ enum SystemKeychainVault {
         defer { lock.unlock() }
 
         switch ownerOf(id: id) {
-        case .none:
+        case .absent:
             // Already gone is success for the caller's purposes.
             return true
+        case .unstamped:
+            // Exists but is nobody's — not this caller's to delete,
+            // and not gone either.
+            report("delete(denied — unowned slot)", id: id, status: errSecAuthFailed)
+            return false
         case .stamped(let existing) where existing != owner:
             report("delete(denied — owned by \(existing))", id: id, status: errSecAuthFailed)
             return false
         case .failed:
             // Could not tell whose it is — do not claim it is gone.
             return false
-        default:
+        case .stamped:
             break
         }
 
@@ -243,14 +258,19 @@ enum SystemKeychainVault {
 
     // MARK: - Private
 
-    /// Owner lookup, three-way for the same reason as `FetchResult`:
-    /// "no such item" clears the way, "could not ask" must not.
-    /// Items written before ownership was recorded read as `.none` and
-    /// are therefore inaccessible — deliberately, since guessing whose
-    /// they are is worse than ignoring them. Callers hold `lock`.
+    /// Owner lookup, four-way for the same reason as `FetchResult`:
+    /// "no such item" clears the way, "could not ask" must not — and
+    /// "exists without a readable stamp" is its own verdict, refused
+    /// outright by every scoped operation. Deliberately: guessing
+    /// whose an unattributable item is would be worse than ignoring
+    /// it. The consumers carry no `default` arms, so a future fifth
+    /// case is forced through each of them by the compiler — the one
+    /// mechanical guard available while an unstamped item cannot be
+    /// planted through the wire. Callers hold `lock`.
     private enum OwnerLookup {
         case stamped(uid_t)
-        case none
+        case absent
+        case unstamped
         case failed
     }
 
@@ -261,14 +281,14 @@ enum SystemKeychainVault {
         var out: CFTypeRef?
         let status = SecItemCopyMatching(request as CFDictionary, &out)
         guard status == errSecSuccess else {
-            if status == errSecItemNotFound { return .none }
+            if status == errSecItemNotFound { return .absent }
             report("ownerOf", id: id, status: status)
             return .failed
         }
         guard let attributes = out as? [String: Any],
               let raw = attributes[kSecAttrDescription as String] as? String,
               let owner = uid_t(raw) else {
-            return .none
+            return .unstamped
         }
         return .stamped(owner)
     }
