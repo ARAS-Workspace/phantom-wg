@@ -289,7 +289,14 @@ enum SystemKeychainVault {
         }
         guard let attributes = out as? [String: Any],
               let raw = attributes[kSecAttrDescription as String] as? String,
-              let owner = uid_t(raw) else {
+              let owner = uid_t(raw),
+              // Canonical-form check: `uid_t(raw)` also parses "+501"
+              // and other non-canonical decimals that `accounts(of:)`'s
+              // string comparison would never match, so the two scoped
+              // views of "stamped as this owner" could diverge on such
+              // an item. Our own store() only ever writes String(uid);
+              // anything else is an unattributable stamp — refused.
+              String(owner) == raw else {
             return .unstamped
         }
         return .stamped(owner)
