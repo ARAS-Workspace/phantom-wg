@@ -10,6 +10,7 @@ enum TestCatalog {
         [
             SanityWorkflow(),
             VaultIntegrityWorkflow(),
+            IsolationWorkflow(),
             ConfigContractWorkflow(),
             PhantomTunnelWorkflow(.standalone),
             PhantomTunnelWorkflow(.ghost),
