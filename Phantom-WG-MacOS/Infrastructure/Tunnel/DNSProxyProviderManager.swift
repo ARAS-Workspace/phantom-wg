@@ -86,8 +86,8 @@ class DNSProxyProviderManager {
 
     /// Deletes the preference entry entirely — the uninstall path's
     /// counterpart to `enable()`'s save. Load-first per the stale-config
-    /// rule above. Best-effort: a failure leaves an entry the uninstall
-    /// copy already tells the user to remove.
+    /// rule above. Best-effort: a failure leaves an inert entry the
+    /// next enable replaces wholesale.
     func remove() async {
         let mgr = NEDNSProxyManager.shared()
         try? await mgr.loadFromPreferences()

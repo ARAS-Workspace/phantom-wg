@@ -205,12 +205,14 @@ enum SystemKeychainVault {
         return payloads
     }
 
-    /// Deletes every payload belonging to `owner`. The uninstall flow
-    /// runs this while the tunnel extension still answers — once the
-    /// extensions are deactivated there is no XPC peer left to ask,
-    /// which is exactly how payloads used to outlive the app. `false`
-    /// means the vault must not be treated as clean: the enumeration
-    /// failed, or at least one item refused to go.
+    /// Deletes every payload belonging to `owner` — the vault's
+    /// complete per-user erasure primitive. No shipping caller
+    /// remains (the uninstall flow preserves user data by contract;
+    /// the `purgeVault` XPC endpoint layered above in
+    /// `TunnelVaultDaemon` stays for wire-stability), but the
+    /// semantics hold for whoever invokes it: `false` means the vault
+    /// must not be treated as clean — the enumeration failed, or at
+    /// least one item refused to go.
     static func purge(owner: uid_t) -> Bool {
         lock.lock()
         defer { lock.unlock() }

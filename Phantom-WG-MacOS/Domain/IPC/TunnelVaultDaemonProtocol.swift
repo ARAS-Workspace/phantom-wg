@@ -29,9 +29,13 @@ import Foundation
     /// failed and the caller knows nothing.
     func fetchAllVaults(reply: @escaping ([Data]?) -> Void)
 
-    /// Deletes every payload the caller owns. The uninstall flow runs
-    /// this before deactivating the extensions, while there is still a
-    /// peer to ask.
+    /// Deletes every payload the caller owns. No shipping app path
+    /// calls this anymore — the uninstall flow preserves user data by
+    /// contract — but the selector stays: this @objc interface is the
+    /// wire contract both binaries compile, and an upgrade window can
+    /// pair an OLD app, which still calls it, with a new extension.
+    /// Complete per-user erasure remains the vault's to offer, not
+    /// the uninstaller's to invoke.
     func purgeVault(reply: @escaping (Bool) -> Void)
 
     /// Session and identity probe in one endpoint — launchd waking

@@ -139,9 +139,9 @@ final class SplitTunnelingSessionCoordinator {
     // MARK: - Uninstall
 
     /// Uninstall-path cleanup: stops a running session, then deletes
-    /// both proxy preference entries. Best-effort by design — whatever
-    /// survives is exactly what the uninstall copy already tells the
-    /// user how to remove by hand.
+    /// both proxy preference entries. Best-effort by design — a
+    /// survivor is inert without its extension, and the next enable
+    /// replaces it wholesale.
     func purgeForUninstall() async {
         await stop()
         await split.remove()

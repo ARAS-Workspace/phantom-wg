@@ -77,7 +77,7 @@ class SplitTunnelProviderManager {
     /// Deletes the preference entry entirely — the uninstall path's
     /// counterpart to `enable()`'s save. Loads first when needed so a
     /// cold call still finds the entry. Best-effort: a failure leaves
-    /// an entry the uninstall copy already tells the user to remove.
+    /// an inert entry the next enable replaces wholesale.
     func remove() async {
         if manager == nil { await load() }
         guard let manager else { return }
