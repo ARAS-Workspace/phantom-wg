@@ -44,6 +44,11 @@ targets:
           - "**/.DS_Store"
           - Localization/translations
           - AppIcon.icon
+          # wstunnel FFI is extension-side only: the bridge compiles
+          # into PhantomTunnel via its own source entry and bridging
+          # header. Compiling it here too made the app link the
+          # static wstunnel objects it never calls.
+          - Shared/WstunnelBridge.swift
       - path: Phantom-WG-MacOS/Localization/translations
         type: folder
         buildPhase: resources
@@ -63,8 +68,6 @@ targets:
       - target: PhantomDNSProxy
         embed: true
         codeSign: true
-      - framework: Libraries/WstunnelKit/libwstunnel_mac.a
-        embed: false
     settings:
       base:
         ARCHS: "$(ARCHS_STANDARD)"
@@ -75,11 +78,6 @@ targets:
         CODE_SIGN_ENTITLEMENTS: Phantom-WG-MacOS/Phantom-WG-MacOS.entitlements
         CODE_SIGN_STYLE: Manual
         DEVELOPMENT_TEAM: 9C5SL5H7CM
-        SWIFT_OBJC_BRIDGING_HEADER: Phantom-WG-MacOS/BridgingHeader.h
-        HEADER_SEARCH_PATHS:
-          - "$(PROJECT_DIR)/Libraries/WstunnelKit/include"
-        LIBRARY_SEARCH_PATHS:
-          - "$(PROJECT_DIR)/Libraries/WstunnelKit"
         OTHER_LDFLAGS:
           - "-lresolv"
           - "-Wl,-w"
