@@ -68,15 +68,11 @@ struct ExtensionGateView: View {
         }
     }
 
-    /// Opens the System Settings pane that hosts Network Extensions.
-    /// Sequoia and later list extensions under Login Items &
-    /// Extensions; Sonoma keeps them under Privacy & Security.
+    /// Opens the System Settings pane that hosts Network Extensions —
+    /// Login Items & Extensions on every macOS this app runs on (the
+    /// 15.1 floor retired the Sonoma-era Privacy & Security fallback).
     private func openSystemSettings() {
-        if #available(macOS 15.0, *) {
-            NSWorkspace.shared.open(URL(string: "x-apple.systempreferences:com.apple.LoginItems-Settings.extension")!)
-        } else {
-            NSWorkspace.shared.open(URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_AllFiles")!)
-        }
+        NSWorkspace.shared.open(URL(string: "x-apple.systempreferences:com.apple.LoginItems-Settings.extension")!)
     }
 }
 

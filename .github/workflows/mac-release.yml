@@ -84,13 +84,12 @@ jobs:
             1. Download the DMG for your architecture
             2. Drag **Phantom-WG Mac** to the **Applications** folder
             3. On first launch, approve the system extension:
-               - **macOS 15+ (Sequoia):** System Settings → General → Login Items & Extensions → Network Extensions
-               - **macOS 14 (Sonoma):** System Settings → Privacy & Security → Extensions → Network Extensions
+               - System Settings → General → Login Items & Extensions → Network Extensions
             4. Import your tunnel configuration (.conf) and connect
 
             #### Requirements
 
-            - macOS 14.0 (Sonoma) or later
+            - macOS 15.1 (Sequoia) or later
 
             ---
 
@@ -108,13 +107,12 @@ jobs:
             1. Mimarinize uygun DMG dosyasını indirin
             2. **Phantom-WG Mac** uygulamasını **Applications** klasörüne sürükleyin
             3. İlk çalıştırmada sistem uzantısını onaylayın:
-               - **macOS 15+ (Sequoia):** Sistem Ayarları → Genel → Oturum Açma Öğeleri ve Uzantılar → Ağ Uzantıları
-               - **macOS 14 (Sonoma):** Sistem Ayarları → Gizlilik ve Güvenlik → Uzantılar → Ağ Uzantıları
+               - Sistem Ayarları → Genel → Oturum Açma Öğeleri ve Uzantılar → Ağ Uzantıları
             4. Tünel yapılandırmanızı (.conf) içe aktarın ve bağlanın
 
             #### Gereksinimler
 
-            - macOS 14.0 (Sonoma) veya üzeri
+            - macOS 15.1 (Sequoia) veya üzeri
 
           files: |
             ${{ runner.temp }}/release/Phantom-WG-MacOS-${{ needs.extract-version.outputs.version }}-arm64.dmg
