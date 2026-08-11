@@ -19,6 +19,7 @@ final class VaultIntegrityWorkflow: TestWorkflow {
             WorkflowStep("Stress Interleave (10 Configs, 3 Rounds)", stressInterleave),
             WorkflowStep("Undecodable Reported Distinctly (read id)", undecodableRead),
             WorkflowStep("Undecodable Not Silently Conflated (read vs readAll)", undecodableAgreement),
+            WorkflowStep("Upsert Semantics (Heal + Idempotent Store/Delete)", upsertSemantics),
             WorkflowStep("Delete Proof", deleteProof),
             WorkflowStep("No Materialization", noMaterialization),
             // These two run LAST, on a vault holding only the door
@@ -296,6 +297,68 @@ final class VaultIntegrityWorkflow: TestWorkflow {
         }
     }
 
+    /// The upsert's contract, pinned from the caller's side. Three
+    /// claims, each load-bearing: a valid store over an id holding
+    /// corrupt bytes heals the slot in place (the user's re-import
+    /// recovery — the one cell of the corrupt/valid matrix no other
+    /// step reaches); storing the same payload twice changes nothing
+    /// (the client's retry ladder re-stores after a timeout that hid a
+    /// landed write); and deleting an absent or already-deleted id
+    /// answers true (remove()'s retry path wedges the tunnel as
+    /// unremovable if this ever regresses).
+    private func upsertSemantics() async {
+        guard let cfg = TestConfigFactory.throwaway(name: "TE-Heal-\(runTag)") else {
+            fail("factory produced no config")
+            return
+        }
+        tracked.append(cfg)
+        guard await vaultRaw.storeRaw(Data("corrupt".utf8), id: cfg.id) else {
+            fail("raw corrupt store refused")
+            return
+        }
+        guard case .undecodable = await vault.read(id: cfg.id) else {
+            fail("precondition broke — corrupt write did not read .undecodable")
+            return
+        }
+        guard await vault.store(cfg) else {
+            fail("valid store over a corrupt slot refused — heal-in-place broken")
+            return
+        }
+        if case .config(let healed) = await vault.read(id: cfg.id) {
+            check(healed == cfg, "valid store over corrupt bytes healed the slot in place")
+        } else {
+            fail("healed slot did not read back as a config")
+        }
+
+        guard await vault.store(cfg) else {
+            fail("second identical store refused — a retry after a timed-out-but-landed write would not be harmless")
+            return
+        }
+        if case .config(let again) = await vault.read(id: cfg.id) {
+            check(again == cfg, "storing the same payload twice reads back unchanged")
+        } else {
+            fail("double-stored slot did not read back as a config")
+        }
+
+        check(await vault.delete(id: UUID()), "deleting a never-stored id answers true")
+        guard let twice = TestConfigFactory.throwaway(name: "TE-DelTwice-\(runTag)") else {
+            fail("factory produced no config")
+            return
+        }
+        tracked.append(twice)
+        guard await vault.store(twice) else {
+            fail("store refused: \(twice.name)")
+            return
+        }
+        check(await vault.delete(id: twice.id), "first delete answers true")
+        check(await vault.delete(id: twice.id), "second delete of the same id answers true")
+        if case .missing = await vault.read(id: twice.id) {
+            log("deleted id reads back .missing", .ok)
+        } else {
+            fail("deleted id did not read back .missing")
+        }
+    }
+
     private func deleteProof() async {
         for id in rawIds {
             await vault.delete(id: id, attempts: 3)
@@ -311,7 +374,15 @@ final class VaultIntegrityWorkflow: TestWorkflow {
         for cfg in tracked {
             if case .missing = await vault.read(id: cfg.id) { gone += 1 }
         }
-        check(gone == tracked.count, "all \(tracked.count) throwaways read back .missing (\(gone) confirmed)")
+        // The raw plants get the same absence proof as the tracked
+        // configs — a corrupt item surviving its delete must fail this
+        // step, not slip through as a quiet leftover.
+        var rawGone = 0
+        for id in rawIds {
+            if case .missing = await vault.read(id: id) { rawGone += 1 }
+        }
+        check(gone == tracked.count && rawGone == rawIds.count,
+              "all \(tracked.count) throwaways and \(rawIds.count) raw plants read back .missing (\(gone)+\(rawGone) confirmed)")
     }
 
     private func noMaterialization() async {
