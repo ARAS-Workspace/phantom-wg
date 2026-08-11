@@ -4,20 +4,26 @@ import NetworkExtension
 
 /// Source of truth for the tunnel list. Owns the pairing between the
 /// system's NetworkExtension preferences (identity-only projections)
-/// and the extension's TunnelVault (the payloads): `reconcileFromVault`
-/// restores vault payloads the system lost, drops system entries the
-/// vault does not back, and realigns drifted projections —
+/// and the extension's TunnelVault (the payloads): `ingest` scopes the
+/// system-wide list to this user's own entries, `reconcileFromVault`
+/// restores vault payloads the system lost and realigns drifted
+/// projections (purely additive — under the ownership boundary an
+/// unbacked entry cannot be told apart from another local user's) —
 /// `creatingIds` keeps a pass from minting an entry for a tunnel
 /// mid-import, and the debounced refresh coalesces the system's
 /// change-notification bursts into single reload+reconcile passes.
 /// Activation lives in `TunnelsManager+Activation`: one active tunnel
 /// at a time — a newly toggled tunnel waits out the previous one's
-/// deactivation before it starts. Every activation also silently arms
-/// the recovery rule (one connect-on-any-network on-demand rule): an
-/// activated tunnel is one the user wants back, so the system revives
-/// it across reboots, app termination, and network loss. Deactivation
-/// stands the rule down, and activating one tunnel disarms every
-/// other tunnel's rule.
+/// deactivation before it starts. Every activation that passes the
+/// foreign-slot pre-flight silently arms the recovery rule (one
+/// connect-on-any-network on-demand rule): an activated tunnel is one
+/// the user wants back, so the system revives it across reboots, app
+/// termination, and network loss. The rule stands down on
+/// deactivation, when activating one tunnel disarms every other
+/// tunnel's, and whenever another local user's session is proven to
+/// hold the system's one VPN slot (the collision belts and the
+/// connection gate's engage sweep) — an armed rule against an
+/// occupied slot only feeds the cross-user fight.
 @Observable
 @MainActor
 class TunnelsManager {
@@ -469,7 +475,29 @@ class TunnelsManager {
                     // attemptId guard keeps a slow fetch from writing
                     // over a newer activation round.
                     let attemptId = tunnel.activationAttemptId
-                    Task { @MainActor in
+                    Task { @MainActor [weak self] in
+                        // Collision first: when another local user's
+                        // session holds the slot, the disconnect record
+                        // reads as noise ("session ended") — name the
+                        // real cause, and stand our recovery rule down
+                        // so an armed connect-on-any-network rule stops
+                        // feeding the cross-user fight. The verdict is
+                        // sampled at check time, not drop time: a
+                        // transient drop that loses the freed slot to
+                        // the other user's rule inside this window gets
+                        // the collision label too — acceptable, since
+                        // with a foreign holder present the gate's
+                        // engage sweep would stand the same rule down
+                        // anyway. Every other drop cause keeps the
+                        // transient keep-armed contract.
+                        if let self, case .heldByForeign = await self.foreignSlotVerdict() {
+                            guard tunnel.activationAttemptId == attemptId,
+                                  tunnel.lastActivationError == nil else { return }
+                            tunnel.lastActivationError = .foreignSlotHolder
+                            tunnel.tunnelProvider.isOnDemandEnabled = false
+                            try? await tunnel.tunnelProvider.savePreferences()
+                            return
+                        }
                         let systemError = await tunnel.tunnelProvider.fetchLastDisconnectError()
                         guard tunnel.activationAttemptId == attemptId,
                               tunnel.lastActivationError == nil else { return }
@@ -674,5 +702,20 @@ class TunnelsManager {
             NSLog("[vault] ingest uid \(currentUser): kept \(kept.count)/\(providers.count) via vault — \(foreign) other users', \(custody) kept for custody (payload present, not decodable), \(unverified) unverified in a dark window, \(unattributed) without identity")
         }
         return kept
+    }
+
+    /// Asks whether the system's one VPN slot is held by another local
+    /// user's session. Shares `SlotClassifier` with the connection
+    /// gate, so the gate and the activation belts can never disagree
+    /// on what a foreign holder is. Unverifiable states answer `.free`
+    /// — refusing an activation on evidence that never arrived would
+    /// be worse than letting the system report the failure itself.
+    func foreignSlotVerdict() async -> SlotVerdict {
+        guard let providers = try? await providerFactory.loadAllFromPreferences(),
+              case .configs(let mine) = await vault.readAll() else { return .free }
+        return await SlotClassifier.classify(
+            providers: providers,
+            ownedIDs: Set(mine.map(\.id))
+        ) { await self.vault.read(id: $0) }
     }
 }

@@ -77,9 +77,14 @@ extension TunnelsManager {
     // MARK: - Private
 
     /// The recovery rule: one connect-on-any-network on-demand rule,
-    /// armed on every activation. There is no user-facing switch —
-    /// starting a tunnel is the recovery intent, stopping it withdraws
-    /// it (`startDeactivation` disarms before it stops).
+    /// armed on every activation that passes the foreign-slot
+    /// pre-flight. There is no user-facing switch — starting a tunnel
+    /// is the recovery intent, stopping it withdraws it
+    /// (`startDeactivation` disarms before it stops). The rule also
+    /// stands down without a stop when another local user's session
+    /// is proven to hold the slot: the collision belts here and the
+    /// connection gate's engage sweep — an armed rule against an
+    /// occupied slot only feeds the cross-user fight.
     private static func armRecovery(on provider: TunnelProviding) {
         let rule = NEOnDemandRuleConnect()
         rule.interfaceTypeMatch = .any
@@ -87,13 +92,16 @@ extension TunnelsManager {
         provider.isOnDemandEnabled = true
     }
 
-    /// Stands the recovery rule down and persists it. Used only on the
-    /// give-up paths that failed *locally* — a config that cannot load,
-    /// or whose `startTunnel` throws, would fail the same way on every
-    /// system-initiated on-demand retry, so leaving it armed is a loop
-    /// trap. A timeout or a dropped session is the opposite case: that
-    /// is the transient condition the recovery rule exists to ride out,
-    /// so those paths leave it armed on purpose.
+    /// Stands the recovery rule down and persists it. Two caller
+    /// families: the give-up paths that failed *locally* — a config
+    /// that cannot load, or whose `startTunnel` throws, would fail the
+    /// same way on every system-initiated on-demand retry, so leaving
+    /// it armed is a loop trap — and the collision paths, where a
+    /// proven foreign slot holder makes our armed rule pure fuel for
+    /// the cross-user fight. A timeout or a dropped session with no
+    /// holder in sight is the opposite case: that is the transient
+    /// condition the recovery rule exists to ride out, so those paths
+    /// leave it armed on purpose.
     private static func disarmRecovery(on provider: TunnelProviding) async {
         provider.isOnDemandEnabled = false
         try? await provider.savePreferences()
@@ -105,9 +113,11 @@ extension TunnelsManager {
             tunnel.activationTask?.cancel()
             tunnel.activationTask = nil
             tunnel.status = .inactive
-            // Every attempt started without throwing and the system
-            // never reported connected or disconnected — there is no
-            // system error to show, only the timeout itself. Recovery
+            // The ladder ran out without the system ever reporting
+            // connected or disconnected — there is no terminal system
+            // error to show, only the timeout itself (a one-time stale
+            // rung may have thrown and been reloaded past; a repeat
+            // never reaches here, it exits terminal below). Recovery
             // stays armed on purpose: a timeout is transient (no network
             // or an unreachable server), exactly what on-demand rides out.
             tunnel.lastActivationError = .retryLimitReached(
@@ -129,13 +139,41 @@ extension TunnelsManager {
         let attemptId = UUID().uuidString
         tunnel.activationAttemptId = attemptId
 
-        // Enable the manager and arm recovery in the same save. An
-        // activated tunnel is one the user wants back: the system
-        // restarts it whenever a network returns — across reboots
-        // and app termination included.
-        tunnel.tunnelProvider.isEnabled = true
-        Self.armRecovery(on: tunnel.tunnelProvider)
         Task {
+            // Pre-flight, first attempt only: when another local
+            // user's session holds the system's one VPN slot, fail
+            // fast and clean — no enable, no armed recovery rule, no
+            // retry ladder. Saving an armed connect-on-any-network
+            // rule against an occupied slot is what feeds the
+            // cross-user on-demand fight; the honest outcome is the
+            // gate's message, not eight doomed attempts. The
+            // optimistic `.activating` above keeps the toggle honest
+            // while the verdict (two vault reads) is fetched.
+            if retryIndex == 0, case .heldByForeign = await foreignSlotVerdict() {
+                guard tunnel.activationAttemptId == attemptId,
+                      tunnel.status == .activating else { return }
+                tunnel.isAttemptingActivation = false
+                tunnel.status = .inactive
+                tunnel.lastActivationError = .foreignSlotHolder
+                activateWaitingTunnelIfNeeded()
+                return
+            }
+            // Re-guard BOTH facts after the verdict await: the user
+            // may have toggled off (or handed the turn to a queued
+            // tunnel) while the evidence was fetched. A toggle-off
+            // does not touch the attemptId, so status must be checked
+            // too — arming and starting past a cancel would raise the
+            // tunnel against an explicit stop and persist an armed
+            // rule the user just withdrew.
+            guard tunnel.activationAttemptId == attemptId,
+                  tunnel.status == .activating || tunnel.status == .reasserting else { return }
+
+            // Enable the manager and arm recovery in the same save. An
+            // activated tunnel is one the user wants back: the system
+            // restarts it whenever a network returns — across reboots
+            // and app termination included.
+            tunnel.tunnelProvider.isEnabled = true
+            Self.armRecovery(on: tunnel.tunnelProvider)
             do {
                 try await tunnel.tunnelProvider.savePreferences()
                 guard tunnel.activationAttemptId == attemptId else { return }
@@ -168,6 +206,42 @@ extension TunnelsManager {
         do {
             try tunnel.tunnelProvider.startTunnel()
         } catch {
+            // A stale configuration is documented recovery, not a
+            // terminal error: another process touched the entry
+            // between our save and start, and the cure is reload +
+            // retry. ONE chance per ladder, on the first rung only —
+            // a config that is stale again after a reload is not
+            // raced, it is broken, and it falls to the terminal path
+            // below (which stands recovery down), so the ladder can
+            // never loop re-arming a persistently stale entry.
+            if retryIndex == 0,
+               (error as? NEVPNError)?.code == .configurationStale,
+               tunnel.activationAttemptId == attemptId,
+               (try? await tunnel.tunnelProvider.loadPreferences()) != nil {
+                // Re-guard after the reload roundtrip: a toggle-off or
+                // a queued handoff during the await must win.
+                guard tunnel.activationAttemptId == attemptId,
+                      tunnel.status == .activating || tunnel.status == .reasserting else { return }
+                startActivation(of: tunnel, at: retryIndex + 1)
+                return
+            }
+            // Collision beats the generic story: `.configurationDisabled`
+            // (and some plain start failures) are how an occupied slot
+            // surfaces — when the classifier proves a foreign holder,
+            // name it instead of printing the system's opaque line.
+            // One re-guard after the verdict await covers both exits:
+            // a user who cancelled mid-fetch keeps their cancel.
+            let verdict = await foreignSlotVerdict()
+            guard tunnel.activationAttemptId == attemptId,
+                  tunnel.status == .activating || tunnel.status == .reasserting else { return }
+            if case .heldByForeign = verdict {
+                tunnel.isAttemptingActivation = false
+                tunnel.status = .inactive
+                tunnel.lastActivationError = .foreignSlotHolder
+                await Self.disarmRecovery(on: tunnel.tunnelProvider)
+                activateWaitingTunnelIfNeeded()
+                return
+            }
             tunnel.isAttemptingActivation = false
             tunnel.status = .inactive
             tunnel.lastActivationError = .startingFailed(systemError: error)

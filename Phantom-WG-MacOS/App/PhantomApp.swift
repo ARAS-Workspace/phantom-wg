@@ -17,6 +17,7 @@ struct PhantomApp: App {
     @State private var toastCenter: ToastCenter
     @State private var vaultClient: TunnelVaultClient
     @State private var vaultSession: TunnelVaultSession
+    @State private var connectionGate: ConnectionGateCoordinator
 
     init() {
         let loc = LocalizationManager.shared
@@ -54,6 +55,7 @@ struct PhantomApp: App {
         _toastCenter = State(initialValue: ToastCenter())
         _vaultClient = State(initialValue: vaultClient)
         _vaultSession = State(initialValue: TunnelVaultSession(vault: vaultClient))
+        _connectionGate = State(initialValue: ConnectionGateCoordinator(vault: vaultClient))
         _dnsDaemonClient = State(initialValue: dnsDaemonClient)
         _splitDaemonClient = State(initialValue: splitDaemonClient)
     }
@@ -65,7 +67,17 @@ struct PhantomApp: App {
                     // Second lock: PhantomTunnel and TunnelVault exist
                     // together or not at all — no session, no list.
                     if vaultSession.state == .ready {
-                        TunnelContentView(loader: tunnelsManager)
+                        // Third lock: the system's one VPN slot. When
+                        // another local user's session holds it, the
+                        // list would only offer activations that feed
+                        // the cross-user on-demand fight — the gate
+                        // names the situation instead and releases
+                        // itself the moment the slot is freed.
+                        if connectionGate.state == .slotFree {
+                            TunnelContentView(loader: tunnelsManager)
+                        } else {
+                            ConnectionGateView()
+                        }
                     } else {
                         TunnelVaultGateView()
                     }
@@ -85,6 +97,7 @@ struct PhantomApp: App {
             .environment(toastCenter)
             .environment(vaultClient)
             .environment(vaultSession)
+            .environment(connectionGate)
             .tint(Color.accentColor)
             // Fixed: the layout is designed at this size. Wide enough
             // that a 44-character base64 key sits on one line with
@@ -101,6 +114,15 @@ struct PhantomApp: App {
                 // entry must probe again rather than trust a stale
                 // `.ready`.
                 if !ready { vaultSession.invalidate() }
+            }
+            .task(id: vaultSession.state) {
+                // The slot verdict needs the vault to answer ownership,
+                // so the connection gate arms only at readiness — and
+                // re-checks on every return to it (a re-proven session
+                // means the world may have changed underneath).
+                guard vaultSession.state == .ready else { return }
+                connectionGate.start()
+                connectionGate.checkAgain()
             }
             .task(id: coordinator.allReady) {
                 // Boot reconcile once the gate clears. The session

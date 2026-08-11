@@ -31,6 +31,15 @@ enum AXID {
         }
     }
 
+    // MARK: Connection Gate
+
+    enum ConnectionGate {
+        static let checking     = "connection-gate.checking"
+        static let heldMessage  = "connection-gate.held-message"
+        static let openSettings = "connection-gate.open-settings"
+        static let checkAgain   = "connection-gate.check-again"
+    }
+
     // MARK: Vault Gate
 
     enum VaultGate {

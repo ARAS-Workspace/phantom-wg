@@ -6,10 +6,16 @@ enum TunnelActivationError: Error {
     case loadingFailed(systemError: Error)
     case retryLimitReached(lastSystemError: Error)
     case failedWhileActivating(systemError: Error)
+    /// Another local user's session holds the system's one VPN slot.
+    /// No system error rides along: the message IS the diagnosis, and
+    /// the fix lives in System Settings > VPN, not in a retry.
+    case foreignSlotHolder
 
     var alertText: String {
         let loc = LocalizationManager.shared
         switch self {
+        case .foreignSlotHolder:
+            return loc.t("error_foreign_slot")
         case .startingFailed(let error):
             return loc.t("error_starting_failed", error.localizedDescription)
         case .savingFailed(let error):
