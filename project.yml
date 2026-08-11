@@ -2,7 +2,7 @@ name: Phantom-WG-MacOS
 options:
   bundleIdPrefix: com.remrearas
   deploymentTarget:
-    macOS: "14.0"
+    macOS: "15.1"
   xcodeVersion: "16.0"
   generateEmptyDirectories: true
   # Restore the manually-maintained Run scheme after every regen.
@@ -244,6 +244,12 @@ targets:
   PhantomSplitTunnel:
     type: system-extension
     platform: macOS
+    # Stays on the 14.0 floor while the app rides 15.1: the flow-relay
+    # layer speaks the pre-15 NE datagram API (NWHostEndpoint family,
+    # deprecated at 15.0), and raising this floor buries the build in
+    # deprecation noise for code the parked relay-migration package
+    # owns. The day that package lands, the floors unify.
+    deploymentTarget: "14.0"
     sources:
       - path: PhantomSplitTunnel
         excludes:
@@ -316,6 +322,10 @@ targets:
   PhantomDNSProxy:
     type: system-extension
     platform: macOS
+    # Same 14.0 floor as PhantomSplitTunnel, same reason: the DNS flow
+    # relay speaks the pre-15 NE datagram API; the parked
+    # relay-migration package unifies the floors.
+    deploymentTarget: "14.0"
     sources:
       - path: PhantomDNSProxy
         excludes:

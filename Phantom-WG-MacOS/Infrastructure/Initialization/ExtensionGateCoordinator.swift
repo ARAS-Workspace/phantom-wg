@@ -29,6 +29,7 @@ final class ExtensionGateCoordinator {
         category: "gate.coordinator"
     )
     @ObservationIgnored private var foregroundObserver: NSObjectProtocol?
+    @ObservationIgnored private var workspaceEcho: WorkspaceEcho?
 
     /// One boot measurement per process. The window's `onAppear`
     /// re-runs `start()` on every re-creation, so without this guard
@@ -92,6 +93,9 @@ final class ExtensionGateCoordinator {
         if let foregroundObserver {
             NotificationCenter.default.removeObserver(foregroundObserver)
         }
+        if let workspaceEcho {
+            OSSystemExtensionsWorkspace.shared.removeObserver(workspaceEcho)
+        }
     }
 
     /// All three extensions report `.activated`. Root switch keys off
@@ -125,6 +129,30 @@ final class ExtensionGateCoordinator {
                     self?.log("didBecomeActive → checkAll()")
                     self?.checkAll()
                 }
+            }
+        }
+        // Push-side of the gate: the workspace notifies enable/disable/
+        // deactivate transitions the moment they happen, killing the
+        // one blind spot the foreground re-check had — a System
+        // Settings toggle flipped while this app stays frontmost was
+        // invisible until the next focus change. The observer scope is
+        // not documented as app-limited, so transitions are filtered
+        // to our own extensions; the foreground re-check above stays
+        // as the belt for everything else. macOS offers no workspace
+        // QUERY, so `checkAll`/`settle` remain the measurement — this
+        // only sharpens when they run.
+        if workspaceEcho == nil {
+            let echo = WorkspaceEcho { [weak self] bundleID in
+                Task { @MainActor in
+                    self?.log("workspace transition (\(bundleID)) → checkAll()")
+                    self?.checkAll()
+                }
+            }
+            do {
+                try OSSystemExtensionsWorkspace.shared.addObserver(echo)
+                workspaceEcho = echo
+            } catch {
+                log("workspace observer registration failed: \(error.localizedDescription) — foreground re-checks carry the load alone")
             }
         }
         guard !hasRunBootMeasurement else {
@@ -172,5 +200,37 @@ final class ExtensionGateCoordinator {
 
     private func log(_ message: String) {
         os_log("%{public}@", log: oslog, type: .default, message)
+    }
+}
+
+/// The workspace observer's landing pad. A separate NSObject on
+/// purpose: `OSSystemExtensionsWorkspaceObserver` requires one, and
+/// the coordinator should not inherit NSObject just to hear these.
+/// Callbacks arrive on an unspecified queue and are forwarded only
+/// for this app's own extensions — the workspace's observer scope is
+/// not documented as app-limited.
+private final class WorkspaceEcho: NSObject, OSSystemExtensionsWorkspaceObserver {
+
+    private let onTransition: @Sendable (String) -> Void
+
+    init(onTransition: @escaping @Sendable (String) -> Void) {
+        self.onTransition = onTransition
+    }
+
+    private func forward(_ info: OSSystemExtensionInfo) {
+        guard info.bundleIdentifier.hasPrefix("com.remrearas.Phantom-WG-MacOS.") else { return }
+        onTransition(info.bundleIdentifier)
+    }
+
+    func systemExtensionWillBecomeEnabled(_ systemExtensionInfo: OSSystemExtensionInfo) {
+        forward(systemExtensionInfo)
+    }
+
+    func systemExtensionWillBecomeDisabled(_ systemExtensionInfo: OSSystemExtensionInfo) {
+        forward(systemExtensionInfo)
+    }
+
+    func systemExtensionWillBecomeInactive(_ systemExtensionInfo: OSSystemExtensionInfo) {
+        forward(systemExtensionInfo)
     }
 }
