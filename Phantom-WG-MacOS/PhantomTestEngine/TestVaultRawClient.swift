@@ -16,6 +16,12 @@ final class TestVaultRawClient {
 
     private var connection: NSXPCConnection?
 
+    deinit {
+        // Explicit teardown rather than dealloc-implied cleanup —
+        // invalidate() is thread-safe, so no actor hop is needed.
+        connection?.invalidate()
+    }
+
     private func proxy(_ onError: @escaping @Sendable (Error) -> Void) -> TunnelVaultDaemonProtocol? {
         if connection == nil {
             let conn = NSXPCConnection(machServiceName: TunnelVaultService.machServiceName, options: [])
@@ -31,7 +37,7 @@ final class TestVaultRawClient {
     /// Returns the daemon's ack, or false if the vault could not be reached.
     func storeRaw(_ bytes: Data, id: UUID) async -> Bool {
         await withCheckedContinuation { continuation in
-            let resume = StepResume(continuation)
+            let resume = SingleResume(continuation)
             guard let proxy = proxy({ _ in resume.finish(false) }) else {
                 resume.finish(false)
                 return

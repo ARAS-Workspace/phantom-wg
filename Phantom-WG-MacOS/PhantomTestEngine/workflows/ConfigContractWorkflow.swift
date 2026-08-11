@@ -14,9 +14,9 @@ import Foundation
 /// 2. Multi-[Peer] import: a `.conf` with two `[Peer]` sections must
 ///    not silently collapse into one working tunnel. The parser
 ///    refuses a repeated section outright (`.duplicateSection`); this
-///    proves the refusal holds — and should a future parser ever
-///    accept the shape, acceptance is only legal with BOTH peers
-///    preserved. A quiet merge that then activates is the failure.
+///    proves that exact refusal identity holds — and while the typed
+///    model stays single-peer, ANY acceptance is by definition a
+///    collapse (one key wearing merged ranges) and fails outright.
 final class ConfigContractWorkflow: TestWorkflow {
     override var displayName: String { "Config Contract (Leak + Parse Guards)" }
 
@@ -39,19 +39,56 @@ final class ConfigContractWorkflow: TestWorkflow {
         do {
             t = try await tunnels.add(config: cfg)
         } catch {
-            // Refusing at import is one valid way to honour the guard.
-            log("import refused a no-route config: \(error.localizedDescription)", .ok)
-            check(true, "no-route config never became a runnable tunnel")
+            // add() never inspects routes — a throw here is
+            // infrastructure (vault down, name collision), not the
+            // guard under test. Report honestly instead of crediting
+            // the leak guard with someone else's refusal.
+            skip("environment: add() failed before the guard was exercised — \(error.localizedDescription)")
             return
         }
         tunnels.startActivation(of: t)
         // The safe outcome is that it never reaches active. If it does,
         // that is the leak: a live tunnel with no cryptokey route.
         let wentActive = await awaitStatus(t, is: .active, within: 12)
-        check(!wentActive,
-              wentActive
-                ? "LEAK: no-route config reached .active — traffic would leave in the clear"
-                : "no-route config was kept from going active (status=\(t.status))")
+        if wentActive {
+            fail("LEAK: no-route config reached .active — traffic would leave in the clear")
+        } else {
+            // Never active inside the sampling window — now demand
+            // the TERMINAL shape in one leak-aware loop with three
+            // exits: any .active sighting is the LEAK (the one
+            // respawn revive can raise a second attempt after the
+            // first window, so a blind wait-for-inactive would miss
+            // it); .inactive WITH a recorded refusal is the earned
+            // PASS (the drop belt writes the record async after the
+            // status flip, so inactive-with-nil keeps polling rather
+            // than declaring a spurious miss); budget exhaustion
+            // reports the honest inconclusive. The budget covers the
+            // remaining rungs plus the anonymous-drop revive class;
+            // a full ladder hang is deliberately left inconclusive.
+            let terminalStart = Date()
+            var verdictGiven = false
+            while Date().timeIntervalSince(terminalStart) < 35 {
+                if Task.isCancelled { return }
+                if t.status == .active {
+                    fail("LEAK: no-route config reached .active on a later attempt — traffic would leave in the clear")
+                    verdictGiven = true
+                    break
+                }
+                if t.status == .inactive, let refusal = t.lastActivationError {
+                    check(true, "no-route config was refused terminally (status=inactive, error=\(String(describing: refusal)))")
+                    verdictGiven = true
+                    break
+                }
+                try? await Task.sleep(for: .milliseconds(250))
+            }
+            if !verdictGiven {
+                if t.status == .inactive {
+                    skip("inconclusive: settled inactive without a recorded refusal inside the budget")
+                } else {
+                    skip("inconclusive: still \(t.status) after the extended budget — refusal not yet terminal")
+                }
+            }
+        }
         if t.status != .inactive {
             tunnels.startDeactivation(of: t)
             _ = await awaitStatus(t, is: .inactive, within: 15)
@@ -67,24 +104,30 @@ final class ConfigContractWorkflow: TestWorkflow {
         var draft: TunnelDraft
         do {
             draft = try ConfParser.parse(text)
+        } catch ConfParser.ParseError.duplicateSection(let section) {
+            // The exact guard: a second [Peer] must be refused as
+            // section-level ambiguity, not merged away. Only this
+            // error identity counts — any other rejection would be
+            // the parser failing for an unrelated reason while the
+            // collapse guard silently regressed.
+            check(section.lowercased() == "peer",
+                  "multi-peer config rejected at parse (explicit) — duplicate [\(section)] section")
+            return
         } catch {
-            // Explicit rejection at parse is the correct guard — a
-            // repeated [Peer] would otherwise collapse in the
-            // section-keyed split, so parse time is where the
-            // ambiguity must be refused.
-            check(true, "multi-peer config rejected at parse (explicit) — \(error.localizedDescription)")
+            fail("multi-peer config rejected for the wrong reason — \(error.localizedDescription)")
             return
         }
         // Parser accepted it. Give the draft a name FIRST, so validation
         // runs the real import path — an unnamed draft fails on the empty
         // name and that rejection would masquerade as a multi-peer guard.
-        // The only acceptable acceptance keeps BOTH peers; a single
-        // collapsed peer (one key, both ranges) is the failure.
         draft.name = "TE-MultiPeer-\(UUID().uuidString.prefix(8))"
         let result = draft.validate()
-        if let cfg = result.config {
-            check(cfg.wireguard.peer.allowedIPs.count >= 4,
-                  "both peers preserved — allowedIPs entries=\(cfg.wireguard.peer.allowedIPs.count) (a single collapsed peer would be < 4)")
+        if result.config != nil {
+            // The typed model carries exactly one peer, so ANY
+            // accepted multi-peer text is a collapse: one key wearing
+            // merged ranges. There is no acceptable acceptance shape
+            // while the model stays single-peer.
+            fail("parser accepted a multi-peer conf into a single-peer model — silent collapse")
         } else {
             fail("named multi-peer config still failed validation — collapsed silently rather than being rejected outright (errors=\(result.errors.count))")
         }

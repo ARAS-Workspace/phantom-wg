@@ -118,12 +118,18 @@ final class VaultIntegrityWorkflow: TestWorkflow {
             fail("twin store refused")
             return
         }
-        var bothReadable = true
-        for id in [base.id, twin.id] {
-            if case .config = await vault.read(id: id) { continue }
-            bothReadable = false
+        // Payload identity, not mere decodability: each id must hand
+        // back ITS OWN payload — a name-keyed vault could serve one
+        // payload from both ids and still pass a decodability check.
+        guard case .config(let backBase) = await vault.read(id: base.id) else {
+            fail("base did not read back .config")
+            return
         }
-        check(bothReadable && base.id != twin.id,
+        guard case .config(let backTwin) = await vault.read(id: twin.id) else {
+            fail("twin did not read back .config")
+            return
+        }
+        check(backBase == base && backTwin == twin && base.id != twin.id,
               "two payloads share name \"\(base.name)\" under distinct ids — the vault keys on id, name uniqueness stays TunnelsManager's duty")
     }
 
@@ -185,8 +191,19 @@ final class VaultIntegrityWorkflow: TestWorkflow {
             return
         }
         let absent = await vault.read(id: absentId)
-        check(label(corrupt) != label(absent),
-              "undecodable distinct from absent — corrupt=\(label(corrupt)) absent=\(label(absent))")
+        // Exact pair, not mere inequality: a regression mapping
+        // undecodable to .missing would still differ from a transient
+        // .unreachable on the absent read — an inequality check would
+        // pass with the guarded regression live.
+        guard case .undecodable = corrupt else {
+            fail("planted payload did not read back .undecodable — got \(label(corrupt))")
+            return
+        }
+        guard case .missing = absent else {
+            fail("absent baseline did not answer .missing — got \(label(absent))")
+            return
+        }
+        check(true, "undecodable distinct from absent — corrupt=\(label(corrupt)) absent=\(label(absent))")
     }
 
     /// An undecodable payload must not be silently conflated with an
@@ -208,9 +225,15 @@ final class VaultIntegrityWorkflow: TestWorkflow {
             return
         }
         let inReadAll = all.contains { $0.id == id }
-        let hiddenById = label(byId) == "missing"
-        check(!(hiddenById && !inReadAll),
-              "read(id) surfaces undecodable, not conflated with absent — read(id)=\(label(byId)), readAll excludes it (inReadAll=\(inReadAll))")
+        // Positive claim, not a negated conjunction: the per-id
+        // surface must answer .undecodable itself — the old shape
+        // (only forbidding missing-AND-excluded) let a transient
+        // .unreachable read pass as agreement.
+        guard case .undecodable = byId else {
+            fail("read(id) did not surface the planted payload as .undecodable — got \(label(byId))")
+            return
+        }
+        check(!inReadAll, "read(id) surfaces undecodable, not conflated with absent — read(id)=\(label(byId)), readAll's decoded answer excludes it (inReadAll=\(inReadAll))")
     }
 
     /// Corrupt a real tunnel's payload in place, then reconcile. The
@@ -238,10 +261,18 @@ final class VaultIntegrityWorkflow: TestWorkflow {
         check(survived, survived
             ? "entry survived a corrupted payload through reconcile"
             : "entry DROPPED after payload corruption — secret orphaned (a removal path has grown back into reconcile)")
+        // Loud cleanup, mirroring the visibility twin: this id is
+        // never tracked, so Delete Proof cannot see its leftovers —
+        // a failed sweep must say so instead of leaving a corrupt
+        // payload or a TE-Corrupt entry behind in silence.
         if let t = tunnel(named: name) {
-            try? await tunnels.remove(tunnel: t)
+            do { try await tunnels.remove(tunnel: t) } catch {
+                log("cleanup: entry remove failed — \(name) lingers in the list (\(error.localizedDescription))", .warn)
+            }
         }
-        await vault.delete(id: cfg.id, attempts: 3)
+        if !(await vault.delete(id: cfg.id, attempts: 3)) {
+            log("cleanup: corrupt payload delete failed — \(name) lingers in the vault", .warn)
+        }
     }
 
     /// The visibility half of the custody contract. Corrupt a real
@@ -368,12 +399,16 @@ final class VaultIntegrityWorkflow: TestWorkflow {
     }
 
     private func deleteProof() async {
-        for id in rawIds {
-            await vault.delete(id: id, attempts: 3)
-        }
-        guard !tracked.isEmpty else {
+        // The skip guard covers BOTH stashes and sits before any
+        // delete: a run whose factory failed but whose injection
+        // steps planted raw bytes must still prove those bytes gone,
+        // not sweep them unverified behind a "nothing was stored".
+        guard !tracked.isEmpty || !rawIds.isEmpty else {
             skip("nothing was stored")
             return
+        }
+        for id in rawIds {
+            await vault.delete(id: id, attempts: 3)
         }
         for cfg in tracked {
             await vault.delete(id: cfg.id)
@@ -398,8 +433,19 @@ final class VaultIntegrityWorkflow: TestWorkflow {
         let materialized = tunnels.tunnels.filter { ids.contains($0.id) }
         check(materialized.isEmpty,
               "no throwaway materialized into the tunnel list (\(materialized.count) found)")
-        check(tunnel(named: TestContext.ghostName) != nil && tunnel(named: TestContext.wireGuardName) != nil,
-              "door configs intact")
+        // "Intact" must mean the PAYLOAD answers, not just the row:
+        // custody-visibility keeps a row listed even when its payload
+        // is broken, so presence-by-name alone cannot detect the
+        // exact damage this step rules out.
+        var doorsIntact = true
+        for name in [TestContext.ghostName, TestContext.wireGuardName] {
+            guard let door = tunnel(named: name),
+                  case .config = await vault.read(id: door.id) else {
+                doorsIntact = false
+                continue
+            }
+        }
+        check(doorsIntact, "door configs intact — rows listed and payloads decode")
     }
 
     // MARK: - Shared

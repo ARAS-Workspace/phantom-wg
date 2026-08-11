@@ -64,9 +64,10 @@ enum TestConfigFactory {
     }
 
     /// Raw `.conf` text carrying two `[Peer]` sections. Not parsed
-    /// here — handed to the workflow so it can prove the parser either
-    /// rejects it outright or preserves both peers, never silently
-    /// collapsing to one damaged peer.
+    /// here — handed to the workflow so it can prove the parser
+    /// refuses it with the `.duplicateSection` identity; while the
+    /// typed model stays single-peer, any acceptance would be a
+    /// silent collapse and fails the step outright.
     static func multiPeerConfText() -> String {
         let iface = Curve25519.KeyAgreement.PrivateKey()
         let peerA = Curve25519.KeyAgreement.PrivateKey().publicKey

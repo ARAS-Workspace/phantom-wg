@@ -1,6 +1,5 @@
 #if DEBUG
 import Foundation
-import Synchronization
 
 /// Reply from the tunnel extension's app-message surface. The two
 /// negative shapes are different claims and must not be told the same
@@ -22,29 +21,9 @@ enum ProviderReply: Equatable {
     }
 }
 
-/// DEBUG-local mirror of the vault client's private `SingleResume`:
-/// guards a continuation against the race between a late XPC reply and
-/// the timeout task — the first finish wins, the rest are dropped.
-/// Shared by the step helpers and the raw vault client. The one-shot
-/// flag lives inside a `Mutex`, so the type is `Sendable` by compiler
-/// proof rather than by annotation.
-final class StepResume<T: Sendable>: Sendable {
-    private let continuation: CheckedContinuation<T, Never>
-    private let done = Mutex(false)
-
-    init(_ continuation: CheckedContinuation<T, Never>) {
-        self.continuation = continuation
-    }
-
-    func finish(_ value: T) {
-        let first = done.withLock { done -> Bool in
-            guard !done else { return false }
-            done = true
-            return true
-        }
-        if first { continuation.resume(returning: value) }
-    }
-}
+// The one-shot continuation guard the helpers ride is the production
+// `SingleResume` (Infrastructure/Concurrency/SingleResume.swift) —
+// the DEBUG-local mirror this file used to carry is retired.
 
 /// One step: an English title and a pure async body. The body uses the
 /// workflow's inherited helpers; nothing is threaded in. A body does
@@ -158,10 +137,12 @@ class TestWorkflow {
     /// Sends one app message to the tunnel extension and races the
     /// reply against a timeout, so a mute extension can never wedge
     /// the runner. `NETunnelProviderSession` RPCs aren't cancellable;
-    /// a late reply after a timeout win is simply dropped.
+    /// a late reply after a timeout win is simply dropped. Stop
+    /// responsiveness is bounded by the in-flight budget — the
+    /// timeout sleeper is unstructured and uncancelled by design.
     func providerMessage(_ tunnel: TunnelContainer, _ bytes: [UInt8], timeout: Double = 5) async -> ProviderReply {
         await withCheckedContinuation { continuation in
-            let resume = StepResume(continuation)
+            let resume = SingleResume(continuation)
             do {
                 try tunnel.tunnelProvider.sendProviderMessage(Data(bytes)) { data in
                     resume.finish(data.map(ProviderReply.data) ?? .empty)
@@ -184,7 +165,7 @@ class TestWorkflow {
     /// running; only its result is dropped.
     func race<T: Sendable>(_ seconds: Double, _ operation: @escaping @MainActor () async -> T) async -> T? {
         await withCheckedContinuation { (continuation: CheckedContinuation<T?, Never>) in
-            let resume = StepResume(continuation)
+            let resume = SingleResume(continuation)
             Task { @MainActor in resume.finish(await operation()) }
             Task { try? await Task.sleep(for: .seconds(seconds)); resume.finish(nil) }
         }
@@ -207,8 +188,17 @@ class TestWorkflow {
             stepSkipReason = nil
             engine?.emit("  • \(step.title)", .step)
             await step.body()
+            // Fail outranks everything: a failure recorded before a
+            // Stop is real evidence and keeps its verdict. Only a
+            // cancelled body that had NOT already failed reads SKIP —
+            // its remaining claims are unproven, not disproven — and
+            // either way a cancelled run proves nothing further.
             if stepFailed {
                 engine?.emit("    ✗ FAIL", .error)
+                if Task.isCancelled { break }
+            } else if Task.isCancelled {
+                engine?.emit("    ◦ SKIP (cancelled)", .skip)
+                break
             } else if let reason = stepSkipReason {
                 engine?.emit("    ◦ SKIP (\(reason))", .skip)
             } else {

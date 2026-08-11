@@ -248,11 +248,34 @@ final class IsolationWorkflow: TestWorkflow {
             return
         }
 
+        // The rung-0 pre-flight rides a 2s verdict deadline and costs
+        // at least TWO sequential vault round-trips (readAll + the
+        // per-id probe), so the gate must fit two RTTs plus slack
+        // inside 2s — one ping under 0.8s is the proxy. A vault
+        // slower than that legitimately reads .free (unverifiable)
+        // and the activation proceeds: product behavior, not a
+        // product bug. Non-ready answers are their own stories, not
+        // slowness.
+        let pingStart = Date()
+        let pingAnswer = await vault.ping()
+        let pingRTT = Date().timeIntervalSince(pingStart)
+        switch pingAnswer {
+        case .doorFailed(let identity):
+            fail("vault door failed — identity=\(identity)")
+            return
+        case .unreachable:
+            skip("environment: vault unreachable")
+            return
+        case .ready:
+            guard pingRTT < 0.8 else {
+                skip("environment: vault RTT \(String(format: "%.2f", pingRTT))s — two verdict round-trips cannot fit the 2s pre-flight deadline")
+                return
+            }
+        }
+
         manager.startActivation(of: container)
-        // The pre-flight verdict is a readAll plus a per-id probe,
-        // each behind its own 5s race timeout — budget past the
-        // worst-case sum so a slow-but-answering vault cannot fake a
-        // product FAIL.
+        // Poll budget covers the 2s verdict deadline plus scheduling
+        // slack; the belts settle the error well inside it.
         let start = Date()
         while Date().timeIntervalSince(start) < 12 {
             if container.lastActivationError != nil { break }

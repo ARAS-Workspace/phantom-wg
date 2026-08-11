@@ -24,7 +24,18 @@ final class SanityWorkflow: TestWorkflow {
 
     func liveServices() async {
         log("TunnelsManager: \(tunnels.tunnels.count) tunnels visible")
-        log("vault / coordinator / daemon-client obtained from @Environment", .ok)
+        // The wiring claim must be earned, not narrated: one ping
+        // proves the vault client answers end-to-end. Before this,
+        // the step carried no check at all and could never be
+        // anything but PASS.
+        switch await vault.ping() {
+        case .ready(let payloads, let identity):
+            check(true, "vault answers from @Environment — identity=\(identity) payloads=\(payloads)")
+        case .doorFailed(let identity):
+            fail("vault door failed — identity=\(identity)")
+        case .unreachable:
+            skip("environment: vault unreachable at suite start")
+        }
     }
 
     func testConfigs() async {

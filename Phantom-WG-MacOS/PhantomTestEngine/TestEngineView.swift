@@ -42,7 +42,11 @@ struct TestEngineView: View {
     var body: some View {
         NavigationStack {
             Group {
-                if ctx.hasTestConfigs {
+                // `engine.isRunning` keeps an in-flight run's controls
+                // and stream even if the named configs blink out of
+                // the live list mid-run (a reconcile rebuild) — the
+                // gate returns once the run ends.
+                if ctx.hasTestConfigs || engine.isRunning {
                     runner
                 } else {
                     configGate
