@@ -32,10 +32,11 @@ import os.log
 /// domain a system extension can reach.
 ///
 /// Lookup is by attributes rather than a persistent reference: the
-/// account already identifies the item, and an attribute query still
-/// resolves after an item is deleted and rewritten (a stored reference
-/// would dangle). Only the extension calls this type; the app reaches
-/// it through `TunnelVaultDaemon` over XPC.
+/// account already identifies the item, and on the file-based keychain
+/// a persistent reference goes stale the moment an item's attributes
+/// are updated — an attribute query cannot dangle. Only the extension
+/// calls this type; the app reaches it through `TunnelVaultDaemon`
+/// over XPC.
 enum SystemKeychainVault {
 
     static let service = "com.remrearas.Phantom-WG-MacOS.tunnelvault"
@@ -62,8 +63,15 @@ enum SystemKeychainVault {
     // MARK: - CRUD
 
     /// Writes (or replaces) the vault item for `id`, stamped with the
-    /// owning uid. Delete-then-add rather than `SecItemUpdate` so a
-    /// partially written item can never survive a failed rewrite.
+    /// owning uid. Upsert — `SecItemUpdate` first, `SecItemAdd` only
+    /// when there is nothing to update: a failed update leaves the old
+    /// item fully intact, so no moment exists in which the only copy
+    /// of a tunnel's keys lives outside the keychain. (The former
+    /// delete-then-add carried that moment, and its rollback could
+    /// itself fail — a double failure lost the secret outright.)
+    /// Attribute lookup keeps this safe from the file-based keychain's
+    /// quirk of invalidating persistent references on attribute
+    /// updates — nothing here ever holds one.
     @discardableResult
     static func store(_ payload: Data, id: String, owner: uid_t) -> Bool {
         lock.lock()
@@ -84,38 +92,22 @@ enum SystemKeychainVault {
             break
         }
 
-        // Read the current payload before disturbing the slot. This is
-        // the only copy of the tunnel's keys, so a failed `SecItemAdd`
-        // below must be able to put back exactly what was there rather
-        // than leaving the caller a `false` and an empty slot.
-        // `Self.` is required: the `payload` parameter shadows the
-        // `payload(for:)` reader inside this function.
-        let previous: Data?
-        if case .payload(let data) = Self.payload(for: id) {
-            previous = data
-        } else {
-            previous = nil
+        // The update carries the same three fields the add writes, so
+        // an item that predates ownership stamping leaves this call
+        // stamped either way.
+        let fields: [String: Any] = [
+            kSecAttrDescription as String: String(owner),
+            kSecAttrLabel as String: "Phantom-WG Tunnel (\(id))",
+            kSecValueData as String: payload
+        ]
+
+        var status = SecItemUpdate(query(id: id) as CFDictionary, fields as CFDictionary)
+        if status == errSecItemNotFound {
+            var attributes = query(id: id)
+            fields.forEach { attributes[$0.key] = $0.value }
+            status = SecItemAdd(attributes as CFDictionary, nil)
         }
-
-        SecItemDelete(query(id: id) as CFDictionary)
-
-        var attributes = query(id: id)
-        attributes[kSecAttrDescription as String] = String(owner)
-        attributes[kSecAttrLabel as String] = "Phantom-WG Tunnel (\(id))"
-        attributes[kSecValueData as String] = payload
-
-        let status = SecItemAdd(attributes as CFDictionary, nil)
         report("store", id: id, status: status)
-
-        if status != errSecSuccess, let previous {
-            // Roll the old payload back so a failed rewrite is not an
-            // irreversible loss of the tunnel's secrets.
-            var restore = query(id: id)
-            restore[kSecAttrDescription as String] = String(owner)
-            restore[kSecAttrLabel as String] = "Phantom-WG Tunnel (\(id))"
-            restore[kSecValueData as String] = previous
-            report("store(rollback)", id: id, status: SecItemAdd(restore as CFDictionary, nil))
-        }
         return status == errSecSuccess
     }
 
