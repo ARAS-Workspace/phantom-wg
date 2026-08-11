@@ -39,6 +39,17 @@ class TunnelContainer: Identifiable {
     @ObservationIgnored var isAttemptingActivation = false
     @ObservationIgnored var activationAttemptId: String?
     @ObservationIgnored var activationTask: Task<Void, Never>?
+    /// One in-app revive per user intent, for the respawn-window class
+    /// where the system drops a just-started session without an error
+    /// record. Granted (reset) by `startActivation(of:)`, spent by the
+    /// disconnect observer — the revive path re-enters below the
+    /// public door precisely so it can never re-grant itself.
+    @ObservationIgnored var respawnReviveConsumed = false
+    /// The pending revive, held so every intent withdrawal (a stop, a
+    /// newer start elsewhere, a ground sweep, a remove) can cancel it
+    /// — a delayed re-activation firing behind a green sweep would
+    /// falsify the sweep.
+    @ObservationIgnored var respawnReviveTask: Task<Void, Never>?
 
     init(tunnel: TunnelProviding) {
         tunnelProvider = tunnel

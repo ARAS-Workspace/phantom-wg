@@ -112,9 +112,13 @@ final class ConnectionGateCoordinator {
 
     /// Mirrors `TunnelsManager.foreignSlotVerdict()`'s funnel (loadAll
     /// → owner-scoped readAll → classifier, unverifiable answers free)
-    /// — keep the two in lockstep. The gate cannot call it directly
-    /// because the engage sweep needs the same providers/owned-set the
-    /// verdict was computed from.
+    /// with one deliberate divergence: NO deadline here. The manager's
+    /// rung-0 pre-flight opts into a tight budget because a user is
+    /// waiting; the gate is the patient path and must wait out slow
+    /// evidence — do not "fix" this copy by adding the deadline. The
+    /// gate cannot call the manager's directly because the engage
+    /// sweep needs the same providers/owned-set the verdict was
+    /// computed from.
     private func evaluate() async {
         evaluationEpoch += 1
         let epoch = evaluationEpoch

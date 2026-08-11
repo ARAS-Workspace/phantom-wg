@@ -390,6 +390,14 @@ class TunnelsManager {
     }
 
     func remove(tunnel: TunnelContainer) async throws {
+        // A pending revive must not outlive the entry it would raise —
+        // and a belt still hunting for a record mid-removal must find
+        // the grant already spent, or it could schedule a revive
+        // against an entry whose deletion is suspended right here.
+        tunnel.respawnReviveConsumed = true
+        tunnel.respawnReviveTask?.cancel()
+        tunnel.respawnReviveTask = nil
+
         // The payload goes first, and its failure stops everything.
         //
         // Removing the system entry first looks tidier but loses the
@@ -521,6 +529,13 @@ class TunnelsManager {
                 tunnel.status = .active
 
             case .disconnected:
+                // Captured before the bookkeeping resets: "the session
+                // died while a start was genuinely in flight" is the
+                // respawn-revive discriminator — a user-initiated stop
+                // travels through `.deactivating` and never reads as
+                // mid-activation here.
+                let droppedMidActivation = tunnel.isAttemptingActivation
+                    && (tunnel.status == .activating || tunnel.status == .reasserting)
                 tunnel.isAttemptingActivation = false
                 tunnel.activationTask?.cancel()
                 tunnel.activationTask = nil
@@ -534,6 +549,7 @@ class TunnelsManager {
                     // over a newer activation round.
                     let attemptId = tunnel.activationAttemptId
                     Task { @MainActor [weak self] in
+                        guard let self else { return }
                         // Collision first: when another local user's
                         // session holds the slot, the disconnect record
                         // reads as noise ("session ended") — name the
@@ -548,7 +564,14 @@ class TunnelsManager {
                         // engage sweep would stand the same rule down
                         // anyway. Every other drop cause keeps the
                         // transient keep-armed contract.
-                        if let self, case .heldByForeign = await self.foreignSlotVerdict() {
+                        // Full patience on purpose: no user is blocked
+                        // behind this belt, and a slow-but-eventual
+                        // foreign proof must still stand the armed
+                        // rule down. The revive decision below does
+                        // queue behind it — acceptable, because every
+                        // stage is transport-bounded and the tail
+                        // still lands inside the respawn window.
+                        if case .heldByForeign = await self.foreignSlotVerdict() {
                             guard tunnel.activationAttemptId == attemptId,
                                   tunnel.lastActivationError == nil else { return }
                             tunnel.lastActivationError = .foreignSlotHolder
@@ -556,12 +579,51 @@ class TunnelsManager {
                             try? await tunnel.tunnelProvider.savePreferences()
                             return
                         }
-                        let systemError = await tunnel.tunnelProvider.fetchLastDisconnectError()
+                        // Bounded: this wrapper carries no timeout of
+                        // its own, and the same dark window that
+                        // dropped the session can hang it forever —
+                        // the deadline keeps the record (or its honest
+                        // stand-in) landing while it still matters.
+                        let systemError = await self.bounded(3) {
+                            (await tunnel.tunnelProvider.fetchLastDisconnectError()).map { $0 as NSError }
+                        }
                         guard tunnel.activationAttemptId == attemptId,
                               tunnel.lastActivationError == nil else { return }
+                        if let systemError {
+                            tunnel.lastActivationError = .failedWhileActivating(systemError: systemError)
+                            return
+                        }
+                        // Anonymous drop: no foreign holder and no
+                        // system record. Mid-activation this is the
+                        // respawn-window class (field-measured up to
+                        // ~10s after a teardown), and the OS's own
+                        // on-demand revival is not guaranteed without
+                        // a network event. Sequenced HERE — after the
+                        // record hunt came up empty — so a real
+                        // failure's record can never be raced into a
+                        // retry. Spend the single per-intent revive
+                        // through `beginActivation` — the full
+                        // machinery below the granting door, so a
+                        // revived attempt can never re-grant itself;
+                        // once spent, record the honest stand-in.
+                        if droppedMidActivation, !tunnel.respawnReviveConsumed {
+                            tunnel.respawnReviveConsumed = true
+                            tunnel.respawnReviveTask = Task { @MainActor [weak self] in
+                                try? await Task.sleep(for: .seconds(1))
+                                guard let self, !Task.isCancelled,
+                                      tunnel.activationAttemptId == attemptId,
+                                      tunnel.status == .inactive,
+                                      tunnel.lastActivationError == nil,
+                                      self.tunnels.contains(where: { $0 === tunnel }),
+                                      !self.tunnels.contains(where: { $0.id != tunnel.id && $0.status != .inactive })
+                                else { return }
+                                NSLog("[activation] anonymous mid-activation drop — spending the one revive on \(tunnel.name)")
+                                self.beginActivation(of: tunnel)
+                            }
+                            return
+                        }
                         tunnel.lastActivationError = .failedWhileActivating(
-                            systemError: systemError
-                                ?? Self.noSystemDetail(LocalizationManager.shared.t("error_detail_session_ended")))
+                            systemError: Self.noSystemDetail(LocalizationManager.shared.t("error_detail_session_ended")))
                     }
                 }
 
@@ -769,12 +831,50 @@ class TunnelsManager {
     /// on what a foreign holder is. Unverifiable states answer `.free`
     /// — refusing an activation on evidence that never arrived would
     /// be worse than letting the system report the failure itself.
-    func foreignSlotVerdict() async -> SlotVerdict {
+    /// The same doctrine makes a deadline safe where a caller opts in:
+    /// an answer that has not arrived by `seconds` IS an unverifiable
+    /// state. Only the rung-0 pre-flight opts in (2s) — it has a user
+    /// waiting and fail-open converges (the ladder's own exits and the
+    /// gate both stand rules down on real proof). The drop belt and
+    /// every other caller keep the default unbounded patience: they
+    /// run post-mortem, and a slow-but-eventual foreign proof must
+    /// still stand the armed rule down.
+    func foreignSlotVerdict(within seconds: Double? = nil) async -> SlotVerdict {
+        guard let seconds else { return await computeForeignSlotVerdict() }
+        return await bounded(seconds) { await self.computeForeignSlotVerdict() } ?? .free
+    }
+
+    private func computeForeignSlotVerdict() async -> SlotVerdict {
         guard let providers = try? await providerFactory.loadAllFromPreferences(),
               case .configs(let mine) = await vault.readAll() else { return .free }
         return await SlotClassifier.classify(
             providers: providers,
             ownedIDs: Set(mine.map(\.id))
         ) { await self.vault.read(id: $0) }
+    }
+
+    /// Races a producer against a deadline through a one-shot resume
+    /// — the same shape as the vault client's transport races, and
+    /// deliberately NOT a task group: a group scope awaits all its
+    /// children on exit, so with an uncancellable producer it would
+    /// bound only the returned value, never the caller's wait. Here
+    /// the caller genuinely resumes at the first finish; the losing
+    /// producer keeps running detached (XPC round-trips are not
+    /// cancellable) and its answer is dropped. `nil` means the
+    /// deadline won — the evidence never arrived — and every caller
+    /// falls back to the meaning its doctrine gives an unverifiable
+    /// state.
+    private func bounded<T: Sendable>(
+        _ seconds: Double,
+        _ producer: @escaping @MainActor () async -> T?
+    ) async -> T? {
+        await withCheckedContinuation { continuation in
+            let resume = SingleResume(continuation)
+            Task { @MainActor in resume.finish(await producer()) }
+            Task {
+                try? await Task.sleep(for: .seconds(seconds))
+                resume.finish(nil)
+            }
+        }
     }
 }

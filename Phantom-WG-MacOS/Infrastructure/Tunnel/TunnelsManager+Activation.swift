@@ -6,6 +6,29 @@ import NetworkExtension
 extension TunnelsManager {
 
     func startActivation(of tunnel: TunnelContainer) {
+        // Grant only on an ACCEPTED intent: a duplicate start on a
+        // non-inactive tunnel is a no-op and must not re-arm the
+        // revive mid-attempt.
+        guard tunnel.status == .inactive else { return }
+        // A newer intent ANYWHERE withdraws every older pending
+        // revive first — reviving tunnel A after the user chose B
+        // would override the freshest intent with a stale one.
+        for other in tunnels {
+            other.respawnReviveConsumed = true
+            other.respawnReviveTask?.cancel()
+            other.respawnReviveTask = nil
+        }
+        // Then this fresh intent grants its one revive. The revive
+        // re-enters through `beginActivation` below this door, so a
+        // revived attempt can never re-grant itself into a loop.
+        tunnel.respawnReviveConsumed = false
+        beginActivation(of: tunnel)
+    }
+
+    /// Everything the public door does except granting the respawn
+    /// revive: exclusive-slot queueing, the disarm-others sweep, and
+    /// rung 0. The disconnect observer's one-shot revive enters here.
+    func beginActivation(of tunnel: TunnelContainer) {
         guard tunnel.status == .inactive else { return }
 
         if let activeTunnel = tunnels.first(where: { $0.status != .inactive && $0.status != .waiting }) {
@@ -29,6 +52,14 @@ extension TunnelsManager {
     }
 
     func startDeactivation(of tunnel: TunnelContainer) {
+        // A stop is the withdrawal of the intent that granted the
+        // revive: spend it and cancel any pending one BEFORE any
+        // async window (the armed stop's disarm save below suspends)
+        // can let a spontaneous drop race a revive up against the
+        // user's explicit stop.
+        tunnel.respawnReviveConsumed = true
+        tunnel.respawnReviveTask?.cancel()
+        tunnel.respawnReviveTask = nil
         guard tunnel.status != .inactive && tunnel.status != .deactivating else { return }
 
         // A waiting tunnel has not started yet: toggling it off cancels
@@ -75,6 +106,14 @@ extension TunnelsManager {
     /// carry an armed rule into the extension-less void. Best-effort,
     /// like the rest of the uninstall path.
     func disarmAllRecovery() async {
+        // The sweep also voids every pending revive — a delayed
+        // re-activation firing behind a green "armed-count=0" would
+        // falsify the sweep a moment after it reported clean.
+        for tunnel in tunnels {
+            tunnel.respawnReviveConsumed = true
+            tunnel.respawnReviveTask?.cancel()
+            tunnel.respawnReviveTask = nil
+        }
         for tunnel in tunnels where tunnel.isActivateOnDemandEnabled {
             tunnel.tunnelProvider.isOnDemandEnabled = false
             try? await tunnel.tunnelProvider.savePreferences()
@@ -156,7 +195,12 @@ extension TunnelsManager {
             // gate's message, not eight doomed attempts. The
             // optimistic `.activating` above keeps the toggle honest
             // while the verdict (two vault reads) is fetched.
-            if retryIndex == 0, case .heldByForeign = await foreignSlotVerdict() {
+            // The verdict rides a tight deadline here: in a vault
+            // respawn window the reads hang to their 5s transport
+            // timeouts, and rung 0 sitting behind that is pure delay —
+            // past the deadline the state is unverifiable, and
+            // unverifiable already answers `.free`.
+            if retryIndex == 0, case .heldByForeign = await foreignSlotVerdict(within: 2) {
                 guard tunnel.activationAttemptId == attemptId,
                       tunnel.status == .activating else { return }
                 tunnel.isAttemptingActivation = false
