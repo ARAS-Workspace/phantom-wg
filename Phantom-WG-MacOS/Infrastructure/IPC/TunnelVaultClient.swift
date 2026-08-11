@@ -1,7 +1,6 @@
 import Foundation
 import Observation
 import os.log
-import Synchronization
 
 /// App-side XPC client for the tunnel extension's secret custody.
 ///
@@ -386,29 +385,6 @@ private enum RawReadAll {
     case unreachable
 }
 
-/// Guards a continuation that several callbacks may reach — the XPC
-/// error handler and the reply block both fire in some failure modes,
-/// and resuming twice traps. The one-shot flag lives inside a
-/// `Mutex`, so the type is `Sendable` by compiler proof rather than
-/// by annotation.
-private final class SingleResume<T: Sendable>: Sendable {
-    private let continuation: CheckedContinuation<T, Never>
-    private let done = Mutex(false)
-
-    init(_ continuation: CheckedContinuation<T, Never>) {
-        self.continuation = continuation
-    }
-
-    /// `true` when this call is the one that resumed — lets the
-    /// timeout branch tell "I won" from "I was already beaten".
-    @discardableResult
-    func finish(_ value: T) -> Bool {
-        let first = done.withLock { done -> Bool in
-            guard !done else { return false }
-            done = true
-            return true
-        }
-        if first { continuation.resume(returning: value) }
-        return first
-    }
-}
+// The one-shot continuation guard these races ride lives in
+// Infrastructure/Concurrency/SingleResume.swift — shared with the
+// tunnels manager's deadline helper and the DEBUG harness.
