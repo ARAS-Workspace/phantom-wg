@@ -34,8 +34,6 @@ final class DNSProxyProvider: NEDNSProxyProvider, ProxyConfigReceiver {
                options.map { "\(Array($0.keys))" } ?? "<nil>")
         logger.log("startProxy")
 
-        ProxyConfigDaemon.shared?.attach(provider: self)
-
         interfaceMonitor.onChange = { [weak self] interface in
             if let interface {
                 self?.logger.log("interface resolved: \(interface.name)")
@@ -48,6 +46,12 @@ final class DNSProxyProvider: NEDNSProxyProvider, ProxyConfigReceiver {
         let initial = loadConfiguration(options: options) ?? .default
         logger.log("config loaded: apps=\(initial.apps.count)")
         applyConfiguration(initial)
+
+        // Attach LAST: the daemon replays any config pushed while no
+        // provider was attached, so the drained payload must land
+        // after the (possibly stale) options bootstrap above — the
+        // fresher writer always wins.
+        ProxyConfigDaemon.shared?.attach(provider: self)
 
         completionHandler(nil)
     }

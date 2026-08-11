@@ -16,7 +16,11 @@ final class TransparentProxyProvider: NETransparentProxyProvider, ActiveFlowRela
     private let logger = RingBufferLogger.shared
     private let interfaceMonitor = InterfaceMonitor()
 
+    /// Written from the daemon's XPC config push, read from NE
+    /// flow-dispatch threads — every access goes through `stateLock`,
+    /// mirroring `DNSProxyProvider`.
     private var excludedApps: [AppEntry] = []
+    private let stateLock = NSLock()
 
     /// Live relay registry. Each `TCPFlowRelay` / `UDPFlowRelay`
     /// registers a close-closure on start and unregisters on close,
@@ -30,8 +34,6 @@ final class TransparentProxyProvider: NETransparentProxyProvider, ActiveFlowRela
     override func startProxy(options: [String: Any]? = nil) async throws {
         os_log("startProxy — loading configuration", log: log, type: .default)
 
-        ProxyConfigDaemon.shared?.attach(provider: self)
-
         try await setTunnelNetworkSettings(buildNetworkSettings())
 
         interfaceMonitor.onChange = { [weak self] interface in
@@ -41,6 +43,12 @@ final class TransparentProxyProvider: NETransparentProxyProvider, ActiveFlowRela
 
         let initialConfig = loadConfigurationFromProviderProtocol() ?? .default
         applyConfiguration(initialConfig)
+
+        // Attach LAST: the daemon replays any config pushed while no
+        // provider was attached, so the drained payload must land
+        // after the (possibly stale) preference bootstrap above —
+        // the fresher writer always wins.
+        ProxyConfigDaemon.shared?.attach(provider: self)
 
         os_log("startProxy — ready", log: log, type: .default)
     }
@@ -178,7 +186,10 @@ final class TransparentProxyProvider: NETransparentProxyProvider, ActiveFlowRela
     }
 
     private func matchedExcludeApp(_ signingID: String) -> AppEntry? {
-        excludedApps.first { FlowDecisionEngine.matches(signingID: signingID, against: $0) }
+        stateLock.lock()
+        let apps = excludedApps
+        stateLock.unlock()
+        return apps.first { FlowDecisionEngine.matches(signingID: signingID, against: $0) }
     }
 
     // MARK: - Configuration
@@ -189,8 +200,10 @@ final class TransparentProxyProvider: NETransparentProxyProvider, ActiveFlowRela
     /// Logs the app-list diff against the previous state so the user can
     /// see additions/removals.
     func applyConfiguration(_ configuration: SplitTunnelingConfiguration) {
+        stateLock.lock()
         let previous = excludedApps
         excludedApps = configuration.apps
+        stateLock.unlock()
         interfaceMonitor.setSelection(configuration.interfaceSelection)
         logger.logAppDiff(previous: previous, current: configuration.apps)
     }

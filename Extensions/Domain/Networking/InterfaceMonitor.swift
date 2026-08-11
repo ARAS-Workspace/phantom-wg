@@ -14,7 +14,17 @@ final class InterfaceMonitor {
     /// strict reject path kicks in.
     var onChange: ((NWInterface?) -> Void)?
 
-    private(set) var current: NWInterface?
+    /// Read from NE flow-dispatch threads while `resolve()` writes on
+    /// `syncQueue`, so the public read hops through the same queue —
+    /// a bare cross-thread read of the stored value is a data race.
+    /// `onChange` handlers must use their delivered value instead of
+    /// this accessor: they fire on `syncQueue` itself, where a
+    /// `sync` hop would deadlock.
+    var current: NWInterface? {
+        syncQueue.sync { _current }
+    }
+
+    private var _current: NWInterface?
 
     private var selection: InterfaceSelection = .auto
     private var available: [NWInterface] = []
@@ -72,8 +82,8 @@ final class InterfaceMonitor {
             resolved = available.first(where: { $0.name == name })
         }
 
-        let previous = current
-        current = resolved
+        let previous = _current
+        _current = resolved
 
         if previous?.name != resolved?.name {
             onChange?(resolved)
