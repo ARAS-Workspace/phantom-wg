@@ -51,52 +51,29 @@ enum ConfEditorMessages {
         }
     }
 
+    /// One exhaustive switch, no default arms: a new `TunnelDraft.Field`
+    /// case must claim its banner label here at compile time. The
+    /// earlier grouped sub-switches carried `default: return ""` arms
+    /// that would have rendered a mis-routed field as a nameless
+    /// error line instead of failing the build.
     private static func fieldLabel(_ field: TunnelDraft.Field, loc: LocalizationManager) -> String {
         switch field {
-        case .name:
-            return loc.t("detail_name")
-        case .interfacePrivateKey, .interfaceAddresses,
-             .interfaceDnsServers, .interfaceMTU:
-            return interfaceLabel(field, loc: loc)
-        case .peerPublicKey, .peerPresharedKey, .peerAllowedIPs,
-             .peerEndpoint, .peerPersistentKeepalive:
-            return peerLabel(field, loc: loc)
-        case .wstunnelUrl, .wstunnelSecret, .wstunnelLocalHost,
-             .wstunnelLocalPort, .wstunnelRemoteHost, .wstunnelRemotePort:
-            return wstunnelLabel(field, loc: loc)
-        }
-    }
-
-    private static func interfaceLabel(_ field: TunnelDraft.Field, loc: LocalizationManager) -> String {
-        switch field {
-        case .interfacePrivateKey:  return loc.t("detail_private_key")
-        case .interfaceAddresses:   return loc.t("detail_address")
-        case .interfaceDnsServers:  return loc.t("detail_dns")
-        case .interfaceMTU:         return loc.t("detail_mtu")
-        default:                    return ""
-        }
-    }
-
-    private static func peerLabel(_ field: TunnelDraft.Field, loc: LocalizationManager) -> String {
-        switch field {
+        case .name:                     return loc.t("detail_name")
+        case .interfacePrivateKey:      return loc.t("detail_private_key")
+        case .interfaceAddresses:       return loc.t("detail_address")
+        case .interfaceDnsServers:      return loc.t("detail_dns")
+        case .interfaceMTU:             return loc.t("detail_mtu")
         case .peerPublicKey:            return loc.t("detail_public_key")
         case .peerPresharedKey:         return loc.t("detail_preshared_key")
         case .peerAllowedIPs:           return loc.t("detail_allowed_ips")
         case .peerEndpoint:             return loc.t("detail_endpoint")
         case .peerPersistentKeepalive:  return loc.t("detail_keepalive")
-        default:                        return ""
-        }
-    }
-
-    private static func wstunnelLabel(_ field: TunnelDraft.Field, loc: LocalizationManager) -> String {
-        switch field {
-        case .wstunnelUrl:          return loc.t("detail_server_url")
-        case .wstunnelSecret:       return loc.t("detail_secret")
-        case .wstunnelLocalHost:    return loc.t("detail_local_host")
-        case .wstunnelLocalPort:    return loc.t("detail_local_port")
-        case .wstunnelRemoteHost:   return loc.t("detail_remote_host")
-        case .wstunnelRemotePort:   return loc.t("detail_remote_port")
-        default:                    return ""
+        case .wstunnelUrl:              return loc.t("detail_server_url")
+        case .wstunnelSecret:           return loc.t("detail_secret")
+        case .wstunnelLocalHost:        return loc.t("detail_local_host")
+        case .wstunnelLocalPort:        return loc.t("detail_local_port")
+        case .wstunnelRemoteHost:       return loc.t("detail_remote_host")
+        case .wstunnelRemotePort:       return loc.t("detail_remote_port")
         }
     }
 }

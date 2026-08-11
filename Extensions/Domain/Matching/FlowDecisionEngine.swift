@@ -2,16 +2,18 @@ import Foundation
 
 // MARK: - Flow Decision Engine
 
-/// Flow decision helpers used by PhantomSplitTunnel's `handleNewFlow`.
-/// The OS delivers every outbound TCP/UDP flow to our extension without
-/// any signing-identifier filtering — the `NENetworkRule` we install
-/// specifies only `protocol: .any, direction: .outbound`. Filtering is
-/// runtime-only and happens here:
+/// Flow decision helpers shared by both proxy extensions' flow
+/// dispatch — PhantomSplitTunnel's `handleNewFlow` (whose
+/// `NENetworkRule` specifies only `protocol: .any, direction:
+/// .outbound`) and PhantomDNSProxy's, which sees every DNS flow the
+/// system hands the proxy. The OS delivers those flows without any
+/// signing-identifier filtering; filtering is runtime-only and
+/// happens here:
 ///
 /// - `isOwnProcess` — self-bypass guard. Flows from our own processes
-///   (main app, PhantomTunnel, PhantomSplitTunnel) are declined back
-///   to the OS default route so the extension never loops its own
-///   upstream traffic through itself.
+///   (the main app and all three extensions) are declined back to the
+///   OS default route so a proxy never loops its own upstream traffic
+///   through itself.
 /// - `matches` — user-app matching. Two-pass matrix (exact signing ID
 ///   + bundle-ID namespace) so a single entry captures both the main
 ///   process and its helper / service children.
@@ -25,10 +27,10 @@ enum FlowDecisionEngine {
     /// back to the OS default route so the extension never loops its
     /// own upstream traffic through itself.
     ///
-    /// Covers:
-    /// - `com.remrearas.Phantom-WG-MacOS`              (main app)
-    /// - `com.remrearas.Phantom-WG-MacOS.PhantomTunnel` (tunnel ext.)
-    /// - `com.remrearas.Phantom-WG-MacOS.PhantomSplitTunnel`
+    /// Covers the team-prefixed signing identifiers — this exact
+    /// string plus its subordinate namespace:
+    /// - `9C5SL5H7CM.com.remrearas.Phantom-WG-MacOS` (main app)
+    /// - `….PhantomTunnel`, `….PhantomSplitTunnel`, `….PhantomDNSProxy`
     static let selfSigningPrefix = "9C5SL5H7CM.com.remrearas.Phantom-WG-MacOS"
 
     /// Returns `true` when the flow originates from one of our own
@@ -54,10 +56,11 @@ enum FlowDecisionEngine {
     /// signed with a different team prefix). Adding the main app once
     /// routes all children of that bundle-ID namespace through bypass.
     static func matches(signingID: String, against app: AppEntry) -> Bool {
-        // Malformed or empty entry data must never match: an empty
-        // signing identifier would anchor-match every flow, and an
-        // empty bundle ID would turn the namespace pass into a prefix
-        // on "." that captures unrelated apps.
+        // Malformed or empty entry data must never match: with an
+        // empty entry field the anchored comparisons degenerate into
+        // bare "." prefix checks, and matching must never hinge on
+        // the accident that no real flow ID starts with a dot — a
+        // degenerate entry is refused outright.
         guard !signingID.isEmpty,
               !app.signingIdentifier.isEmpty,
               !app.bundleIdentifier.isEmpty else { return false }

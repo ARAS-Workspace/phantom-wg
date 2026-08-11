@@ -37,11 +37,6 @@ final class PhysicalInterfaceResolver {
         monitor = pathMonitor
     }
 
-    func stop() {
-        monitor?.cancel()
-        monitor = nil
-    }
-
     deinit {
         monitor?.cancel()
     }

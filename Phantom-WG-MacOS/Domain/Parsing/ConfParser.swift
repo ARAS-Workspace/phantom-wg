@@ -117,6 +117,12 @@ enum ConfParser {
             if multiEntryKeys.contains(key), let existing = result[section]?[key] {
                 result[section]?[key] = existing + ", " + value
             } else {
+                // Scalar keys are deliberately last-wins within a
+                // section (a repeated Endpoint/PrivateKey line simply
+                // overwrites) — the duplicate guard above rejects
+                // section-level ambiguity only. Escalating repeated
+                // scalar keys to a ParseError is a cross-repo decision
+                // (iOS parser parity plus new error copy).
                 result[section]?[key] = value
             }
         }

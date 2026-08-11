@@ -62,7 +62,9 @@ final class ConnectionGateCoordinator {
     /// Arms the observers and runs the first check. Called when the
     /// vault session reaches `.ready` — the verdict needs the vault to
     /// answer ownership, so checking earlier could only be inconclusive.
-    /// Idempotent; re-entries fall through to `checkAgain()`.
+    /// Idempotent; later calls are plain no-ops, so every return to
+    /// vault-readiness must pair `start()` with `checkAgain()` (the
+    /// `.task(id:)` in `PhantomApp` does exactly that).
     func start() {
         guard !started else { return }
         started = true

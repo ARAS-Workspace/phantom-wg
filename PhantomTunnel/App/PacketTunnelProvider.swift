@@ -53,7 +53,9 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
             return
         }
 
-        // 4. Build WireGuard config (IPv4 only, endpoint -> 127.0.0.1:localPort)
+        // 4. Build WireGuard config (ghost: endpoint = the wstunnel
+        //    listener at localHost:localPort; standalone: the peer
+        //    endpoint carried verbatim)
         let tunnelConfiguration: TunnelConfiguration
         do {
             tunnelConfiguration = try WireGuardConfigBuilder.build(

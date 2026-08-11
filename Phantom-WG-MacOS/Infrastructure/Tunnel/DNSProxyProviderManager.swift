@@ -11,8 +11,6 @@ import os.log
 @MainActor
 class DNSProxyProviderManager {
 
-    @ObservationIgnored private var manager: NEDNSProxyManager?
-
     private static let providerBundleID = "com.remrearas.Phantom-WG-MacOS.PhantomDNSProxy"
     private static let localizedDescription = "Phantom-WG DNSProxy"
 
@@ -23,10 +21,11 @@ class DNSProxyProviderManager {
 
     // MARK: - Load
 
+    /// Preference-layer warm-up for boot(): primes the shared
+    /// manager's cache with a first `loadFromPreferences` before the
+    /// session coordinator reads enable state.
     func load() async {
-        let mgr = NEDNSProxyManager.shared()
-        try? await mgr.loadFromPreferences()
-        manager = mgr
+        try? await NEDNSProxyManager.shared().loadFromPreferences()
     }
 
     // MARK: - Enable / Disable
@@ -66,20 +65,14 @@ class DNSProxyProviderManager {
                    log: log, type: .default,
                    dataSize, mgr.isEnabled ? "true" : "false")
         }
-
-        manager = mgr
     }
 
     func disable() async throws {
         let mgr = NEDNSProxyManager.shared()
         try await mgr.loadFromPreferences()
-        guard mgr.isEnabled else {
-            manager = mgr
-            return
-        }
+        guard mgr.isEnabled else { return }
         mgr.isEnabled = false
         try await mgr.saveToPreferences()
-        manager = mgr
     }
 
     // MARK: - Remove
@@ -92,6 +85,5 @@ class DNSProxyProviderManager {
         let mgr = NEDNSProxyManager.shared()
         try? await mgr.loadFromPreferences()
         try? await mgr.removeFromPreferences()
-        manager = mgr
     }
 }

@@ -37,7 +37,9 @@ class SplitTunnelProviderManager {
             attachStatusObserver()
             refreshSessionStatus()
         } catch {
-            // load is non-fatal — the next boot()/start() pass retries.
+            // load is non-fatal, but nothing in-process retries it:
+            // enable() just throws ManagerError.notLoaded until the
+            // next boot() pass (app relaunch) runs load again.
         }
     }
 

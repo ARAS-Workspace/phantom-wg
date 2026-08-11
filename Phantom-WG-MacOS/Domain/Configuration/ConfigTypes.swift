@@ -231,8 +231,13 @@ struct IPEndpoint: Equatable, Hashable, Codable {
         return UInt16(value)
     }
 
-    /// RFC 1123 hostname rules: labels 1–63 chars, total <= 253,
-    /// alphanumeric + hyphens (not at label boundaries), dot-separated.
+    /// RFC 1123 hostname SHAPE: labels 1–63 chars, total <= 253,
+    /// hyphens never at label boundaries, dot-separated. The character
+    /// classes are deliberately Unicode-wide (`isLetter`/`isNumber`)
+    /// and the lengths count Characters, not octets — a non-ASCII
+    /// hostname passes here and surfaces its failure at connect-time
+    /// resolution instead of as a field error. Tightening to ASCII is
+    /// a cross-repo decision (iOS parser parity).
     private static func isValidHostname(_ text: String) -> Bool {
         guard !text.isEmpty, text.count <= 253 else { return false }
         let labels = text.split(separator: ".", omittingEmptySubsequences: false)

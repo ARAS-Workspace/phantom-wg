@@ -20,8 +20,9 @@ import os.log
 /// (`settle()`, once per process) and user actions (`activate()` /
 /// `refresh()` / `deactivate()`), each resolved through delegate
 /// callbacks. There is no background polling and no notification
-/// observer; the coordinator re-checks on app foreground for runtime
-/// drop-back detection.
+/// observer in this controller; runtime drop-back detection lives in
+/// the coordinator — workspace transition pushes plus an app-foreground
+/// re-check belt (see `ExtensionGateCoordinator.start()`).
 @Observable
 @MainActor
 final class ExtensionGateController: NSObject, OSSystemExtensionRequestDelegate {

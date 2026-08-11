@@ -147,6 +147,9 @@ struct InterfaceDraft: Equatable {
                 if let err = error as? WireGuardKey.ParseError {
                     errors[.interfacePrivateKey] = .wireGuardKey(err)
                 }
+                // The cast can't fail today: WireGuardKey(parsing:)
+                // throws only its own ParseError, so a nil result
+                // always carries a recorded field error.
                 privKey = nil
             }
         }
@@ -233,6 +236,8 @@ struct PeerDraft: Equatable {
             errors[field] = .wireGuardKey(err)
             return nil
         } catch {
+            // Unreachable today: WireGuardKey(parsing:) throws only
+            // its own ParseError; the untyped `throws` forces this arm.
             return nil
         }
     }
@@ -250,6 +255,8 @@ struct PeerDraft: Equatable {
             errors[field] = .wireGuardKey(err)
             return nil
         } catch {
+            // Unreachable today: WireGuardKey(parsing:) throws only
+            // its own ParseError; the untyped `throws` forces this arm.
             return nil
         }
     }
@@ -269,6 +276,8 @@ struct PeerDraft: Equatable {
             errors[.peerEndpoint] = .endpoint(err)
             return nil
         } catch {
+            // Unreachable today: IPEndpoint(parsing:) throws only its
+            // own ParseError; the untyped `throws` forces this arm.
             return nil
         }
     }
@@ -300,6 +309,9 @@ struct WstunnelDraft: Equatable {
                 if let err = error as? WstunnelURL.ParseError {
                     errors[.wstunnelUrl] = .wstunnelURL(err)
                 }
+                // The cast can't fail today: WstunnelURL(parsing:)
+                // throws only its own ParseError, so a nil result
+                // always carries a recorded field error.
                 parsedURL = nil
             }
         }
@@ -367,6 +379,9 @@ private func parseAddresses(
             if let err = error as? AddressWithPrefix.ParseError {
                 errors[field] = .address(err, atIndex: index)
             }
+            // The cast can't fail today: AddressWithPrefix(parsing:)
+            // throws only its own ParseError, so a nil result always
+            // carries a recorded field error.
             return nil
         }
     }
@@ -392,6 +407,9 @@ private func parseIPList(
             if let err = error as? IPAddressEntry.ParseError {
                 errors[field] = .ipAddress(err, atIndex: index)
             }
+            // The cast can't fail today: IPAddressEntry(parsing:)
+            // throws only its own ParseError, so a nil result always
+            // carries a recorded field error.
             return nil
         }
     }
