@@ -38,7 +38,15 @@ class TunnelContainer: Identifiable {
     // views that have no visibility into activation bookkeeping.
     @ObservationIgnored var isAttemptingActivation = false
     @ObservationIgnored var activationAttemptId: String?
+    /// The scheduled NEXT rung — a sleep that fires the retry. Cancel
+    /// it and no further rung is climbed.
     @ObservationIgnored var activationTask: Task<Void, Never>?
+    /// The rung running RIGHT NOW. Cancelling it buys nothing (its
+    /// awaits are NE round-trips, which are not cancellable), but
+    /// AWAITING it is worth everything: it is the only way to know
+    /// that a `savePreferences` already on its way to the system has
+    /// landed. `remove()` uses exactly that before it deletes.
+    @ObservationIgnored var activationRungTask: Task<Void, Never>?
     /// One in-app revive per user intent, for the respawn-window class
     /// where the system drops a just-started session without an error
     /// record. Granted (reset) by `startActivation(of:)`, spent by the

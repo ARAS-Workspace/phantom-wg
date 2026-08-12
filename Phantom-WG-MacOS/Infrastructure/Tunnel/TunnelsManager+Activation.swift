@@ -6,6 +6,11 @@ import NetworkExtension
 extension TunnelsManager {
 
     func startActivation(of tunnel: TunnelContainer) {
+        // A tunnel being deleted is not startable, however inactive it
+        // looks: `remove()` hangs on the vault for seconds with the
+        // detail sheet still up, and a toggle tapped in that window
+        // would arm and save an entry the next line is about to erase.
+        guard !removingIds.contains(tunnel.id) else { return }
         // Grant only on an ACCEPTED intent: a duplicate start on a
         // non-inactive tunnel is a no-op and must not re-arm the
         // revive mid-attempt.
@@ -29,6 +34,11 @@ extension TunnelsManager {
     /// revive: exclusive-slot queueing, the disarm-others sweep, and
     /// rung 0. The disconnect observer's one-shot revive enters here.
     func beginActivation(of tunnel: TunnelContainer) {
+        // Barred here too, not only at the rung below: this door
+        // reshuffles state before it gets there — it can park the
+        // tunnel as `.waiting` and stop whichever tunnel is active —
+        // and none of that should happen for an entry being deleted.
+        guard !removingIds.contains(tunnel.id) else { return }
         guard tunnel.status == .inactive else { return }
 
         if let activeTunnel = tunnels.first(where: { $0.status != .inactive && $0.status != .waiting }) {
@@ -42,10 +52,24 @@ extension TunnelsManager {
         }
 
         // Disarm every other tunnel's recovery rule first — recovery
-        // belongs to the tunnel being activated now
-        tunnels.filter { $0.id != tunnel.id && $0.isActivateOnDemandEnabled }.forEach { other in
-            other.tunnelProvider.isOnDemandEnabled = false
-            other.tunnelProvider.savePreferences { _ in }
+        // belongs to the tunnel being activated now. Fire-and-forget in
+        // ordering only, never in outcome: the old shape threw the
+        // save's answer away, so a refused disarm left a second armed
+        // rule in the store while the app counted one. On refusal the
+        // helper re-reads the store and sets the flag to what is
+        // actually there, and the log says which tunnel kept its rule.
+        for other in tunnels where other.id != tunnel.id && other.isActivateOnDemandEnabled {
+            Task {
+                // Evaluated when the task RUNS, not when it is spawned:
+                // the same liveness guard the armed stop carries, for
+                // the same reason. A save landing on an entry that is
+                // being deleted re-mints it in the system store.
+                guard !removingIds.contains(other.id),
+                      tunnels.contains(where: { $0.id == other.id }) else { return }
+                if let error = await Self.standDownRecovery(on: other.tunnelProvider) {
+                    NSLog("[activation] recovery rule stayed armed on \(other.name) — \(error.localizedDescription)")
+                }
+            }
         }
 
         startActivation(of: tunnel, at: 0)
@@ -62,6 +86,22 @@ extension TunnelsManager {
         tunnel.respawnReviveTask = nil
         guard tunnel.status != .inactive && tunnel.status != .deactivating else { return }
 
+        // The intent comes down HERE, synchronously, before any branch
+        // below can suspend. The armed path saves first and only then
+        // reaches `performDeactivation`, so withdrawing there left a
+        // whole NE round-trip in which the rung still read
+        // `.activating` with a matching attempt id: it walked past
+        // both guards, re-armed the rule the user was withdrawing, and
+        // started the tunnel. A stop that a start can answer is not a
+        // stop. Same reason the drop belt must not see this as a
+        // mid-activation drop: with the flag down it takes the plain
+        // status branch instead of writing "session ended" over the
+        // user's own decision.
+        tunnel.isAttemptingActivation = false
+        tunnel.activationAttemptId = nil
+        tunnel.activationTask?.cancel()
+        tunnel.activationTask = nil
+
         // A waiting tunnel has not started yet: toggling it off cancels
         // the queued activation. Sending stop to a session the system
         // never brought up draws no status callback, so it would strand
@@ -75,23 +115,39 @@ extension TunnelsManager {
         // Stand the recovery rule down first — with it armed, the
         // system would reconnect the moment the tunnel drops.
         if tunnel.isActivateOnDemandEnabled {
-            tunnel.tunnelProvider.isOnDemandEnabled = false
             Task {
-                do {
-                    // A remove() can land while this save is queued —
-                    // persisting then would re-mint the just-removed
-                    // entry as a zombie in the system store. The list
-                    // is the liveness authority: a container no
-                    // longer listed has nothing left to persist.
-                    guard tunnels.contains(where: { $0.id == tunnel.id }) else { return }
-                    try await tunnel.tunnelProvider.savePreferences()
-                    performDeactivation(of: tunnel)
-                } catch {
-                    // The tunnel keeps running and stays armed — a
-                    // fact, not a choice: the stop request could not
-                    // be persisted. Surface it instead of pretending.
-                    tunnel.lastActivationError = .savingFailed(systemError: error)
+                // The same two guards the disarm-others task carries.
+                // The window is narrow and worth naming precisely, so
+                // nobody later mistakes it for the common path: the
+                // Delete button is disabled unless the tunnel is
+                // inactive, so `deleteTunnel`'s stop-then-remove pair
+                // only fires when the tunnel came UP between the
+                // confirmation dialog opening and the user confirming
+                // — an on-demand rule reconnecting it, or the respawn
+                // revive. Narrow, but the cost of losing that race is
+                // a re-minted entry the app can no longer see or
+                // delete, and the guard is one line.
+                guard !removingIds.contains(tunnel.id),
+                      tunnels.contains(where: { $0.id == tunnel.id }) else { return }
+                let disarmError = await Self.standDownRecovery(on: tunnel.tunnelProvider)
+                // A newer intent may have been granted while that save
+                // was in flight — the user changed their mind twice.
+                // The withdrawal above set the attempt id to nil, so
+                // anything else there is a start that outranks this
+                // stop, and finishing it would tear down the session
+                // that start is bringing up.
+                guard tunnel.activationAttemptId == nil else { return }
+                if let disarmError {
+                    // Two facts to report, and both go out: the rule
+                    // could not be stood down (so the system may
+                    // reconnect this tunnel on its own), and the stop
+                    // the user asked for still happens. Returning here
+                    // instead — the previous shape — left the session
+                    // running with its ladder already dismantled, so
+                    // the tunnel could no longer be stopped at all.
+                    tunnel.lastActivationError = .savingFailed(systemError: disarmError)
                 }
+                performDeactivation(of: tunnel)
             }
         } else {
             performDeactivation(of: tunnel)
@@ -106,17 +162,56 @@ extension TunnelsManager {
     /// carry an armed rule into the extension-less void. Best-effort,
     /// like the rest of the uninstall path.
     func disarmAllRecovery() async {
-        // The sweep also voids every pending revive — a delayed
-        // re-activation firing behind a green "armed-count=0" would
-        // falsify the sweep a moment after it reported clean.
+        // Everything that could arm a rule after this sweep is
+        // withdrawn first, or the sweep reports clean and something
+        // re-arms behind it. Three sources, all real: a rung in flight
+        // walks straight past `armRecovery` on its way to the start; a
+        // scheduled retry climbs on its own five seconds later; and a
+        // queued tunnel takes its turn the moment the active one goes
+        // down, which is precisely what an uninstall is about to
+        // cause. The pending revives go with them.
+        waitingTunnel = nil
         for tunnel in tunnels {
+            tunnel.isAttemptingActivation = false
+            tunnel.activationAttemptId = nil
+            tunnel.activationTask?.cancel()
+            tunnel.activationTask = nil
             tunnel.respawnReviveConsumed = true
             tunnel.respawnReviveTask?.cancel()
             tunnel.respawnReviveTask = nil
+            // Only the rows whose mover was just withdrawn: an
+            // `.activating` tunnel has nothing left to advance it and
+            // would spin until the app restarted, and a queued one
+            // never had a session. `.deactivating` and `.reasserting`
+            // are the system's to finish and stay the observer's.
+            if tunnel.status == .activating || tunnel.status == .waiting {
+                tunnel.status = .inactive
+            }
         }
-        for tunnel in tunnels where tunnel.isActivateOnDemandEnabled {
-            tunnel.tunnelProvider.isOnDemandEnabled = false
-            try? await tunnel.tunnelProvider.savePreferences()
+        // A rung already inside its save cannot be recalled, and it
+        // arms on its way past. Waiting it out here is the same
+        // contract `remove()` keeps, and for the same reason: without
+        // it the sweep can report clean seconds before an armed rule
+        // lands behind it. One deadline for the whole set, not one
+        // each — this runs on the uninstall path, where the user is
+        // waiting on a progress sheet.
+        let rungs = tunnels.compactMap(\.activationRungTask)
+        _ = await bounded(15) {
+            for rung in rungs { await rung.value }
+            return true
+        }
+        // Unconditional, no armed-filter: a tunnel whose flag reads
+        // false may still hold the rule in the store from an earlier
+        // refused save, and the sweep is the last chance to clear it
+        // before the extensions go.
+        for tunnel in tunnels {
+            // Best-effort, but not blind: a rule that survives its
+            // save is exactly what this sweep exists to prevent, and
+            // the uninstall continues either way — so it gets said out
+            // loud rather than swallowed by a `try?`.
+            if let error = await Self.standDownRecovery(on: tunnel.tunnelProvider) {
+                NSLog("[uninstall] recovery rule survived the sweep on \(tunnel.name) — \(error.localizedDescription)")
+            }
         }
     }
 
@@ -138,22 +233,72 @@ extension TunnelsManager {
         provider.isOnDemandEnabled = true
     }
 
-    /// Stands the recovery rule down and persists it. Two caller
-    /// families: the give-up paths that failed *locally* — a config
-    /// that cannot load, or whose `startTunnel` throws, would fail the
-    /// same way on every system-initiated on-demand retry, so leaving
-    /// it armed is a loop trap — and the collision paths, where a
-    /// proven foreign slot holder makes our armed rule pure fuel for
-    /// the cross-user fight. A timeout or a dropped session with no
-    /// holder in sight is the opposite case: that is the transient
-    /// condition the recovery rule exists to ride out, so those paths
-    /// leave it armed on purpose.
-    private static func disarmRecovery(on provider: TunnelProviding) async {
+    /// Stands the recovery rule down and answers the memory-versus-
+    /// store question honestly.
+    ///
+    /// Callers come in four families: the give-up paths that failed
+    /// LOCALLY (a config that cannot load, a `startTunnel` that
+    /// throws) where leaving the rule armed is a loop trap; the stop,
+    /// hand-off and removal paths, where the user withdrew the intent;
+    /// the collision paths, where a proven foreign slot holder makes
+    /// an armed rule fuel for the cross-user fight; and the uninstall
+    /// sweep. A timeout, or a dropped session with no holder in sight,
+    /// is the opposite case and deliberately keeps its rule: that is
+    /// the transient condition recovery exists to ride out.
+    ///
+    /// Disarming is two facts, not one: the flag in this process and
+    /// the rule in the system store. Write the flag, let the save fail
+    /// quietly, and this process reports the comfortable half — the
+    /// callers here branch on the returned error, and the DEBUG
+    /// harness counts armed tunnels by reading
+    /// `isActivateOnDemandEnabled`, which is this flag.
+    ///
+    /// So a refused save does not get to guess. A failed write leaves
+    /// the store in an unknown state (the rule may have landed and
+    /// only the reply been lost), and this asks rather than assumes:
+    /// one `loadPreferences` re-reads what is actually stored, and the
+    /// flag then carries the store's own answer. Only when that
+    /// re-read ALSO fails does it fall back — to what the flag was on
+    /// entry, so a tunnel that came in armed stays reported armed
+    /// (under-reporting a rule leaves the system reconnecting a tunnel
+    /// the user stood down) and one that came in disarmed does not
+    /// invent a rule it never had.
+    ///
+    /// It runs unconditionally, including on a tunnel that already
+    /// looks disarmed: the flag being false is precisely what an
+    /// earlier failed save leaves behind, and skipping on it would
+    /// make this the one call that cannot repair that state.
+    ///
+    /// Returns nil when the rule is down for real. NOT the only place
+    /// the rule comes down — the connection gate's engage sweep still
+    /// writes the flag and saves by hand; it belongs to the gate's own
+    /// package and should end up here.
+    @discardableResult
+    static func standDownRecovery(on provider: TunnelProviding) async -> Error? {
+        // What was true before we touched it, so the pessimistic
+        // fallback restores a fact instead of inventing one: a tunnel
+        // that was never armed must not come back from a failed save
+        // claiming a rule it never had.
+        let wasArmed = provider.isOnDemandEnabled
         provider.isOnDemandEnabled = false
-        try? await provider.savePreferences()
+        do {
+            try await provider.savePreferences()
+            return nil
+        } catch {
+            if (try? await provider.loadPreferences()) == nil {
+                provider.isOnDemandEnabled = wasArmed
+            }
+            return error
+        }
     }
 
     func startActivation(of tunnel: TunnelContainer, at retryIndex: Int) {
+        // The same bar, one level down: the public door is not the
+        // only way in. The revive re-enters through `beginActivation`,
+        // the queue hand-off calls this directly, and a scheduled
+        // retry lands here on its own. One deletion has to close all
+        // of them.
+        guard !removingIds.contains(tunnel.id) else { return }
         guard retryIndex < maxRetries else {
             tunnel.isAttemptingActivation = false
             tunnel.activationTask?.cancel()
@@ -185,7 +330,15 @@ extension TunnelsManager {
         let attemptId = UUID().uuidString
         tunnel.activationAttemptId = attemptId
 
-        Task {
+        // Held so `remove()` can wait for this rung to finish before it
+        // deletes anything — see `activationRungTask`. Deliberately NOT
+        // self-clearing: a rung can start the next one from inside its
+        // own body (the stale-config reload path below), and a `defer`
+        // here would run AFTER that assignment and wipe the live
+        // handle, leaving `remove()` to await a task that already
+        // returned. A finished task answers `.value` instantly, so a
+        // stale handle costs nothing; a cleared one costs the wait.
+        tunnel.activationRungTask = Task {
             // Pre-flight, first attempt only: when another local
             // user's session holds the system's one VPN slot, fail
             // fast and clean — no enable, no armed recovery rule, no
@@ -227,7 +380,15 @@ extension TunnelsManager {
             Self.armRecovery(on: tunnel.tunnelProvider)
             do {
                 try await tunnel.tunnelProvider.savePreferences()
-                guard tunnel.activationAttemptId == attemptId else { return }
+                // Both facts again, for the reason the pre-flight
+                // guard above spells out: this await is the widest window in the
+                // rung, and a stop that lands inside it does not touch
+                // the attempt id. Checking the id alone here let the
+                // start proceed past an explicit cancel — and since
+                // `armRecovery` ran just above, the tunnel came up
+                // armed against the user's own withdrawal.
+                guard tunnel.activationAttemptId == attemptId,
+                      tunnel.status == .activating || tunnel.status == .reasserting else { return }
                 await self.doStartVPNTunnel(tunnel: tunnel, attemptId: attemptId, retryIndex: retryIndex)
             } catch {
                 tunnel.isAttemptingActivation = false
@@ -242,17 +403,37 @@ extension TunnelsManager {
         do {
             try await tunnel.tunnelProvider.loadPreferences()
         } catch {
+            // A config that cannot load fails the same way on every
+            // system-initiated retry, so an armed rule here is a loop
+            // trap and comes down even for an attempt nobody wants any
+            // more. "Nobody" is the limit though: if a NEWER attempt
+            // has since been granted, the rule in the store is that
+            // attempt's, and disarming it would strip recovery from a
+            // tunnel the user is bringing up right now.
+            if tunnel.activationAttemptId == attemptId || tunnel.activationAttemptId == nil {
+                if let disarmError = await Self.standDownRecovery(on: tunnel.tunnelProvider) {
+                    NSLog("[activation] recovery rule stayed armed on \(tunnel.name) after a local give-up — \(disarmError.localizedDescription)")
+                }
+            }
+            // The row and the queue are stricter still: writing them
+            // for an attempt the user already withdrew would stamp a
+            // red `loadingFailed` on their own stop and hand the queue
+            // on a second time. Only the attempt that still owns the
+            // intent may say how this ended.
+            guard tunnel.activationAttemptId == attemptId else { return }
             tunnel.isAttemptingActivation = false
             tunnel.status = .inactive
             tunnel.lastActivationError = .loadingFailed(systemError: error)
-            // Local failure — stand recovery down so the OS does not
-            // keep relaunching a config that cannot load.
-            await Self.disarmRecovery(on: tunnel.tunnelProvider)
             activateWaitingTunnelIfNeeded()
             return
         }
 
-        guard tunnel.activationAttemptId == attemptId else { return }
+        // The last gate before the session actually comes up, so it
+        // asks both facts like every other post-await guard on this
+        // path: a stop inside the reload window must not be answered
+        // with a start.
+        guard tunnel.activationAttemptId == attemptId,
+              tunnel.status == .activating || tunnel.status == .reasserting else { return }
 
         do {
             try tunnel.tunnelProvider.startTunnel()
@@ -289,7 +470,9 @@ extension TunnelsManager {
                 tunnel.isAttemptingActivation = false
                 tunnel.status = .inactive
                 tunnel.lastActivationError = .foreignSlotHolder
-                await Self.disarmRecovery(on: tunnel.tunnelProvider)
+                if let disarmError = await Self.standDownRecovery(on: tunnel.tunnelProvider) {
+                    NSLog("[activation] recovery rule stayed armed on \(tunnel.name) after a proven foreign holder — \(disarmError.localizedDescription)")
+                }
                 activateWaitingTunnelIfNeeded()
                 return
             }
@@ -298,7 +481,9 @@ extension TunnelsManager {
             tunnel.lastActivationError = .startingFailed(systemError: error)
             // Local failure — stand recovery down so the OS does not
             // keep relaunching a tunnel whose start throws.
-            await Self.disarmRecovery(on: tunnel.tunnelProvider)
+            if let disarmError = await Self.standDownRecovery(on: tunnel.tunnelProvider) {
+                NSLog("[activation] recovery rule stayed armed on \(tunnel.name) after a local give-up — \(disarmError.localizedDescription)")
+            }
             activateWaitingTunnelIfNeeded()
             return
         }
@@ -321,9 +506,53 @@ extension TunnelsManager {
         }
     }
 
+    /// The stop itself. `startDeactivation` owns the intent
+    /// withdrawal and has already done it synchronously, so nothing
+    /// here writes the activation bookkeeping: repeating it looked
+    /// harmless until you follow the armed path, where this runs a
+    /// round-trip later and would erase the ledger of whatever
+    /// activation the user started in the meantime. The caller proves
+    /// the withdrawal still stands before it gets here.
     func performDeactivation(of tunnel: TunnelContainer) {
-        tunnel.status = .deactivating
+
+        // The stop always goes out. An earlier version skipped it when
+        // the provider looked idle, which reads well until you notice
+        // where this runs on the armed path: immediately after a
+        // `savePreferences` round-trip, exactly when NE can still
+        // answer `.invalid` for a session that is very much alive.
+        // Skipping there would have painted the row off while the utun
+        // kept carrying traffic, with nothing left in the app to stop
+        // it. Stopping a session that is already down costs a no-op.
         tunnel.tunnelProvider.stopTunnel()
+
+        // Only the STATUS depends on that reading, and only because a
+        // stop sent to a session the system never brought up draws no
+        // callback: the row would sit in `.deactivating` for ever. The
+        // `.waiting` case is caught upstream; this is its twin for an
+        // attempt that dropped before it ever became a session, which
+        // the suite's logs show as an `.inactive → .deactivating`
+        // transition with nothing after it. A wrong guess here is
+        // self-correcting — the observer owns the row from the next
+        // notification on — where a wrong guess about the stop was not.
+        switch tunnel.tunnelProvider.connectionStatus {
+        case .disconnected:
+            tunnel.status = .inactive
+            // The hand-off, for the reason every other callback-less
+            // exit on this path makes it: with no status change
+            // coming, a tunnel queued behind this one would wait for
+            // its turn until the app restarted. It rides `.disconnected`
+            // and NOT `.invalid`, even though both mean "no callback":
+            // `.invalid` is also what a manager answers in the moment
+            // after a save, for a session that is very much alive.
+            // Painting the row there is recoverable, but starting the
+            // queued tunnel on top of a session still going down is
+            // not — that is two tunnels racing for the one slot.
+            activateWaitingTunnelIfNeeded()
+        case .invalid:
+            tunnel.status = .inactive
+        default:
+            tunnel.status = .deactivating
+        }
     }
 
     func activateWaitingTunnelIfNeeded() {

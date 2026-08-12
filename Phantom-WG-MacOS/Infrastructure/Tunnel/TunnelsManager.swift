@@ -87,6 +87,14 @@ class TunnelsManager {
     let retryInterval: TimeInterval = 5.0
     let maxRetries: Int = 8
 
+    /// Tunnels whose `remove()` is in flight. Every mutation gate is
+    /// barred for them: the removal suspends for seconds with its
+    /// sheet still on screen, and an activation — or a save from the
+    /// editor — started inside that window would re-arm or re-write an
+    /// entry that is about to be deleted, which is how a system entry
+    /// outlives the app's list.
+    @ObservationIgnored private(set) var removingIds: Set<UUID> = []
+
     // MARK: - Factory
 
     static func create(vault: TunnelVaultClient) async throws -> TunnelsManager {
@@ -354,6 +362,17 @@ class TunnelsManager {
     }
 
     func modify(tunnel: TunnelContainer, with config: TunnelConfig) async throws {
+        // Barred during removal like the activation gates, and for a
+        // sharper reason: this path WRITES THE PAYLOAD BACK. Landing
+        // between the delete and the entry removal, it restores the
+        // very secret that was just erased, and the next reconcile
+        // finds a payload without an entry and rebuilds the tunnel the
+        // user deleted. A save the user asked for deserves an error,
+        // not a silent no-op.
+        guard !removingIds.contains(tunnel.id) else {
+            throw TunnelManagementError.vpnSystemErrorOnModifyTunnel(
+                systemError: Self.noSystemDetail(LocalizationManager.shared.t("error_detail_session_ended")))
+        }
         let name = config.name.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !name.isEmpty else {
             throw TunnelManagementError.tunnelInvalidName
@@ -383,6 +402,17 @@ class TunnelsManager {
             try await tunnel.tunnelProvider.savePreferences()
             try await tunnel.tunnelProvider.loadPreferences()
         } catch {
+            // Put the projection back to whatever the store actually
+            // holds. The three lines above wrote the edit into the
+            // provider BEFORE the save, so a refused save leaves this
+            // process believing an identity the system never accepted
+            // — and that lie is load-bearing: reconcile detects a
+            // stale projection by comparing the vault payload against
+            // exactly this value, so it would find them in agreement
+            // and skip the repair the failure just made necessary. If
+            // the re-read fails too the drift survives, and then the
+            // only cure left is the user editing the tunnel again.
+            try? await tunnel.tunnelProvider.loadPreferences()
             throw TunnelManagementError.vpnSystemErrorOnModifyTunnel(systemError: error)
         }
 
@@ -390,14 +420,41 @@ class TunnelsManager {
     }
 
     func remove(tunnel: TunnelContainer) async throws {
-        // A pending revive must not outlive the entry it would raise —
-        // and a belt still hunting for a record mid-removal must find
-        // the grant already spent, or it could schedule a revive
-        // against an entry whose deletion is suspended right here.
-        tunnel.respawnReviveConsumed = true
-        tunnel.respawnReviveTask?.cancel()
-        tunnel.respawnReviveTask = nil
-
+        // Removal suspends for seconds below (three vault attempts,
+        // then the system entry), and the sheet that asked for it
+        // stays on screen the whole time — `deleteTunnel` only
+        // dismisses after this returns. So the window is not just
+        // "what was already running", it is "anything the user can
+        // still press". Three withdrawals, in order of what they
+        // actually stop:
+        //
+        // 1. The door is barred for this id. Clearing the attempt id
+        //    alone would not have done it: a FRESH activation writes
+        //    its own id and undoes every flag below, and one tap on
+        //    the toggle while this call hangs is enough. With the id
+        //    listed here, both entrances refuse it.
+        removingIds.insert(tunnel.id)
+        defer { removingIds.remove(tunnel.id) }
+        // 1b. Then the rung already in flight is waited out, BEFORE
+        //     anything is deleted. NE round-trips are not cancellable,
+        //     so a `savePreferences` on its way to the system cannot be
+        //     recalled; landing after our `removePreferences` it
+        //     re-mints the entry, and with `armRecovery` in the same
+        //     rung it comes back ARMED with its payload gone —
+        //     invisible, undeletable, self-reconnecting. Waiting here
+        //     rather than after the vault delete is what makes the
+        //     ceiling safe to enforce: nothing is half-deleted yet, so
+        //     a wedged call answers "could not delete, try again"
+        //     instead of leaving an entry no one can decode. The bar
+        //     above already keeps a NEW rung from taking its place.
+        let rungSettled: Bool? = await bounded(20) {
+            await tunnel.activationRungTask?.value
+            return true
+        }
+        guard rungSettled == true else {
+            throw TunnelManagementError.vpnSystemErrorOnRemoveTunnel(
+                systemError: Self.noSystemDetail(LocalizationManager.shared.t("error_detail_timeout")))
+        }
         // The payload goes first, and its failure stops everything.
         //
         // Removing the system entry first looks tidier but loses the
@@ -408,10 +465,58 @@ class TunnelsManager {
         // agrees the tunnel is gone. And if the vault cannot be
         // reached, refusing outright leaves the tunnel whole rather
         // than half-deleted.
+        //
+        // Nothing has been withdrawn from the tunnel at this point,
+        // and that is deliberate: on the failure below it keeps its
+        // ladder, its retry and its revive, exactly as if the user had
+        // never asked. An earlier version withdrew first and left a
+        // surviving tunnel frozen mid-activation with nothing running
+        // to move it — a worse outcome than the failure it reported.
         guard await vault.delete(id: tunnel.id, attempts: 3) else {
             throw TunnelManagementError.vaultUnavailable
         }
 
+        // 2. Past this line the tunnel's secret is gone and there is no
+        //    tunnel left to activate, so now the intent comes down.
+        //    Every rung re-reads the attempt id after its await, so
+        //    `nil` fails them closed; the scheduled retry, the one task
+        //    we hold a handle to, is cancelled outright. Clearing
+        //    `isAttemptingActivation` also keeps the teardown's own
+        //    `.disconnected` from reading as a mid-activation drop and
+        //    handing this entry to the drop belt mid-deletion.
+        tunnel.isAttemptingActivation = false
+        tunnel.activationAttemptId = nil
+        tunnel.activationTask?.cancel()
+        tunnel.activationTask = nil
+        // A pending revive must not outlive the entry it would raise.
+        tunnel.respawnReviveConsumed = true
+        tunnel.respawnReviveTask?.cancel()
+        tunnel.respawnReviveTask = nil
+
+        // The rule comes down before the entry does, and this is not
+        // belt-and-braces — it is the only place that can do it for
+        // the common case. Armed-and-inactive is a NORMAL resting
+        // state here: both the anonymous drop and the exhausted ladder
+        // keep their rule on purpose, and a tunnel in that state skips
+        // `startDeactivation` entirely when the user deletes it (the
+        // delete flow only stops what is running). Leave it, and a
+        // failed `removePreferences` below strands an entry that is
+        // armed, payload-less, hidden from the list by the ownership
+        // filter, and retried by the OS on every network change.
+        // Sequential await, so nothing here can outrun the removal.
+        if let disarmError = await Self.standDownRecovery(on: tunnel.tunnelProvider) {
+            NSLog("[remove] recovery rule stayed armed on \(tunnel.name) — \(disarmError.localizedDescription)")
+        }
+
+        // Half-deleted from here on: the payload is gone, so a failure
+        // below leaves an entry the app can no longer decode. The next
+        // ingest reads `.missing` for it and files it under another
+        // user, which hides it from the list — the throw is the only
+        // notice the user gets that something is still in System
+        // Settings. Nothing paints the row here on purpose: the status
+        // it carries was written by this manager, not observed, and
+        // overwriting it with a session reading would erase a
+        // `.waiting` queue slot or dress an armed entry as idle.
         do {
             try await tunnel.tunnelProvider.removePreferences()
         } catch {
@@ -534,8 +639,12 @@ class TunnelsManager {
                 // respawn-revive discriminator — a user-initiated stop
                 // travels through `.deactivating` and never reads as
                 // mid-activation here.
-                let droppedMidActivation = tunnel.isAttemptingActivation
-                    && (tunnel.status == .activating || tunnel.status == .reasserting)
+                // The first half of that sentence is already true —
+                // this whole branch sits inside `if
+                // tunnel.isAttemptingActivation` — so the status is
+                // the entire discriminator, and saying so keeps the
+                // next reader from hunting for a second condition.
+                let droppedMidActivation = tunnel.status == .activating || tunnel.status == .reasserting
                 tunnel.isAttemptingActivation = false
                 tunnel.activationTask?.cancel()
                 tunnel.activationTask = nil
@@ -572,27 +681,78 @@ class TunnelsManager {
                         // stage is transport-bounded and the tail
                         // still lands inside the respawn window.
                         if case .heldByForeign = await self.foreignSlotVerdict() {
+                            // Three facts, not one, and each was
+                            // learned the hard way: the attempt must
+                            // still be this one, the row must still be
+                            // down (the OS can revive a tunnel while a
+                            // slow verdict is fetched, and writing a
+                            // failure under a green session is a lie),
+                            // and the entry must still exist (a save
+                            // onto a tunnel being deleted re-mints it).
+                            // Two decisions with two different tests,
+                            // and folding them into one guard was a
+                            // regression: the rule came down only when
+                            // the row happened to still be idle, so a
+                            // slow-but-proven foreign holder — the
+                            // exact case the unbounded verdict above
+                            // exists to catch — left our rule armed
+                            // and feeding the cross-user fight.
+                            //
+                            // Standing the rule down answers to the
+                            // EVIDENCE: a proven holder means our
+                            // armed rule is fuel, whatever the row is
+                            // doing by now. It stops only for entries
+                            // we must not write to at all.
+                            guard !self.removingIds.contains(tunnel.id),
+                                  self.tunnels.contains(where: { $0 === tunnel }) else { return }
+                            if let disarmError = await Self.standDownRecovery(on: tunnel.tunnelProvider) {
+                                NSLog("[activation] recovery rule stayed armed on \(tunnel.name) after a proven foreign holder — \(disarmError.localizedDescription)")
+                            }
+                            // The error belongs to the ROW, so it
+                            // answers to the row: only an attempt that
+                            // is still current, still unexplained and
+                            // still down may wear it. A tunnel the OS
+                            // has since revived must not be labelled a
+                            // failure under a green session.
                             guard tunnel.activationAttemptId == attemptId,
-                                  tunnel.lastActivationError == nil else { return }
+                                  tunnel.lastActivationError == nil,
+                                  tunnel.status == .inactive else { return }
                             tunnel.lastActivationError = .foreignSlotHolder
-                            tunnel.tunnelProvider.isOnDemandEnabled = false
-                            try? await tunnel.tunnelProvider.savePreferences()
                             return
                         }
-                        // Bounded: this wrapper carries no timeout of
-                        // its own, and the same dark window that
-                        // dropped the session can hang it forever —
-                        // the deadline keeps the record (or its honest
-                        // stand-in) landing while it still matters.
-                        let systemError = await self.bounded(3) {
+                        // Bounded: this call carries no timeout of its
+                        // own, and the same dark window that dropped
+                        // the session can hang it forever. Two levels
+                        // come back and both matter — `.some(.some)`
+                        // is a record, `.some(.none)` is the system
+                        // saying there was none, and `nil` is the
+                        // system not saying anything at all.
+                        let fetched: NSError?? = await self.bounded(3) {
                             (await tunnel.tunnelProvider.fetchLastDisconnectError()).map { $0 as NSError }
                         }
                         guard tunnel.activationAttemptId == attemptId,
-                              tunnel.lastActivationError == nil else { return }
-                        if let systemError {
-                            tunnel.lastActivationError = .failedWhileActivating(systemError: systemError)
+                              tunnel.lastActivationError == nil,
+                              tunnel.status == .inactive,
+                              self.tunnels.contains(where: { $0 === tunnel }) else { return }
+                        if let record = fetched.flatMap({ $0 }) {
+                            tunnel.lastActivationError = .failedWhileActivating(systemError: record)
                             return
                         }
+                        // Neither branch below is "the system told us
+                        // nothing happened": a deadline is ignorance,
+                        // not evidence. They share the revive because
+                        // ignorance here has one overwhelmingly likely
+                        // cause — the extension respawn window that
+                        // makes the fetch hang in the first place — but
+                        // they must not share a sentence, so the
+                        // stand-in each of them leaves says which one
+                        // it was. The record a late answer would have
+                        // carried is genuinely lost; what is no longer
+                        // lost is the difference between losing it and
+                        // never having one.
+                        let unanswered = fetched == nil
+                        let standIn = Self.noSystemDetail(LocalizationManager.shared.t(
+                            unanswered ? "error_detail_timeout" : "error_detail_session_ended"))
                         // Anonymous drop: no foreign holder and no
                         // system record. Mid-activation this is the
                         // respawn-window class (field-measured up to
@@ -610,20 +770,45 @@ class TunnelsManager {
                             tunnel.respawnReviveConsumed = true
                             tunnel.respawnReviveTask = Task { @MainActor [weak self] in
                                 try? await Task.sleep(for: .seconds(1))
-                                guard let self, !Task.isCancelled,
-                                      tunnel.activationAttemptId == attemptId,
+                                // Cancellation is the one silent exit,
+                                // and it is silent on purpose: it only
+                                // happens when the user withdrew the
+                                // intent (a stop, a delete, a newer
+                                // start) and their own action is the
+                                // explanation.
+                                guard let self, !Task.isCancelled else { return }
+                                guard tunnel.activationAttemptId == attemptId,
                                       tunnel.status == .inactive,
                                       tunnel.lastActivationError == nil,
+                                      !self.removingIds.contains(tunnel.id),
                                       self.tunnels.contains(where: { $0 === tunnel }),
                                       !self.tunnels.contains(where: { $0.id != tunnel.id && $0.status != .inactive })
-                                else { return }
-                                NSLog("[activation] anonymous mid-activation drop — spending the one revive on \(tunnel.name)")
+                                else {
+                                    // Granted but unspendable — most
+                                    // often because a queued tunnel
+                                    // took the slot in the meantime.
+                                    // The drop that armed it is still
+                                    // unexplained, and the belt's exit
+                                    // above skipped the stand-in on
+                                    // the promise that this revive
+                                    // would speak. A toggle that falls
+                                    // back to off with no error and no
+                                    // retry is the single outcome this
+                                    // whole belt exists to prevent, so
+                                    // the promise is kept here.
+                                    if tunnel.activationAttemptId == attemptId,
+                                       tunnel.lastActivationError == nil,
+                                       tunnel.status == .inactive {
+                                        tunnel.lastActivationError = .failedWhileActivating(systemError: standIn)
+                                    }
+                                    return
+                                }
+                                NSLog("[activation] mid-activation drop with \(unanswered ? "no answer from the system" : "no system record") — spending the one revive on \(tunnel.name)")
                                 self.beginActivation(of: tunnel)
                             }
                             return
                         }
-                        tunnel.lastActivationError = .failedWhileActivating(
-                            systemError: Self.noSystemDetail(LocalizationManager.shared.t("error_detail_session_ended")))
+                        tunnel.lastActivationError = .failedWhileActivating(systemError: standIn)
                     }
                 }
 
@@ -864,9 +1049,20 @@ class TunnelsManager {
     /// deadline won — the evidence never arrived — and every caller
     /// falls back to the meaning its doctrine gives an unverifiable
     /// state.
-    private func bounded<T: Sendable>(
+    // Internal rather than private: the activation extension's
+    // uninstall sweep waits out in-flight rungs through it, the same
+    // way `remove()` does.
+    /// The producer returns a NON-optional `T`, so the optional this
+    /// hands back has exactly one meaning: nil is the deadline, never
+    /// an answer. A producer whose own answer is optional (the
+    /// disconnect record is the live example) comes back as `T??` and
+    /// the caller reads the two levels apart — "the system said there
+    /// was nothing" and "the system never said" are different facts,
+    /// and flattening them into one nil is how a real failure was once
+    /// filed as an anonymous drop.
+    func bounded<T: Sendable>(
         _ seconds: Double,
-        _ producer: @escaping @MainActor () async -> T?
+        _ producer: @escaping @MainActor () async -> T
     ) async -> T? {
         await withCheckedContinuation { continuation in
             let resume = SingleResume(continuation)

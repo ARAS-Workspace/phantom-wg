@@ -26,7 +26,7 @@ protocol TunnelProviding: AnyObject {
     /// on local give-up failures, on a proven foreign slot holder (the
     /// collision belts and the gate's engage sweep), and for the
     /// uninstall sweep. See `TunnelsManager.armRecovery` /
-    /// `disarmRecovery`.
+    /// `standDownRecovery`.
     var isOnDemandEnabled: Bool { get set }
     var onDemandRules: [NEOnDemandRule]? { get set }
 
