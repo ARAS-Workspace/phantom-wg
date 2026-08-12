@@ -247,10 +247,27 @@ final class ExtensionGateController: NSObject, OSSystemExtensionRequestDelegate 
         OSSystemExtensionManager.shared.submitRequest(request)
     }
 
+    /// Refusals this controller raises itself, as opposed to the ones
+    /// the system hands back.
+    enum ExtensionGateError: Error {
+        /// A second `deactivate()` arrived while one was still
+        /// awaiting its delegate callback.
+        case deactivationAlreadyInFlight
+    }
+
     /// Submit a deactivation request and await completion. Throws on
     /// hard error, resolves to `.notInstalled` on success.
     func deactivate() async throws {
         log("deactivate() submitted (status=\(status))")
+        // One deactivation at a time. A second call would overwrite the
+        // stored continuation and strand the first caller for ever —
+        // nothing would ever resume it — and the uninstall flow awaits
+        // three of these in sequence, so a stall there stops the whole
+        // teardown with no error to show for it.
+        if deactivationContinuation != nil {
+            log("deactivate() refused — one is already in flight")
+            throw ExtensionGateError.deactivationAlreadyInFlight
+        }
         try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
             self.deactivationContinuation = continuation
             let request = OSSystemExtensionRequest.deactivationRequest(

@@ -97,6 +97,19 @@ struct TunnelDraft: Equatable {
             wstunnelConfig = nil
         }
 
+        // The wstunnel half is guarded too, and deliberately by its
+        // own clause rather than by trusting `errors.isEmpty` to cover
+        // it. Every path that can fail to build a `WstunnelConfig`
+        // does record an error today, so this is unreachable — but the
+        // day one of them forgets, the slip would save an
+        // endpoint-less STANDALONE config (Ghost mode never parses the
+        // user's endpoint field) that validates clean here and only
+        // fails at activation, as an unexplained invalid-config error
+        // far from the edit that caused it. This line moves that
+        // failure to the editor, onto a field the user is looking at.
+        if wstunnel != nil, wstunnelConfig == nil, errors.isEmpty {
+            errors[.wstunnelUrl] = .empty
+        }
         guard
             errors.isEmpty,
             let interfaceConfig,
