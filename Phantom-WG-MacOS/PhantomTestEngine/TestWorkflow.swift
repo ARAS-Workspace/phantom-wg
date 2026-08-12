@@ -162,12 +162,26 @@ class TestWorkflow {
     /// status IS the user's perspective — and the budget guarantees a
     /// hung transition can never wedge the runner.
     ///
-    /// Observer-only, on evidence: the manager's own status observation
-    /// keeps `status` current, and a `refreshStatus()` here proved
-    /// harmful on the first live run — it stomped the manager's
-    /// optimistic `.activating` with the system's stale value and
-    /// logged a transition that never happened. The harness observes
-    /// shared state, it never writes it.
+    /// Observer-only: the manager's own status observation keeps
+    /// `status` current, so a `refreshStatus()` from inside this loop
+    /// would add a second writer to reason about for no reading it does
+    /// not already have. On the first live run it did worse than that —
+    /// it stomped the manager's optimistic `.activating` and logged a
+    /// transition that never happened — though that particular stomp is
+    /// no longer possible from anywhere: `TunnelContainer.refreshStatus`
+    /// now refuses to lower a row the manager is driving, which
+    /// `ActivationSeamWorkflow`'s two refresh steps assert.
+    ///
+    /// Those two steps are the only place the suite calls a status
+    /// writer at all, and both call it on a side-manager container the
+    /// step built itself over synthetic providers — no container the
+    /// app is using has its status written by the suite. Elsewhere the
+    /// suite still writes: activation bookkeeping is arranged directly
+    /// in a couple of seam steps, every workflow drives the manager's
+    /// own entry points, and this file itself hands out the raw vault
+    /// write surface and a provider-message sender. The narrow claim
+    /// is the one that matters here — nothing observes a tunnel's
+    /// status by writing it.
     @discardableResult
     func awaitStatus(_ tunnel: TunnelContainer, is target: TunnelStatus, within seconds: Double) async -> Bool {
         let start = Date()

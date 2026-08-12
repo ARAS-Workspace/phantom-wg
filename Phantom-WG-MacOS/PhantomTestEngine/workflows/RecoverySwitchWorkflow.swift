@@ -2,14 +2,32 @@
 import Foundation
 
 /// Proves the armed<=1 invariant HOLDS THROUGH a live switch, not just
-/// at rest. Activating a second tunnel disarms every other tunnel's
-/// recovery rule first (TunnelsManager+Activation), so at no observed
-/// instant may two tunnels carry an armed on-demand rule.
+/// at rest.
 ///
-/// Both door configs are real, so this needs a reachable endpoint for
-/// the tunnels to actually reach `.active`; when they cannot, the
-/// switch still runs and the invariant is still sampled — the claim is
-/// about arming, not about connectivity.
+/// On this workflow's green path the invariant is held by the STOP,
+/// not by the sweep: switching parks the second tunnel `.waiting` and
+/// stops the first, and `startDeactivation` stands the first tunnel's
+/// rule down before its stop goes out — so by the time the hand-off
+/// climbs rung 0 there is usually nothing left for rung 0's sweep to
+/// disarm. The sweep is the belt under that: it catches a tunnel that
+/// is armed and idle, which no door tunnel is here. Its own mechanical
+/// coverage lives in `ActivationSeamWorkflow`'s hand-off step, where a
+/// third tunnel is armed on purpose.
+///
+/// Both door configs are real, and the two steps answer an unreachable
+/// endpoint differently. If the FIRST tunnel never reaches `.active`,
+/// `armFirst` fails and the switch step skips: the hand-off needs a
+/// live session to hand off from, so there is no switch to sample. If
+/// the SECOND never arrives, the switch still ran and the sampler
+/// still ran with it — `samples > 0` and `peak <= 1` are still
+/// claimed; the three checks behind the completed-handover gate are
+/// the ones dropped (the rule seen armed at all, recovery landing on
+/// the second tunnel, and the first tunnel disarmed by it).
+///
+/// Note what is NOT the reason for either skip: reachability does not
+/// decide whether a rule gets armed. `armRecovery` runs on rung 0
+/// before `startTunnel` and its save succeeds whatever the endpoint
+/// does, so an unreachable tunnel is armed too.
 ///
 /// Note the boundary: the disarm-others path reads its save's outcome
 /// now (`standDownRecovery` — a refused save re-reads the store and
@@ -103,7 +121,11 @@ final class RecoverySwitchWorkflow: TestWorkflow {
     /// exactly the user-facing truth (what the OS would revive).
     private func switchSampled() async {
         guard firstArmed, let a = first, let b = second else {
-            skip("first tunnel not armed")
+            // `firstArmed` is set only once the first tunnel reached
+            // `.active`, so this reads "no live session to hand off
+            // from" — not "no rule was armed", which reachability does
+            // not decide.
+            skip("first tunnel never came up, so there is no handover to sample")
             return
         }
         var peak = 0

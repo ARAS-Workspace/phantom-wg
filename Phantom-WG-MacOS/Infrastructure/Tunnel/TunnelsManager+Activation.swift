@@ -31,8 +31,12 @@ extension TunnelsManager {
     }
 
     /// Everything the public door does except granting the respawn
-    /// revive: exclusive-slot queueing, the disarm-others sweep, and
-    /// rung 0. The disconnect observer's one-shot revive enters here.
+    /// revive: exclusive-slot queueing, and rung 0 when the slot is
+    /// free. The disconnect observer's one-shot revive enters here.
+    ///
+    /// The disarm-others sweep is NOT here — it stands on rung 0, so
+    /// that the queue hand-off, which never passes through this door,
+    /// gets it too.
     func beginActivation(of tunnel: TunnelContainer) {
         // Barred here too, not only at the rung below: this door
         // reshuffles state before it gets there — it can park the
@@ -49,27 +53,6 @@ extension TunnelsManager {
             waitingTunnel = tunnel
             startDeactivation(of: activeTunnel)
             return
-        }
-
-        // Disarm every other tunnel's recovery rule first — recovery
-        // belongs to the tunnel being activated now. Fire-and-forget in
-        // ordering only, never in outcome: the old shape threw the
-        // save's answer away, so a refused disarm left a second armed
-        // rule in the store while the app counted one. On refusal the
-        // helper re-reads the store and sets the flag to what is
-        // actually there, and the log says which tunnel kept its rule.
-        for other in tunnels where other.id != tunnel.id && other.isActivateOnDemandEnabled {
-            Task {
-                // Evaluated when the task RUNS, not when it is spawned:
-                // the same liveness guard the armed stop carries, for
-                // the same reason. A save landing on an entry that is
-                // being deleted re-mints it in the system store.
-                guard !removingIds.contains(other.id),
-                      tunnels.contains(where: { $0.id == other.id }) else { return }
-                if let error = await Self.standDownRecovery(on: other.tunnelProvider) {
-                    NSLog("[activation] recovery rule stayed armed on \(other.name) — \(error.localizedDescription)")
-                }
-            }
         }
 
         startActivation(of: tunnel, at: 0)
@@ -310,7 +293,11 @@ extension TunnelsManager {
             // rung may have thrown and been reloaded past; a repeat
             // never reaches here, it exits terminal below). Recovery
             // stays armed on purpose: a timeout is transient (no network
-            // or an unreachable server), exactly what on-demand rides out.
+            // or an unreachable server), exactly what on-demand rides
+            // out — unless a tunnel is queued behind this one, in which
+            // case the hand-off below climbs rung 0 and rung 0's sweep
+            // gives the rule to whoever is activating now. Armed<=1
+            // outranks keeping a transient rule.
             tunnel.lastActivationError = .retryLimitReached(
                 lastSystemError: TunnelsManager.noSystemDetail(LocalizationManager.shared.t("error_detail_timeout")))
             // A give-up path like the others: a queued tunnel takes the
@@ -322,6 +309,45 @@ extension TunnelsManager {
         }
 
         if retryIndex == 0 {
+            // Disarm every other tunnel's recovery rule — recovery
+            // belongs to the tunnel being activated now.
+            //
+            // This sits on rung 0 rather than at the public door
+            // because the door is not the only way in. The queue
+            // hand-off calls this method directly, and armed-and-
+            // inactive is a normal resting state (an anonymous drop and
+            // an exhausted ladder both keep their rule on purpose), so
+            // a tunnel taking its turn that way used to arm its rule
+            // beside one that was already armed. Every entrance climbs
+            // rung 0, so every ladder now issues the sweep.
+            //
+            // Issues, not completes: the tasks below suspend inside
+            // their own saves, so a sweep can still land after this
+            // tunnel has armed. The invariant they serve is eventual —
+            // one armed rule once the saves settle — not a happens-
+            // before against `armRecovery`.
+            //
+            // Fire-and-forget in ordering only, never in outcome: the
+            // old shape threw the save's answer away, so a refused
+            // disarm left a second armed rule in the store while the
+            // app counted one. On refusal the helper re-reads the store
+            // and sets the flag to what is actually there, and the log
+            // says which tunnel kept its rule.
+            for other in tunnels where other.id != tunnel.id && other.isActivateOnDemandEnabled {
+                Task {
+                    // Evaluated when the task RUNS, not when it is
+                    // spawned: the same liveness guard the armed stop
+                    // carries, for the same reason. A save landing on
+                    // an entry that is being deleted re-mints it in the
+                    // system store.
+                    guard !removingIds.contains(other.id),
+                          tunnels.contains(where: { $0.id == other.id }) else { return }
+                    if let error = await Self.standDownRecovery(on: other.tunnelProvider) {
+                        NSLog("[activation] recovery rule stayed armed on \(other.name) — \(error.localizedDescription)")
+                    }
+                }
+            }
+
             tunnel.status = .activating
             tunnel.lastActivationError = nil
         }
@@ -555,8 +581,41 @@ extension TunnelsManager {
         }
     }
 
+    /// Gives the queued tunnel its turn, if there is one and the slot
+    /// is actually free.
+    ///
+    /// Two preconditions, both of them tested here rather than assumed
+    /// of the callers, because this method enters
+    /// `startActivation(of:at:)` directly and so skips the activation
+    /// door that scans for a live session (`beginActivation`).
+    ///
+    /// The queued container must still be listed. `ingest` rebuilds
+    /// `tunnels` and can drop a row without touching this slot, and
+    /// starting a tunnel the list no longer holds would raise a session
+    /// nothing in the app is tracking. A slot whose tunnel is gone is
+    /// stale by definition, so it goes with it.
+    ///
+    /// And the system's one slot must be free. What every caller did
+    /// before this test existed was ground ITS OWN tunnel first, which
+    /// is a weaker thing than proving the slot free — the observer's
+    /// non-attempting branch grounds whichever tunnel the notification
+    /// named, and says nothing about the rest of the list. The removal
+    /// and the reload made the difference visible rather than created
+    /// it: they run for an arbitrary tunnel and carry no information at
+    /// all about who holds the session. Starting a queued tunnel on top
+    /// of a live one is exactly the move `performDeactivation` refuses.
+    ///
+    /// A busy slot KEEPS the queue: the slot stays set so the next
+    /// hand-off, once the live session ends, still finds it.
     func activateWaitingTunnelIfNeeded() {
         guard let waitingTunnel else { return }
+        guard tunnels.contains(where: { $0 === waitingTunnel }) else {
+            self.waitingTunnel = nil
+            return
+        }
+        guard !tunnels.contains(where: {
+            $0.id != waitingTunnel.id && $0.status != .inactive && $0.status != .waiting
+        }) else { return }
         self.waitingTunnel = nil
         guard waitingTunnel.status == .waiting else { return }
         startActivation(of: waitingTunnel, at: 0)

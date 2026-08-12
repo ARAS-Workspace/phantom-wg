@@ -530,6 +530,21 @@ class TunnelsManager {
         if waitingTunnel?.id == tunnel.id {
             waitingTunnel = nil
         }
+
+        // A queue slot must not outlive the list it was queued in. The
+        // removal may have taken the very session the queued tunnel was
+        // waiting behind, in which case its turn is now; or the slot
+        // may have gone stale, in which case the hand-off's own guards
+        // clear it. Both answers are better than leaving it: before the
+        // status gate a later reload repainted the orphan `.inactive`,
+        // and that accidental repair is exactly what the gate removed.
+        //
+        // Safe for the unrelated-tunnel case only because the hand-off
+        // now tests the slot itself: deleting a bystander while another
+        // tunnel is still up leaves the queue exactly where it was.
+        // No-op when the removed tunnel WAS the queued one, since the
+        // line above just cleared the slot.
+        activateWaitingTunnelIfNeeded()
     }
 
     /// The uninstall flow's hand on the refresh machinery: from this
@@ -672,7 +687,11 @@ class TunnelsManager {
                         // with a foreign holder present the gate's
                         // engage sweep would stand the same rule down
                         // anyway. Every other drop cause keeps the
-                        // transient keep-armed contract.
+                        // transient keep-armed contract — with the same
+                        // exception the ladder's own give-up carries: if
+                        // a tunnel is queued, the hand-off this branch
+                        // triggers climbs rung 0, and rung 0's sweep
+                        // hands the rule to the tunnel starting now.
                         // Full patience on purpose: no user is blocked
                         // behind this belt, and a slow-but-eventual
                         // foreign proof must still stand the armed
@@ -830,10 +849,35 @@ class TunnelsManager {
                 break
             }
         } else {
-            let newStatus = TunnelStatus(from: systemStatus)
-            tunnel.status = newStatus
+            // No attempt of ours is in flight, so the reading is the
+            // system's to give: an on-demand revival, a stop from
+            // System Settings, a drop under a session we had stopped
+            // watching — and, most often of all, the tail of a stop we
+            // issued ourselves. That last one lands here because the
+            // flag came down when the session CONNECTED (the branch
+            // above), so by the time the user stops a running tunnel
+            // there is no attempt left to be in flight; for a stop
+            // issued before that, `startDeactivation` lowers it
+            // synchronously. Either way it is the hand-off below that
+            // this branch owes the queued tunnel. The row follows the
+            // reading through the gate that knows which states are ours
+            // to keep (`refreshStatus`), so a reading that only means
+            // "no session" can no longer take a queued tunnel's turn
+            // away. A reading that says a session EXISTS still lands,
+            // here as everywhere: if the system has somehow started a
+            // queued tunnel out of band, that is news and the row says
+            // so.
+            //
+            // Deliberately belt-less, and this is the accepted limit
+            // rather than an oversight: a session that dies after it
+            // connected is most often a network that went away, and the
+            // armed recovery rule is the answer to that. Writing a
+            // failure for every such drop would put red on the routine
+            // case, and the app has nothing truer to say than what the
+            // row already shows.
+            tunnel.refreshStatus()
 
-            if newStatus == .inactive {
+            if tunnel.status == .inactive {
                 activateWaitingTunnelIfNeeded()
             }
         }
@@ -892,6 +936,16 @@ class TunnelsManager {
         // The list now mirrors this user's slice of the system store;
         // put back whatever the vault says should be in it.
         await reconcileFromVault()
+        // The reload is the only system-derived writer that grounds the
+        // blocker WITHOUT a notification: a session that ended while
+        // the app was in the background leaves none, and this pass is
+        // the catch-all for exactly that. It grounds the blocker, and
+        // the status gate rightly refuses to touch the queued row — so
+        // without this line the slot would survive with nothing left to
+        // start it. The hand-off tests both the slot and the queued
+        // row's membership itself, so on the ordinary pass, where
+        // nothing changed, it is a no-op.
+        activateWaitingTunnelIfNeeded()
     }
 
     #if DEBUG
