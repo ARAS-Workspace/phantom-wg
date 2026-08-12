@@ -67,18 +67,19 @@ class ProxyConfigDaemonClient {
         }
 
         return await withCheckedContinuation { (continuation: CheckedContinuation<Bool, Never>) in
+            let resume = SingleResume(continuation)
             let proxy = conn.remoteObjectProxyWithErrorHandler { [weak self] error in
                 os_log("applyConfig error: %{public}@",
                        log: self?.log ?? OSLog.default, type: .error, error.localizedDescription)
-                continuation.resume(returning: false)
+                resume.finish(false)
             } as? ProxyConfigDaemonProtocol
 
             guard let proxy else {
-                continuation.resume(returning: false)
+                resume.finish(false)
                 return
             }
             proxy.applyConfig(data) { success in
-                continuation.resume(returning: success)
+                resume.finish(success)
             }
         }
     }
@@ -96,22 +97,23 @@ class ProxyConfigDaemonClient {
         guard let conn = connection else { return nil }
 
         return await withCheckedContinuation { (continuation: CheckedContinuation<String?, Never>) in
+            let resume = SingleResume(continuation)
             let proxy = conn.remoteObjectProxyWithErrorHandler { [weak self] error in
                 os_log("fetchLogs error: %{public}@",
                        log: self?.log ?? OSLog.default, type: .error, error.localizedDescription)
-                continuation.resume(returning: nil)
+                resume.finish(nil)
             } as? ProxyConfigDaemonProtocol
 
             guard let proxy else {
-                continuation.resume(returning: nil)
+                resume.finish(nil)
                 return
             }
             proxy.fetchLogs { data in
                 guard let data else {
-                    continuation.resume(returning: nil)
+                    resume.finish(nil)
                     return
                 }
-                continuation.resume(returning: String(data: data, encoding: .utf8))
+                resume.finish(String(data: data, encoding: .utf8))
             }
         }
     }
@@ -131,18 +133,19 @@ class ProxyConfigDaemonClient {
         guard let conn = connection else { return nil }
 
         return await withCheckedContinuation { (continuation: CheckedContinuation<String?, Never>) in
+            let resume = SingleResume(continuation)
             let proxy = conn.remoteObjectProxyWithErrorHandler { [weak self] error in
                 os_log("fetchIdentity error: %{public}@",
                        log: self?.log ?? OSLog.default, type: .error, error.localizedDescription)
-                continuation.resume(returning: nil)
+                resume.finish(nil)
             } as? ProxyConfigDaemonProtocol
 
             guard let proxy else {
-                continuation.resume(returning: nil)
+                resume.finish(nil)
                 return
             }
             proxy.fetchIdentity { identity in
-                continuation.resume(returning: identity)
+                resume.finish(identity)
             }
         }
     }
@@ -160,18 +163,19 @@ class ProxyConfigDaemonClient {
         guard let conn = connection else { return false }
 
         return await withCheckedContinuation { (continuation: CheckedContinuation<Bool, Never>) in
+            let resume = SingleResume(continuation)
             let proxy = conn.remoteObjectProxyWithErrorHandler { [weak self] error in
                 os_log("clearLogs error: %{public}@",
                        log: self?.log ?? OSLog.default, type: .error, error.localizedDescription)
-                continuation.resume(returning: false)
+                resume.finish(false)
             } as? ProxyConfigDaemonProtocol
 
             guard let proxy else {
-                continuation.resume(returning: false)
+                resume.finish(false)
                 return
             }
             proxy.clearLogs { ok in
-                continuation.resume(returning: ok)
+                resume.finish(ok)
             }
         }
     }
@@ -181,27 +185,22 @@ class ProxyConfigDaemonClient {
     /// Race an async operation against a sleep; first to finish wins.
     /// The losing side keeps running — `NSXPCConnection` RPCs aren't
     /// cancellable from Swift — but its eventual result is dropped.
-    private func withRaceTimeout<T>(
+    private func withRaceTimeout<T: Sendable>(
         seconds: Double,
         fallback: T,
         operation: @escaping () async -> T
     ) async -> T {
         await withCheckedContinuation { (continuation: CheckedContinuation<T, Never>) in
-            let lock = NSLock()
-            var resumed = false
-            func resumeOnce(_ value: T) {
-                lock.lock(); defer { lock.unlock() }
-                guard !resumed else { return }
-                resumed = true
-                continuation.resume(returning: value)
-            }
-            Task {
-                let result = await operation()
-                resumeOnce(result)
-            }
+            // The hand-rolled lock-and-flag this used to carry is the
+            // shared `SingleResume` now: same one-shot guarantee, but
+            // the flag lives inside a `Mutex`, so the type is Sendable
+            // by compiler proof instead of by inspection. Its twin in
+            // the vault client retired for the same reason.
+            let resume = SingleResume(continuation)
+            Task { resume.finish(await operation()) }
             Task {
                 try? await Task.sleep(for: .seconds(seconds))
-                resumeOnce(fallback)
+                resume.finish(fallback)
             }
         }
     }

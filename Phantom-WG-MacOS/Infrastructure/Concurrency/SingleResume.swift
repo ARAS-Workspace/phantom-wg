@@ -6,8 +6,9 @@ import Synchronization
 /// `CheckedContinuation` twice traps, so the one-shot flag lives
 /// inside a `Mutex` and the type is `Sendable` by compiler proof
 /// rather than by annotation. Shared by the vault client's transport
-/// races, the tunnels manager's `bounded` deadline, and the DEBUG
-/// harness — one implementation, no drifting mirrors.
+/// races, the proxy daemon clients' RPCs and their race-timeout, the
+/// tunnels manager's `bounded` deadline, and the DEBUG harness — one
+/// implementation, no drifting mirrors.
 final class SingleResume<T: Sendable>: Sendable {
     private let continuation: CheckedContinuation<T, Never>
     private let done = Mutex(false)
