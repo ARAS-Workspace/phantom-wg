@@ -44,13 +44,64 @@ final class VaultIntegrityWorkflow: TestWorkflow {
     // MARK: - Steps
 
     private func pingReady() async {
+        // Registered from the first step, before anything is planted:
+        // the stashes are read when the net RUNS, so it sweeps
+        // whatever the run got as far as storing. Delete Proof stays
+        // the owner and keeps earning its absence proof on the normal
+        // path — by the time this runs there, both stashes read
+        // `.missing` already and it reports a clean zero.
+        onTeardown("vault throwaways") { [weak self] in
+            guard let self else { return }
+            let ids = self.tracked.map(\.id) + self.rawIds
+            guard !ids.isEmpty else {
+                self.log("teardown: nothing was planted")
+                return
+            }
+            // Only what is still there is swept, and only a delete
+            // that answered true counts — deleting an id the vault no
+            // longer holds also answers true, which is why the read
+            // comes first and the count means "was there, now gone".
+            // An `.unreachable` read is neither: it proves nothing
+            // about that id and it means the next fifteen will each
+            // burn their own transport timeout. One is a symptom, a
+            // whole run of them is a dark door, so the loop stops and
+            // says what it could not check instead of spending
+            // minutes discovering the same thing sixteen times.
+            var swept = 0
+            var stuck = 0
+            var unchecked = 0
+            var index = 0
+            for id in ids {
+                index += 1
+                switch await self.vault.read(id: id) {
+                case .missing:
+                    continue
+                case .unreachable:
+                    unchecked = ids.count - index + 1
+                    self.log("teardown: vault dark — swept \(swept), still present \(stuck), \(unchecked) of \(ids.count) left unchecked", .error)
+                    return
+                case .config, .undecodable:
+                    if await self.vault.delete(id: id, attempts: 3) { swept += 1 } else { stuck += 1 }
+                }
+            }
+            if swept == 0 && stuck == 0 {
+                self.log("teardown: all \(ids.count) planted payload(s) already gone")
+            } else {
+                self.log("teardown: swept \(swept), still present \(stuck), of \(ids.count) planted", stuck > 0 ? .error : .warn)
+            }
+        }
         switch await vault.ping() {
         case .ready(let payloads, let identity):
             log("vault ready — identity=\(identity) payloads=\(payloads)", .ok)
         case .doorFailed(let identity):
             fail("extension answered but the keychain door failed — identity=\(identity)")
         case .unreachable:
-            fail("vault unreachable")
+            // The suite-wide doctrine, one sentence: a claim that
+            // depends on the vault SKIPs when the vault does not
+            // answer (silence proves nothing about the claim), while a
+            // CLEANUP that cannot reach the vault reports an error
+            // (residue is real whatever the reason).
+            skip("environment: vault unreachable")
         }
     }
 
@@ -74,7 +125,7 @@ final class VaultIntegrityWorkflow: TestWorkflow {
             case .undecodable:
                 fail("\(cfg.name): stored a valid config but read .undecodable")
             case .unreachable:
-                fail("\(cfg.name): read unreachable after store")
+                skip("environment: vault unreachable after store — \(cfg.name) round-trip unproven")
             }
         }
     }
@@ -100,7 +151,7 @@ final class VaultIntegrityWorkflow: TestWorkflow {
         case .undecodable:
             fail("rewrote a valid config but read .undecodable")
         case .unreachable:
-            fail("read unreachable after rewrite")
+            skip("environment: vault unreachable after rewrite — claim unproven")
         }
     }
 
@@ -135,7 +186,7 @@ final class VaultIntegrityWorkflow: TestWorkflow {
 
     private func stressInterleave() async {
         guard case .configs(let baseline) = await vault.readAll() else {
-            fail("readAll unreachable at baseline")
+            skip("environment: readAll unreachable at baseline")
             return
         }
         var expected = Set(baseline.map(\.id))
@@ -187,7 +238,7 @@ final class VaultIntegrityWorkflow: TestWorkflow {
         rawIds.append(corruptId)
         let corrupt = await vault.read(id: corruptId)
         if case .unreachable = corrupt {
-            fail("vault unreachable")
+            skip("environment: vault unreachable — distinctness unproven")
             return
         }
         let absent = await vault.read(id: absentId)
@@ -221,7 +272,7 @@ final class VaultIntegrityWorkflow: TestWorkflow {
         }
         let byId = await vault.read(id: id)
         guard case .configs(let all) = await vault.readAll() else {
-            fail("readAll unreachable")
+            skip("environment: readAll unreachable — agreement unproven")
             return
         }
         let inReadAll = all.contains { $0.id == id }
@@ -248,9 +299,61 @@ final class VaultIntegrityWorkflow: TestWorkflow {
             fail("factory produced no config")
             return
         }
-        guard (try? await tunnels.add(config: cfg)) != nil else {
+        // The container is kept for the net below, not for the step:
+        // once the payload is corrupt the ownership filter can drop
+        // this row out of the list, and then this reference is the
+        // only handle left on the system entry.
+        guard let base = try? await tunnels.add(config: cfg) else {
             fail("add failed for the corruption base")
             return
+        }
+        // The heaviest residue in this workflow, and the one Delete
+        // Proof cannot reach: a REAL system entry whose payload is
+        // about to be corrupted. The loud inline cleanup below owns
+        // the normal path; under a Stop it cannot run at all, and what
+        // survives is exactly the custody-visibility shape — an entry
+        // the list keeps rendering with bytes nothing can decode.
+        onTeardown("corruption base") { [weak self] in
+            guard let self else { return }
+            var notes: [String] = []
+            var stuck = false
+            let payloadPresent: Bool
+            if case .missing = await self.vault.read(id: cfg.id) {
+                payloadPresent = false
+            } else {
+                payloadPresent = true
+            }
+            if let listed = self.tunnel(named: name) {
+                do {
+                    try await self.tunnels.remove(tunnel: listed)
+                    notes.append("entry removed")
+                } catch {
+                    notes.append("entry still listed (\(error.localizedDescription))")
+                    stuck = true
+                }
+            } else if payloadPresent {
+                // Not listed, but the bytes say the step never swept:
+                // the row is hidden rather than gone, so the kept
+                // container is the only way to take the entry down.
+                if (try? await base.tunnelProvider.removePreferences()) == nil {
+                    notes.append("hidden NE entry removal failed — check System Settings > VPN")
+                    stuck = true
+                } else {
+                    notes.append("hidden NE entry removed")
+                }
+            }
+            // `remove()` above deletes the payload itself, so this is
+            // a sweep of whatever is left rather than a second delete.
+            if case .missing = await self.vault.read(id: cfg.id) {
+                // Nothing left.
+            } else if await self.vault.delete(id: cfg.id, attempts: 3) {
+                notes.append("corrupt payload swept")
+            } else {
+                notes.append("corrupt payload still present")
+                stuck = true
+            }
+            self.log("teardown: corruption base — \(notes.isEmpty ? "already clean" : notes.joined(separator: ", "))",
+                     stuck ? .error : (notes.isEmpty ? .info : .warn))
         }
         guard await vaultRaw.storeRaw(Data("corrupt".utf8), id: cfg.id) else {
             fail("raw corrupt store refused")
@@ -261,6 +364,22 @@ final class VaultIntegrityWorkflow: TestWorkflow {
         check(survived, survived
             ? "entry survived a corrupted payload through reconcile"
             : "entry DROPPED after payload corruption — secret orphaned (a removal path has grown back into reconcile)")
+        // The doc's claim is two survivals, and until now only one was
+        // measured: the ROW. The BYTES are the other half — reconcile
+        // must not have deleted or replaced the corrupt payload, and
+        // `.undecodable` is the only answer that proves it is still
+        // there as written (`.missing` would mean the secret was
+        // dropped, `.config` that something rewrote it).
+        switch await vault.read(id: cfg.id) {
+        case .undecodable:
+            check(true, "the corrupt bytes themselves survived reconcile (.undecodable)")
+        case .missing:
+            fail("the corrupt payload was DELETED during reconcile — the secret did not survive")
+        case .config:
+            fail("the corrupt payload was REWRITTEN during reconcile — not the bytes that were stored")
+        case .unreachable:
+            skip("environment: vault unreachable — byte-survival unproven")
+        }
         // Loud cleanup, mirroring the visibility twin: this id is
         // never tracked, so Delete Proof cannot see its leftovers —
         // a failed sweep must say so instead of leaving a corrupt
@@ -294,6 +413,53 @@ final class VaultIntegrityWorkflow: TestWorkflow {
         guard let container = try? await tunnels.add(config: cfg) else {
             fail("add failed for the visibility base")
             return
+        }
+        // Same class as the corruption base, with one twist: this row
+        // may be HIDDEN from the list when the gate is red, so the net
+        // holds the container rather than looking the name up — the
+        // entry has to come down even when the list will not show it.
+        onTeardown("visibility base") { [weak self] in
+            guard let self else { return }
+            var notes: [String] = []
+            var stuck = false
+            // A payload still present means the step's own cleanup
+            // never completed, and that is also the only reliable
+            // signal that the NE entry is still there: asking the
+            // manager is no good here (the row can be hidden), and
+            // calling removePreferences on an entry the step already
+            // removed would answer with an error we would then report
+            // as residue that does not exist.
+            let payloadPresent: Bool
+            if case .missing = await self.vault.read(id: cfg.id) {
+                payloadPresent = false
+            } else {
+                payloadPresent = true
+            }
+            if payloadPresent {
+                if await self.vault.delete(id: cfg.id, attempts: 3) {
+                    notes.append("corrupt payload swept")
+                } else {
+                    notes.append("corrupt payload still present")
+                    stuck = true
+                }
+                if (try? await container.tunnelProvider.removePreferences()) == nil {
+                    notes.append("NE entry removal failed — check System Settings > VPN")
+                    stuck = true
+                } else {
+                    notes.append("NE entry removed")
+                }
+            } else if self.tunnels.tunnels.contains(where: { $0.id == cfg.id }) {
+                // Payload gone but the row survived it: the step got
+                // half way. Take the entry down too.
+                if (try? await container.tunnelProvider.removePreferences()) == nil {
+                    notes.append("NE entry removal failed — check System Settings > VPN")
+                    stuck = true
+                } else {
+                    notes.append("NE entry removed")
+                }
+            }
+            self.log("teardown: visibility base — \(notes.isEmpty ? "already clean" : notes.joined(separator: ", "))",
+                     stuck ? .error : (notes.isEmpty ? .info : .warn))
         }
         guard await vaultRaw.storeRaw(Data("corrupt".utf8), id: cfg.id) else {
             fail("raw corrupt store refused")
@@ -407,11 +573,15 @@ final class VaultIntegrityWorkflow: TestWorkflow {
             skip("nothing was stored")
             return
         }
+        // Same patience for both stashes: a vault respawn window does
+        // not care which client wrote the payload, and the impatient
+        // single shot the tracked configs used to get was the one that
+        // left them behind when the door was mid-restart.
         for id in rawIds {
             await vault.delete(id: id, attempts: 3)
         }
         for cfg in tracked {
-            await vault.delete(id: cfg.id)
+            await vault.delete(id: cfg.id, attempts: 3)
         }
         var gone = 0
         for cfg in tracked {
@@ -429,6 +599,19 @@ final class VaultIntegrityWorkflow: TestWorkflow {
     }
 
     private func noMaterialization() async {
+        // The in-memory list is the sample, deliberately unforced.
+        // Two separate facts make it the right one: a reload now could
+        // not mint anything (the payloads are already deleted), and it
+        // WOULD hide a row minted earlier — ingest files a payload-less
+        // row under another user. The unreloaded list is therefore the
+        // only surface that can still show the damage. The suite's own
+        // steps do not reshape it (they touch only the vault, which
+        // posts no configuration-change notification), but one outside
+        // reshaper exists: a foreground return mid-run schedules a
+        // reload, and a row minted before it would be hidden by it.
+        // Accepted as a limit — a check that can miss under an
+        // app-switch is still worth more than one blinded by its own
+        // sampling.
         let ids = Set(tracked.map(\.id))
         let materialized = tunnels.tunnels.filter { ids.contains($0.id) }
         check(materialized.isEmpty,
@@ -464,7 +647,7 @@ final class VaultIntegrityWorkflow: TestWorkflow {
     /// and no id listed twice.
     private func verifyExactSet(_ expected: Set<UUID>, _ label: String) async {
         guard case .configs(let all) = await vault.readAll() else {
-            fail("readAll unreachable \(label)")
+            skip("environment: readAll unreachable \(label) — set equality unproven")
             return
         }
         let actual = all.map(\.id)

@@ -63,8 +63,44 @@ final class PhantomTunnelWorkflow: TestWorkflow {
                 return
             }
         }
+        // This is the user's own door config, so the net grounds it —
+        // it never removes it. `deactivateAndSweep` owns the normal
+        // path and earns the armed-count verdict; the steps between
+        // here and there carry cancel-returns that would otherwise
+        // leave a live session with an armed recovery rule behind.
+        onTeardown("door config left running") { [weak self] in
+            guard let self else { return }
+            let armedNow = self.tunnels.tunnels.filter(\.isActivateOnDemandEnabled).count
+            guard let leftover = self.tunnel(named: self.configName) else {
+                self.log("teardown: \(self.configName) not in the list, armed-count=\(armedNow)",
+                         armedNow == 0 ? .info : .warn)
+                return
+            }
+            guard leftover.status != .inactive else {
+                // Inactive is not the same as disarmed: a rung that
+                // failed its save after arming leaves exactly that
+                // pair, and grounding would skip it. Same answer as
+                // the RecoverySwitch net gives the same residue.
+                guard armedNow > 0 else {
+                    self.log("teardown: \(self.configName) already grounded, armed-count=0")
+                    return
+                }
+                await self.tunnels.disarmAllRecovery()
+                let after = self.tunnels.tunnels.filter(\.isActivateOnDemandEnabled).count
+                self.log("teardown: \(self.configName) grounded but armed — swept, armed-count=\(after)",
+                         after == 0 ? .warn : .error)
+                return
+            }
+            self.tunnels.startDeactivation(of: leftover)
+            let grounded = await self.awaitStatus(leftover, is: .inactive, within: 15)
+            let armed = self.tunnels.tunnels.filter(\.isActivateOnDemandEnabled).count
+            self.log("teardown: grounded \(self.configName)=\(grounded), armed-count=\(armed)", .warn)
+        }
         tunnels.startActivation(of: t)
-        if await awaitStatus(t, is: .active, within: 30) {
+        // The ladder's own budget, not a round number: a rung that
+        // retries eight times at five seconds is still a correct
+        // activation at t=38s, and 30 would have called it a failure.
+        if await awaitStatus(t, is: .active, within: activationBudget) {
             sessionUp = true
             log("session up — mode=\(mode == .ghost ? "ghost" : "standalone")", .ok)
             // The identity projection must agree with the mode the door
@@ -76,7 +112,7 @@ final class PhantomTunnelWorkflow: TestWorkflow {
             check(armed.count == 1 && armed.first === t,
                   "recovery armed on this tunnel only — armed-count=\(armed.count)")
         } else {
-            fail("no active within 30s — lastActivationError=\(t.lastActivationError.map { String(describing: $0) } ?? "nil")")
+            fail("no active within \(Int(activationBudget))s — lastActivationError=\(t.lastActivationError.map { String(describing: $0) } ?? "nil")")
         }
     }
 
@@ -170,10 +206,17 @@ final class PhantomTunnelWorkflow: TestWorkflow {
         check(echo == .data(Data([2])), "flush acknowledged — reply=\(echo.label)")
         switch await providerMessage(t, [1]) {
         case .data(let d):
-            check(d.count < preFlushBytes || preFlushBytes == 0,
-                  "buffer after flush: \(preFlushBytes) → \(d.count) bytes")
+            // No `|| preFlushBytes == 0` escape hatch. That clause
+            // could only ever be true when the previous step had
+            // already failed to read a buffer, and it turned this step
+            // green precisely then — a flush proven against a log
+            // surface that was mute.
+            check(preFlushBytes > 0, "a pre-flush measurement exists to compare against (\(preFlushBytes) bytes)")
+            check(d.count < preFlushBytes, "buffer after flush: \(preFlushBytes) → \(d.count) bytes")
         case .empty:
-            log("buffer empty after flush", .ok)
+            // An empty buffer after a flush is the flush working, but
+            // only if there was something to flush.
+            check(preFlushBytes > 0, "buffer empty after flush, from \(preFlushBytes) bytes")
         case .unanswered:
             fail("buffer read after flush unanswered")
         }
@@ -184,22 +227,34 @@ final class PhantomTunnelWorkflow: TestWorkflow {
             skip("session not up")
             return
         }
-        // The app's reset wrapper carries no timeout of its own, so a
-        // mute extension would wedge here — race it under a ceiling.
-        let done: Void? = await race(15) {
-            try? await self.tunnels.resetConnection(of: t)
+        // Three outcomes told apart, because they are three different
+        // facts: nil is the 15s ceiling (a mute extension), false is
+        // the reset call throwing (the old `try?`-only shape folded
+        // this into "returned"), true is a clean return.
+        let outcome: Bool? = await race(15) {
+            (try? await self.tunnels.resetConnection(of: t)) != nil
         }
-        guard done != nil else {
+        guard let returned = outcome else {
             fail("reset did not return within 15s — extension may be wedged")
             return
         }
-        log("reset returned — layer rebuilt in place", .ok)
+        guard returned else {
+            fail("reset call threw — the send failed before the extension could act")
+            return
+        }
+        // Only what is known at this line: the call came back. Whether
+        // the layer was rebuilt is what the rest of the step measures.
+        log("reset call returned", .ok)
         guard await awaitStatus(t, is: .active, within: 30) else {
             fail("no return to active after reset")
             return
         }
         guard lastHandshakeTs > 0 else {
-            log("re-handshake proof not applicable (no handshake before reset)", .warn)
+            // Without a baseline from XPC 0 the rebuild cannot be
+            // proven, only the return-to-active above — and a step
+            // that proved half its name reports that as a skip, not
+            // as a quiet pass.
+            skip("no handshake baseline from XPC 0 — rebuild proof not applicable")
             return
         }
         let start = Date()
@@ -233,19 +288,25 @@ final class PhantomTunnelWorkflow: TestWorkflow {
             skip("session not up")
             return
         }
-        async let first: Void? = race(20) { try? await self.tunnels.resetConnection(of: t) }
-        async let second: Void? = race(20) { try? await self.tunnels.resetConnection(of: t) }
-        // Void? is the race contract here, spelled out so the compiler
-        // does not warn about inferring it: nil = the 20s ceiling won
-        // (a wedged reset), non-nil = the reset call returned.
-        let (a, b): (Void?, Void?) = await (first, second)
-        guard a != nil, b != nil else {
+        // Same three-way contract as the single reset above: nil is
+        // the ceiling, false is a throw, true is a clean return.
+        async let first: Bool? = race(20) { (try? await self.tunnels.resetConnection(of: t)) != nil }
+        async let second: Bool? = race(20) { (try? await self.tunnels.resetConnection(of: t)) != nil }
+        let (a, b) = await (first, second)
+        guard let ra = a, let rb = b else {
             fail("a concurrent reset did not return within 20s — wedge")
             return
         }
-        log("both concurrent resets returned", .ok)
+        guard ra, rb else {
+            fail("a concurrent reset threw (first=\(ra) second=\(rb))")
+            return
+        }
+        log("both concurrent resets returned without throwing", .ok)
+        // The claim this step can actually earn: overlapping resets
+        // did not leave the tunnel down. Their internal ordering is
+        // the extension's business and is not observable from here.
         check(await awaitStatus(t, is: .active, within: 30),
-              "converged to a single active state after overlapping resets — status=\(t.status)")
+              "tunnel is live after overlapping resets — status=\(t.status)")
     }
 
     private func negativeContract() async {

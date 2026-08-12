@@ -24,8 +24,9 @@ struct TestEngineView: View {
     @Environment(LocalizationManager.self) private var loc
     @Environment(\.dismiss) private var dismiss
 
-    @State private var engine = PhantomTestEngine()
-    @State private var runTask: Task<Void, Never>?
+    /// Not `@State`: the runner outlives this sheet on purpose, so the
+    /// single-run latch and the Stop handle survive a close/reopen.
+    private let engine = PhantomTestEngine.shared
     @State private var savingError: String?
     @State private var showingSaveError = false
 
@@ -66,8 +67,13 @@ struct TestEngineView: View {
         }
         .frame(minWidth: 560, minHeight: 600)
         // A dismissed sheet must not keep driving live tunnels: the run
-        // is cancelled with the view, and the runner reports "stopped".
-        .onDisappear { runTask?.cancel() }
+        // is cancelled with the view, the runner reports "stopped", and
+        // each workflow's teardown net sweeps what its steps planted.
+        // Exactly the Stop button's path — same call, same latch, same
+        // teardown — because the runner is process-wide. Reopening the
+        // sheet while that teardown is still finishing finds Run
+        // disabled rather than a second run over the same services.
+        .onDisappear { engine.stop() }
     }
 
     // MARK: - Runner (control bar + flat log)
@@ -76,7 +82,7 @@ struct TestEngineView: View {
         VStack(spacing: 0) {
             HStack(spacing: 10) {
                 Button {
-                    runTask = Task { await engine.run(TestCatalog.workflows, ctx) }
+                    engine.start(TestCatalog.workflows, ctx)
                 } label: {
                     Label(s.run, systemImage: "play.fill")
                 }
@@ -86,7 +92,7 @@ struct TestEngineView: View {
 
                 if engine.isRunning {
                     Button {
-                        runTask?.cancel()
+                        engine.stop()
                     } label: {
                         Label(s.stop, systemImage: "stop.fill")
                     }

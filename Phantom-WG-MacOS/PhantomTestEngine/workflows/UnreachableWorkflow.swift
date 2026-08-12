@@ -31,6 +31,12 @@ final class UnreachableWorkflow: TestWorkflow {
     private var fakeConfig: TunnelConfig?
     private var fake: TunnelContainer?
     private var reachedActive = false
+    /// Whether the abort step actually issued a stop, and what error
+    /// the row carried just before it — the truth step compares
+    /// against this, so the claim is about what the ABORT changed, not
+    /// about whatever an earlier drop may have legitimately recorded.
+    private var abortIssued = false
+    private var failureRecordedBeforeAbort = false
 
     // MARK: - Steps
 
@@ -67,6 +73,31 @@ final class UnreachableWorkflow: TestWorkflow {
         } catch {
             fail("add threw: \(error.localizedDescription)")
             return
+        }
+        // `cleanupProof` owns the removal and earns its verdict from
+        // it. This is the net for the runs that never reach that step:
+        // the activation steps below carry their own cancel-returns,
+        // and this tunnel is activated, so a Stop can strand it live
+        // with an armed recovery rule.
+        onTeardown("planted unreachable tunnel") { [weak self] in
+            guard let self else { return }
+            guard let leftover = self.tunnel(named: name) else {
+                self.log("teardown: \(name) already swept by the step")
+                return
+            }
+            if leftover.status != .inactive {
+                self.tunnels.startDeactivation(of: leftover)
+                guard await self.awaitStatus(leftover, is: .inactive, within: 15) else {
+                    self.log("teardown: \(name) would not ground (status=\(leftover.status)) — left in the list on purpose", .warn)
+                    return
+                }
+            }
+            do {
+                try await self.tunnels.remove(tunnel: leftover)
+                self.log("teardown: removed \(name)", .warn)
+            } catch {
+                self.log("teardown: \(name) still in the list — remove failed (\(error.localizedDescription))", .warn)
+            }
         }
         check(tunnel(named: cfg.name) != nil, "tunnel materialized in the list — \(cfg.name)")
         if case .config = await vault.read(id: cfg.id) {
@@ -129,11 +160,20 @@ final class UnreachableWorkflow: TestWorkflow {
             skip("no fake tunnel")
             return
         }
-        if t.status == .inactive {
-            log("already inactive before abort (give-up path ran)", .warn)
-        } else {
-            tunnels.startDeactivation(of: t)
+        if case .failedWhileActivating = t.lastActivationError {
+            failureRecordedBeforeAbort = true
         }
+        if t.status == .inactive {
+            // No abort can be issued against a tunnel that is already
+            // down, and passing on an instant status check would
+            // credit this step with a stop it never sent. Which path
+            // grounded it is not claimed — the recorded error is
+            // reported as-is for the reader.
+            skip("tunnel already inactive before an abort could be issued — lastActivationError=\(t.lastActivationError.map { String(describing: $0) } ?? "nil")")
+            return
+        }
+        tunnels.startDeactivation(of: t)
+        abortIssued = true
         check(await awaitStatus(t, is: .inactive, within: 15),
               "abort landed — a config that can never connect cannot hold the user")
     }
@@ -145,7 +185,19 @@ final class UnreachableWorkflow: TestWorkflow {
         }
         try? await Task.sleep(for: .seconds(1))
         check(t.status == .inactive, "status stable inactive (1s later)")
-        log("lastActivationError=\(t.lastActivationError.map { String(describing: $0) } ?? "nil")")
+        if abortIssued {
+            // The one lie this step exists to rule out: the machinery
+            // reading the user's own stop as a session failure. A
+            // failure recorded BEFORE the abort is legitimate history
+            // and stays out of the claim; one appearing after it is
+            // the belt misfiling the stop.
+            var failureNow = false
+            if case .failedWhileActivating = t.lastActivationError { failureNow = true }
+            check(!(failureNow && !failureRecordedBeforeAbort),
+                  "the abort was not misfiled as a session failure — lastActivationError=\(t.lastActivationError.map { String(describing: $0) } ?? "nil")")
+        } else {
+            log("lastActivationError=\(t.lastActivationError.map { String(describing: $0) } ?? "nil")")
+        }
 
         var armed = tunnels.tunnels.filter(\.isActivateOnDemandEnabled)
         if !armed.isEmpty, armed.count == 1, armed[0] === t,
@@ -177,8 +229,31 @@ final class UnreachableWorkflow: TestWorkflow {
             fail("vault still answers for the removed id")
         }
         check(tunnel(named: cfg.name) == nil, "tunnel gone from the list")
-        check(tunnel(named: TestContext.ghostName) != nil && tunnel(named: TestContext.wireGuardName) != nil,
-              "door configs intact")
+        // "Intact" has to mean the payload answers, not just that a
+        // row is drawn: the custody contract keeps a row listed even
+        // when its bytes no longer decode, so a row-only check would
+        // pass over exactly the damage it claims to rule out. The
+        // vault-integrity twin was hardened this way already; this is
+        // the same sentence with the same evidence behind it.
+        for name in [TestContext.ghostName, TestContext.wireGuardName] {
+            guard let door = tunnel(named: name) else {
+                fail("door config missing after the run — \(name)")
+                continue
+            }
+            // Each answer is its own fact — the old else-collapse
+            // printed "no longer decodes" for a vault that simply did
+            // not answer, inventing a diagnosis out of silence.
+            switch await vault.read(id: door.id) {
+            case .config:
+                check(true, "\(name): row listed and payload decodes")
+            case .undecodable:
+                fail("\(name): row is listed but its payload no longer decodes")
+            case .missing:
+                fail("\(name): row is listed but its payload is gone from the vault")
+            case .unreachable:
+                skip("environment: vault unreachable — \(name) intactness unproven")
+            }
+        }
     }
 }
 #endif

@@ -2,53 +2,10 @@
 import Foundation
 import NetworkExtension
 
-/// Minimal `TunnelProviding` stand-in for slot/isolation stress. The
-/// system cannot hand the harness another user's live session, but a
-/// synthetic provider whose id the vault does not back IS one, as far
-/// as every classifier and filter in the app can tell — ownership is
-/// decided by the owner-scoped vault, never by who minted the object.
-/// Records what the code under test does to it (arming, saves, starts)
-/// so the steps can assert the negative space: what must NOT happen.
-final class FakeSlotProvider: TunnelProviding {
-    var localizedDescription: String?
-    var isEnabled = false
-    private(set) var identity: TunnelIdentity?
-    var tunnelIdentity: TunnelIdentity? { identity }
-    func configure(with identity: TunnelIdentity) { self.identity = identity }
-    var isOnDemandEnabled = false
-    var onDemandRules: [NEOnDemandRule]?
-    var connectionStatus: NEVPNStatus
-    private(set) var saveCount = 0
-    private(set) var startCount = 0
-
-    init(name: String?, identity: TunnelIdentity?, status: NEVPNStatus) {
-        self.localizedDescription = name
-        self.identity = identity
-        self.connectionStatus = status
-    }
-
-    func startTunnel() throws { startCount += 1 }
-    func stopTunnel() {}
-    func sendProviderMessage(_ data: Data, responseHandler: @escaping @Sendable (Data?) -> Void) throws {
-        responseHandler(nil)
-    }
-    func savePreferences(completion: @escaping @Sendable (Error?) -> Void) {
-        saveCount += 1
-        completion(nil)
-    }
-    func loadPreferences(completion: @escaping @Sendable (Error?) -> Void) { completion(nil) }
-    func removePreferences(completion: @escaping @Sendable (Error?) -> Void) { completion(nil) }
-    func matchesNotification(_ notification: Notification) -> Bool { false }
-    func fetchLastDisconnectError(completion: @escaping @Sendable (Error?) -> Void) { completion(nil) }
-}
-
-struct FakeSlotFactory: TunnelProviderFactory {
-    let canned: [TunnelProviding]
-    func makeProvider() -> TunnelProviding {
-        FakeSlotProvider(name: nil, identity: nil, status: .invalid)
-    }
-    func loadAllFromPreferences() async throws -> [TunnelProviding] { canned }
-}
+// The synthetic provider these steps drive lives in
+// PhantomTestEngine/FakeSlotProvider.swift — shared with the
+// activation-seam steps, which need the same object to answer slowly
+// or not at all.
 
 /// Cross-user isolation, stressed on a single identity: synthetic
 /// foreign providers against the REAL vault. The classifier's foreign
@@ -66,6 +23,7 @@ final class IsolationWorkflow: TestWorkflow {
             WorkflowStep("Classifier: Idle Foreign Frees The Slot", idleForeignFrees),
             WorkflowStep("Gate: Engage Disarms Our Armed Rule, Release Follows", gateEngageAndRelease),
             WorkflowStep("Pre-flight: Foreign Holder Blocks Activation Cleanly", preflightBlocks),
+            WorkflowStep("Seam: A Driven Status Reaches The Real Handler", drivenStatusReachesHandler),
         ]
     }
 
@@ -115,6 +73,19 @@ final class IsolationWorkflow: TestWorkflow {
         guard await vaultRaw.storeRaw(Data("corrupt".utf8), id: corruptId) else {
             fail("raw corrupt store refused")
             return
+        }
+        // The step sweeps this on every path it reaches, but under a
+        // Stop it cannot: a cancelled task's `vault.delete` returns
+        // false without sending anything. This is the only sweep that
+        // still works on that path.
+        onTeardown("corrupt plant") { [weak self] in
+            guard let self else { return }
+            if case .missing = await self.vault.read(id: corruptId) {
+                self.log("teardown: corrupt plant already swept by the step")
+                return
+            }
+            let gone = await self.vault.delete(id: corruptId, attempts: 3)
+            self.log("teardown: corrupt plant swept=\(gone)", gone ? .warn : .error)
         }
         // Precondition, proven not assumed: the probe channel is alive
         // and answers .undecodable RIGHT NOW — without this, a vault
@@ -171,6 +142,41 @@ final class IsolationWorkflow: TestWorkflow {
             fail("store refused: \(cfg.name)")
             return
         }
+        // This one is DECODABLE, which makes it the heaviest residue
+        // in the suite: left behind, the next reconcile mints a real
+        // NE entry for it and the user inherits a tunnel they never
+        // imported. The step's own cleanup dies with a Stop; this does
+        // not.
+        onTeardown("gate-own plant") { [weak self] in
+            guard let self else { return }
+            var notes: [String] = []
+            var stuck = false
+            // Row first, payload second, and the order is the whole
+            // point: deleting the payload while a materialized row is
+            // still listed makes the next ingest read `.missing` for
+            // it, file it under another user and hide it — leaving a
+            // system entry nothing in this app can reach again.
+            // `remove()` takes the payload down with the row anyway.
+            if let materialized = self.tunnel(named: cfg.name) {
+                do {
+                    try await self.tunnels.remove(tunnel: materialized)
+                    notes.append("materialized row removed")
+                } catch {
+                    notes.append("materialized row still listed (\(error.localizedDescription))")
+                    stuck = true
+                }
+            }
+            if case .missing = await self.vault.read(id: cfg.id) {
+                // Gone, by the step or by the remove above.
+            } else if await self.vault.delete(id: cfg.id, attempts: 3) {
+                notes.append("payload swept")
+            } else {
+                notes.append("payload still present")
+                stuck = true
+            }
+            self.log("teardown: gate-own plant — \(notes.isEmpty ? "already swept by the step" : notes.joined(separator: ", "))",
+                     stuck ? .error : (notes.isEmpty ? .info : .warn))
+        }
         let own = FakeSlotProvider(
             name: cfg.name,
             identity: TunnelIdentity(id: cfg.id, name: cfg.name, createdAt: Date(), isGhost: false),
@@ -193,7 +199,10 @@ final class IsolationWorkflow: TestWorkflow {
         check(!own.isOnDemandEnabled && own.saveCount >= 1,
               "engaging the gate disarmed our armed rule and persisted it (saves=\(own.saveCount))")
 
-        foreign.connectionStatus = .disconnected
+        // Silently: this step drives the gate by hand below, and a
+        // published notification would hand the same transition to the
+        // manager's observer as well.
+        foreign.setStatusSilently(.disconnected)
         await gate.evaluateNow()
         check(gate.state == .slotFree,
               "gate released once the foreign session went idle — state=\(String(describing: gate.state))")
@@ -292,6 +301,63 @@ final class IsolationWorkflow: TestWorkflow {
         check(!own.isOnDemandEnabled, "recovery was never armed against an occupied slot")
         check(own.saveCount == 0, "no preferences save was issued (saves=\(own.saveCount))")
         check(own.startCount == 0, "startTunnel was never called (starts=\(own.startCount))")
+    }
+
+    /// The seam itself, proven before anything is built on it.
+    ///
+    /// The activation belts hang off `handleStatusChange`, and the only
+    /// door into that method is an `.NEVPNStatusDidChange` the manager
+    /// matches to one of its tunnels. Until now the harness had no way
+    /// to knock on it: real sessions decide their own timing, and the
+    /// synthetic provider answered `matchesNotification` with a flat
+    /// `false`. This step proves the driven notification arrives, is
+    /// matched to the right tunnel, and runs the production handler —
+    /// and, just as importantly, that a fake's notification is invisible
+    /// to the app's real tunnels.
+    private func drivenStatusReachesHandler() async {
+        let identity = foreignIdentity(name: "TE-Seam-\(runTag)")
+        let fake = FakeSlotProvider(name: identity.name, identity: identity, status: .disconnected)
+        let manager = TunnelsManager(
+            tunnelProviders: [fake],
+            providerFactory: FakeSlotFactory(canned: [fake]),
+            vault: vault
+        )
+        guard let container = manager.tunnels.first(where: { $0.id == identity.id }) else {
+            fail("side manager did not materialize the seam tunnel")
+            return
+        }
+        guard container.status == .inactive else {
+            fail("seam tunnel did not start from inactive — status=\(container.status)")
+            return
+        }
+
+        fake.drive(.connected)
+
+        // The observer hops through a Task on the main queue, so the
+        // handler runs after this call returns rather than inside it.
+        var reached = false
+        let start = Date()
+        while Date().timeIntervalSince(start) < 3 {
+            if container.status == .active { reached = true; break }
+            try? await Task.sleep(for: .milliseconds(50))
+        }
+        check(reached, "driven .connected reached the real handler — status=\(container.status)")
+
+        // The other half of the isolation claim, asked directly rather
+        // than inferred: no real tunnel answers to this notification.
+        // Comparing the live tunnels' statuses before and after would
+        // have been the same sentence with a timing bug in it — a real
+        // session transitioning on its own during the wait would fail
+        // a claim that was never about it.
+        let driven = Notification(name: .NEVPNStatusDidChange, object: fake, userInfo: nil)
+        let claimedByReal = tunnels.tunnels.filter { $0.tunnelProvider.matchesNotification(driven) }
+        check(claimedByReal.isEmpty,
+              "no real tunnel matches a driven notification (\(claimedByReal.count) of \(tunnels.tunnels.count) claimed it)")
+
+        // And the deliberate negative: a notification carrying someone
+        // else's object must not match this provider.
+        check(!fake.matchesNotification(Notification(name: .NEVPNStatusDidChange, object: NSObject(), userInfo: nil)),
+              "a foreign object's notification does not match this provider")
     }
 }
 #endif

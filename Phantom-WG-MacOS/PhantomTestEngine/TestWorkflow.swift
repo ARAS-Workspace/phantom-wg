@@ -80,18 +80,69 @@ class TestWorkflow {
     /// encoder would never produce. Fresh per workflow.
     let vaultRaw = TestVaultRawClient()
 
+    /// How long an activation may honestly take, read from the ladder
+    /// instead of guessed: every rung the manager will climb, at its
+    /// own pacing. A step that waits less than this and then fails is
+    /// not measuring the tunnel, it is measuring its own impatience —
+    /// a slow but correct connect would print red.
+    var activationBudget: Double {
+        Double(tunnels.maxRetries) * tunnels.retryInterval
+    }
+
+    /// Stops the whole suite after this step, for the one case where
+    /// continuing would be dishonest rather than merely slow: the
+    /// verdicts below would describe something other than what is
+    /// installed. Everything already reported keeps its verdict, and
+    /// the teardown nets still run.
+    func abortRun(_ reason: String) {
+        engine?.requestAbort(reason)
+    }
+
     // MARK: - Step helpers (English, indented under the current step)
 
     func log(_ text: String, _ level: OutputKind = .info) {
         engine?.emit("      \(text)", level)
     }
+    /// Records a failure — unless the run is already stopping.
+    ///
+    /// Some live-surface helpers unwind with a negative answer the
+    /// moment Stop lands (`awaitStatus` returns false, and
+    /// `vault.delete(id:attempts:)` refuses to send a single request),
+    /// and a body that turns that answer into `fail` would print a red
+    /// regression the user themselves caused. Others — `providerMessage`
+    /// and `race` — never see the cancellation at all and keep
+    /// returning real observations, which is why this guard is about
+    /// WHEN the verdict lands, not about where the answer came from. A failure recorded
+    /// BEFORE the Stop still stands: `stepFailed` is already set by
+    /// then, and nothing here clears it.
+    ///
+    /// The cut-off is when the verdict is RECORDED, not when the fact
+    /// was observed — a negative that was already certain before the
+    /// Stop still reads "unproven" if the call lands after it. That is
+    /// the safe direction to be wrong in: a suppressed true failure
+    /// costs one re-run, an invented one costs a bug hunt.
     func fail(_ message: String? = nil) {
+        if Task.isCancelled {
+            if let message { log("\(message) — unproven, run stopped", .skip) }
+            return
+        }
         stepFailed = true
         if let message { log(message, .error) }
     }
     /// Logs the outcome (ok/error) and fails the step when false.
+    ///
+    /// After a Stop this goes quiet in BOTH directions: a negative is
+    /// unproven rather than disproven, and a positive is unearned
+    /// rather than proven. The asymmetric version of this guard (mute
+    /// the reds, keep printing the greens) reads worst of all — an
+    /// invariant that "held" because every observation behind it was
+    /// cut short.
     @discardableResult
     func check(_ condition: Bool, _ message: String) -> Bool {
+        if Task.isCancelled {
+            log("\(message) — unproven, run stopped", .skip)
+            return condition
+        }
         log(message, condition ? .ok : .error)
         if !condition { stepFailed = true }
         return condition
@@ -163,6 +214,12 @@ class TestWorkflow {
     /// an app call that itself carries no timeout (a mute extension
     /// would wedge the runner otherwise). The losing operation keeps
     /// running; only its result is dropped.
+    ///
+    /// Stop does not reach the operation: both sides ride unstructured
+    /// tasks, which inherit actor and priority but not cancellation.
+    /// That is load-bearing for `onTeardown` — cleanup has to survive
+    /// the very cancellation that makes it necessary — and it is why
+    /// Stop responsiveness here is bounded by `seconds`, not immediate.
     func race<T: Sendable>(_ seconds: Double, _ operation: @escaping @MainActor () async -> T) async -> T? {
         await withCheckedContinuation { (continuation: CheckedContinuation<T?, Never>) in
             let resume = SingleResume(continuation)
@@ -175,6 +232,69 @@ class TestWorkflow {
         String(format: "%.1fs", Date().timeIntervalSince(start))
     }
 
+    // MARK: - Teardown (residue net)
+
+    /// Registers cleanup for residue this workflow plants in shared
+    /// state — a vault payload, a system entry, a tunnel left running.
+    ///
+    /// The suite's own sweep steps stay where they are: they are the
+    /// owners on the normal path and their verdicts are real evidence.
+    /// This is the net under them, for the paths a step never reaches:
+    /// a Stop mid-body, an early `return`, a precondition skip. Under a
+    /// Stop the owning step cannot sweep even if it is reached —
+    /// `vault.delete(id:attempts:)` returns false without sending a
+    /// request once the task is cancelled — so on that path the net is
+    /// not a second chance, it is the only one.
+    ///
+    /// Two rules for bodies. They must tolerate running after the
+    /// owning step already swept (look before deleting, and stay quiet
+    /// about what is already gone), and each must report exactly one
+    /// result line, including "nothing to sweep" — a silent net cannot
+    /// be told from a net that never ran.
+    ///
+    /// Jobs run in reverse registration order (innermost residue
+    /// first), each under its own ceiling, in a context Stop cannot
+    /// reach — see `race`. One consequence to keep in mind if a body
+    /// ever grows an assertion: inside it `Task.isCancelled` is false,
+    /// so `check` and `fail` behave normally even though the run is
+    /// stopping. Report with `log`; the nets are cleanup, not claims.
+    func onTeardown(_ label: String, _ body: @escaping @MainActor () async -> Void) {
+        teardowns.append((label, body))
+    }
+
+    private var teardowns: [(label: String, body: @MainActor () async -> Void)] = []
+
+    /// Sized for the single-residue bodies: grounding a live tunnel is
+    /// 15s, and `remove()` behind it can spend a 5s transport timeout
+    /// plus 600/1200ms backoffs on each of three vault attempts, about
+    /// 17s more.
+    ///
+    /// A body that loops over many ids can still exceed this against a
+    /// dark vault — the vault-throwaway net is the one that can, which
+    /// is why that net stops itself at the first unreachable read
+    /// rather than relying on the ceiling. Ceilings here are a backstop
+    /// for a wedged call, not a budget the bodies may spend freely.
+    ///
+    /// And the ceiling drops the RESULT, not the work (see `race`): a
+    /// job past it keeps running detached, so the warning below means
+    /// "this run stopped waiting", not "this cleanup was cancelled".
+    /// A run that ends that way can report done while a sweep is still
+    /// going, so the bodies stay bounded on their own.
+    private static let teardownCeiling: Double = 45
+
+    private func runTeardowns() async {
+        guard !teardowns.isEmpty else { return }
+        let jobs = Array(teardowns.reversed())
+        teardowns.removeAll()
+        engine?.emit("  • Teardown", .step)
+        for job in jobs {
+            let finished: Void? = await race(Self.teardownCeiling) { await job.body() }
+            if finished == nil {
+                engine?.emit("      \(job.label): still running past \(Int(Self.teardownCeiling))s — this run stopped waiting for it", .warn)
+            }
+        }
+    }
+
     // MARK: - Runner entry (not for subclasses)
 
     func _bind(_ context: TestContext, _ engine: PhantomTestEngine) {
@@ -184,6 +304,7 @@ class TestWorkflow {
     func _run() async {
         for step in steps {
             if Task.isCancelled { break }
+            if engine?.abortReason != nil { break }
             stepFailed = false
             stepSkipReason = nil
             engine?.emit("  • \(step.title)", .step)
@@ -205,6 +326,9 @@ class TestWorkflow {
                 engine?.emit("    ✓ PASS", .ok)
             }
         }
+        // Always, including the `break` paths above: the net exists
+        // precisely for the runs that ended early.
+        await runTeardowns()
     }
 }
 #endif

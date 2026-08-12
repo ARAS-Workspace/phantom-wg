@@ -46,6 +46,32 @@ final class ConfigContractWorkflow: TestWorkflow {
             skip("environment: add() failed before the guard was exercised — \(error.localizedDescription)")
             return
         }
+        // From here the tunnel is real: a vault payload, a system
+        // entry, and in a moment an armed recovery rule. The step
+        // sweeps it below on every path it reaches; this is the net
+        // for the ones it does not (a Stop inside the terminal wait).
+        onTeardown("planted no-route tunnel") { [weak self] in
+            guard let self else { return }
+            guard let leftover = self.tunnel(named: name) else {
+                self.log("teardown: \(name) already swept by the step")
+                return
+            }
+            if leftover.status != .inactive {
+                self.tunnels.startDeactivation(of: leftover)
+                guard await self.awaitStatus(leftover, is: .inactive, within: 15) else {
+                    // Removing an entry the system is still driving is
+                    // the very race the net exists to avoid widening.
+                    self.log("teardown: \(name) would not ground (status=\(leftover.status)) — left in the list on purpose", .warn)
+                    return
+                }
+            }
+            do {
+                try await self.tunnels.remove(tunnel: leftover)
+                self.log("teardown: removed \(name)", .warn)
+            } catch {
+                self.log("teardown: \(name) still in the list — remove failed (\(error.localizedDescription))", .warn)
+            }
+        }
         tunnels.startActivation(of: t)
         // The safe outcome is that it never reaches active. If it does,
         // that is the leak: a live tunnel with no cryptokey route.
@@ -93,8 +119,13 @@ final class ConfigContractWorkflow: TestWorkflow {
             tunnels.startDeactivation(of: t)
             _ = await awaitStatus(t, is: .inactive, within: 15)
         }
-        // Clean the planted tunnel whatever the verdict — remove()
-        // carries the respawn-window retry, so it survives the exit(0).
+        // Clean the planted tunnel on every path this line is reached
+        // — remove() carries the respawn-window retry, so it survives
+        // the exit(0). Two caveats worth knowing here: a Stop inside
+        // the terminal wait above never reaches this line at all, and
+        // even reaching it under cancellation buys nothing, because
+        // `vault.delete(id:attempts:)` refuses to send a request once
+        // the task is cancelled. Both paths are the teardown net's.
         try? await tunnels.remove(tunnel: t)
         check(tunnel(named: name) == nil, "planted no-route tunnel removed")
     }
