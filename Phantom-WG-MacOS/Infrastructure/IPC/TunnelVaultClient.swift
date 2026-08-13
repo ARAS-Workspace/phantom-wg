@@ -18,6 +18,11 @@ import os.log
 class TunnelVaultClient {
 
     @ObservationIgnored private var connection: NSXPCConnection?
+    /// The last usable-payload count the fetchAll line reported, so it
+    /// fires on TRANSITIONS rather than on every pass. `nil` means the
+    /// next successful answer logs unconditionally — the initial
+    /// baseline, and the first light after a dark window.
+    @ObservationIgnored private var lastLoggedUsableCount: Int?
 
     @ObservationIgnored private let log = OSLog(
         subsystem: "com.remrearas.Phantom-WG-MacOS",
@@ -309,8 +314,10 @@ class TunnelVaultClient {
         case .failed:
             os_log("fetchAll — the vault answered but could not enumerate",
                    log: log, type: .error)
+            lastLoggedUsableCount = nil
             return .unreachable
         case .unreachable:
+            lastLoggedUsableCount = nil
             return .unreachable
         }
 
@@ -328,7 +335,18 @@ class TunnelVaultClient {
             }
         }
 
-        os_log("fetchAll — %{public}d usable payload(s)", log: log, type: .default, configs.count)
+        // The steady state stays quiet. This funnel runs on every
+        // refresh, verdict and reconcile pass, so an unchanged count
+        // repeated is noise carrying nothing; the count's diagnostic
+        // value — the custody and isolation field signal — lives in
+        // its TRANSITIONS. So the line fires when the count moves,
+        // once for the initial baseline, and again on the first
+        // answer after a dark window (the reset above), while every
+        // failure path keeps its own line unconditionally.
+        if configs.count != lastLoggedUsableCount {
+            os_log("fetchAll — %{public}d usable payload(s)", log: log, type: .default, configs.count)
+            lastLoggedUsableCount = configs.count
+        }
         if undecodable > 0 {
             os_log("fetchAll — %{public}d payload(s) FAILED to decode and were ignored",
                    log: log, type: .error, undecodable)
