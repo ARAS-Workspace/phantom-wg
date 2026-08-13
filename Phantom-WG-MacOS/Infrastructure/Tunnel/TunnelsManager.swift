@@ -83,9 +83,34 @@ class TunnelsManager {
 
     @ObservationIgnored var waitingTunnel: TunnelContainer?
 
-    // Activation retry pacing (consumed by TunnelsManager+Activation)
-    let retryInterval: TimeInterval = 5.0
-    let maxRetries: Int = 8
+    // Activation retry pacing (consumed by TunnelsManager+Activation).
+    // Injected with production defaults for the same reason
+    // `currentUser` is: a contract that only expresses itself over the
+    // full ladder cannot be measured in a test that has to finish, and
+    // the alternative is a guard nobody drives.
+    let retryInterval: TimeInterval
+    let maxRetries: Int
+
+    /// The deadline rung 0's foreign-slot pre-flight rides. Fixed
+    /// rather than paced: it bounds two vault reads, which take what
+    /// they take whatever the ladder's pacing is.
+    let preflightBudget: TimeInterval = 2
+
+    /// How long one attempt may stay unresolved before the manager
+    /// withdraws it.
+    ///
+    /// Not a bound on a rung's work — it cannot be, since two of a
+    /// rung's steps are NE round-trips with no deadline of their own,
+    /// and one of those is exactly what this exists to catch. It is a
+    /// deadline chosen to sit comfortably past the ladder's own pacing,
+    /// so a climb that is still moving always mints a new attempt id
+    /// (retiring the previous rung's watchdog) long before this
+    /// expires. The pre-flight's budget is added because it is fixed
+    /// rather than paced: at short pacing it would otherwise be most of
+    /// the ceiling.
+    var activationCeiling: TimeInterval {
+        Double(maxRetries + 1) * retryInterval + preflightBudget
+    }
 
     /// Tunnels whose `remove()` is in flight. Every mutation gate is
     /// barred for them: the removal suspends for seconds with its
@@ -112,15 +137,37 @@ class TunnelsManager {
         tunnelProviders: [TunnelProviding],
         providerFactory: TunnelProviderFactory = RealTunnelProviderFactory(),
         vault: TunnelVaultClient,
-        currentUser: uid_t = getuid()
+        currentUser: uid_t = getuid(),
+        retryInterval: TimeInterval = 5.0,
+        maxRetries: Int = 8,
+        observesSystemChanges: Bool = true
     ) {
         self.providerFactory = providerFactory
         self.vault = vault
         self.currentUser = currentUser
+        self.retryInterval = retryInterval
+        self.maxRetries = maxRetries
         tunnels = Self.sortedByCreatedAt(tunnelProviders.map { TunnelContainer(tunnel: $0) })
         startObservingTunnelStatuses()
-        startObservingTunnelConfigurations()
-        startObservingForeground()
+        // The status observer above is deliberately NOT governed by the
+        // flag — it is how any session, driven or real, reaches the
+        // rows. What the flag governs is the two RELOAD triggers: a
+        // configuration change anywhere in the system, and a return to
+        // the foreground. Production always observes them. The DEBUG
+        // harness steps that hold a rig open across a long window opt
+        // out — a real reload passes their rows through the ownership
+        // boundary, and a synthetic row the vault does not back reads
+        // as another user's and is dropped, so an app switch mid-step
+        // could empty the very list the step is measuring. The
+        // short-lived side rigs keep the default and carry environment
+        // exemptions instead.
+        // Injected for the same reason the ladder's pacing is: the
+        // contract cannot be measured under a trigger the step cannot
+        // schedule.
+        if observesSystemChanges {
+            startObservingTunnelConfigurations()
+            startObservingForeground()
+        }
     }
 
     /// Newest first — tunnels without a persisted `createdAt` fall back
@@ -936,10 +983,13 @@ class TunnelsManager {
         // The list now mirrors this user's slice of the system store;
         // put back whatever the vault says should be in it.
         await reconcileFromVault()
-        // The reload is the only system-derived writer that grounds the
-        // blocker WITHOUT a notification: a session that ended while
-        // the app was in the background leaves none, and this pass is
-        // the catch-all for exactly that. It grounds the blocker, and
+        // For rows with no attempt in flight, the reload is the only
+        // system-derived writer that grounds the blocker WITHOUT a
+        // notification: a session that ended while the app was in the
+        // background leaves none, and this pass is the catch-all for
+        // exactly that. (A row WITH an attempt has its own: the
+        // watchdog's withdrawal re-derives and hands off at the
+        // ceiling.) It grounds the blocker, and
         // the status gate rightly refuses to touch the queued row — so
         // without this line the slot would survive with nothing left to
         // start it. The hand-off tests both the slot and the queued
@@ -1072,11 +1122,12 @@ class TunnelsManager {
     /// be worse than letting the system report the failure itself.
     /// The same doctrine makes a deadline safe where a caller opts in:
     /// an answer that has not arrived by `seconds` IS an unverifiable
-    /// state. Only the rung-0 pre-flight opts in (2s) — it has a user
-    /// waiting and fail-open converges (the ladder's own exits and the
-    /// gate both stand rules down on real proof). The drop belt and
-    /// every other caller keep the default unbounded patience: they
-    /// run post-mortem, and a slow-but-eventual foreign proof must
+    /// state. The two callers with a user still waiting behind an
+    /// `.activating` row opt in (the rung-0 pre-flight and the
+    /// start-catch, both on `preflightBudget`) — fail-open converges
+    /// there, because their exits stand rules down on their own. The
+    /// drop belt keeps the default unbounded patience: it alone
+    /// runs post-mortem, and a slow-but-eventual foreign proof must
     /// still stand the armed rule down.
     func foreignSlotVerdict(within seconds: Double? = nil) async -> SlotVerdict {
         guard let seconds else { return await computeForeignSlotVerdict() }

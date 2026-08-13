@@ -56,7 +56,11 @@ final class FakeSlotProvider: TunnelProviding {
     /// intended silence as CONTINUATION MISUSE in every run that drove
     /// it. The awaiting task stays suspended either way — that is the
     /// scenario — but held, it is silence, not misuse.
-    private var heldCompletions: [Any] = []
+    /// Typed rather than `[Any]`: every silent surface here answers
+    /// `(Error?) -> Void`, and a stored-as-`Any` closure would have to
+    /// be cast back to be released — a cast whose failure would be
+    /// silent, which is the one thing a cleanup net must not be.
+    private var heldCompletions: [@Sendable (Error?) -> Void] = []
 
     // MARK: - Observed state
 
@@ -102,6 +106,47 @@ final class FakeSlotProvider: TunnelProviding {
     /// starting state the manager should not react to yet.
     func setStatusSilently(_ status: NEVPNStatus) {
         connectionStatus = status
+    }
+
+    /// Answers every completion this provider is holding, so a step
+    /// that drove `.hangs` or `.never` can end its own silence.
+    ///
+    /// A held completion is not just a suspended caller: it is a
+    /// checked continuation inside the production bridge. How much it
+    /// pins depends on the surface. A held SAVE suspends the task
+    /// that issued it, and two families do — a rung's arm save and a
+    /// withdrawal's stand-down. The rung is the expensive one: it
+    /// holds the manager that owns this provider past the await, so
+    /// left alone the side manager outlives the step. In a rig that
+    /// kept the reload triggers that leak would keep running real
+    /// vault passes for the rest of the app's session; the wedging
+    /// steps opt out of those triggers, so the standing residue is a
+    /// status-observer-only manager — smaller, still a leak. The withdrawal's task needs only the container past
+    /// the save — its last use of the manager comes before it — but
+    /// ARC promises release from last use, not before the suspension,
+    /// so an unoptimized build may still carry the manager across the
+    /// hang: a step wedging that family relies on the drain, never on
+    /// the ordering. A held FETCH pins less still: its belt rode
+    /// `bounded` and moved on, leaving the suspended producer with the
+    /// container and this provider. Held silence is residue in every
+    /// family, and draining here ends them all.
+    ///
+    /// For the SAVE families the error is what the system would report
+    /// for a request that cannot be completed, so the resumed caller
+    /// takes its ordinary failure path. The FETCH family's parameter
+    /// is an answer channel, not a failure channel — a released fetch
+    /// delivers a fabricated disconnect RECORD — and that is safe only
+    /// because every fetch here rides `bounded`, whose race answered
+    /// long before any teardown runs: the late record falls to the
+    /// `SingleResume` and is dropped, never filed.
+    @discardableResult
+    func releaseHeldCompletions() -> Int {
+        let held = heldCompletions
+        heldCompletions.removeAll()
+        let cancelled = NSError(domain: "TE.Seam", code: 44,
+                                userInfo: [NSLocalizedDescriptionKey: "test rig released a held request"])
+        for completion in held { completion(cancelled) }
+        return held.count
     }
 
     // MARK: - TunnelProviding

@@ -113,7 +113,8 @@ final class ConnectionGateCoordinator {
     /// Mirrors `TunnelsManager.foreignSlotVerdict()`'s funnel (loadAll
     /// → owner-scoped readAll → classifier, unverifiable answers free)
     /// with one deliberate divergence: NO deadline here. The manager's
-    /// rung-0 pre-flight opts into a tight budget because a user is
+    /// user-facing verdict callers — the rung-0 pre-flight and the
+    /// start-catch — opt into a tight budget because a user is
     /// waiting; the gate is the patient path and must wait out slow
     /// evidence — do not "fix" this copy by adding the deadline. The
     /// gate cannot call the manager's directly because the engage

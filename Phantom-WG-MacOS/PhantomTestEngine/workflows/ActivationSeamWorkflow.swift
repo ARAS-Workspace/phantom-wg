@@ -36,6 +36,8 @@ final class ActivationSeamWorkflow: TestWorkflow {
             WorkflowStep("A List Refresh Cannot Take A Queued Tunnel's Turn", refreshCannotDropTheQueue),
             WorkflowStep("A Removal Hands The Queue On Only When The Slot Is Free", removalHandsOnTheQueue),
             WorkflowStep("A Queue Slot Whose Tunnel Left The List Is Discarded", staleQueueSlotIsDiscarded),
+            WorkflowStep("An Attempt That Never Resolves Is Withdrawn", wedgedAttemptIsWithdrawn),
+            WorkflowStep("A Withdrawal Leaves The Dying Session To The System", dyingSessionIsWithdrawnInPlace),
         ]
     }
 
@@ -240,6 +242,19 @@ final class ActivationSeamWorkflow: TestWorkflow {
         guard let rig = await activatedRig(name: "TE-Seam-StandIn-\(runTag)", configure: {
             $0.disconnectAnswer = .never
         }) else { return }
+        // The `.never` fetch parks a completion the same way `.hangs`
+        // parks a save, and a parked completion holds the production
+        // bridge's continuation. This one does not reach back to the
+        // manager, so the leak is a container and its provider rather
+        // than a live observer — but held silence is still residue,
+        // and the net drains it. Safe to release late: the belt's own
+        // fetch rode `bounded(3)` and dropped this answer long ago.
+        onTeardown("held disconnect fetch") { [weak self] in
+            let released = rig.fake.releaseHeldCompletions()
+            self?.log(released == 0
+                      ? "teardown: no held fetch remained"
+                      : "teardown: released \(released) held fetch completion(s)")
+        }
         rig.container.respawnReviveConsumed = true
         rig.fake.drive(.disconnected)
         // Two legs before the stand-in can land: the belt's unbounded
@@ -373,9 +388,12 @@ final class ActivationSeamWorkflow: TestWorkflow {
     /// NOT measure is that `ingest` reaches the row through the gate —
     /// the rig's providers are not vault-backed, so a real reload would
     /// drop them from the list rather than refresh them. That leg rests
-    /// on reading the two production call sites in `TunnelsManager`
-    /// (the reload's `ingest` and the observer's non-attempting
-    /// branch), neither of which this rig can drive.
+    /// on reading the production call sites (the reload's `ingest`,
+    /// the observer's non-attempting branch, the watchdog's
+    /// withdrawal and the rung save-catch — the last two lower the
+    /// flag first, which opens the gate everywhere but a queue-taken
+    /// `.waiting` row, and the dying-session step below measures the
+    /// watchdog's), which this rig cannot drive from here.
     private func refreshCannotCancelActivation() async {
         let identity = TunnelIdentity(id: UUID(), name: "TE-Seam-Refresh-\(runTag)", createdAt: Date(), isGhost: false)
         let fake = FakeSlotProvider(name: identity.name, identity: identity, status: .disconnected)
@@ -716,6 +734,274 @@ final class ActivationSeamWorkflow: TestWorkflow {
         check(manager.waitingTunnel == nil, "and the stale slot was discarded rather than kept")
         let started = await settle(within: 1) { fakeB.startCount > 0 }
         check(!started, "no session was raised for a row the list no longer holds (starts=\(fakeB.startCount))")
+    }
+
+    /// The floor under everything else on the activation path: an
+    /// attempt that can neither proceed nor fail must not be allowed to
+    /// last.
+    ///
+    /// Driven by the one shape no guard sees coming — a preferences
+    /// save that never answers. Nothing else can move the attempt after
+    /// that: the rung is suspended inside the save, and the retry
+    /// ladder is only scheduled past a successful start, so there is no
+    /// timer either. Before the ceiling this row stayed `.activating`
+    /// for the life of the process.
+    ///
+    /// The ladder is scaled down for the rig. That pacing is injected
+    /// precisely so a contract which only expresses itself at the end
+    /// of an attempt can be measured by a step that has to finish. At
+    /// 1.0s and two rungs the ceiling lands at five seconds — three
+    /// rungs' worth plus the pre-flight's own two-second budget, which
+    /// the formula carries rather than assuming it away. The save is
+    /// therefore always issued first, with three seconds of margin
+    /// over the pre-flight's worst case. Wall-clock on the green path:
+    /// the ceiling's five, the retry window's three, and the
+    /// post-release quiet window — about eleven in all.
+    private func wedgedAttemptIsWithdrawn() async {
+        let identity = TunnelIdentity(id: UUID(), name: "TE-Seam-Wedged-\(runTag)", createdAt: Date(), isGhost: false)
+        let fake = FakeSlotProvider(name: identity.name, identity: identity, status: .disconnected)
+        fake.saveAnswer = .hangs
+        // `observesSystemChanges: false` — this step holds a wedge for
+        // eleven seconds, and a real configuration change or an app
+        // switch inside that window used to reload the side manager,
+        // drop the vault-unbacked fake as foreign, and skip the step.
+        // The rig needs no reloads (nothing here drives one), so the
+        // hazard is simply not subscribed to.
+        let manager = TunnelsManager(
+            tunnelProviders: [fake],
+            providerFactory: FakeSlotFactory(canned: [fake]),
+            vault: vault,
+            retryInterval: 1.0,
+            maxRetries: 2,
+            observesSystemChanges: false
+        )
+        guard let container = manager.tunnels.first(where: { $0.id == identity.id }) else {
+            fail("side manager did not materialize the wedged-attempt tunnel")
+            return
+        }
+        // The wedge has to be released or it never ends: the held save
+        // completion keeps the production bridge's continuation alive,
+        // that keeps the rung task alive, and the rung task holds this
+        // manager. With the reload triggers unsubscribed the leak no
+        // longer runs vault passes — the residue is the suspended
+        // continuation, the rung task, this container and a
+        // status-observer-only manager — but held silence is still
+        // residue, and the drain is still what ends it. Registered
+        // before the activation so it fires on every exit, including
+        // the environment skip below.
+        onTeardown("wedged save") { [weak self] in
+            let released = fake.releaseHeldCompletions()
+            self?.log(released == 0
+                      ? "teardown: nothing was still held — the step released the wedge itself"
+                      : "teardown: released \(released) held request(s) so the side manager can go")
+        }
+
+        manager.startActivation(of: container)
+        guard await settle(within: 8, until: { fake.saveCount >= 1 }) else {
+            skip("environment: the rung never reached its arm save")
+            return
+        }
+        // Captured here, where it means one thing: the arm save, and
+        // nothing else, has been issued. Taking it after the
+        // withdrawal would fold in the withdrawal's OWN disarm save and
+        // leave the totals below saying nothing.
+        let savesAtArm = fake.saveCount
+        check(container.status == .activating,
+              "the attempt is wedged inside a save that will never answer — status=\(container.status)")
+
+        // No environment exemption here any more: with the reload
+        // triggers unsubscribed, nothing can empty this rig's list —
+        // the watchdog either fires or the product broke its floor.
+        let explained = await settle(within: 8) { container.lastActivationError != nil }
+        check(explained,
+              "the ceiling withdrew it — lastActivationError=\(container.lastActivationError.map { String(describing: $0) } ?? "nil")")
+        var named = false
+        if case .activationUnresolved = container.lastActivationError { named = true }
+        check(named, "and said the system never answered rather than inventing an error it did not give")
+        check(container.status == .inactive, "the row came back to rest — status=\(container.status)")
+        check(!container.isAttemptingActivation, "the attempt flag came down with it")
+
+        // The half of the contract that says WITHDRAWS, never retries.
+        // Measured on the save counter rather than the start counter,
+        // because a wedged rig can never reach `startTunnel` at all: a
+        // start count of zero is true whatever the withdrawal does,
+        // while a retry it wrongly spawned would climb rung 0 and issue
+        // a save. The arithmetic names the contract — the arm save,
+        // plus the withdrawal's own disarm, and nothing else.
+        //
+        // Watched past a rung-0 re-entry's worst case rather than past
+        // the retry interval alone: a spawned rung spends the
+        // pre-flight's budget before its save would appear, and sizing
+        // the window on the interval alone left about a tenth of a
+        // second of slack.
+        let window = manager.preflightBudget + manager.retryInterval
+        let climbedAgain = await settle(within: window) { fake.saveCount > savesAtArm + 1 }
+        // Exact equality, both bounds at once: fewer would mean the
+        // withdrawal never issued its own stand-down, more would mean
+        // a retry was climbed on top of the wedge.
+        check(!climbedAgain && fake.saveCount == savesAtArm + 1,
+              "exactly the arm save and the withdrawal's own stand-down (saves=\(fake.saveCount), expected \(savesAtArm + 1))")
+        // No startCount claim on purpose: in this rig `startTunnel` is
+        // unreachable whatever the product does — the save it sits
+        // behind never answers — so asserting zero would be a check
+        // that cannot fail, and this file calls that decoration.
+
+        // The owner sweeps its own residue; the net stays registered
+        // for the paths that never reach this line. Releasing here also
+        // keeps the wedge from outliving the step by the length of the
+        // rest of the workflow.
+        let released = fake.releaseHeldCompletions()
+        check(released >= 1, "the step released the wedge it planted (released=\(released))")
+
+        // Only the disarm's own error report is still sequenced behind
+        // the held save — the hand-off deliberately runs ahead of it,
+        // so the window above already covered everything user-facing.
+        // Nothing after the release may climb: the resumed arm save
+        // falls to its attempt-id guard, and the resumed disarm only
+        // re-reads.
+        let savesAfterRelease = fake.saveCount
+        let climbedAfterRelease = await settle(within: manager.preflightBudget + 0.5) {
+            fake.saveCount > savesAfterRelease
+        }
+        check(!climbedAfterRelease,
+              "and nothing climbed once the wedge was released (saves=\(fake.saveCount))")
+        // The catch guard's red-first witness. The released arm save
+        // resumes into the rung's save-catch carrying an error, and
+        // only the attempt-id guard there keeps it from stamping
+        // `savingFailed` over the withdrawal's verdict — the window
+        // above has already given that resume time to land, so this
+        // reads the settled truth. Delete the guard and this goes red.
+        var verdictKept = false
+        if case .activationUnresolved = container.lastActivationError { verdictKept = true }
+        check(verdictKept,
+              "the late save's refusal could not overwrite the withdrawal's verdict — error=\(container.lastActivationError.map { String(describing: $0) } ?? "nil")")
+    }
+
+    /// The watchdog's second cause, and the half of the withdrawal
+    /// contract the wedged-save step cannot see: what happens to the
+    /// STATUS. A `.disconnecting` that lands mid-attempt paints
+    /// `.deactivating` without clearing the flag, the rung closes on
+    /// its own guard with nothing scheduled behind it, and if the
+    /// system's `.disconnected` never follows the attempt is
+    /// unresolved with a session still dying under it.
+    ///
+    /// The ceiling must withdraw the INTENT — flag down, error named,
+    /// rule disarmed — but must NOT flat-ground the row: the system
+    /// still holds the dying session, a written `.inactive` would last
+    /// exactly one refresh, and its flicker would offer a start
+    /// against a slot that is still occupied. So the seal here is
+    /// double-edged: the error appears AND the row still reads
+    /// `.deactivating`. The step then plays the system's overdue
+    /// `.disconnected` and proves the ordinary observer path grounds
+    /// the row with the explanation intact.
+    ///
+    /// Deterministic by construction: the fatal `.disconnecting` is
+    /// driven while rung 0 is still inside its pre-flight, so the rung
+    /// refuses at its own status guard — no save, no start, no retry
+    /// timer ever arms, and the only save the whole step may see is
+    /// the withdrawal's own disarm. Wall-clock is the rig ceiling's
+    /// five seconds plus the three-second watch window — about nine.
+    private func dyingSessionIsWithdrawnInPlace() async {
+        let identity = TunnelIdentity(id: UUID(), name: "TE-Seam-Dying-\(runTag)", createdAt: Date(), isGhost: false)
+        let fake = FakeSlotProvider(name: identity.name, identity: identity, status: .disconnected)
+        // Reload triggers unsubscribed for the same reason as the
+        // wedged sibling: a nine-second hold must not be emptied by an
+        // app switch. The status observer stays — the drives below
+        // ride it.
+        let manager = TunnelsManager(
+            tunnelProviders: [fake],
+            providerFactory: FakeSlotFactory(canned: [fake]),
+            vault: vault,
+            retryInterval: 1.0,
+            maxRetries: 2,
+            observesSystemChanges: false
+        )
+        guard let container = manager.tunnels.first(where: { $0.id == identity.id }) else {
+            fail("side manager did not materialize the dying-session tunnel")
+            return
+        }
+        // Saves succeed in this rig, so nothing should ever be held —
+        // the net is here for the same reason the sibling steps carry
+        // one: a step that plants silence must not rely on its own
+        // green path to clean it up.
+        onTeardown("held completions (dying-session step)") { [weak self] in
+            let released = fake.releaseHeldCompletions()
+            self?.log(released == 0
+                      ? "teardown: nothing was held, as this rig intends"
+                      : "teardown: released \(released) held request(s)")
+        }
+
+        manager.startActivation(of: container)
+        // The rung is suspended inside its pre-flight verdict; the
+        // session starts dying before it comes back. The observer's
+        // attempting branch paints `.deactivating` and leaves the flag
+        // up — the exact shape the ceiling exists to resolve.
+        fake.drive(.disconnecting)
+        let dying = await settle(within: 2) {
+            container.status == .deactivating && container.isAttemptingActivation
+        }
+        check(dying, "the session is dying under an attempt that still holds its intent — status=\(container.status)")
+        let savesBeforeWithdrawal = fake.saveCount
+
+        // No environment exemptions in this step: with the reload
+        // triggers unsubscribed nothing can empty the rig's list, so
+        // a missing withdrawal is the product's failure, never the
+        // environment's.
+        let explained = await settle(within: 8) { container.lastActivationError != nil }
+        check(explained,
+              "the ceiling withdrew it — lastActivationError=\(container.lastActivationError.map { String(describing: $0) } ?? "nil")")
+        var named = false
+        if case .activationUnresolved = container.lastActivationError { named = true }
+        check(named, "and said the system never answered rather than inventing an error it did not give")
+        check(!container.isAttemptingActivation, "the attempt flag came down")
+        // The double edge: withdrawn, but NOT grounded. The system
+        // still reads `.disconnecting`, so the re-derived status must
+        // keep saying so — a flat `.inactive` here is the flicker this
+        // step exists to forbid.
+        check(container.status == .deactivating,
+              "the dying session was left to the system — status=\(container.status)")
+        // The disarm save lands on the far side of an executor hop, so
+        // its count is not necessarily readable the instant the error
+        // is — the withdrawal writes the error BEFORE it issues the
+        // save. The equality is therefore asserted only after the
+        // watch window, the way the wedged sibling does it, and the
+        // window is sized past a rung-0 re-entry's worst case (the
+        // pre-flight budget a spawned rung spends before its save
+        // would appear), not the retry interval alone.
+        let window = manager.preflightBudget + manager.retryInterval
+        let climbed = await settle(within: window) {
+            fake.saveCount > savesBeforeWithdrawal + 1 || fake.startCount > 0
+        }
+        // Exactly the withdrawal's own disarm and nothing else: the
+        // rung never reached a save (it refused at its status guard),
+        // so fewer means the stand-down never went out and more means
+        // something climbed over a dying session.
+        check(!climbed && fake.saveCount == savesBeforeWithdrawal + 1,
+              "exactly the withdrawal's own stand-down (saves=\(fake.saveCount), expected \(savesBeforeWithdrawal + 1))")
+        // Zero polices the one class that can actually move in this
+        // rig: a wrongly issued rung-0 re-entry — a hand-off or public
+        // door that ignored the dying row — repaints `.activating` and
+        // climbs through save to start, because saves answer here; it
+        // would trip the status and error-survival checks around this
+        // one too, since rung 0 clears the error it climbs over. A
+        // wrongly SCHEDULED retry, by contrast, parks at its own
+        // status guard before either counter moves — that class no
+        // counter can see, and it is the product guard itself that
+        // neutralizes it.
+        check(fake.startCount == 0,
+              "no session was ever raised over the dying one (starts=\(fake.startCount))")
+
+        // The system finally finishes the death it owed. The flag is
+        // down, so this lands through the observer's non-attempting
+        // branch and the ordinary status gate — and the explanation
+        // must survive the grounding, because the grounding is not a
+        // new verdict, just the old session's tail.
+        fake.drive(.disconnected)
+        let grounded = await settle(within: 2) { container.status == .inactive }
+        check(grounded, "the system's own .disconnected grounded the row once it finally came — status=\(container.status)")
+        var explanationSurvived = false
+        if case .activationUnresolved = container.lastActivationError { explanationSurvived = true }
+        check(explanationSurvived, "and the withdrawal's explanation survived the grounding")
     }
 }
 #endif

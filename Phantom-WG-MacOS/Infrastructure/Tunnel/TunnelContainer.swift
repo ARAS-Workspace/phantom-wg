@@ -86,11 +86,15 @@ class TunnelContainer: Identifiable {
     /// without clearing the flag, and the rung then closes on its own
     /// guard with no ladder left. The system's own `.disconnected` tail
     /// normally grounds the row a moment later; when that notification
-    /// never arrives the reload is the only writer left, and this gate
+    /// never arrives the reload was the only writer left, and this gate
     /// had taken it away. What made that terminal rather than untidy is
     /// the surrounding UI: Delete and Edit are disabled off `.inactive`
     /// and toggling off returns early on `.deactivating` without
-    /// lowering the flag, so the user has no move either.
+    /// lowering the flag, so the user has no move either. (The
+    /// activation ceiling's watchdog has since become a second writer
+    /// for that row — it withdraws the attempt at the ceiling — which
+    /// turns the cost of a repeat of this mistake from permanent into
+    /// ceiling-long. Smaller is not small; the exclusion stays.)
     var isManagerDriven: Bool {
         switch status {
         case .waiting: return true
@@ -118,12 +122,18 @@ class TunnelContainer: Identifiable {
     /// future case to `.inactive`, so both are covered by the same test
     /// instead of each needing its own.
     ///
-    /// Two callers reach this gate, and they are the only writes that
-    /// DERIVE the row from the system's reading: the reload's `ingest`
-    /// and the status observer's non-attempting branch. Everything else
+    /// Four callers reach this gate, and they are the only writes
+    /// that DERIVE the row from the system's reading: the reload's
+    /// `ingest`, the status observer's non-attempting branch, the
+    /// activation watchdog's withdrawal, and the rung save-catch —
+    /// the last two lower the attempt flag before they derive, which
+    /// opens the gate everywhere but the one place it must stay shut:
+    /// a row the queue has since taken is `.waiting`, manager-driven
+    /// whatever the flag says, and the save-catch's lowering derive
+    /// is rightly refused there. Everything else
     /// that writes `status` is the manager writing its own decision —
-    /// the rung's optimistic paint, the queue slot, the give-up exits,
-    /// `performDeactivation`, the uninstall sweep, and the observer's
+    /// the rung's optimistic paint, the queue slot, the other give-up
+    /// exits, `performDeactivation`, the uninstall sweep, and the observer's
     /// attempting branch, which belongs to the drop belt and owns a
     /// drop during an attempt. The gate has nothing to say to any of
     /// them, so this is not a chokepoint for `status`; it is a

@@ -10,12 +10,23 @@ enum TunnelActivationError: Error {
     /// No system error rides along: the message IS the diagnosis, and
     /// the fix lives in System Settings > VPN, not in a retry.
     case foreignSlotHolder
+    /// The attempt outlived its budget without ever resolving: no
+    /// session, no failure, nothing left running to move it. Like
+    /// `foreignSlotHolder` it carries no system error, and for a
+    /// stronger reason — the system never said anything at all, which
+    /// is the whole content of this case. Distinct from
+    /// `retryLimitReached`, which means the ladder ran its full course
+    /// and every rung answered; this one means the attempt stopped
+    /// answering.
+    case activationUnresolved
 
     var alertText: String {
         let loc = LocalizationManager.shared
         switch self {
         case .foreignSlotHolder:
             return loc.t("error_foreign_slot")
+        case .activationUnresolved:
+            return loc.t("error_activation_unresolved")
         case .startingFailed(let error):
             return loc.t("error_starting_failed", error.localizedDescription)
         case .savingFailed(let error):

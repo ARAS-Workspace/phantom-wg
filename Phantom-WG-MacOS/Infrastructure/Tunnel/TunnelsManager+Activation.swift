@@ -356,6 +356,155 @@ extension TunnelsManager {
         let attemptId = UUID().uuidString
         tunnel.activationAttemptId = attemptId
 
+        // The floor under every other guard on this path: no attempt
+        // may stay unresolved for ever.
+        //
+        // Three different things leave one that way, and they have
+        // nothing in common except the outcome — an NE round-trip that
+        // never answers, a `.disconnecting` whose `.disconnected` never
+        // follows, and any rung that closes on one of its own guards
+        // with nothing scheduled behind it. So this watches the
+        // OUTCOME rather than the causes: past the ceiling, if the
+        // attempt is still this one and still has nothing to show, the
+        // manager withdraws it.
+        //
+        // It withdraws and never retries. Retrying would put a second
+        // rung on top of a first that cannot be cancelled (NE
+        // round-trips are not), and the single `activationRungTask`
+        // handle would lose the live one. The bookkeeping it writes is
+        // safe against the call still in flight — the attempt id goes
+        // first, and every guard downstream fails closed on it — and
+        // then it makes ONE store write, standing the rule down, which
+        // genuinely does race that call. A REFUSED save is bounded the
+        // way every disarm here is — the helper re-reads the store
+        // rather than guessing — but this save rides the very surface
+        // whose silence is the withdrawal's premise, so it can also
+        // hang exactly like the call it suspects. That is accepted,
+        // and it dictates the order below: the row, the error and the
+        // queue hand-off are all written BEFORE the save, so nothing
+        // user-facing ever waits on it. What a hang then costs is this
+        // task (suspended, holding one container) and a flag reading
+        // disarmed over a store that never confirmed — repaired by the
+        // next activation of this row, which rewrites the rule
+        // wholesale. (A removal would repair it too, but in the
+        // wedged-save family its rung-wait rides the same silent
+        // surface and times out first; the activation is the repair
+        // that needs no luck.)
+        //
+        // No cancellation site, deliberately. Each of these tasks is
+        // its own generation check — a later rung, a stop, a delete or
+        // a written error all move one of the facts below — so a
+        // watchdog that wakes into a resolved world is a no-op, and the
+        // alternative was eight places that would have to remember.
+        // The manager is held weakly across the sleep for the same
+        // reason: a watchdog must not be what keeps a dead manager
+        // alive for a whole ceiling.
+        Task { [weak self] in
+            guard let ceiling = self?.activationCeiling else { return }
+            try? await Task.sleep(for: .seconds(ceiling))
+            // The three facts that say the attempt is still unresolved,
+            // plus the two that say this row is still ours to write —
+            // the same pair every deferred writer on this path carries,
+            // and load-bearing here because the lines below now include
+            // a save. A row that is `.active`, `.inactive` or parked
+            // `.waiting` is not an unresolved attempt: the first two
+            // resolved, and the third belongs to the queue.
+            guard let self,
+                  tunnel.activationAttemptId == attemptId,
+                  tunnel.isAttemptingActivation,
+                  tunnel.lastActivationError == nil,
+                  tunnel.status == .activating || tunnel.status == .reasserting
+                    || tunnel.status == .deactivating,
+                  !self.removingIds.contains(tunnel.id),
+                  self.tunnels.contains(where: { $0 === tunnel }) else { return }
+            // The floor is under SILENCE, and silence is the one fact
+            // the row alone cannot supply. A system reading that says
+            // a session exists — connecting, reasserting or connected
+            // — is the system still speaking: the attempt is late,
+            // not unresolved, and the observer's ordinary paths still
+            // own its ending. Withdrawing here would stamp "the
+            // system never reported why" over a session the system is
+            // actively reporting, and stand down the very rule every
+            // activated tunnel is promised. Read without writing —
+            // landing a raising value is the observer's job. A session
+            // the system holds at connecting for ever stays a spinner
+            // the user can stop — in the armed wedged pair the first
+            // tap withdraws the intent and disarms while its own save
+            // rides the same silent surface, and the second tap then
+            // sends the stop — honest, and strictly older than this
+            // watchdog.
+            let derived = TunnelStatus(from: tunnel.tunnelProvider.connectionStatus)
+            guard derived == .inactive || derived == .deactivating else { return }
+            NSLog("[activation] attempt on \(tunnel.name) never resolved — withdrawing it")
+            tunnel.isAttemptingActivation = false
+            tunnel.activationAttemptId = nil
+            tunnel.activationTask?.cancel()
+            tunnel.activationTask = nil
+            // Re-derived rather than grounded flat: with the flag down
+            // the gate is open, so this lands what the system actually
+            // reads — `.inactive` for the wedged save (no session ever
+            // existed), `.deactivating` for the stuck `.disconnecting`,
+            // kept honestly: the system still holds a dying session, a
+            // flat `.inactive` would only last until the next refresh
+            // (the save below broadcasts one itself when it lands) and
+            // its flicker would offer a start against a slot that is
+            // still occupied. The withdrawal is the intent bookkeeping
+            // above; the session's remains are the system's story to
+            // finish, and its eventual reading grounds the row through
+            // the ordinary observer path.
+            tunnel.refreshStatus()
+            // One more look after the landing write: the reading can
+            // flip in the instant between the peek and the write, and
+            // an attempt the system just resolved must not wear the
+            // verdict. The bookkeeping above already matches a freshly
+            // connected row — flag down, no error — so leaving here is
+            // complete, not partial. What does leave with it is the
+            // ladder: if the just-raised session dies later, the drop
+            // lands in the belt-less non-attempting branch — where the
+            // armed rule, untouched here precisely for this, is the
+            // designed answer.
+            guard tunnel.status == .inactive || tunnel.status == .deactivating else {
+                NSLog("[activation] the system answered while \(tunnel.name) was being withdrawn — leaving the session to it")
+                return
+            }
+            tunnel.lastActivationError = .activationUnresolved
+            // Sequenced BEFORE the disarm save, deliberately: that save
+            // rides the surface this task exists to suspect, and the
+            // queue must not wait on it. The hand-off proves the slot
+            // free itself — a row still `.deactivating` above keeps
+            // the queue parked — and a tunnel it does start issues its
+            // own rung-0 sweep, which still sees this row's armed flag
+            // (nothing here has touched it yet), so ordering ahead of
+            // the disarm cannot let a second armed rule settle.
+            self.activateWaitingTunnelIfNeeded()
+            // The rule comes down, and this is a decision rather than
+            // an omission. `retryLimitReached` keeps its rule because
+            // the ladder RAN — every rung answered, and "no network
+            // yet" is exactly what on-demand rides out. Here nothing
+            // answered at all, which is no evidence of a transient
+            // network condition and every sign of a local one, so
+            // leaving a connect-on-any-network rule armed would hand
+            // the system a tunnel this manager just gave up on.
+            //
+            // The save also shares the sweep's accepted exposure:
+            // issued before a removal and landing after it, it can
+            // re-mint the entry the user just deleted. The guards
+            // above run at wake and the issue follows synchronously,
+            // so the open window is the landing alone — the same
+            // "issues, not completes" class the sweep carries, and the
+            // cleanup family owns closing it for every disarm site at
+            // once.
+            if let disarmError = await Self.standDownRecovery(on: tunnel.tunnelProvider) {
+                // The error means the SAVE was refused, not that the
+                // rule survived. The helper re-reads the store on a
+                // refusal, so the flag usually carries the store's own
+                // answer — and when even the re-read fails, the last
+                // value known true. Either way it is the truest reading
+                // this process has, which is how the line reports it.
+                NSLog("[activation] disarm save refused on \(tunnel.name) after an unresolved attempt — armed=\(tunnel.tunnelProvider.isOnDemandEnabled) is the truest reading available: \(disarmError.localizedDescription)")
+            }
+        }
+
         // Held so `remove()` can wait for this rung to finish before it
         // deletes anything — see `activationRungTask`. Deliberately NOT
         // self-clearing: a rung can start the next one from inside its
@@ -379,7 +528,7 @@ extension TunnelsManager {
             // timeouts, and rung 0 sitting behind that is pure delay —
             // past the deadline the state is unverifiable, and
             // unverifiable already answers `.free`.
-            if retryIndex == 0, case .heldByForeign = await foreignSlotVerdict(within: 2) {
+            if retryIndex == 0, case .heldByForeign = await foreignSlotVerdict(within: preflightBudget) {
                 guard tunnel.activationAttemptId == attemptId,
                       tunnel.status == .activating else { return }
                 tunnel.isAttemptingActivation = false
@@ -417,8 +566,51 @@ extension TunnelsManager {
                       tunnel.status == .activating || tunnel.status == .reasserting else { return }
                 await self.doStartVPNTunnel(tunnel: tunnel, attemptId: attemptId, retryIndex: retryIndex)
             } catch {
+                // Only the attempt that still owns the intent may say
+                // how it ended. A save can answer late — after a stop,
+                // after a newer start, or after the ceiling withdrew
+                // this attempt — and without this the refusal would be
+                // stamped on whatever the row is doing by then,
+                // grounding a newer activation on an older save's
+                // failure.
+                //
+                // Recovery is deliberately left alone here, and not
+                // because the store is known clean — a refused save
+                // leaves it unknown, which is the whole reason
+                // `standDownRecovery` re-reads rather than guesses. It
+                // is left alone because armed-and-inactive is a
+                // resting state the app already handles: the next
+                // activation's sweep disarms it, a stop disarms it,
+                // and a removal disarms it before the entry goes.
+                guard tunnel.activationAttemptId == attemptId else { return }
                 tunnel.isAttemptingActivation = false
-                tunnel.status = .inactive
+                // Re-derived, not grounded flat, for the watchdog's
+                // reason: a `.disconnecting` that landed mid-save means
+                // the system still holds a dying session, and a flat
+                // `.inactive` would flicker back on the next refresh
+                // while offering a start against the slot it still
+                // occupies. The ordinary refusal is unchanged — a
+                // session that never existed derives `.inactive` —
+                // and the guard below owns the pairs where the derive
+                // is refused or lands raising.
+                tunnel.refreshStatus()
+                // And the watchdog's raising-guard, for the same flip
+                // plus one more of its own: the observer's `.connected`
+                // branch lowers the flag but leaves the attempt id, so
+                // a session the STORED rule raised out of band
+                // mid-save arrives here fully armed — and a row a
+                // spurious ground handed to the queue arrives
+                // `.waiting`, which the gate above rightly refused to
+                // lower (queue slots are manager-driven whatever the
+                // flag says). In both pairs the row has moved past
+                // this attempt, and the old save's refusal is not a
+                // failure it should wear: the drop belt calls writing
+                // one under a green row a lie, and stamping a fresh
+                // queue slot would hand its turn away with it.
+                guard tunnel.status == .inactive || tunnel.status == .deactivating else {
+                    NSLog("[activation] arm save refused on \(tunnel.name) but the row has moved on (status=\(tunnel.status)) — leaving it be")
+                    return
+                }
                 tunnel.lastActivationError = .savingFailed(systemError: error)
                 activateWaitingTunnelIfNeeded()
             }
@@ -489,7 +681,16 @@ extension TunnelsManager {
             // name it instead of printing the system's opaque line.
             // One re-guard after the verdict await covers both exits:
             // a user who cancelled mid-fetch keeps their cancel.
-            let verdict = await foreignSlotVerdict()
+            //
+            // Budgeted for the same two reasons the pre-flight is: the
+            // row still reads `.activating` with a user behind it, and
+            // fail-open converges — BOTH exits below stand the rule
+            // down, so a verdict that never arrives costs only the
+            // label, never the disarm. Unbounded, this await could
+            // outlive the watchdog's ceiling, and the withdrawal would
+            // then file "the system never reported why" over a start
+            // error the system had in fact thrown.
+            let verdict = await foreignSlotVerdict(within: preflightBudget)
             guard tunnel.activationAttemptId == attemptId,
                   tunnel.status == .activating || tunnel.status == .reasserting else { return }
             if case .heldByForeign = verdict {
