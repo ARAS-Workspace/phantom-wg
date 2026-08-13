@@ -79,7 +79,21 @@ jobs:
             | Apple Silicon (M1/M2/M3/M4) | `Phantom-WG-MacOS-${{ needs.extract-version.outputs.version }}-arm64.dmg` |
             | Intel | `Phantom-WG-MacOS-${{ needs.extract-version.outputs.version }}-x86_64.dmg` |
 
-            #### Installation
+            #### Homebrew
+
+            Install:
+
+            ```bash
+            brew install --cask ARAS-Workspace/tap/phantom-wg-mac
+            ```
+
+            Update:
+
+            ```bash
+            brew upgrade --cask ARAS-Workspace/tap/phantom-wg-mac
+            ```
+
+            #### Manual Installation
 
             1. Download the DMG for your architecture
             2. Drag **Phantom-WG Mac** to the **Applications** folder
@@ -102,7 +116,21 @@ jobs:
             | Apple Silicon (M1/M2/M3/M4) | `Phantom-WG-MacOS-${{ needs.extract-version.outputs.version }}-arm64.dmg` |
             | Intel | `Phantom-WG-MacOS-${{ needs.extract-version.outputs.version }}-x86_64.dmg` |
 
-            #### Kurulum
+            #### Homebrew
+
+            Kurulum:
+
+            ```bash
+            brew install --cask ARAS-Workspace/tap/phantom-wg-mac
+            ```
+
+            Güncelleme:
+
+            ```bash
+            brew upgrade --cask ARAS-Workspace/tap/phantom-wg-mac
+            ```
+
+            #### Manuel Kurulum
 
             1. Mimarinize uygun DMG dosyasını indirin
             2. **Phantom-WG Mac** uygulamasını **Applications** klasörüne sürükleyin
