@@ -2,11 +2,12 @@ import Foundation
 import AppKit
 import NetworkExtension
 
-// Sealed at file size: six hardening packages grew this manager along
-// its real seams (activation already lives in its own extension), and
-// the next split belongs to those seams when the cleanup ledger calls
-// for it — not to a counter. The thresholds stay live for every other
-// file in the product; the type carries its own seal at the class.
+// Sealed at file size: hardening package after hardening package grew
+// this manager along its real seams (activation already lives in its
+// own extension), and the next split belongs to those seams when the
+// cleanup ledger calls for it — not to a counter. The thresholds stay
+// live for every other file in the product; the type carries its own
+// seal at the class.
 // swiftlint:disable file_length
 
 /// Source of truth for the tunnel list. Owns the pairing between the
