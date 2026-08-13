@@ -275,6 +275,12 @@ extension TunnelsManager {
         }
     }
 
+    // Sealed at size, on purpose: this is the ladder's single entrance,
+    // and the bar, the exhausted exit, the sweep, the watchdog and the
+    // rung are ONE reviewed narrative whose ordering is the contract —
+    // splitting it would scatter exactly what the comments prove. The
+    // thresholds stay live for the rest of the product.
+    // swiftlint:disable:next cyclomatic_complexity function_body_length
     func startActivation(of tunnel: TunnelContainer, at retryIndex: Int) {
         // The same bar, one level down: the public door is not the
         // only way in. The revive re-enters through `beginActivation`,
@@ -617,6 +623,10 @@ extension TunnelsManager {
         }
     }
 
+    // Sealed at size for the entrance's reason: the load, the one-shot
+    // stale retry, the collision verdicts and the retry timer are one
+    // sequence whose ordering is the contract.
+    // swiftlint:disable:next cyclomatic_complexity function_body_length
     func doStartVPNTunnel(tunnel: TunnelContainer, attemptId: String, retryIndex: Int) async {
         do {
             try await tunnel.tunnelProvider.loadPreferences()

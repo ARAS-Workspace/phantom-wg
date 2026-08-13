@@ -2,6 +2,13 @@ import Foundation
 import AppKit
 import NetworkExtension
 
+// Sealed at file size: six hardening packages grew this manager along
+// its real seams (activation already lives in its own extension), and
+// the next split belongs to those seams when the cleanup ledger calls
+// for it — not to a counter. The thresholds stay live for every other
+// file in the product; the type carries its own seal at the class.
+// swiftlint:disable file_length
+
 /// Source of truth for the tunnel list. Owns the pairing between the
 /// system's NetworkExtension preferences (identity-only projections)
 /// and the extension's TunnelVault (the payloads): `ingest` scopes the
@@ -26,6 +33,7 @@ import NetworkExtension
 /// occupied slot only feeds the cross-user fight.
 @Observable
 @MainActor
+// swiftlint:disable:next type_body_length
 class TunnelsManager {
 
     var tunnels: [TunnelContainer] = []
@@ -684,6 +692,10 @@ class TunnelsManager {
         }
     }
 
+    // Sealed at size: the attempting/non-attempting split and the drop
+    // belt inside it are one reviewed narrative — the branch ordering
+    // IS the doctrine the surrounding comments prove.
+    // swiftlint:disable:next cyclomatic_complexity function_body_length
     private func handleStatusChange(for tunnel: TunnelContainer) {
         let systemStatus = tunnel.tunnelProvider.connectionStatus
 
@@ -1154,9 +1166,10 @@ class TunnelsManager {
     /// deadline won — the evidence never arrived — and every caller
     /// falls back to the meaning its doctrine gives an unverifiable
     /// state.
-    // Internal rather than private: the activation extension's
-    // uninstall sweep waits out in-flight rungs through it, the same
-    // way `remove()` does.
+    ///
+    /// Internal rather than private: the activation extension's
+    /// uninstall sweep waits out in-flight rungs through it, the same
+    /// way `remove()` does.
     /// The producer returns a NON-optional `T`, so the optional this
     /// hands back has exactly one meaning: nil is the deadline, never
     /// an answer. A producer whose own answer is optional (the

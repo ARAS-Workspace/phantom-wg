@@ -46,7 +46,7 @@ struct TestEngineStrings {
         emptyDesc: "Çalıştır'a basın.",
         gateTitle: "Test Yapılandırmaları Gerekli",
         gateIntro: "Bu alana ulaşmak için iki yapılandırmaya ihtiyacınız var.",
-        gateReturn:"Bu isimde yapılandırmaları içe aktardıktan sonra buraya dönmelisiniz."
+        gateReturn: "Bu isimde yapılandırmaları içe aktardıktan sonra buraya dönmelisiniz."
     )
 
     static let en = TestEngineStrings(

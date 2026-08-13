@@ -8,6 +8,19 @@ excluded:
 
 # ── Rule Configuration ───────────────────────────────────
 
+# House style: multiline collection literals keep a trailing comma
+# (diff-friendly, consistently applied). The default rule fights it;
+# disabled rather than tuned. If we ever want the opposite direction
+# enforced, revisit with `mandatory_comma: true`.
+disabled_rules:
+  - trailing_comma
+
+# Exhaustive default-less switches are house doctrine — the compiler
+# proves coverage, and every arm is a decision the reviewer reads.
+# Case arms must not count against complexity.
+cyclomatic_complexity:
+  ignores_case_statements: true
+
 line_length:
   warning: 140
   error: 200

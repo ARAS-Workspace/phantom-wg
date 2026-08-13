@@ -477,7 +477,8 @@ final class VaultIntegrityWorkflow: TestWorkflow {
         let visible = tunnels.tunnels.contains { $0.id == cfg.id }
         check(visible, visible
             ? "tunnel stayed listed through a reload with an undecodable payload — custody remains visible"
-            : "tunnel VANISHED from the list after a reload — the ownership filter took an undecodable own payload for another user's entry")
+            : "tunnel VANISHED from the list after a reload — the ownership filter"
+                + " took an undecodable own payload for another user's entry")
         await cleanupVisibilityBase(container, cfg.id)
     }
 

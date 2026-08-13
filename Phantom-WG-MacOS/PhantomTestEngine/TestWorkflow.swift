@@ -311,10 +311,16 @@ class TestWorkflow {
 
     // MARK: - Runner entry (not for subclasses)
 
+    // The leading underscore is the deliberate marker that these two
+    // belong to the RUNNER: a step body has no business calling
+    // either, and the name says so at every call site. The linter's
+    // naming rule is right in general and overruled here on purpose.
+    // swiftlint:disable:next identifier_name
     func _bind(_ context: TestContext, _ engine: PhantomTestEngine) {
         self.context = context
         self.engine = engine
     }
+    // swiftlint:disable:next identifier_name
     func _run() async {
         for step in steps {
             if Task.isCancelled { break }

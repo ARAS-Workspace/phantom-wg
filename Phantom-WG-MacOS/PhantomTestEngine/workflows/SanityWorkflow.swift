@@ -110,8 +110,8 @@ final class SanityWorkflow: TestWorkflow {
         // extensions are measured here but exercised nowhere below, so
         // a stale one is worth a red line and nothing more — aborting
         // on it would let an untouched neighbour cancel a run that was
-        // never about it. A rebuild alone fixes neither: the stamp is
-        // MARKETING_VERSION, so an unchanged version reinstalls
+        // never about it. A rebuild alone fixes neither: the stamp
+        // is MARKETING_VERSION, so an unchanged version reinstalls
         // nothing. Say the cure in the same breath as the diagnosis.
         let staleTunnel = stale.filter { $0.hasPrefix("PhantomTunnel") }
         if !staleTunnel.isEmpty {

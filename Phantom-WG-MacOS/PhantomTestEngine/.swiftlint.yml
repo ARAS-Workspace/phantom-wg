@@ -1,0 +1,57 @@
+# ── SwiftLint: PhantomTestEngine overrides ────────────────
+#
+# The harness is narrative by design: linear arrange-act-assert steps
+# whose meaning lives in the step text, rigs returned as tuples, and
+# single-letter names (t, d, a, b, c, n) for tunnels and deadlines the
+# surrounding sentence already names. Metrics are tuned to the observed
+# shape with headroom; correctness rules inherit the root config.
+# (Nested configs merge per rule: identifier_name below REPLACES the
+# root's, so the root's exclusions are repeated here.)
+
+disabled_rules:
+  - large_tuple    # rig factories deliberately return (container, fake, manager)
+
+cyclomatic_complexity:
+  warning: 20
+  error: 30
+  ignores_case_statements: true
+
+function_body_length:
+  warning: 80
+  error: 120
+
+type_body_length:
+  warning: 600
+  error: 800
+
+file_length:
+  warning: 700
+  error: 1000
+  ignore_comment_only_lines: true
+
+identifier_name:
+  min_length:
+    warning: 2
+    error: 1
+  max_length:
+    warning: 50
+    error: 60
+  excluded:
+    - id
+    - db
+    - ts
+    - tr
+    - en
+    - vc
+    - ok
+    - v
+    - f
+    - h
+    - m
+    - s
+    - t    # tunnel under measurement
+    - d    # deadline / driven answer
+    - a    # first of a tunnel pair
+    - b    # second of a tunnel pair
+    - c    # third tunnel in sweep steps
+    - n    # sample counter
