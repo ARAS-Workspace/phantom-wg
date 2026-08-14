@@ -91,7 +91,19 @@ enum ConfParser {
 
             // Section header
             if stripped.hasPrefix("["), stripped.hasSuffix("]") {
-                let name = String(stripped.dropFirst().dropLast()).lowercased()
+                // Trimmed like every key below, and for the same
+                // reason: a stray space inside the brackets —
+                // "[Peer ]" — must not mint a DISTINCT section that
+                // dodges the duplicate guard while parse() reads only
+                // the exact-spelled name, silently dropping the whole
+                // peer the variant carried. The trim covers Zs+tab
+                // (`.whitespaces`); invisible Cf characters (U+200B,
+                // U+FEFF) and the exotic members of `.newlines` the
+                // splitter above honours (VT/FF/NEL) stay a named
+                // cross-repo unicode-hygiene decision, queued with
+                // the scalar-key question below.
+                let name = String(stripped.dropFirst().dropLast())
+                    .trimmingCharacters(in: .whitespaces).lowercased()
                 // Each section is a singleton here. A repeated header —
                 // most often a second [Peer] — used to merge into the
                 // first (last value wins per key), silently collapsing

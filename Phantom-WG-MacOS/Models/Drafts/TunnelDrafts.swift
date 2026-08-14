@@ -110,6 +110,32 @@ struct TunnelDraft: Equatable {
         if wstunnel != nil, wstunnelConfig == nil, errors.isEmpty {
             errors[.wstunnelUrl] = .empty
         }
+        // The same belt for the other two arms — it was cut for
+        // wstunnel alone, and the skipped pair fails CLOSED-and-silent
+        // instead of open: a nil interface or peer with an empty error
+        // map would fall through the guard below as config:nil +
+        // errors:[:], which both editors render as a Save that does
+        // nothing behind an empty banner. Unreachable today for the
+        // same reason the wstunnel arm was; the day a nil-returning
+        // path forgets its error, the slip lands on the arm's defining
+        // field instead of on a dead button.
+        if interfaceConfig == nil, errors.isEmpty {
+            errors[.interfacePrivateKey] = .empty
+        }
+        if peerConfig == nil, errors.isEmpty {
+            errors[.peerPublicKey] = .empty
+        }
+        // And the one arm that fails OPEN rather than closed:
+        // `PeerConfig.endpoint` is Optional, so a parseEndpoint slip
+        // that returns nil without recording an error BUILDS a
+        // standalone config with no endpoint and an empty error map —
+        // Save succeeds silently and the config fails only at
+        // activation, far from the field. Unreachable today (every
+        // parse arm records); the day one forgets, it dies here, on
+        // the field the user is looking at.
+        if wstunnel == nil, let peer = peerConfig, peer.endpoint == nil, errors.isEmpty {
+            errors[.peerEndpoint] = .empty
+        }
         guard
             errors.isEmpty,
             let interfaceConfig,
