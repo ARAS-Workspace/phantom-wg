@@ -51,44 +51,7 @@ final class VaultIntegrityWorkflow: TestWorkflow {
         // path — by the time this runs there, both stashes read
         // `.missing` already and it reports a clean zero.
         onTeardown("vault throwaways") { [weak self] in
-            guard let self else { return }
-            let ids = self.tracked.map(\.id) + self.rawIds
-            guard !ids.isEmpty else {
-                self.log("teardown: nothing was planted")
-                return
-            }
-            // Only what is still there is swept, and only a delete
-            // that answered true counts — deleting an id the vault no
-            // longer holds also answers true, which is why the read
-            // comes first and the count means "was there, now gone".
-            // An `.unreachable` read is neither: it proves nothing
-            // about that id and it means the next fifteen will each
-            // burn their own transport timeout. One is a symptom, a
-            // whole run of them is a dark door, so the loop stops and
-            // says what it could not check instead of spending
-            // minutes discovering the same thing sixteen times.
-            var swept = 0
-            var stuck = 0
-            var unchecked = 0
-            var index = 0
-            for id in ids {
-                index += 1
-                switch await self.vault.read(id: id) {
-                case .missing:
-                    continue
-                case .unreachable:
-                    unchecked = ids.count - index + 1
-                    self.log("teardown: vault dark — swept \(swept), still present \(stuck), \(unchecked) of \(ids.count) left unchecked", .error)
-                    return
-                case .config, .undecodable:
-                    if await self.vault.delete(id: id, attempts: 3) { swept += 1 } else { stuck += 1 }
-                }
-            }
-            if swept == 0 && stuck == 0 {
-                self.log("teardown: all \(ids.count) planted payload(s) already gone")
-            } else {
-                self.log("teardown: swept \(swept), still present \(stuck), of \(ids.count) planted", stuck > 0 ? .error : .warn)
-            }
+            await self?.sweepThrowaways()
         }
         switch await vault.ping() {
         case .ready(let payloads, let identity):
@@ -314,46 +277,7 @@ final class VaultIntegrityWorkflow: TestWorkflow {
         // survives is exactly the custody-visibility shape — an entry
         // the list keeps rendering with bytes nothing can decode.
         onTeardown("corruption base") { [weak self] in
-            guard let self else { return }
-            var notes: [String] = []
-            var stuck = false
-            let payloadPresent: Bool
-            if case .missing = await self.vault.read(id: cfg.id) {
-                payloadPresent = false
-            } else {
-                payloadPresent = true
-            }
-            if let listed = self.tunnel(named: name) {
-                do {
-                    try await self.tunnels.remove(tunnel: listed)
-                    notes.append("entry removed")
-                } catch {
-                    notes.append("entry still listed (\(error.localizedDescription))")
-                    stuck = true
-                }
-            } else if payloadPresent {
-                // Not listed, but the bytes say the step never swept:
-                // the row is hidden rather than gone, so the kept
-                // container is the only way to take the entry down.
-                if (try? await base.tunnelProvider.removePreferences()) == nil {
-                    notes.append("hidden NE entry removal failed — check System Settings > VPN")
-                    stuck = true
-                } else {
-                    notes.append("hidden NE entry removed")
-                }
-            }
-            // `remove()` above deletes the payload itself, so this is
-            // a sweep of whatever is left rather than a second delete.
-            if case .missing = await self.vault.read(id: cfg.id) {
-                // Nothing left.
-            } else if await self.vault.delete(id: cfg.id, attempts: 3) {
-                notes.append("corrupt payload swept")
-            } else {
-                notes.append("corrupt payload still present")
-                stuck = true
-            }
-            self.log("teardown: corruption base — \(notes.isEmpty ? "already clean" : notes.joined(separator: ", "))",
-                     stuck ? .error : (notes.isEmpty ? .info : .warn))
+            await self?.sweepCorruptionBase(base, id: cfg.id, name: name)
         }
         guard await vaultRaw.storeRaw(Data("corrupt".utf8), id: cfg.id) else {
             fail("raw corrupt store refused")
@@ -422,41 +346,66 @@ final class VaultIntegrityWorkflow: TestWorkflow {
             guard let self else { return }
             var notes: [String] = []
             var stuck = false
-            // A payload still present means the step's own cleanup
-            // never completed, and that is also the only reliable
-            // signal that the NE entry is still there: asking the
-            // manager is no good here (the row can be hidden), and
-            // calling removePreferences on an entry the step already
-            // removed would answer with an error we would then report
-            // as residue that does not exist.
-            let payloadPresent: Bool
-            if case .missing = await self.vault.read(id: cfg.id) {
-                payloadPresent = false
-            } else {
-                payloadPresent = true
-            }
-            if payloadPresent {
-                if await self.vault.delete(id: cfg.id, attempts: 3) {
-                    notes.append("corrupt payload swept")
-                } else {
-                    notes.append("corrupt payload still present")
+            // The payload is the pivot, read three-valued and
+            // retried: present means the step's own cleanup never
+            // completed and the entry must still be there; missing
+            // hands the verdict to the fresh-list probe; unreachable
+            // verifies nothing and so claims nothing — as residue,
+            // loudly. The manager's list alone cannot carry any of
+            // it: this row can be HIDDEN when the gate is red, and a
+            // stale mirror can outlive an entry that is already gone
+            // — which is why the net holds the container for the
+            // present arm and asks the fresh system list for the
+            // missing one.
+            switch await self.readPayloadState(cfg.id) {
+            case .present:
+                // Payload first, and a failed delete KEEPS the entry —
+                // the same order and the same rule
+                // `cleanupVisibilityBase` spells out. Removing the
+                // entry over a surviving payload would strand the
+                // bytes with no list row, no detail surface and no
+                // path ever to see or clear them: the exact
+                // broken-custody state this gate exists to prevent.
+                let verdict = await self.verifiedDelete(cfg.id)
+                switch verdict {
+                case .swept, .sweptReplyLost:
+                    notes.append(verdict == .sweptReplyLost
+                        ? "payload swept (the delete's reply was lost)" : "payload swept")
+                    switch await self.verifiedEntryRemoval(id: cfg.id, via: container.tunnelProvider) {
+                    case .removed:
+                        notes.append("NE entry removed")
+                        await self.tunnels.prune()
+                    case .alreadyGone:
+                        notes.append("NE entry already gone")
+                        await self.tunnels.prune()
+                    case .failed:
+                        notes.append("NE entry removal failed — check System Settings > VPN")
+                        stuck = true
+                    case .unverified:
+                        notes.append("NE entry state unverified — system list unreadable")
+                        stuck = true
+                    }
+                case .stillPresent:
+                    notes.append("payload still present — NE entry left in place so the custody row stays reachable")
+                    stuck = true
+                case .unverified:
+                    notes.append("vault unreachable — payload state unverified; NE entry left in place")
                     stuck = true
                 }
-                if (try? await container.tunnelProvider.removePreferences()) == nil {
-                    notes.append("NE entry removal failed — check System Settings > VPN")
-                    stuck = true
-                } else {
-                    notes.append("NE entry removed")
-                }
-            } else if self.tunnels.tunnels.contains(where: { $0.id == cfg.id }) {
-                // Payload gone but the row survived it: the step got
-                // half way. Take the entry down too.
-                if (try? await container.tunnelProvider.removePreferences()) == nil {
-                    notes.append("NE entry removal failed — check System Settings > VPN")
-                    stuck = true
-                } else {
-                    notes.append("NE entry removed")
-                }
+            case .missing:
+                // Payload gone — whether the row still shows or a
+                // reload has already hidden it, the mirror cannot
+                // carry the verdict (stale in both directions, and a
+                // bare removePreferences on an entry that is already
+                // gone would invent residue). The fresh-list probe
+                // answers both shapes, prunes a stale row, and earns
+                // "already clean" instead of assuming it.
+                let probe = await self.probeHiddenSurvivor(id: cfg.id)
+                notes.append(contentsOf: probe.notes)
+                stuck = stuck || probe.stuck
+            case .unreachable:
+                notes.append("vault unreachable — payload state unverified, entry (if any) left in place")
+                stuck = true
             }
             self.log("teardown: visibility base — \(notes.isEmpty ? "already clean" : notes.joined(separator: ", "))",
                      stuck ? .error : (notes.isEmpty ? .info : .warn))
@@ -499,7 +448,9 @@ final class VaultIntegrityWorkflow: TestWorkflow {
             // Prune the hidden container deterministically: list
             // hygiene must not depend on the debounced refresh being
             // alive (an uninstall latch silences it for the process).
-            await tunnels.refresh()
+            // Prune, not refresh: a full reload's reconcile could
+            // mint entries for plants a later net still has to sweep.
+            await tunnels.prune()
         }
     }
 
@@ -658,6 +609,384 @@ final class VaultIntegrityWorkflow: TestWorkflow {
         let duplicates = actual.count - actualSet.count
         check(missing.isEmpty && extra.isEmpty && duplicates == 0,
               "\(label): \(actual.count) payloads — missing=\(missing.count) extra=\(extra.count) duplicates=\(duplicates)")
+    }
+}
+
+// MARK: - Verified sweep kit — the three-valued reads,
+// re-read-verified deletes/removals, the fresh-list probe and the
+// corruption net body they serve. Same file, so `private` members
+// stay reachable from the class; out of the class body so the
+// type-length ruler keeps measuring the workflow's own steps.
+extension VaultIntegrityWorkflow {
+    /// One vault read, kept three-valued. `.unreachable` is neither
+    /// presence nor absence, and the nets below decide differently on
+    /// each: collapsing it into "present" let their arms print
+    /// verified-sounding verdicts — "still present", "swept" — over a
+    /// reading that verified nothing.
+    private enum PayloadReading { case present, missing, unreachable }
+
+    /// Three attempts, spaced: waking the vault extension usually
+    /// costs the first one, and every sweep decision downstream rides
+    /// this answer — a single lost 5s race must not convert a
+    /// self-healing teardown into do-nothing residue. `.present` is
+    /// presence only, decodable and corrupt bytes alike, which is why
+    /// no arm below calls what it swept "corrupt": presence was
+    /// observed, the bytes' nature was not.
+    private func readPayloadState(_ id: UUID) async -> PayloadReading {
+        switch await vault.read(id: id, attempts: 3) {
+        case .missing: return .missing
+        case .unreachable: return .unreachable
+        default: return .present
+        }
+    }
+
+    /// How a sweep's outcome is decided. The delete Bool alone cannot
+    /// tell "refused" from "unreachable" — and a delete can even LAND
+    /// with only its reply lost — so a false answer is followed by a
+    /// re-read, and each verdict claims exactly what was observed.
+    private enum SweepVerdict { case swept, sweptReplyLost, stillPresent, unverified }
+
+    private func verifiedDelete(_ id: UUID) async -> SweepVerdict {
+        if await vault.delete(id: id, attempts: 3) { return .swept }
+        // ONE attempt, deliberately: three failed deletes have already
+        // established sustained darkness or refusal, and a landed
+        // delete whose reply was lost makes the NEXT delete attempt
+        // answer true (deleting an absent id is idempotent-true), so
+        // this read serves the vault that answers NOW. A dark one
+        // earns .unverified without another 17s of patience — the
+        // teardown ceiling is sized against exactly these chains.
+        switch await vault.read(id: id) {
+        case .missing: return .sweptReplyLost
+        case .unreachable: return .unverified
+        default: return .stillPresent
+        }
+    }
+
+    /// The NE twin of `verifiedDelete`: a removePreferences error on
+    /// a cached (or even a fresh) handle cannot tell "refused" from
+    /// "already gone" — the removal's reply can be lost, and another
+    /// sweeper can land first — so a failure is followed by a FRESH
+    /// list re-check, and residue is claimed only when the entry is
+    /// actually still there.
+    private enum EntryRemoval { case removed, alreadyGone, failed, unverified }
+
+    private func verifiedEntryRemoval(id: UUID, via provider: TunnelProviding) async -> EntryRemoval {
+        if (try? await provider.removePreferences()) != nil { return .removed }
+        // One beat before the re-check: an interrupted removal can be
+        // mid-commit, and an instant fresh read would report the old
+        // state as residue that stops existing a second later.
+        try? await Task.sleep(for: .milliseconds(600))
+        guard let fresh = try? await RealTunnelProviderFactory().loadAllFromPreferences() else {
+            return .unverified
+        }
+        return fresh.contains(where: { $0.tunnelIdentity?.id == id }) ? .failed : .alreadyGone
+    }
+
+    /// The last honest question a net can ask once the payload is
+    /// gone: did the ENTRY survive? A payload-less entry is filed as
+    /// another user's and hidden by the next reload, so the manager's
+    /// mirror cannot carry the verdict in either direction — a hidden
+    /// survivor reads absent there, and a stale row can outlive an
+    /// entry that is already gone (a pruning refresh that lost its
+    /// load). Only a FRESH system list answers, and what is acted on
+    /// is the MATCHED fresh object itself, never a cached handle —
+    /// the house rule `removeEntriesForUninstall` states: no stale
+    /// provider object is replayed. An unreadable list is reported as
+    /// unverified residue, never clean — the throwaways net's
+    /// doctrine, a cleanup that cannot verify is an error.
+    private func probeHiddenSurvivor(id: UUID) async -> (notes: [String], stuck: Bool) {
+        guard let fresh = try? await RealTunnelProviderFactory().loadAllFromPreferences() else {
+            return (["system list unreadable — entry cleanliness unverified"], true)
+        }
+        guard let survivor = fresh.first(where: { $0.tunnelIdentity?.id == id }) else {
+            // Absent from a fresh system list: provably clean. The
+            // mirror may still be showing a stale row for it — align
+            // it while there is a deterministic chance.
+            if tunnels.tunnels.contains(where: { $0.id == id }) {
+                await tunnels.prune()
+            }
+            return ([], false)
+        }
+        switch await verifiedEntryRemoval(id: id, via: survivor) {
+        case .removed:
+            // Deterministic prune, the `cleanupVisibilityBase`
+            // precedent: list hygiene must not depend on the
+            // debounced refresh.
+            await tunnels.prune()
+            return (["surviving NE entry removed (a half-completed removal had left it behind)"], false)
+        case .alreadyGone:
+            await tunnels.prune()
+            return (["surviving NE entry already gone by the time it was acted on"], false)
+        case .failed:
+            return (["surviving NE entry removal failed — check System Settings > VPN"], true)
+        case .unverified:
+            return (["surviving NE entry removal unverified — system list went unreadable"], true)
+        }
+    }
+
+    /// The catch arm's resolution, asked rather than inferred:
+    /// `remove()` deletes the payload BEFORE the entry, so its throw
+    /// alone does not say which half survived — the pre-deletion
+    /// exits leave the pair intact, the removePreferences exit
+    /// leaves the bytes already gone.
+    private func resolveFailedRemove(_ listed: TunnelContainer, id: UUID, error: Error) async -> (notes: [String], stuck: Bool) {
+        switch await readPayloadState(id) {
+        case .present:
+            // Visible custody: sweeping the payload out from under a
+            // listed entry would hide the row on the next reload —
+            // the strand every arm here refuses.
+            return (["entry still listed, payload intact — visible custody kept (\(error.localizedDescription))"], true)
+        case .missing:
+            // The second half failed: bytes gone, entry listed. Kept,
+            // the next reload would file it as another user's and
+            // hide it for ever — so it comes down now, while there is
+            // still a handle.
+            switch await verifiedEntryRemoval(id: id, via: listed.tunnelProvider) {
+            case .removed:
+                // Deterministic prune: the row is still in the
+                // manager's mirror, and nothing else promises a
+                // reload (the uninstall latch can silence the
+                // debounced one for the process).
+                await tunnels.prune()
+                return (["remove() half-completed (payload gone) — entry taken down"], false)
+            case .alreadyGone:
+                await tunnels.prune()
+                return (["remove() half-completed (payload gone) — entry already gone"], false)
+            case .failed:
+                return (["remove() half-completed (payload gone) and the entry refused removal — check System Settings > VPN"], true)
+            case .unverified:
+                return (["remove() half-completed (payload gone), entry state unverified — system list unreadable"], true)
+            }
+        case .unreachable:
+            return (["remove() failed (\(error.localizedDescription)) and the vault is unreachable — which half survived is unverified, pair left in place"], true)
+        }
+    }
+
+    /// The corruption base's net body, named the way the visibility
+    /// twin names its inline path (`cleanupVisibilityBase`), and
+    /// carrying one rule through every arm: the ENTRY never comes down
+    /// while bytes it backs might survive — payload first, entry
+    /// second, because a payload-less entry is only hidden by the next
+    /// reload while a payload without its entry is unreachable for
+    /// ever. Success is claimed only where it was observed, and an
+    /// unreachable vault claims nothing.
+    private func sweepCorruptionBase(_ base: TunnelContainer, id: UUID, name: String) async {
+        var notes: [String] = []
+        var stuck = false
+        if let listed = tunnel(named: name) {
+            do {
+                try await tunnels.remove(tunnel: listed)
+                notes.append("entry removed")
+                // `remove()` deletes the payload itself; with the
+                // entry provably gone a surviving leftover gets one
+                // more sweep, and no custody decision rides on it.
+                switch await readPayloadState(id) {
+                case .missing:
+                    break // Nothing left.
+                case .present:
+                    switch await verifiedDelete(id) {
+                    case .swept:
+                        notes.append("leftover payload swept")
+                    case .sweptReplyLost:
+                        notes.append("leftover payload swept (the delete's reply was lost)")
+                    case .stillPresent:
+                        notes.append("leftover payload still present")
+                        stuck = true
+                    case .unverified:
+                        notes.append("vault unreachable — leftover payload state unverified")
+                        stuck = true
+                    }
+                case .unreachable:
+                    notes.append("vault unreachable — leftover payload state unverified")
+                    stuck = true
+                }
+            } catch {
+                // `remove()` deletes the payload BEFORE the entry, so
+                // the throw alone does not say which half survived —
+                // the resolver asks the vault rather than infer.
+                let resolved = await resolveFailedRemove(listed, id: id, error: error)
+                notes.append(contentsOf: resolved.notes)
+                stuck = stuck || resolved.stuck
+            }
+        } else {
+            switch await readPayloadState(id) {
+            case .present:
+                // Not listed, but the bytes say the step never swept:
+                // the row is hidden rather than gone. Payload first,
+                // and a failed delete KEEPS the entry — with both
+                // halves present the next reload reads `.undecodable`
+                // and puts the custody row back on the list, the only
+                // surface that can still reach this pair.
+                let verdict = await verifiedDelete(id)
+                switch verdict {
+                case .swept, .sweptReplyLost:
+                    notes.append(verdict == .sweptReplyLost
+                        ? "payload swept (the delete's reply was lost)" : "payload swept")
+                    switch await verifiedEntryRemoval(id: id, via: base.tunnelProvider) {
+                    case .removed:
+                        notes.append("hidden NE entry removed")
+                        await tunnels.prune()
+                    case .alreadyGone:
+                        notes.append("hidden NE entry already gone")
+                        await tunnels.prune()
+                    case .failed:
+                        notes.append("hidden NE entry removal failed — check System Settings > VPN")
+                        stuck = true
+                    case .unverified:
+                        notes.append("hidden NE entry state unverified — system list unreadable")
+                        stuck = true
+                    }
+                case .stillPresent:
+                    notes.append("payload still present — hidden NE entry left in place so custody can resurface it")
+                    stuck = true
+                case .unverified:
+                    notes.append("vault unreachable — payload state unverified; hidden NE entry left in place")
+                    stuck = true
+                }
+            case .missing:
+                // Neither listed nor backed by bytes — usually clean,
+                // unless a removal failed on its second half and a
+                // reload has already hidden the survivor. Only the
+                // fresh-list probe can answer that.
+                let probe = await probeHiddenSurvivor(id: id)
+                notes.append(contentsOf: probe.notes)
+                stuck = stuck || probe.stuck
+            case .unreachable:
+                notes.append("vault unreachable — payload state unverified, entry (if any) left in place")
+                stuck = true
+            }
+        }
+        log("teardown: corruption base — \(notes.isEmpty ? "already clean" : notes.joined(separator: ", "))",
+            stuck ? .error : (notes.isEmpty ? .info : .warn))
+    }
+
+    /// The throwaways net's body: payload sweep first (with the
+    /// dark and stuck doors), then the bounded entry re-look — the
+    /// run's terminal guarantee that no planted id survives in
+    /// either store.
+    private func sweepThrowaways() async {
+        let ids = self.tracked.map(\.id) + self.rawIds
+        guard !ids.isEmpty else {
+            self.log("teardown: nothing was planted")
+            return
+        }
+        // Only what is still there is swept, and only a delete
+        // that answered true counts — deleting an id the vault no
+        // longer holds also answers true, which is why the read
+        // comes first and the count means "was there, now gone".
+        // An `.unreachable` read is neither: it proves nothing
+        // about that id and it means the next fifteen will each
+        // burn their own transport timeout. One is a symptom, a
+        // whole run of them is a dark door, so the loop stops and
+        // says what it could not check instead of spending
+        // minutes discovering the same thing sixteen times.
+        var cleared = Set<UUID>()
+        var swept = 0
+        var stuck = 0
+        var unchecked = 0
+        var index = 0
+        var stuckStreak = 0
+        payloadSweep: for id in ids {
+            index += 1
+            switch await self.vault.read(id: id) {
+            case .missing:
+                cleared.insert(id)
+            case .unreachable:
+                unchecked = ids.count - index + 1
+                self.log("teardown: vault dark — swept \(swept), still present \(stuck), \(unchecked) of \(ids.count) left unchecked", .error)
+                break payloadSweep
+            case .config, .undecodable:
+                // The dark door's twin for WRITES: one refused
+                // delete is a symptom, a streak is a wedged store,
+                // and each further retry burns 17s of the ceiling
+                // the entry sweep below still needs. Count the
+                // rest present without paying for them.
+                if stuckStreak >= 2 {
+                    stuck += 1
+                    continue
+                }
+                if await self.vault.delete(id: id, attempts: 3) {
+                    swept += 1
+                    cleared.insert(id)
+                    stuckStreak = 0
+                } else {
+                    stuck += 1
+                    stuckStreak += 1
+                }
+            }
+        }
+        if unchecked == 0 {
+            if swept == 0 && stuck == 0 {
+                self.log("teardown: all \(ids.count) planted payload(s) already gone")
+            } else {
+                self.log("teardown: swept \(swept), still present \(stuck), of \(ids.count) planted", stuck > 0 ? .error : .warn)
+            }
+        }
+        // ENTRY sweep — rides NE, not the vault, so it runs even
+        // past a dark door above. A reconcile that ran while
+        // planted payloads still had bytes (a dark Delete Proof
+        // followed by the corruption step's own reconcile, or the
+        // production debounced reload that a net's own entry
+        // removal arms) can have MINTED real entries for them;
+        // sweeping payloads alone would orphan those entries into
+        // exactly the hidden residue this package exists to
+        // remove. Payloads went first, so a late reload can no
+        // longer re-mint; every entry carrying a planted id comes
+        // down off a FRESH list — matched objects only — and the
+        // mirror is pruned once. This is the net that runs LAST,
+        // so its guarantee is the run's: no planted id survives
+        // in either store.
+        // Only ids whose payload is CONFIRMED gone: removing an
+        // entry while its bytes survive only hands the debounced
+        // reload a payload to re-mint from — the pair stays
+        // visible instead (the payload summary above already
+        // reported it loudly), and every entry removed here has
+        // nothing left to resurrect it.
+        //
+        // BOUNDED RE-LOOK, not one shot: a reconcile already in
+        // flight took its readAll snapshot BEFORE the payload
+        // sweep, and its createEntry loop can keep landing
+        // entries after any single fresh list was read. Payloads
+        // are gone, so every LATER reconcile mints nothing — the
+        // race is finite, and a couple of beats-and-looks drain
+        // it. A clean look is the only exit that claims clean.
+        var entriesSwept = 0
+        var entriesStuck = 0
+        var entriesUnverified = 0
+        var lookedClean = false
+        for pass in 1...3 {
+            if pass > 1 {
+                // One beat so the in-flight loop's tail and the
+                // 400ms debounce it may have armed both land
+                // inside it — the re-look then sees their work.
+                try? await Task.sleep(for: .milliseconds(800))
+            }
+            guard let fresh = try? await RealTunnelProviderFactory().loadAllFromPreferences() else {
+                self.log("teardown: system list unreadable — minted-entry cleanliness unverified", .error)
+                return
+            }
+            let minted = fresh.filter { provider in
+                provider.tunnelIdentity.map { cleared.contains($0.id) } ?? false
+            }
+            if minted.isEmpty { lookedClean = true; break }
+            lookedClean = false
+            for provider in minted {
+                guard let id = provider.tunnelIdentity?.id else { continue }
+                switch await self.verifiedEntryRemoval(id: id, via: provider) {
+                case .removed, .alreadyGone: entriesSwept += 1
+                case .failed: entriesStuck += 1
+                case .unverified: entriesUnverified += 1
+                }
+            }
+            await self.tunnels.prune()
+        }
+        guard entriesSwept + entriesStuck + entriesUnverified > 0 else { return }
+        var parts = ["\(entriesSwept) swept"]
+        if entriesStuck > 0 { parts.append("\(entriesStuck) refused removal — check System Settings > VPN") }
+        if entriesUnverified > 0 { parts.append("\(entriesUnverified) unverified (system list went unreadable)") }
+        if !lookedClean { parts.append("last look still saw a cleared-id entry — a straggler may remain") }
+        self.log("teardown: minted entries — \(parts.joined(separator: ", "))",
+                 (entriesStuck + entriesUnverified) > 0 || !lookedClean ? .error : .warn)
     }
 }
 #endif

@@ -80,14 +80,23 @@ class TestWorkflow {
     /// encoder would never produce. Fresh per workflow.
     let vaultRaw = TestVaultRawClient()
 
-    /// How long an activation may honestly take, read from the ladder
-    /// instead of guessed: every rung the manager will climb, at its
-    /// own pacing. A step that waits less than this and then fails is
-    /// not measuring the tunnel, it is measuring its own impatience —
-    /// a slow but correct connect would print red.
-    var activationBudget: Double {
-        Double(tunnels.maxRetries) * tunnels.retryInterval
-    }
+    /// How long an activation may honestly take, read from the
+    /// manager's own ceiling instead of re-derived here. The ladder's
+    /// real pacing exceeds `maxRetries * retryInterval`: rung 0 spends
+    /// its pre-flight budget and every rung its NE round-trips BEFORE
+    /// the retry timer even arms — the bare product that used to sit
+    /// here undersized every honest climb by construction. Know what
+    /// the ceiling is NOT: a whole-ladder wall clock. It bounds one
+    /// attempt's SILENCE and is re-armed on every rung, so a climb
+    /// whose NE round-trips run slow can land an honest last-rung
+    /// connect past it and still print red here. That tail is
+    /// accepted by name — the ladder has no finite wall-clock bound
+    /// for a budget to chase, and `awaitStatus`'s past-deadline
+    /// recheck keeps the poll gap itself out of it. What this budget
+    /// refuses is only the old guarantee: a step that gives up before
+    /// the manager's own pacing has run is not measuring the tunnel,
+    /// it is measuring its own impatience.
+    var activationBudget: Double { tunnels.activationCeiling }
 
     /// Stops the whole suite after this step, for the one case where
     /// continuing would be dishonest rather than merely slow: the
@@ -195,6 +204,10 @@ class TestWorkflow {
             if tunnel.status == target { return true }
             try? await Task.sleep(for: .milliseconds(200))
         }
+        // One recheck past the deadline: the target can land inside
+        // the final poll gap, and giving up over a status that is
+        // already there would be the budget's own lie.
+        if tunnel.status == target { return true }
         log("status stayed \(tunnel.status) — no \(target) within \(Int(seconds))s", .warn)
         return false
     }
@@ -278,10 +291,14 @@ class TestWorkflow {
 
     private var teardowns: [(label: String, body: @MainActor () async -> Void)] = []
 
-    /// Sized for the single-residue bodies: grounding a live tunnel is
-    /// 15s, and `remove()` behind it can spend a 5s transport timeout
-    /// plus 600/1200ms backoffs on each of three vault attempts, about
-    /// 17s more.
+    /// Re-derived for the verified-sweep bodies: the longest single-
+    /// residue chain is a retried three-valued read (16.8s dark), a
+    /// retried delete (16.8s), the delete's single-attempt re-read
+    /// (5s), an NE entry removal and a prune — call it ~45s against a
+    /// vault that stays dark throughout, and the ceiling sits above
+    /// it so a net that is merely PATIENT is never clipped mid-claim.
+    /// (Grounding a live tunnel is 15s and `remove()` about 17s more —
+    /// the old sizing — both comfortably inside.)
     ///
     /// A body that loops over many ids can still exceed this against a
     /// dark vault — the vault-throwaway net is the one that can, which
@@ -294,7 +311,7 @@ class TestWorkflow {
     /// "this run stopped waiting", not "this cleanup was cancelled".
     /// A run that ends that way can report done while a sweep is still
     /// going, so the bodies stay bounded on their own.
-    private static let teardownCeiling: Double = 45
+    private static let teardownCeiling: Double = 60
 
     private func runTeardowns() async {
         guard !teardowns.isEmpty else { return }
@@ -304,7 +321,7 @@ class TestWorkflow {
         for job in jobs {
             let finished: Void? = await race(Self.teardownCeiling) { await job.body() }
             if finished == nil {
-                engine?.emit("      \(job.label): still running past \(Int(Self.teardownCeiling))s — this run stopped waiting for it", .warn)
+                engine?.emit("      \(job.label): still running past \(Int(Self.teardownCeiling))s — this run stopped waiting for it (its verdict may still print below, detached)", .warn)
             }
         }
     }

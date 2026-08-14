@@ -71,17 +71,27 @@ final class ActivationSeamWorkflow: TestWorkflow {
         let start = Date()
         while Date().timeIntervalSince(start) < 8 {
             if fake.startCount >= 1 { return (fake, manager, container) }
+            // A Stop mid-wait leaves without the skip below: the run
+            // is ending, and "vault verdict too slow" would name a
+            // cause that was never measured.
+            if Task.isCancelled { return nil }
             try? await Task.sleep(for: .milliseconds(50))
         }
         skip("environment: the rig's activation never reached startTunnel (vault verdict too slow?)")
         return nil
     }
 
-    /// Polls until `condition` holds or the budget runs out.
+    /// Polls until `condition` holds or the budget runs out. Exits on
+    /// cancellation with the truth of that moment, the way the
+    /// deadline exit does: after a Stop the sleep below throws
+    /// immediately and `try?` swallows it, so without the check every
+    /// remaining pass would spin the main actor hot for its whole
+    /// wall-clock window while the user watches Stop do nothing.
     private func settle(within seconds: Double, until condition: () -> Bool) async -> Bool {
         let start = Date()
         while Date().timeIntervalSince(start) < seconds {
             if condition() { return true }
+            if Task.isCancelled { break }
             try? await Task.sleep(for: .milliseconds(100))
         }
         return condition()
@@ -142,6 +152,7 @@ final class ActivationSeamWorkflow: TestWorkflow {
         let start = Date()
         while Date().timeIntervalSince(start) < 5 {
             if manager.removingIds.contains(identity.id) { barred = true; break }
+            if Task.isCancelled { break }
             try? await Task.sleep(for: .milliseconds(20))
         }
         guard barred else {
@@ -543,6 +554,7 @@ final class ActivationSeamWorkflow: TestWorkflow {
         let watch = Date()
         while Date().timeIntervalSince(watch) < 0.5 {
             if b.status != .waiting { slotHeld = false; break }
+            if Task.isCancelled { break }
             try? await Task.sleep(for: .milliseconds(25))
         }
         check(slotHeld && b.status == .waiting,

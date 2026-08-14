@@ -288,6 +288,7 @@ final class IsolationWorkflow: TestWorkflow {
         let start = Date()
         while Date().timeIntervalSince(start) < 12 {
             if container.lastActivationError != nil { break }
+            if Task.isCancelled { break }
             try? await Task.sleep(for: .milliseconds(100))
         }
 
@@ -339,6 +340,7 @@ final class IsolationWorkflow: TestWorkflow {
         let start = Date()
         while Date().timeIntervalSince(start) < 3 {
             if container.status == .active { reached = true; break }
+            if Task.isCancelled { break }
             try? await Task.sleep(for: .milliseconds(50))
         }
         check(reached, "driven .connected reached the real handler — status=\(container.status)")

@@ -1021,6 +1021,27 @@ class TunnelsManager {
     func refresh() async {
         await reload()
     }
+
+    /// Aligns the list from a fresh system read WITHOUT reconciling —
+    /// the teardown nets' surface. A net that just removed an entry
+    /// must prune the mirror deterministically, but running the full
+    /// reload there would let reconcile MINT entries for any decodable
+    /// payload a later net is still due to sweep: teardown must never
+    /// create what teardown exists to remove. Production's own entry
+    /// removals — `remove()` and the uninstall sweep — prune or
+    /// rebuild the list by their own hands; this stays a harness
+    /// surface.
+    func prune() async {
+        guard let providers = try? await providerFactory.loadAllFromPreferences() else { return }
+        await ingest(providers)
+        // Slot hygiene without a start: a queue slot whose row this
+        // prune just dropped would otherwise dangle with nothing left
+        // to clear it — but starting a session is a decision teardown
+        // must never make, so this clears and never hands off.
+        if let waiting = waitingTunnel, !tunnels.contains(where: { $0 === waiting }) {
+            waitingTunnel = nil
+        }
+    }
     #endif
 
     /// The single boundary where system-wide NE providers become THIS
