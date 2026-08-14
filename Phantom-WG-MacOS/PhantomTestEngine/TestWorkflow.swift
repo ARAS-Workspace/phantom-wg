@@ -179,10 +179,11 @@ class TestWorkflow {
     /// transition that never happened — though that particular stomp is
     /// no longer possible from anywhere: `TunnelContainer.refreshStatus`
     /// now refuses to lower a row the manager is driving, which
-    /// `ActivationSeamWorkflow`'s two refresh steps assert.
+    /// `ActivationSeamWorkflow`'s refresh steps assert.
     ///
-    /// Those two steps are the only place the suite calls a status
-    /// writer at all, and both call it on a side-manager container the
+    /// Those refresh steps and the watchdog step that grounds a row on
+    /// purpose are the only place the suite calls a status writer at
+    /// all, and each calls it on a side-manager container the
     /// step built itself over synthetic providers — no container the
     /// app is using has its status written by the suite. Elsewhere the
     /// suite still writes: activation bookkeeping is arranged directly

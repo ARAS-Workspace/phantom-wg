@@ -195,7 +195,7 @@ final class IsolationWorkflow: TestWorkflow {
             identity: TunnelIdentity(id: cfg.id, name: cfg.name, createdAt: Date(), isGhost: false),
             status: .disconnected
         )
-        own.isOnDemandEnabled = true // the armed rule that would feed the fight
+        own.arrangeArmed() // the armed rule that would feed the fight
         let foreign = FakeSlotProvider(
             name: "TE-GateForeign-\(runTag)",
             identity: foreignIdentity(name: "TE-GateForeign-\(runTag)"),
@@ -209,8 +209,8 @@ final class IsolationWorkflow: TestWorkflow {
         await gate.evaluateNow()
         check(gate.state == .slotHeld(holderName: "TE-GateForeign-\(runTag)"),
               "gate engaged on the foreign holder — state=\(String(describing: gate.state))")
-        check(!own.isOnDemandEnabled && own.saveCount >= 1,
-              "engaging the gate disarmed our armed rule and persisted it (saves=\(own.saveCount))")
+        check(!own.isOnDemandEnabled && !own.storedOnDemand && own.saveCount >= 1,
+              "engaging the gate disarmed our armed rule and PERSISTED it — the save count alone would also count a refusal (flag=\(own.isOnDemandEnabled), store=\(own.storedOnDemand), saves=\(own.saveCount))")
 
         // Silently: this step drives the gate by hand below, and a
         // published notification would hand the same transition to the
