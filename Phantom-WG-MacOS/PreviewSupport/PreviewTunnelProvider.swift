@@ -171,9 +171,9 @@ final class PreviewVaultClient: TunnelVaultClient {
         super.init()
     }
 
-    override func store(_ config: TunnelConfig) async -> Bool {
+    override func store(_ config: TunnelConfig) async -> Write {
         payloads[config.id] = config
-        return true
+        return .done
     }
 
     /// When set, every `read(id:)` answers with this instead of the
@@ -185,9 +185,9 @@ final class PreviewVaultClient: TunnelVaultClient {
         return payloads[id].map(Read.config) ?? .missing
     }
 
-    override func delete(id: UUID) async -> Bool {
+    override func delete(id: UUID) async -> Write {
         payloads.removeValue(forKey: id)
-        return true
+        return .done
     }
 
     /// What `ping()` answers; `nil` never resolves, so the canvas can

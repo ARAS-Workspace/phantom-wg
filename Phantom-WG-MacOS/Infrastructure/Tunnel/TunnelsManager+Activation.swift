@@ -99,20 +99,19 @@ extension TunnelsManager {
         // system would reconnect the moment the tunnel drops.
         if tunnel.isActivateOnDemandEnabled {
             Task {
-                // The same two guards the disarm-others task carries.
-                // The window is narrow and worth naming precisely, so
-                // nobody later mistakes it for the common path: the
-                // Delete button is disabled unless the tunnel is
-                // inactive, so `deleteTunnel`'s stop-then-remove pair
-                // only fires when the tunnel came UP between the
-                // confirmation dialog opening and the user confirming
-                // — an on-demand rule reconnecting it, or the respawn
-                // revive. Narrow, but the cost of losing that race is
-                // a re-minted entry the app can no longer see or
-                // delete, and the guard is one line.
-                guard !removingIds.contains(tunnel.id),
-                      tunnels.contains(where: { $0.id == tunnel.id }) else { return }
-                let disarmError = await Self.standDownRecovery(on: tunnel.tunnelProvider)
+                // The gate carries the liveness bars, read when the
+                // save RUNS. The window they close is narrow here and
+                // worth naming precisely, so nobody later mistakes it
+                // for the common path: the Delete button is disabled
+                // unless the tunnel is inactive, so `deleteTunnel`'s
+                // stop-then-remove pair only fires when the tunnel
+                // came UP between the confirmation dialog opening and
+                // the user confirming — an on-demand rule reconnecting
+                // it, or the respawn revive. Narrow, but the cost of
+                // losing that race is a re-minted entry the app can no
+                // longer see or delete.
+                let outcome = await guardedStandDown(tunnel, loggingRefusal: false)
+                if case .barred = outcome { return }
                 // A newer intent may have been granted while that save
                 // was in flight — the user changed their mind twice.
                 // The withdrawal above set the attempt id to nil, so
@@ -120,7 +119,7 @@ extension TunnelsManager {
                 // stop, and finishing it would tear down the session
                 // that start is bringing up.
                 guard tunnel.activationAttemptId == nil else { return }
-                if let disarmError {
+                if case .refused(let disarmError) = outcome {
                     // Two facts to report, and both go out: the rule
                     // could not be stood down (so the system may
                     // reconnect this tunnel on its own), and the stop
@@ -275,6 +274,60 @@ extension TunnelsManager {
         }
     }
 
+    /// Outcome of a gated disarm — see `guardedStandDown`.
+    enum StandDownOutcome {
+        case barred
+        case done
+        case refused(Error)
+    }
+
+    /// THE gate for every disarm save issued after a suspension point.
+    /// A deferred save's liveness facts must be read when the save
+    /// RUNS, never when it was decided: a save landing on an entry
+    /// that is being deleted re-mints it in the system store, and one
+    /// landing on an entry the list no longer holds writes to a row
+    /// nobody owns. Those two bars used to be copied by hand at every
+    /// deferred site — and every NEW site re-ran the lottery of
+    /// remembering them; here they are read once, at issue time, for
+    /// all of them. What stays accepted is the LANDING race ("issues,
+    /// not completes"): a save already in flight when a removal starts
+    /// can still land after it — the gate narrows that window to the
+    /// flight itself, which is as far as an uncancellable surface
+    /// allows. The membership bar is OBJECT identity, not id: a
+    /// container evicted and re-minted under the same id is precisely
+    /// the stale-provider-handle replay the house forbids ("no stale
+    /// provider object is replayed") — the new container's rule
+    /// belongs to its own lifecycle.
+    ///
+    /// Exempt by contract, not by oversight: the rung's own inline
+    /// give-up disarms (a `remove()` WAITS the rung out before
+    /// deleting, so an in-rung save cannot race a completed removal)
+    /// `disarmAllRecovery` (unconditional by design — the uninstall
+    /// sweep is the last chance to clear a rule whose flag lies), and
+    /// `remove()`'s own sequenced disarm — it runs under its own
+    /// `removingIds` entry, so routing it here would only bar itself.
+    ///
+    /// Refusals log in the standard format unless the caller carries
+    /// its own reporting surface (the watchdog's truest-reading line,
+    /// the stop's `savingFailed`).
+    @discardableResult
+    func guardedStandDown(
+        _ tunnel: TunnelContainer,
+        context: @autoclosure () -> String = "",
+        loggingRefusal: Bool = true
+    ) async -> StandDownOutcome {
+        guard !removingIds.contains(tunnel.id),
+              tunnels.contains(where: { $0 === tunnel }) else { return .barred }
+        guard let error = await Self.standDownRecovery(on: tunnel.tunnelProvider) else {
+            return .done
+        }
+        if loggingRefusal {
+            let ctx = context()
+            NSLog("[activation] recovery rule stayed armed on \(tunnel.name)\(ctx.isEmpty ? "" : " \(ctx)") — \(error.localizedDescription)")
+        }
+        return .refused(error)
+    }
+
     // Sealed at size, on purpose: this is the ladder's single entrance,
     // and the bar, the exhausted exit, the sweep, the watchdog and the
     // rung are ONE reviewed narrative whose ordering is the contract —
@@ -341,16 +394,9 @@ extension TunnelsManager {
             // says which tunnel kept its rule.
             for other in tunnels where other.id != tunnel.id && other.isActivateOnDemandEnabled {
                 Task {
-                    // Evaluated when the task RUNS, not when it is
-                    // spawned: the same liveness guard the armed stop
-                    // carries, for the same reason. A save landing on
-                    // an entry that is being deleted re-mints it in the
-                    // system store.
-                    guard !removingIds.contains(other.id),
-                          tunnels.contains(where: { $0.id == other.id }) else { return }
-                    if let error = await Self.standDownRecovery(on: other.tunnelProvider) {
-                        NSLog("[activation] recovery rule stayed armed on \(other.name) — \(error.localizedDescription)")
-                    }
+                    // Liveness reads at RUN time, and both bars, live
+                    // inside the gate — the site cannot forget them.
+                    await guardedStandDown(other)
                 }
             }
 
@@ -492,15 +538,12 @@ extension TunnelsManager {
             // leaving a connect-on-any-network rule armed would hand
             // the system a tunnel this manager just gave up on.
             //
-            // The save also shares the sweep's accepted exposure:
-            // issued before a removal and landing after it, it can
-            // re-mint the entry the user just deleted. The guards
-            // above run at wake and the issue follows synchronously,
-            // so the open window is the landing alone — the same
-            // "issues, not completes" class the sweep carries, and the
-            // cleanup family owns closing it for every disarm site at
-            // once.
-            if let disarmError = await Self.standDownRecovery(on: tunnel.tunnelProvider) {
+            // The save rides the gate, which re-reads the liveness
+            // bars AT ISSUE — the class-wide closure the old comment
+            // here promised to "the cleanup family": the open window
+            // is now the landing alone, the narrowest an uncancellable
+            // surface allows.
+            if case .refused(let disarmError) = await self.guardedStandDown(tunnel, loggingRefusal: false) {
                 // The error means the SAVE was refused, not that the
                 // rule survived. The helper re-reads the store on a
                 // refusal, so the flag usually carries the store's own

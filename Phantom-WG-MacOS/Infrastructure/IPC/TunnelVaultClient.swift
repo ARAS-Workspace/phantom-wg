@@ -57,28 +57,50 @@ class TunnelVaultClient {
 
     // MARK: - RPCs
 
+    /// Outcome of a single write. The old Bool collapsed two different
+    /// stories into one `false`, and every call site paid for it with
+    /// a verified-sounding claim over a reading that verified nothing:
+    /// `.refused` is the daemon ANSWERING no — definitive, the state
+    /// stands as it was — while `.unreachable` is no answer at all,
+    /// where the write may even have LANDED with only its reply lost.
+    /// Callers that report state must branch on the difference; a
+    /// caller that only needs success compares `== .done`.
+    enum Write: Equatable {
+        case done
+        case refused
+        case unreachable
+
+        var label: String {
+            switch self {
+            case .done: return "done"
+            case .refused: return "refused"
+            case .unreachable: return "unreachable"
+            }
+        }
+    }
+
     /// Hands a tunnel's configuration to the extension for custody.
-    /// Returns `false` on encode or transport failure — callers must
-    /// treat that as "the tunnel was not saved".
+    /// An encode failure is a local, definitive no and answers
+    /// `.refused`; transport-level silence answers `.unreachable`.
     @discardableResult
-    func store(_ config: TunnelConfig) async -> Bool {
+    func store(_ config: TunnelConfig) async -> Write {
         guard let payload = try? JSONEncoder().encode(config) else {
             os_log("store — encode FAILED", log: log, type: .error)
-            return false
+            return .refused
         }
         let id = config.id.uuidString
 
-        return await withRaceTimeout("store", seconds: 5, fallback: false) { [log] in
-            await withCheckedContinuation { (continuation: CheckedContinuation<Bool, Never>) in
+        return await withRaceTimeout("store", seconds: 5, fallback: .unreachable) { [log] in
+            await withCheckedContinuation { (continuation: CheckedContinuation<Write, Never>) in
                 let resume = SingleResume(continuation)
                 guard let proxy = self.proxy({ error in
                     os_log("store error: %{public}@", log: log, type: .error, error.localizedDescription)
-                    resume.finish(false)
+                    resume.finish(.unreachable)
                 }) else {
-                    resume.finish(false)
+                    resume.finish(.unreachable)
                     return
                 }
-                proxy.storeVault(payload, id: id) { ok in resume.finish(ok) }
+                proxy.storeVault(payload, id: id) { ok in resume.finish(ok ? .done : .refused) }
             }
         }
     }
@@ -88,19 +110,25 @@ class TunnelVaultClient {
     /// mutation issued right after a tunnel deactivation can lose the
     /// teardown/respawn race on its first try — caught live by the
     /// in-app test engine (an import right after a deactivation failed
-    /// its one-shot store). The Bool cannot tell "unreachable" from
-    /// "refused", but a store is an idempotent upsert, so retrying a
-    /// refusal is harmless.
+    /// its one-shot store). Both non-done outcomes are retried — a
+    /// store is an idempotent upsert, so retrying a refusal is
+    /// harmless and a respawn-window keychain door can open between
+    /// attempts — and the LAST outcome is returned, typed, so the
+    /// caller still learns how the final attempt ended. A cancelled
+    /// task sends nothing further and answers the last completed
+    /// attempt's outcome — `.unreachable` when nothing was sent.
     @discardableResult
-    func store(_ config: TunnelConfig, attempts: Int) async -> Bool {
+    func store(_ config: TunnelConfig, attempts: Int) async -> Write {
+        var outcome = Write.unreachable
         for attempt in 1...max(1, attempts) {
-            if Task.isCancelled { return false }
-            if await store(config) { return true }
+            if Task.isCancelled { return outcome }
+            outcome = await store(config)
+            if outcome == .done { return outcome }
             if attempt < attempts {
                 try? await Task.sleep(for: .milliseconds(600 * attempt))
             }
         }
-        return false
+        return outcome
     }
 
     /// Outcome of a single read. The two failures are different
@@ -200,37 +228,43 @@ class TunnelVaultClient {
         return result
     }
 
+    /// Deleting an absent id answers `.done` (idempotent); `.refused`
+    /// is the daemon answering that the keychain would not give the
+    /// item up, `.unreachable` is silence — where the delete may have
+    /// landed with only its reply lost.
     @discardableResult
-    func delete(id: UUID) async -> Bool {
+    func delete(id: UUID) async -> Write {
         let key = id.uuidString
 
-        return await withRaceTimeout("delete", seconds: 5, fallback: false) { [log] in
-            await withCheckedContinuation { (continuation: CheckedContinuation<Bool, Never>) in
+        return await withRaceTimeout("delete", seconds: 5, fallback: .unreachable) { [log] in
+            await withCheckedContinuation { (continuation: CheckedContinuation<Write, Never>) in
                 let resume = SingleResume(continuation)
                 guard let proxy = self.proxy({ error in
                     os_log("delete error: %{public}@", log: log, type: .error, error.localizedDescription)
-                    resume.finish(false)
+                    resume.finish(.unreachable)
                 }) else {
-                    resume.finish(false)
+                    resume.finish(.unreachable)
                     return
                 }
-                proxy.deleteVault(id: key) { ok in resume.finish(ok) }
+                proxy.deleteVault(id: key) { ok in resume.finish(ok ? .done : .refused) }
             }
         }
     }
 
     /// Delete-by-id is idempotent the same way — see `store(_:attempts:)`
-    /// for why a plain Bool retry is safe here.
+    /// for the retry-and-return-last contract.
     @discardableResult
-    func delete(id: UUID, attempts: Int) async -> Bool {
+    func delete(id: UUID, attempts: Int) async -> Write {
+        var outcome = Write.unreachable
         for attempt in 1...max(1, attempts) {
-            if Task.isCancelled { return false }
-            if await delete(id: id) { return true }
+            if Task.isCancelled { return outcome }
+            outcome = await delete(id: id)
+            if outcome == .done { return outcome }
             if attempt < attempts {
                 try? await Task.sleep(for: .milliseconds(600 * attempt))
             }
         }
-        return false
+        return outcome
     }
 
     /// Outcome of the session probe. Three stories the gate tells

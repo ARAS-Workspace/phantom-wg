@@ -269,7 +269,7 @@ class TestWorkflow {
     /// This is the net under them, for the paths a step never reaches:
     /// a Stop mid-body, an early `return`, a precondition skip. Under a
     /// Stop the owning step cannot sweep even if it is reached —
-    /// `vault.delete(id:attempts:)` returns false without sending a
+    /// `vault.delete(id:attempts:)` answers .unreachable without sending a
     /// request once the task is cancelled — so on that path the net is
     /// not a second chance, it is the only one.
     ///

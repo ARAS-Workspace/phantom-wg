@@ -223,7 +223,7 @@ class TunnelsManager {
         // Secrets first. A tunnel entry whose vault payload is missing
         // cannot start, so the vault write gates the whole operation —
         // and a failure here leaves the system exactly as it was.
-        guard await vault.store(config, attempts: 3) else {
+        guard await vault.store(config, attempts: 3) == .done else {
             throw TunnelManagementError.vaultUnavailable
         }
 
@@ -389,7 +389,7 @@ class TunnelsManager {
             // A failed delete must abort the write: letting it proceed
             // past an unanswered dedup is the one way a name collision
             // can be born — exactly what this method's contract forbids.
-            guard await vault.delete(id: other.id, attempts: 3) else {
+            guard await vault.delete(id: other.id, attempts: 3) == .done else {
                 throw TunnelManagementError.vaultUnavailable
             }
             NSLog("[vault] dropped stale payload \(other.id) that claimed the name '\(name)'")
@@ -446,7 +446,7 @@ class TunnelsManager {
         // this, the vault holds the edit while the identity projection
         // stays stale — the tunnel still starts from the new payload,
         // and the next reconcile pass realigns the projection.
-        guard await vault.store(config, attempts: 3) else {
+        guard await vault.store(config, attempts: 3) == .done else {
             throw TunnelManagementError.vaultUnavailable
         }
 
@@ -528,7 +528,7 @@ class TunnelsManager {
         // never asked. An earlier version withdrew first and left a
         // surviving tunnel frozen mid-activation with nothing running
         // to move it — a worse outcome than the failure it reported.
-        guard await vault.delete(id: tunnel.id, attempts: 3) else {
+        guard await vault.delete(id: tunnel.id, attempts: 3) == .done else {
             throw TunnelManagementError.vaultUnavailable
         }
 
@@ -781,11 +781,10 @@ class TunnelsManager {
                             // EVIDENCE: a proven holder means our
                             // armed rule is fuel, whatever the row is
                             // doing by now. It stops only for entries
-                            // we must not write to at all.
-                            guard !self.removingIds.contains(tunnel.id),
-                                  self.tunnels.contains(where: { $0 === tunnel }) else { return }
-                            if let disarmError = await Self.standDownRecovery(on: tunnel.tunnelProvider) {
-                                NSLog("[activation] recovery rule stayed armed on \(tunnel.name) after a proven foreign holder — \(disarmError.localizedDescription)")
+                            // we must not write to at all — the
+                            // gate's bar, read at issue time.
+                            if case .barred = await self.guardedStandDown(tunnel, context: "after a proven foreign holder") {
+                                return
                             }
                             // The error belongs to the ROW, so it
                             // answers to the row: only an attempt that

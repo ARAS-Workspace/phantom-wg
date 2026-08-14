@@ -76,8 +76,9 @@ final class VaultIntegrityWorkflow: TestWorkflow {
         }
         for cfg in [standalone, ghost] {
             tracked.append(cfg)
-            guard await vault.store(cfg) else {
-                fail("store refused: \(cfg.name)")
+            let stored = await vault.store(cfg)
+            guard stored == .done else {
+                fail("store \(stored.label): \(cfg.name)")
                 continue
             }
             switch await vault.read(id: cfg.id) {
@@ -100,8 +101,9 @@ final class VaultIntegrityWorkflow: TestWorkflow {
         }
         var v2 = original
         v2.name = original.name + "-v2"
-        guard await vault.store(v2) else {
-            fail("rewrite store refused")
+        let storedV2 = await vault.store(v2)
+        guard storedV2 == .done else {
+            fail("rewrite store \(storedV2.label)")
             return
         }
         tracked[0] = v2
@@ -128,8 +130,9 @@ final class VaultIntegrityWorkflow: TestWorkflow {
             return
         }
         tracked.append(twin)
-        guard await vault.store(twin) else {
-            fail("twin store refused")
+        let storedTwin = await vault.store(twin)
+        guard storedTwin == .done else {
+            fail("twin store \(storedTwin.label)")
             return
         }
         // Payload identity, not mere decodability: each id must hand
@@ -166,19 +169,19 @@ final class VaultIntegrityWorkflow: TestWorkflow {
         tracked.append(contentsOf: pool)
 
         for cfg in pool {
-            if !(await vault.store(cfg)) { fail("store refused: \(cfg.name)") }
+            if case let outcome = await vault.store(cfg), outcome != .done { fail("store \(outcome.label): \(cfg.name)") }
             expected.insert(cfg.id)
         }
         await verifyExactSet(expected, "after storing 10")
 
         for (index, cfg) in pool.enumerated() where index % 2 == 0 {
-            if !(await vault.delete(id: cfg.id)) { fail("delete refused: \(cfg.name)") }
+            if case let outcome = await vault.delete(id: cfg.id), outcome != .done { fail("delete \(outcome.label): \(cfg.name)") }
             expected.remove(cfg.id)
         }
         await verifyExactSet(expected, "after deleting 5")
 
         for (index, cfg) in pool.enumerated() where index % 2 == 0 {
-            if !(await vault.store(cfg)) { fail("re-store refused: \(cfg.name)") }
+            if case let outcome = await vault.store(cfg), outcome != .done { fail("re-store \(outcome.label): \(cfg.name)") }
             expected.insert(cfg.id)
         }
         await verifyExactSet(expected, "after re-storing 5")
@@ -313,7 +316,7 @@ final class VaultIntegrityWorkflow: TestWorkflow {
                 log("cleanup: entry remove failed — \(name) lingers in the list (\(error.localizedDescription))", .warn)
             }
         }
-        if !(await vault.delete(id: cfg.id, attempts: 3)) {
+        if await vault.delete(id: cfg.id, attempts: 3) != .done {
             log("cleanup: corrupt payload delete failed — \(name) lingers in the vault", .warn)
         }
     }
@@ -368,9 +371,9 @@ final class VaultIntegrityWorkflow: TestWorkflow {
                 // broken-custody state this gate exists to prevent.
                 let verdict = await self.verifiedDelete(cfg.id)
                 switch verdict {
-                case .swept, .sweptReplyLost:
-                    notes.append(verdict == .sweptReplyLost
-                        ? "payload swept (the delete's reply was lost)" : "payload swept")
+                case .swept, .sweptOnReread:
+                    notes.append(verdict == .sweptOnReread
+                        ? "payload swept (verified gone on re-read)" : "payload swept")
                     switch await self.verifiedEntryRemoval(id: cfg.id, via: container.tunnelProvider) {
                     case .removed:
                         notes.append("NE entry removed")
@@ -438,7 +441,7 @@ final class VaultIntegrityWorkflow: TestWorkflow {
     /// container ref survives ingest, so the entry comes down even
     /// while the list hides the tunnel (this gate's RED state).
     private func cleanupVisibilityBase(_ container: TunnelContainer, _ id: UUID) async {
-        guard await vault.delete(id: id, attempts: 3) else {
+        guard await vault.delete(id: id, attempts: 3) == .done else {
             log("cleanup: vault delete failed — NE entry left in place so the custody row stays reachable", .warn)
             return
         }
@@ -461,7 +464,7 @@ final class VaultIntegrityWorkflow: TestWorkflow {
     /// step reaches); storing the same payload twice changes nothing
     /// (the client's retry ladder re-stores after a timeout that hid a
     /// landed write); and deleting an absent or already-deleted id
-    /// answers true (remove()'s retry path wedges the tunnel as
+    /// answers done (remove()'s retry path wedges the tunnel as
     /// unremovable if this ever regresses).
     private func upsertSemantics() async {
         guard let cfg = TestConfigFactory.throwaway(name: "TE-Heal-\(runTag)") else {
@@ -477,8 +480,9 @@ final class VaultIntegrityWorkflow: TestWorkflow {
             fail("precondition broke — corrupt write did not read .undecodable")
             return
         }
-        guard await vault.store(cfg) else {
-            fail("valid store over a corrupt slot refused — heal-in-place broken")
+        let healed = await vault.store(cfg)
+        guard healed == .done else {
+            fail("valid store over a corrupt slot \(healed.label) — heal-in-place unproven")
             return
         }
         if case .config(let healed) = await vault.read(id: cfg.id) {
@@ -487,8 +491,9 @@ final class VaultIntegrityWorkflow: TestWorkflow {
             fail("healed slot did not read back as a config")
         }
 
-        guard await vault.store(cfg) else {
-            fail("second identical store refused — a retry after a timed-out-but-landed write would not be harmless")
+        let restored = await vault.store(cfg)
+        guard restored == .done else {
+            fail("second identical store \(restored.label) — a retry after a timed-out-but-landed write would not be harmless")
             return
         }
         if case .config(let again) = await vault.read(id: cfg.id) {
@@ -497,18 +502,19 @@ final class VaultIntegrityWorkflow: TestWorkflow {
             fail("double-stored slot did not read back as a config")
         }
 
-        check(await vault.delete(id: UUID()), "deleting a never-stored id answers true")
+        check(await vault.delete(id: UUID()) == .done, "deleting a never-stored id answers done")
         guard let twice = TestConfigFactory.throwaway(name: "TE-DelTwice-\(runTag)") else {
             fail("factory produced no config")
             return
         }
         tracked.append(twice)
-        guard await vault.store(twice) else {
-            fail("store refused: \(twice.name)")
+        let storedTwice = await vault.store(twice)
+        guard storedTwice == .done else {
+            fail("store \(storedTwice.label): \(twice.name)")
             return
         }
-        check(await vault.delete(id: twice.id), "first delete answers true")
-        check(await vault.delete(id: twice.id), "second delete of the same id answers true")
+        check(await vault.delete(id: twice.id) == .done, "first delete answers done")
+        check(await vault.delete(id: twice.id) == .done, "second delete of the same id answers done")
         if case .missing = await vault.read(id: twice.id) {
             log("deleted id reads back .missing", .ok)
         } else {
@@ -640,25 +646,33 @@ extension VaultIntegrityWorkflow {
         }
     }
 
-    /// How a sweep's outcome is decided. The delete Bool alone cannot
-    /// tell "refused" from "unreachable" — and a delete can even LAND
-    /// with only its reply lost — so a false answer is followed by a
-    /// re-read, and each verdict claims exactly what was observed.
-    private enum SweepVerdict { case swept, sweptReplyLost, stillPresent, unverified }
+    /// How a sweep's outcome is decided. NEITHER non-done delete
+    /// answer proves presence — a refusal can be the keychain door
+    /// failing ("could not tell whose it is") or a slot that is not
+    /// ours, and silence can be a landed delete with its reply lost —
+    /// so BOTH are followed by one re-read, and each verdict claims
+    /// exactly what was observed.
+    private enum SweepVerdict { case swept, sweptOnReread, stillPresent, unverified }
 
     private func verifiedDelete(_ id: UUID) async -> SweepVerdict {
-        if await vault.delete(id: id, attempts: 3) { return .swept }
-        // ONE attempt, deliberately: three failed deletes have already
-        // established sustained darkness or refusal, and a landed
-        // delete whose reply was lost makes the NEXT delete attempt
-        // answer true (deleting an absent id is idempotent-true), so
-        // this read serves the vault that answers NOW. A dark one
-        // earns .unverified without another 17s of patience — the
-        // teardown ceiling is sized against exactly these chains.
-        switch await vault.read(id: id) {
-        case .missing: return .sweptReplyLost
-        case .unreachable: return .unverified
-        default: return .stillPresent
+        switch await vault.delete(id: id, attempts: 3) {
+        case .done:
+            return .swept
+        case .refused, .unreachable:
+            // NEITHER non-done answer proves presence: a refusal can
+            // be the keychain door failing ("could not tell whose it
+            // is — do not claim it is gone", the daemon's own arm) or
+            // an unstamped slot that is not ours to touch — and
+            // silence can be a landed delete with its reply lost. The
+            // ONE read below serves the vault that answers NOW; a
+            // dark one earns .unverified without another 17s of
+            // patience — the teardown ceiling is sized against
+            // exactly these chains.
+            switch await vault.read(id: id) {
+            case .missing: return .sweptOnReread
+            case .unreachable: return .unverified
+            default: return .stillPresent
+            }
         }
     }
 
@@ -787,8 +801,8 @@ extension VaultIntegrityWorkflow {
                     switch await verifiedDelete(id) {
                     case .swept:
                         notes.append("leftover payload swept")
-                    case .sweptReplyLost:
-                        notes.append("leftover payload swept (the delete's reply was lost)")
+                    case .sweptOnReread:
+                        notes.append("leftover payload swept (verified gone on re-read)")
                     case .stillPresent:
                         notes.append("leftover payload still present")
                         stuck = true
@@ -819,9 +833,9 @@ extension VaultIntegrityWorkflow {
                 // surface that can still reach this pair.
                 let verdict = await verifiedDelete(id)
                 switch verdict {
-                case .swept, .sweptReplyLost:
-                    notes.append(verdict == .sweptReplyLost
-                        ? "payload swept (the delete's reply was lost)" : "payload swept")
+                case .swept, .sweptOnReread:
+                    notes.append(verdict == .sweptOnReread
+                        ? "payload swept (verified gone on re-read)" : "payload swept")
                     switch await verifiedEntryRemoval(id: id, via: base.tunnelProvider) {
                     case .removed:
                         notes.append("hidden NE entry removed")
@@ -871,8 +885,8 @@ extension VaultIntegrityWorkflow {
             return
         }
         // Only what is still there is swept, and only a delete
-        // that answered true counts — deleting an id the vault no
-        // longer holds also answers true, which is why the read
+        // that answered done counts — deleting an id the vault no
+        // longer holds also answers done, which is why the read
         // comes first and the count means "was there, now gone".
         // An `.unreachable` read is neither: it proves nothing
         // about that id and it means the next fifteen will each
@@ -905,7 +919,7 @@ extension VaultIntegrityWorkflow {
                     stuck += 1
                     continue
                 }
-                if await self.vault.delete(id: id, attempts: 3) {
+                if await self.vault.delete(id: id, attempts: 3) == .done {
                     swept += 1
                     cleared.insert(id)
                     stuckStreak = 0

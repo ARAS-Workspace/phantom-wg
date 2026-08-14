@@ -75,17 +75,17 @@ final class IsolationWorkflow: TestWorkflow {
             return
         }
         // The step sweeps this on every path it reaches, but under a
-        // Stop it cannot: a cancelled task's `vault.delete` returns
-        // false without sending anything. This is the only sweep that
-        // still works on that path.
+        // Stop it cannot: a cancelled task's `vault.delete` answers
+        // `.unreachable` without sending anything. This is the only
+        // sweep that still works on that path.
         onTeardown("corrupt plant") { [weak self] in
             guard let self else { return }
             if case .missing = await self.vault.read(id: corruptId) {
                 self.log("teardown: corrupt plant already swept by the step")
                 return
             }
-            let gone = await self.vault.delete(id: corruptId, attempts: 3)
-            self.log("teardown: corrupt plant swept=\(gone)", gone ? .warn : .error)
+            let outcome = await self.vault.delete(id: corruptId, attempts: 3)
+            self.log("teardown: corrupt plant delete \(outcome.label)", outcome == .done ? .warn : .error)
         }
         // Precondition, proven not assumed: the probe channel is alive
         // and answers .undecodable RIGHT NOW — without this, a vault
@@ -93,8 +93,8 @@ final class IsolationWorkflow: TestWorkflow {
         // also classifies free) without touching the branch under test.
         guard case .undecodable = await vault.read(id: corruptId) else {
             fail("precondition broke — corrupt write did not read .undecodable")
-            if !(await vault.delete(id: corruptId, attempts: 3)) {
-                log("cleanup: corrupt plant delete failed — inert undecodable payload left in the vault", .warn)
+            if case let outcome = await vault.delete(id: corruptId, attempts: 3), outcome != .done {
+                log("cleanup: corrupt plant delete \(outcome.label) — an inert undecodable payload may remain in the vault", .warn)
             }
             return
         }
@@ -106,8 +106,8 @@ final class IsolationWorkflow: TestWorkflow {
         let verdict = await verdict(over: [occupying])
         check(verdict == .free,
               "own undecodable payload's active session is NOT a foreign holder — verdict=\(verdict)")
-        if !(await vault.delete(id: corruptId, attempts: 3)) {
-            log("cleanup: corrupt plant delete failed — inert undecodable payload left in the vault", .warn)
+        if case let outcome = await vault.delete(id: corruptId, attempts: 3), outcome != .done {
+            log("cleanup: corrupt plant delete \(outcome.label) — an inert undecodable payload may remain in the vault", .warn)
         }
     }
 
@@ -138,8 +138,9 @@ final class IsolationWorkflow: TestWorkflow {
             fail("factory produced no config")
             return
         }
-        guard await vault.store(cfg, attempts: 3) else {
-            fail("store refused: \(cfg.name)")
+        let stored = await vault.store(cfg, attempts: 3)
+        guard stored == .done else {
+            fail("store \(stored.label): \(cfg.name)")
             return
         }
         // This one is DECODABLE, which makes it the heaviest residue
@@ -166,13 +167,25 @@ final class IsolationWorkflow: TestWorkflow {
                     stuck = true
                 }
             }
-            if case .missing = await self.vault.read(id: cfg.id) {
-                // Gone, by the step or by the remove above.
-            } else if await self.vault.delete(id: cfg.id, attempts: 3) {
-                notes.append("payload swept")
-            } else {
-                notes.append("payload still present")
+            switch await self.vault.read(id: cfg.id) {
+            case .missing:
+                break // Gone, by the step or by the remove above.
+            case .unreachable:
+                // A reading that verified nothing claims nothing —
+                // and loudly, per the cleanup doctrine.
+                notes.append("vault unreachable — payload state unverified")
                 stuck = true
+            default:
+                switch await self.vault.delete(id: cfg.id, attempts: 3) {
+                case .done:
+                    notes.append("payload swept")
+                case .refused:
+                    notes.append("payload delete refused")
+                    stuck = true
+                case .unreachable:
+                    notes.append("vault went unreachable — payload state unverified")
+                    stuck = true
+                }
             }
             self.log("teardown: gate-own plant — \(notes.isEmpty ? "already swept by the step" : notes.joined(separator: ", "))",
                      stuck ? .error : (notes.isEmpty ? .info : .warn))
@@ -210,8 +223,8 @@ final class IsolationWorkflow: TestWorkflow {
         // Checked cleanup: a leftover decodable payload is NOT inert —
         // the live reconcile would materialize it as a real tunnel. If
         // this delete fails, that row will surface in the list; say so.
-        if !(await vault.delete(id: cfg.id, attempts: 3)) {
-            log("cleanup: vault delete failed — '\(cfg.name)' may appear in the tunnel list; delete it there", .warn)
+        if case let outcome = await vault.delete(id: cfg.id, attempts: 3), outcome != .done {
+            log("cleanup: vault delete \(outcome.label) — '\(cfg.name)' may appear in the tunnel list; delete it there", .warn)
         }
         // Belt for the drain race: a live reload that straddled the
         // 600ms drain can have reconciled the throwaway into a REAL
