@@ -91,7 +91,14 @@ enum ConfParser {
 
             // Section header
             if stripped.hasPrefix("["), stripped.hasSuffix("]") {
-                let name = String(stripped.dropFirst().dropLast()).lowercased()
+                // Trimmed like every key below, and for the same
+                // reason: a stray space inside the brackets —
+                // "[Peer ]" — must not mint a DISTINCT section that
+                // dodges the duplicate guard while parse() reads only
+                // the exact-spelled name, silently dropping the whole
+                // peer the variant carried.
+                let name = String(stripped.dropFirst().dropLast())
+                    .trimmingCharacters(in: .whitespaces).lowercased()
                 // Each section is a singleton here. A repeated header —
                 // most often a second [Peer] — used to merge into the
                 // first (last value wins per key), silently collapsing
@@ -117,6 +124,12 @@ enum ConfParser {
             if multiEntryKeys.contains(key), let existing = result[section]?[key] {
                 result[section]?[key] = existing + ", " + value
             } else {
+                // Scalar keys are deliberately last-wins within a
+                // section (a repeated Endpoint/PrivateKey line simply
+                // overwrites) — the duplicate guard above rejects
+                // section-level ambiguity only. Escalating repeated
+                // scalar keys to a ParseError is a cross-repo decision
+                // (iOS parser parity plus new error copy).
                 result[section]?[key] = value
             }
         }
