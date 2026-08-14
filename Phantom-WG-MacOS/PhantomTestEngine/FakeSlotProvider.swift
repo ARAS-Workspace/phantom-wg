@@ -11,13 +11,14 @@ import NetworkExtension
 /// assert the negative space: what must NOT happen.
 ///
 /// It is also the harness's only way INTO the activation machinery.
-/// Three branches of that machinery cannot be reached from outside
+/// Five branches of that machinery cannot be reached from outside
 /// otherwise, because they need a system that misbehaves in a specific
 /// way at a specific moment: a disconnect whose error record arrives
-/// late, a disconnect whose record never arrives, and a save that
-/// hangs or fails while a rung is mid-flight. Every answer below
-/// defaults to the old always-immediate behaviour, so a provider
-/// nobody configures behaves exactly as it did before.
+/// late, a disconnect whose record never arrives, a save that hangs or
+/// fails while a rung is mid-flight, a re-read the store refuses, and
+/// a start the system throws on. Every answer below defaults to the
+/// old always-immediate behaviour, so a provider nobody configures
+/// behaves exactly as it did before.
 final class FakeSlotProvider: TunnelProviding {
 
     // MARK: - Injectable answers
@@ -42,11 +43,37 @@ final class FakeSlotProvider: TunnelProviding {
         case never
     }
 
+    /// What `startTunnel` does. Production declares it `throws` and two
+    /// give-up exits live behind that throw — a local start failure and
+    /// the collision verdict it fetches — so while this always
+    /// succeeded, the exits could not be reached from here at all.
+    enum StartAnswer {
+        case succeeds
+        case fails(NSError)
+    }
+
     var saveAnswer: SaveAnswer = .succeeds
     /// What `removePreferences` does. A slow answer is the only way to
     /// hold a removal open long enough to drive anything against it,
     /// and removal windows are where the entry-resurrection races live.
     var removeAnswer: SaveAnswer = .succeeds
+    /// What `loadPreferences` does — the same shapes a save can answer
+    /// with, because it is the same preferences round-trip. A load that
+    /// FAILS is the only way into `standDownRecovery`'s pessimistic
+    /// half: the branch that restores what the tunnel came in with when
+    /// even the store cannot be asked.
+    ///
+    /// Both are spent by the two local give-up steps, which is what
+    /// they were cut for: a refused load drives the exit behind
+    /// `loadPreferences`, and a throwing start drives the one behind
+    /// `startTunnel` — branches the suite could not reach at all while
+    /// this fake always said yes. What is still uncovered is the
+    /// pessimistic half of `standDownRecovery`, which needs a load that
+    /// refuses UNDER a refused save. Both default to the old
+    /// always-succeeds behaviour, so a provider nobody configures
+    /// behaves exactly as it did.
+    var loadAnswer: SaveAnswer = .succeeds
+    var startAnswer: StartAnswer = .succeeds
     var disconnectAnswer: DisconnectAnswer = .none
 
     /// Handlers for the `.never`/`.hangs` answers, held on purpose. A
@@ -200,8 +227,12 @@ final class FakeSlotProvider: TunnelProviding {
 
     // MARK: - TunnelProviding
 
+    /// Counted before it can throw: the call HAPPENED, and a step that
+    /// asserts "no session was raised" is asking about the call, not
+    /// about its outcome.
     func startTunnel() throws {
         startCount += 1
+        if case .fails(let error) = startAnswer { throw error }
     }
 
     func stopTunnel() { stopCount += 1 }
@@ -244,17 +275,30 @@ final class FakeSlotProvider: TunnelProviding {
     /// every re-read agree with the app, so the divergence this fake
     /// now models could not be produced at all.
     ///
-    /// Only the SUCCESSFUL half of that re-read is reachable from here:
-    /// this load cannot fail, so `standDownRecovery`'s pessimistic
-    /// fallback — restoring the entry value when even the re-read is
-    /// refused — is still uncovered and waits on an injectable answer.
-    /// It repaints the on-demand flag alone; a real load restores the
-    /// whole configuration, which is why the projection rollback in
-    /// `modify()` cannot be measured through this surface either.
+    /// A REFUSED load paints nothing, which is what makes the
+    /// pessimistic fallback observable: the caller is left with the
+    /// value it wrote and has to decide what to report. It repaints the
+    /// on-demand flag alone; a real load restores the whole
+    /// configuration, which is why the projection rollback in
+    /// `modify()` still cannot be measured through this surface.
     func loadPreferences(completion: @escaping @Sendable (Error?) -> Void) {
         loadCount += 1
-        isOnDemandEnabled = storedOnDemand
-        completion(nil)
+        switch loadAnswer {
+        case .succeeds:
+            isOnDemandEnabled = storedOnDemand
+            completion(nil)
+        case .fails(let error):
+            completion(error)
+        case .succeedsAfter(let seconds):
+            // Read at ANSWER time, not at issue: a read reports what is
+            // there when it answers.
+            DispatchQueue.main.asyncAfter(deadline: .now() + seconds) { [weak self] in
+                if let self { self.isOnDemandEnabled = self.storedOnDemand }
+                completion(nil)
+            }
+        case .hangs:
+            heldCompletions.append(completion)
+        }
     }
 
     /// The store's second writer: a removal takes the configuration and

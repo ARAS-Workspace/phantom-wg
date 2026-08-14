@@ -312,8 +312,30 @@ final class IsolationWorkflow: TestWorkflow {
         }
         check(container.status == .inactive, "tunnel returned to inactive — status=\(container.status)")
         check(!own.isEnabled, "isEnabled was never set against an occupied slot")
-        check(!own.isOnDemandEnabled, "recovery was never armed against an occupied slot")
-        check(own.saveCount == 0, "no preferences save was issued (saves=\(own.saveCount))")
+        check(!own.isOnDemandEnabled && !own.storedOnDemand,
+              "recovery was never armed against an occupied slot — in the flag or the store (flag=\(own.isOnDemandEnabled), store=\(own.storedOnDemand))")
+        // The contract as of this session, and the reason the number
+        // moved: the collision exit used to leave this slot alone, which
+        // read as "nothing was written" and was in fact "the one exit
+        // that proved a foreign holder and left our rule wherever it
+        // was". It now stands the rule down like every sibling belt, so
+        // exactly ONE save belongs to this path — and it is a
+        // stand-down, never an arm, which the flag and store above say
+        // in their own right. (The previous version asserted zero and
+        // went red on that change: the guard doing its job.)
+        // Waited for, then pinned: the stand-down is issued AFTER the
+        // verdict is written and on the far side of an executor hop, so
+        // reading the counter the instant the error appears would race
+        // it. The window closes on the first save; the equality then
+        // says no second one followed.
+        let disarmStart = Date()
+        while Date().timeIntervalSince(disarmStart) < 3 {
+            if own.saveCount >= 1 { break }
+            if Task.isCancelled { break }
+            try? await Task.sleep(for: .milliseconds(50))
+        }
+        check(own.saveCount == 1,
+              "the only preferences save was the collision stand-down (saves=\(own.saveCount), expected 1)")
         check(own.startCount == 0, "startTunnel was never called (starts=\(own.startCount))")
     }
 

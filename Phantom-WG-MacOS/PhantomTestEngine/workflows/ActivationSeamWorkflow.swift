@@ -41,10 +41,17 @@ final class ActivationSeamWorkflow: TestWorkflow {
             WorkflowStep("A Grounded Row Cannot Silence Its Own Attempt", groundedRowIsStillWithdrawn),
             WorkflowStep("The Sweep Reaches A Rule The Flag Denies", sweepReachesAStoreOnlyRule),
             WorkflowStep("A Stop Reaches A Rule The Flag Denies", stopReachesAStoreOnlyRule),
+            WorkflowStep("A Revived Session Sheds The Failed Attempt's Verdict", revivalClearsTheVerdict),
+            WorkflowStep("A Give-Up Does Not Ground A Session The System Holds", giveUpDoesNotGroundALiveSession),
+            WorkflowStep("The Watchdog Leaves A Rising Session Alone", peekLeavesARisingSessionAlone),
+            WorkflowStep("A Config That Will Not Load Loses Its Rule", loadFailureStandsTheRuleDown),
+            WorkflowStep("A Start The System Refuses Loses Its Rule", startFailureStandsTheRuleDown),
         ]
     }
 
-    private let runTag = String(UUID().uuidString.prefix(8))
+    // Reachable from the sibling file that carries the
+    // rule-ownership steps.
+    let runTag = String(UUID().uuidString.prefix(8))
 
     // MARK: - Shared rig
 
@@ -52,7 +59,7 @@ final class ActivationSeamWorkflow: TestWorkflow {
     /// belt scenario starts from: activation issued, `startTunnel`
     /// observed, session never connected. Returns nil (with the step
     /// verdict already recorded) when that point is not reached.
-    private func activatedRig(
+    func activatedRig(
         name: String,
         configure: (FakeSlotProvider) -> Void
     ) async -> (fake: FakeSlotProvider, manager: TunnelsManager, container: TunnelContainer)? {
@@ -90,7 +97,7 @@ final class ActivationSeamWorkflow: TestWorkflow {
     /// immediately and `try?` swallows it, so without the check every
     /// remaining pass would spin the main actor hot for its whole
     /// wall-clock window while the user watches Stop do nothing.
-    private func settle(within seconds: Double, until condition: () -> Bool) async -> Bool {
+    func settle(within seconds: Double, until condition: () -> Bool) async -> Bool {
         let start = Date()
         while Date().timeIntervalSince(start) < seconds {
             if condition() { return true }
@@ -381,8 +388,9 @@ final class ActivationSeamWorkflow: TestWorkflow {
     /// rollback, because the tunnel came in armed and the store still
     /// holds the rule, so both answers are `true`. The load counter
     /// below proves only that the store was ASKED. Telling the two
-    /// apart needs a load that can fail, which this fake cannot yet
-    /// answer.
+    /// apart needs a load that REFUSES — the fake can answer that way
+    /// now, and the step that spends it belongs to the coverage work,
+    /// not here.
     private func refusedDisarmSurfaces() async {
         let identity = TunnelIdentity(id: UUID(), name: "TE-Seam-Refused-\(runTag)", createdAt: Date(), isGhost: false)
         let fake = FakeSlotProvider(name: identity.name, identity: identity, status: .connected)
@@ -1055,362 +1063,5 @@ final class ActivationSeamWorkflow: TestWorkflow {
         check(explanationSurvived, "and the withdrawal's explanation survived the grounding")
     }
 
-}
-
-// The watchdog family's newest pair, in the same file and behind the
-// same access as the rest: the class body is at its reviewed size, and
-// the house splits at a type boundary rather than moving a threshold.
-private extension ActivationSeamWorkflow {
-
-    /// The watchdog's third cause, and the one that used to disqualify
-    /// the watchdog itself: the row is GROUNDED under a live attempt.
-    ///
-    /// A `.disconnecting` lands mid-attempt and paints `.deactivating`
-    /// without touching the ledger — that much the dying-session step
-    /// already drives. What follows here is the other half the field
-    /// produces: the system's `.disconnected` tail arrives with no
-    /// notification behind it (the app was in the background, or the
-    /// callback was simply lost), and the next list refresh derives the
-    /// row through the status gate — which lets a lowering value land
-    /// on a `.deactivating` row on purpose. The row reads `.inactive`,
-    /// the attempt ledger is untouched, and nothing is left to advance
-    /// it: the rung closed on its own guard long ago.
-    ///
-    /// While the ceiling read the STATUS, that grounded row was filed
-    /// as "resolved" and the watchdog withdrew in silence — no error,
-    /// no hand-off, and the rule this activation armed left standing in
-    /// the store on a tunnel the manager had given up on. The user saw
-    /// a toggle that switched itself off and said nothing.
-    ///
-    /// So the seal is the ledger, not the paint: the withdrawal must
-    /// still happen on a row that already reads `.inactive`, and the
-    /// store — not just the flag — must end disarmed. That last half is
-    /// only visible because the fake keeps the two apart.
-    ///
-    /// Deterministic by construction: the rig's own arm save answers,
-    /// so the rule really is in the store before anything is grounded,
-    /// and the ladder is scaled the way the wedged step's is — two
-    /// retries at a second, which the formula counts as three rungs'
-    /// worth, plus the pre-flight's own two-second budget: a
-    /// five-second ceiling that STARTS at rung 0, pre-flight included.
-    /// Wall-clock: that ceiling, plus the settle windows around it —
-    /// about seven.
-    func groundedRowIsStillWithdrawn() async {
-        let identity = TunnelIdentity(id: UUID(), name: "TE-Seam-Grounded-\(runTag)", createdAt: Date(), isGhost: false)
-        let fake = FakeSlotProvider(name: identity.name, identity: identity, status: .disconnected)
-        // Reload triggers unsubscribed for the wedged step's reason: the
-        // rig holds an attempt open across a ceiling, and a real
-        // configuration change inside that window would drop the
-        // vault-unbacked fake as foreign and empty the list under the
-        // measurement.
-        let manager = TunnelsManager(
-            tunnelProviders: [fake],
-            providerFactory: FakeSlotFactory(canned: [fake]),
-            vault: vault,
-            retryInterval: 1.0,
-            maxRetries: 2,
-            observesSystemChanges: false
-        )
-        guard let container = manager.tunnels.first(where: { $0.id == identity.id }) else {
-            fail("side manager did not materialize the grounded-row tunnel")
-            return
-        }
-        // This rig plants no silence — every answer lands — but the net
-        // is registered anyway, before the activation, so the sibling
-        // rule holds without exception: what a step arranges, a step
-        // does not rely on its own green path to release.
-        onTeardown("grounded-row rig") { [weak self] in
-            let released = fake.releaseHeldCompletions()
-            self?.log(released == 0
-                      ? "teardown: nothing was held, as this rig intends"
-                      : "teardown: released \(released) held request(s)")
-        }
-
-        manager.startActivation(of: container)
-        // Shorter than the sibling rigs' eight seconds, and it has to
-        // be: this ladder's ceiling is five, so a start observed after
-        // that would be racing the very withdrawal under test. Past
-        // four seconds the vault is answering too slowly to measure
-        // anything here, which is environment, not a broken contract.
-        guard await settle(within: 4, until: { fake.startCount >= 1 }) else {
-            skip("environment: the rig's activation never reached startTunnel within the ceiling (vault verdict too slow?)")
-            return
-        }
-        check(fake.storedOnDemand,
-              "the rung armed the rule in the STORE, which is what the withdrawal below has to clear")
-
-        // The drop that starts it: `.disconnecting` reaches the
-        // observer's attempting branch, which paints `.deactivating`
-        // and deliberately leaves the ledger alone.
-        fake.drive(.disconnecting)
-        guard await settle(within: 3, until: { container.status == .deactivating }) else {
-            fail("the driven .disconnecting never painted the row — status=\(container.status)")
-            return
-        }
-        // Taken AFTER the row leaves `.activating`, not before: the
-        // retry fuse this rig lit is one second long, and a main actor
-        // that stalls inside that window would let rung 1 climb and arm
-        // a second save — the total below would then be red for a
-        // reason that is not the contract. Past this line no rung can
-        // arm: the retry's own guard refuses a `.deactivating` row, so
-        // the count is exact by construction.
-        let savesAtArm = fake.saveCount
-        check(container.isAttemptingActivation && container.activationAttemptId != nil,
-              "the attempt is still owned while the session dies under it")
-
-        // The tail nobody announced: the session is down, but no
-        // notification carries it. `refreshStatus()` is the exact call
-        // `ingest` makes on every row a reload matches, and on a
-        // `.deactivating` row the gate lets it land.
-        fake.setStatusSilently(.disconnected)
-        container.refreshStatus()
-        check(container.status == .inactive,
-              "a refresh grounded the row while its attempt was still live — status=\(container.status)")
-        check(container.isAttemptingActivation && container.lastActivationError == nil,
-              "and the grounding wrote nothing into the ledger: that is what makes the attempt unresolved rather than finished")
-
-        // The seal. Nothing but the ceiling can end this attempt now.
-        let explained = await settle(within: 8) { container.lastActivationError != nil }
-        check(explained,
-              "the ceiling still withdrew the attempt from under a grounded row — lastActivationError=\(container.lastActivationError.map { String(describing: $0) } ?? "nil")")
-        var named = false
-        if case .activationUnresolved = container.lastActivationError { named = true }
-        check(named, "and named the silence rather than inventing an error the system never gave")
-        check(!container.isAttemptingActivation, "the attempt flag came down with it")
-
-        // The half the flag alone would lie about: the rule has to
-        // leave the STORE. Before the ceiling learned to read this row,
-        // this is what survived — an armed connect-on-any-network rule
-        // on a tunnel the manager had already given up on.
-        let disarmed = await settle(within: 3) { !fake.storedOnDemand }
-        check(disarmed,
-              "the recovery rule came down in the store, not just in the flag (store=\(fake.storedOnDemand), flag=\(fake.isOnDemandEnabled))")
-        // Exact, both bounds: fewer would mean no stand-down was ever
-        // issued, more would mean a retry climbed on top of a
-        // withdrawal that promises never to retry.
-        check(fake.saveCount == savesAtArm + 1,
-              "exactly the withdrawal's own stand-down followed the arm save (saves=\(fake.saveCount), expected \(savesAtArm + 1))")
-    }
-
-    /// The rung-0 sweep's reach, measured against the one state the
-    /// flag cannot describe.
-    ///
-    /// Recovery is meant to be single-occupancy: the tunnel being
-    /// activated owns the rule, everyone else stands down. The sweep
-    /// used to pick its targets by reading `isActivateOnDemandEnabled`
-    /// — this process's flag — and a flag is not the store. A disarm
-    /// save that never answers leaves them disagreeing: the app wrote
-    /// the flag down, the rule stayed where it was. Such a row was then
-    /// the one row the sweep skipped, so the next activation armed its
-    /// rule beside a rule already in the store, while every armed count
-    /// in the app (and in this harness) read one — because every one of
-    /// them counts the same flag.
-    ///
-    /// The divergence is produced rather than arranged: a stop whose
-    /// disarm save hangs is exactly the shape the field produces. What
-    /// is lifted before the measurement is the fake's ANSWER MODE, not
-    /// the wedge — the held save stays held until the checks are done,
-    /// because answering it would send `standDownRecovery` to its
-    /// re-read, repaint the flag from the store, and erase the very
-    /// divergence under test.
-    func sweepReachesAStoreOnlyRule() async {
-        let idA = TunnelIdentity(id: UUID(), name: "TE-Seam-SweepA-\(runTag)", createdAt: Date(), isGhost: false)
-        let idB = TunnelIdentity(id: UUID(), name: "TE-Seam-SweepB-\(runTag)", createdAt: Date(), isGhost: false)
-        let fakeA = FakeSlotProvider(name: idA.name, identity: idA, status: .disconnected)
-        let fakeB = FakeSlotProvider(name: idB.name, identity: idB, status: .connected)
-        fakeB.isEnabled = true
-        fakeB.arrangeArmed()
-        // The save that never answers — the producer of the divergence,
-        // and the reason the flag ends up lying.
-        fakeB.saveAnswer = .hangs
-        // Reload triggers unsubscribed for the wedging rigs' reason: the
-        // step holds a save open across several seconds, and a real
-        // configuration change inside that window would pass these
-        // vault-unbacked providers through the ownership boundary and
-        // empty the list under the measurement.
-        let manager = TunnelsManager(
-            tunnelProviders: [fakeA, fakeB],
-            providerFactory: FakeSlotFactory(canned: [fakeA, fakeB]),
-            vault: vault,
-            observesSystemChanges: false
-        )
-        guard let a = manager.tunnels.first(where: { $0.id == idA.id }),
-              let b = manager.tunnels.first(where: { $0.id == idB.id }) else {
-            fail("side manager did not materialize the sweep rig")
-            return
-        }
-        // Registered before anything is wedged, so it fires on every
-        // exit including the environment skip below: a held save keeps
-        // the production bridge's continuation — and the task that
-        // issued it — alive.
-        onTeardown("wedged stop-disarm (sweep rig)") { [weak self] in
-            let released = fakeB.releaseHeldCompletions()
-            self?.log(released == 0
-                      ? "teardown: the sweep rig's wedge was released by the step itself"
-                      : "teardown: released \(released) held request(s) from the sweep rig")
-        }
-
-        manager.startDeactivation(of: b)
-        // A contract, not an environment: every answer in this rig is
-        // injected, the vault is not on this path, and the armed stop
-        // issuing its disarm save is the arrangement itself. If it does
-        // not happen, something in the stop broke.
-        guard await settle(within: 5, until: { fakeB.saveCount >= 1 }) else {
-            fail("the armed stop never reached its disarm save (saves=\(fakeB.saveCount))")
-            return
-        }
-        // The state under test, proved rather than assumed — and it is
-        // the app's own bookkeeping that is wrong here, not the fake's:
-        // the flag says disarmed, the store still holds the rule.
-        check(!fakeB.isOnDemandEnabled && fakeB.storedOnDemand,
-              "the wedged stop left the flag down over a rule still in the store (flag=\(fakeB.isOnDemandEnabled), store=\(fakeB.storedOnDemand))")
-        check(manager.tunnels.contains(where: { $0.id == idB.id }) && !b.isActivateOnDemandEnabled,
-              "and the row is still IN THE LIST while reading disarmed — a listed row is exactly what a flag-filtered sweep walked past")
-
-        // From here the store can answer again — the wedge has already
-        // produced the divergence, and a save that never answers would
-        // only measure the wedge. The held completion itself stays
-        // held (see the doc above).
-        fakeB.saveAnswer = .succeeds
-        let savesBeforeSweep = fakeB.saveCount
-
-        // The slot has to be free before rung 0 can be reached at all.
-        // B's stop is suspended inside its disarm save, so it never got
-        // as far as stopping the session: the row is still `.active`,
-        // and `beginActivation` would park A as `.waiting` behind it —
-        // the sweep would never be issued and this step would measure
-        // nothing while reporting a failure. The system's own
-        // `.disconnected` ends the SESSION through the observer's
-        // non-attempting branch, which touches neither the flag nor the
-        // store.
-        fakeB.drive(.disconnected)
-        guard await settle(within: 3, until: { b.status == .inactive }) else {
-            fail("the stopped row never grounded, so rung 0 was never reachable — status=\(b.status)")
-            return
-        }
-
-        manager.startActivation(of: a)
-        let swept = await settle(within: 10) { !fakeB.storedOnDemand }
-        check(swept,
-              "rung 0 stood down a rule its own flag denied (store=\(fakeB.storedOnDemand), flag=\(fakeB.isOnDemandEnabled))")
-        check(fakeB.saveCount > savesBeforeSweep,
-              "the sweep issued a save for that row at all (saves=\(fakeB.saveCount), before=\(savesBeforeSweep))")
-
-        // The owner sweeps its own residue; the net stays registered for
-        // the paths that never reach this line.
-        let released = fakeB.releaseHeldCompletions()
-        check(released >= 1, "the step released the wedge it planted (released=\(released))")
-        // A climbed a real ladder to get here and left a retry timer
-        // behind it. Withdrawing the intent ends both.
-        manager.startDeactivation(of: a)
-    }
-
-    /// The stop's reach, against the same state the flag cannot
-    /// describe — the sweep step's twin, and the more user-visible of
-    /// the pair.
-    ///
-    /// A stop decides whether to stand the rule down by reading the
-    /// flag. When a disarm save never answers, the flag goes down over
-    /// a rule the store still holds, and from that moment the tunnel is
-    /// a trap: every later stop reads the same false flag, skips the
-    /// disarm, stops the session — and the surviving
-    /// connect-on-any-network rule brings it back. No error is written
-    /// anywhere, and nothing inside the app breaks the loop.
-    ///
-    /// Same producer and same discipline as the sweep step: the wedge
-    /// makes the divergence, the answer mode is restored before the
-    /// second stop, and the held completion is drained only after the
-    /// measurement — draining it first would send `standDownRecovery`
-    /// to its re-read, repaint the flag from the store, and erase the
-    /// very divergence under test.
-    ///
-    /// The stop-first order accepts one bounce: for as long as the
-    /// repair is in flight, the rule is still in the store and may
-    /// bring the session back. That is driven here rather than hoped
-    /// away — the revive is played into the window on purpose — because
-    /// the branch's answer to it (stop it again, since the user's
-    /// withdrawal still stands and no new intent was granted) is the
-    /// half that makes the order defensible at all.
-    func stopReachesAStoreOnlyRule() async {
-        let identity = TunnelIdentity(id: UUID(), name: "TE-Seam-StopRule-\(runTag)", createdAt: Date(), isGhost: false)
-        let fake = FakeSlotProvider(name: identity.name, identity: identity, status: .connected)
-        fake.isEnabled = true
-        fake.arrangeArmed()
-        fake.saveAnswer = .hangs
-        // Reload triggers unsubscribed for the wedging rigs' reason.
-        let manager = TunnelsManager(
-            tunnelProviders: [fake],
-            providerFactory: FakeSlotFactory(canned: [fake]),
-            vault: vault,
-            observesSystemChanges: false
-        )
-        guard let container = manager.tunnels.first(where: { $0.id == identity.id }) else {
-            fail("side manager did not materialize the stop-rule tunnel")
-            return
-        }
-        onTeardown("wedged stop-disarm (stop-rule rig)") { [weak self] in
-            let released = fake.releaseHeldCompletions()
-            self?.log(released == 0
-                      ? "teardown: the stop-rule rig's wedge was released by the step itself"
-                      : "teardown: released \(released) held request(s) from the stop-rule rig")
-        }
-
-        manager.startDeactivation(of: container)
-        // A contract, not an environment: nothing here waits on the
-        // vault, so an armed stop that issues no disarm save is a
-        // broken promise rather than a slow machine.
-        guard await settle(within: 5, until: { fake.saveCount >= 1 }) else {
-            fail("the armed stop never reached its disarm save (saves=\(fake.saveCount))")
-            return
-        }
-        check(!fake.isOnDemandEnabled && fake.storedOnDemand,
-              "the wedged stop left the flag down over a rule still in the store (flag=\(fake.isOnDemandEnabled), store=\(fake.storedOnDemand))")
-        // The session is still up, because the stop is suspended in
-        // front of it — which is exactly why the user stops again.
-        check(container.status == .active,
-              "and the session it was stopping is still up — status=\(container.status)")
-
-        // The store can answer again; the held completion stays held.
-        fake.saveAnswer = .succeeds
-        let savesBefore = fake.saveCount
-        let stopsBefore = fake.stopCount
-
-        manager.startDeactivation(of: container)
-        // Read with nothing awaited in between, because the ORDER is
-        // the contract this branch was shaped around: the stop goes out
-        // synchronously and the repair follows it. A settle here would
-        // pass just as happily against a save-first shape — the one
-        // regression that brings the original trap back.
-        check(fake.stopCount > stopsBefore,
-              "the stop went out BEFORE anything awaited a save (stops=\(fake.stopCount))")
-
-        // The bounce the stop-first order accepts, driven rather than
-        // hoped for: the rule is still in the store at this instant, so
-        // this is exactly what it would do — bring the session back
-        // between the stop and the repair. The system's `.connecting`
-        // reaches the row through the observer's non-attempting branch,
-        // which is how a revive looks when no attempt of ours is live.
-        fake.setStatusSilently(.connecting)
-        fake.drive(.connecting)
-        let cleared = await settle(within: 3) { !fake.storedOnDemand }
-        check(cleared,
-              "and the repair behind it stood down the rule its own flag denied (store=\(fake.storedOnDemand), flag=\(fake.isOnDemandEnabled))")
-        // The stop the user asked for is not undone by the bounce it
-        // invited: with the rule gone and no new intent granted, the
-        // repair answers the revived session with a second stop.
-        let restopped = await settle(within: 3) { fake.stopCount >= stopsBefore + 2 }
-        check(restopped,
-              "and the session the rule brought back was stopped again rather than left running (stops=\(fake.stopCount))")
-        check(container.lastActivationError == nil,
-              "with no error written over a stop that worked — lastActivationError=\(container.lastActivationError.map { String(describing: $0) } ?? "nil")")
-        // Exact, both bounds: fewer would mean no repair was issued,
-        // more would mean the stop pays for more preference writes than
-        // the branch budgets for. The bounce costs stops, never saves.
-        check(fake.saveCount == savesBefore + 1,
-              "exactly the stop's own stand-down followed (saves=\(fake.saveCount), expected \(savesBefore + 1))")
-
-        let released = fake.releaseHeldCompletions()
-        check(released >= 1, "the step released the wedge it planted (released=\(released))")
-    }
 }
 #endif
