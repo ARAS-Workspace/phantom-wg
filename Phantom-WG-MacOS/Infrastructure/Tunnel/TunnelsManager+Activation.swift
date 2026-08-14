@@ -47,11 +47,19 @@ extension TunnelsManager {
 
         if let activeTunnel = tunnels.first(where: { $0.status != .inactive && $0.status != .waiting }) {
             if let previousWaiting = waitingTunnel, previousWaiting.id != tunnel.id {
-                previousWaiting.status = .inactive
+                withdrawQueueSlot(previousWaiting)
             }
             tunnel.status = .waiting
             waitingTunnel = tunnel
             startDeactivation(of: activeTunnel)
+            // The occupant may have been gone already — an evicted slot
+            // whose row the system had grounded, or a session that
+            // ended between the scan above and this line — and then the
+            // stop above is a no-op with no status change behind it,
+            // leaving the tunnel just parked with nothing to start it.
+            // The hand-off tests the slot itself, so it starts the
+            // queued row only if the slot really is free.
+            activateWaitingTunnelIfNeeded()
             return
         }
 
@@ -90,8 +98,7 @@ extension TunnelsManager {
         // never brought up draws no status callback, so it would strand
         // in `.deactivating` — clear the queue slot and return to idle.
         if tunnel.status == .waiting {
-            if waitingTunnel?.id == tunnel.id { waitingTunnel = nil }
-            tunnel.status = .inactive
+            withdrawQueueSlot(tunnel)
             return
         }
 
@@ -412,16 +419,148 @@ extension TunnelsManager {
             return .done
         }
         if loggingRefusal {
-            let ctx = context()
             // What is reported is the SAVE's refusal and the truest
             // reading available after it — never "the rule stayed
             // armed", which this refusal does not establish: the
             // helper re-read the store on its way out, and callers now
             // include a sweep that disarms rows which were never armed
-            // in the first place.
-            NSLog("[activation] disarm save refused on \(tunnel.name)\(ctx.isEmpty ? "" : " \(ctx)") — armed=\(tunnel.tunnelProvider.isOnDemandEnabled) is the truest reading available: \(error.localizedDescription)")
+            // in the first place. The sentence itself lives in one
+            // place, so the in-rung helper cannot drift from it.
+            Self.logDisarmRefusal(on: tunnel, context(), error)
         }
         return .refused(error)
+    }
+
+    /// A give-up exit's ground, DERIVED rather than declared.
+    ///
+    /// Every caller here has just lowered the attempt flag, which opens
+    /// the status gate, so the row can take the system's own reading
+    /// instead of the `.inactive` this code used to guess. The
+    /// difference is not cosmetic: a flat `.inactive` written over a
+    /// session the system still holds is a lie that survives until the
+    /// next refresh, and while it stands the interface offers a start
+    /// against a slot that is occupied. The watchdog has always
+    /// re-derived; this is the same move for the exits that had not.
+    ///
+    /// Synchronous by contract — no task, no await. Four of the five
+    /// callers run inside the rung, where the rung-wait is what makes
+    /// their disarms exempt from the deferred-save gate; a helper that
+    /// suspended would take that exemption away with it. (The fifth,
+    /// the exhausted ladder, is reached from the retry timer and
+    /// disarms nothing at all — a timeout keeps its rule on purpose.)
+    ///
+    /// What counts as "the system disagrees" is narrower than "the
+    /// system is saying something", and the difference is the whole
+    /// correctness of this helper. A row reading `.activating` means
+    /// the system is still CONNECTING — which is not a session it
+    /// holds, it is the very attempt this exit has just abandoned, and
+    /// the ladder's exhaustion is precisely its explanation. Bailing
+    /// there would leave the timeout unexplained for ever: nothing is
+    /// scheduled behind a spent ladder, the watchdog is already
+    /// disqualified by the lowered flag, and the row would spin until
+    /// the system happened to speak. So `.activating` is grounded here
+    /// rather than deferred to.
+    ///
+    /// Answers false only when the row belongs to somebody else: an
+    /// ESTABLISHED session (`.active`, `.reasserting`) that the system
+    /// raised while this exit was deciding, or a `.waiting` slot the
+    /// queue has since taken. Then the caller writes nothing at all —
+    /// a row that is not this give-up's to explain must not wear its
+    /// verdict, and the hand-off would be starting a second tunnel
+    /// over a live one.
+    private func groundedAfterGiveUp(_ tunnel: TunnelContainer,
+                                     _ reason: @autoclosure () -> String) -> Bool {
+        tunnel.refreshStatus()
+        switch tunnel.status {
+        case .active, .reasserting:
+            NSLog("[activation] the system answered while \(tunnel.name) was giving up (\(reason())) — leaving the session to it")
+            return false
+        case .waiting:
+            NSLog("[activation] the queue took \(tunnel.name) while it was giving up (\(reason())) — leaving the row to its slot")
+            return false
+        case .activating:
+            // Our own pending start, and nothing is left to advance it.
+            tunnel.status = .inactive
+            return true
+        case .inactive, .deactivating:
+            // `.deactivating` stays: the system holds a dying session
+            // and its remains are the system's story to finish.
+            return true
+        }
+    }
+
+    /// The give-up disarm, reported honestly.
+    ///
+    /// A refused save does not prove the rule survived: the helper
+    /// re-reads the store on its way out, so what this line carries is
+    /// the refusal and the truest reading left after it — the same
+    /// sentence the deferred-save gate prints for the sites it covers.
+    /// In-rung by design, which is why it does not ride that gate:
+    /// `remove()` waits the rung out before it deletes anything.
+    private static func standDownAfterGiveUp(_ tunnel: TunnelContainer, _ context: String) async {
+        guard let error = await standDownRecovery(on: tunnel.tunnelProvider) else { return }
+        logDisarmRefusal(on: tunnel, context, error)
+    }
+
+    /// The one sentence a refused disarm gets on the activation paths.
+    ///
+    /// Written once and called from both the deferred-save gate and the
+    /// in-rung helper, because two copies of a line that must say the
+    /// same thing is how they start saying different ones — the exact
+    /// reason the watchdog stopped keeping its own. Two older lines
+    /// still say it their own way and still say it wrongly: the
+    /// uninstall sweep's "survived the sweep" and `remove()`'s
+    /// "recovery rule stayed armed". Neither refusal establishes what
+    /// it claims, and both belong to the passes that own those paths.
+    private static func logDisarmRefusal(on tunnel: TunnelContainer, _ context: String, _ error: Error) {
+        let suffix = context.isEmpty ? "" : " \(context)"
+        NSLog("[activation] disarm save refused on \(tunnel.name)\(suffix) — armed=\(tunnel.tunnelProvider.isOnDemandEnabled) is the truest reading available: \(error.localizedDescription)")
+    }
+
+    /// Takes a row out of the queue — the slot AND the ledger.
+    ///
+    /// They go together because a row can arrive here still carrying an
+    /// attempt id, and a slot cleared without the ledger leaves
+    /// bookkeeping nothing will ever answer: a belt or a rung still in
+    /// flight would match that id and write for an attempt nobody is
+    /// waiting on. Clearing it makes them find a mismatch and fall
+    /// silent, which is the honest outcome at BOTH call sites — each is
+    /// the user withdrawing the intent (a newer start evicting this
+    /// slot, or a stop), and the user's own action is the explanation.
+    /// The ledger is taken unconditionally for the same reason the
+    /// task is cancelled: a live `activationTask` would climb a fresh
+    /// rung for an intent that no longer exists.
+    ///
+    /// Only the PAINT is conditional. A parked row can be raised out of
+    /// its slot behind our back — the status gate refuses lowering
+    /// values on a `.waiting` row but lets a rising one land, and both
+    /// the reload and the observer's non-attempting branch do exactly
+    /// that — and writing `.inactive` over a row that is carrying
+    /// traffic would take it off the screen while it runs, and make the
+    /// stop that follows return early on its own `.inactive` guard. So
+    /// the row is only grounded while it really is parked; for that row
+    /// the flat write is mechanical rather than a choice, since
+    /// `.waiting` is unconditionally manager-driven and a re-derive
+    /// could never lower it.
+    private func withdrawQueueSlot(_ tunnel: TunnelContainer) {
+        if waitingTunnel?.id == tunnel.id { waitingTunnel = nil }
+        tunnel.isAttemptingActivation = false
+        tunnel.activationAttemptId = nil
+        tunnel.activationTask?.cancel()
+        tunnel.activationTask = nil
+        guard tunnel.status == .waiting else {
+            // The row left its slot on the system's own initiative, and
+            // the ledger above has just taken away the last thing that
+            // could have resolved it — with no attempt id the ceiling's
+            // watchdog is disqualified, and there is no rung behind it.
+            // So it is handed back to the system's own reading rather
+            // than abandoned: whatever the session is doing, the row
+            // says it. (The gate is open here, because the flag came
+            // down two lines up.)
+            tunnel.refreshStatus()
+            return
+        }
+        tunnel.status = .inactive
     }
 
     // Sealed at size, on purpose: this is the ladder's single entrance,
@@ -439,9 +578,14 @@ extension TunnelsManager {
         guard !removingIds.contains(tunnel.id) else { return }
         guard retryIndex < maxRetries else {
             tunnel.isAttemptingActivation = false
+            // The token goes with the intent. Left behind, it is an id
+            // nothing will ever answer — and a late belt or rung that
+            // still matches it would write for an attempt this exit has
+            // just closed.
+            tunnel.activationAttemptId = nil
             tunnel.activationTask?.cancel()
             tunnel.activationTask = nil
-            tunnel.status = .inactive
+            guard groundedAfterGiveUp(tunnel, "the ladder ran out") else { return }
             // The ladder ran out without the system ever reporting
             // connected or disconnected — there is no terminal system
             // error to show, only the timeout itself (a one-time stale
@@ -590,11 +734,10 @@ extension TunnelsManager {
             // flag is the load-bearing half: an exit that grounded the
             // row first and lowered the ledger after an await would
             // carry this exact shape across the suspension and earn
-            // itself a withdrawal. One ground-write deliberately does
-            // NOT touch the ledger — the queue eviction in
-            // `beginActivation` — and that row is admitted on purpose:
-            // an evicted slot's attempt is unresolved by definition.
-            // What is left is the case this guard used to
+            // itself a withdrawal. The queue's own eviction takes the
+            // ledger with it now, so an evicted row never reaches this
+            // guard at all — its attempt id is gone and the first
+            // condition closes. What is left is the case this guard used to
             // read as "resolved": a system reading that grounded the
             // row under a live attempt — a refresh landing while the
             // row sat `.deactivating`, whose notification never came —
@@ -725,9 +868,24 @@ extension TunnelsManager {
                 guard tunnel.activationAttemptId == attemptId,
                       tunnel.status == .activating else { return }
                 tunnel.isAttemptingActivation = false
-                tunnel.status = .inactive
-                tunnel.lastActivationError = .foreignSlotHolder
-                activateWaitingTunnelIfNeeded()
+                // Everything the user can see is written first and
+                // synchronously — the row, the verdict, the queue's
+                // turn — because the save below has no deadline and the
+                // window it opens is one where the flag is already
+                // down: the watchdog is disqualified, the status gate
+                // is open, and a refresh landing inside it would ground
+                // this row without a word.
+                if groundedAfterGiveUp(tunnel, "a proven foreign holder") {
+                    tunnel.lastActivationError = .foreignSlotHolder
+                    activateWaitingTunnelIfNeeded()
+                }
+                // The rule comes down whatever the row ended up
+                // reading, because the evidence is about the SLOT, not
+                // about us: a proven foreign holder makes our
+                // connect-on-any-network rule the fuel of the
+                // cross-user fight. This was the one collision exit
+                // that left it armed. In-rung, like its siblings.
+                await Self.standDownAfterGiveUp(tunnel, "at the rung-0 pre-flight, after a proven foreign holder")
                 return
             }
             // Re-guard BOTH facts after the verdict await: the user
@@ -826,9 +984,7 @@ extension TunnelsManager {
             // attempt's, and disarming it would strip recovery from a
             // tunnel the user is bringing up right now.
             if tunnel.activationAttemptId == attemptId || tunnel.activationAttemptId == nil {
-                if let disarmError = await Self.standDownRecovery(on: tunnel.tunnelProvider) {
-                    NSLog("[activation] recovery rule stayed armed on \(tunnel.name) after a local give-up — \(disarmError.localizedDescription)")
-                }
+                await Self.standDownAfterGiveUp(tunnel, "after a configuration that would not load")
             }
             // The row and the queue are stricter still: writing them
             // for an attempt the user already withdrew would stamp a
@@ -837,7 +993,7 @@ extension TunnelsManager {
             // intent may say how this ended.
             guard tunnel.activationAttemptId == attemptId else { return }
             tunnel.isAttemptingActivation = false
-            tunnel.status = .inactive
+            guard groundedAfterGiveUp(tunnel, "a configuration that would not load") else { return }
             tunnel.lastActivationError = .loadingFailed(systemError: error)
             activateWaitingTunnelIfNeeded()
             return
@@ -892,23 +1048,33 @@ extension TunnelsManager {
                   tunnel.status == .activating || tunnel.status == .reasserting else { return }
             if case .heldByForeign = verdict {
                 tunnel.isAttemptingActivation = false
-                tunnel.status = .inactive
-                tunnel.lastActivationError = .foreignSlotHolder
-                if let disarmError = await Self.standDownRecovery(on: tunnel.tunnelProvider) {
-                    NSLog("[activation] recovery rule stayed armed on \(tunnel.name) after a proven foreign holder — \(disarmError.localizedDescription)")
+                // User-facing writes first and synchronously, disarm
+                // after: the queue must not wait on a preference
+                // round-trip that may hang. Whoever takes the turn
+                // climbs rung 0, whose sweep now covers this row too.
+                if groundedAfterGiveUp(tunnel, "a proven foreign holder") {
+                    tunnel.lastActivationError = .foreignSlotHolder
+                    activateWaitingTunnelIfNeeded()
                 }
-                activateWaitingTunnelIfNeeded()
+                // Unconditional, for the pre-flight twin's reason: the
+                // proof is about the slot. Even a row the system has
+                // meanwhile raised must not keep a rule that was armed
+                // against a holder we just proved.
+                await Self.standDownAfterGiveUp(tunnel, "in the start-catch, after a proven foreign holder")
                 return
             }
             tunnel.isAttemptingActivation = false
-            tunnel.status = .inactive
+            guard groundedAfterGiveUp(tunnel, "a start the system refused") else { return }
             tunnel.lastActivationError = .startingFailed(systemError: error)
-            // Local failure — stand recovery down so the OS does not
-            // keep relaunching a tunnel whose start throws.
-            if let disarmError = await Self.standDownRecovery(on: tunnel.tunnelProvider) {
-                NSLog("[activation] recovery rule stayed armed on \(tunnel.name) after a local give-up — \(disarmError.localizedDescription)")
-            }
             activateWaitingTunnelIfNeeded()
+            // Local failure — stand recovery down so the OS does not
+            // keep relaunching a tunnel whose start throws. Conditional
+            // where the collision arm is not, and the asymmetry is the
+            // evidence: a throw says OUR start failed, so a session the
+            // system has raised in the meantime disproves it, and
+            // stripping that session's rule would be answering an
+            // error that no longer describes anything.
+            await Self.standDownAfterGiveUp(tunnel, "after a local give-up")
             return
         }
 

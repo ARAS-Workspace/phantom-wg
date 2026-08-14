@@ -707,6 +707,11 @@ class TunnelsManager {
                 tunnel.activationTask?.cancel()
                 tunnel.activationTask = nil
                 tunnel.status = .active
+                // The other rising write in the app, and the one that
+                // does not pass through the status gate — so it carries
+                // the same rule by hand: a session that came up wears no
+                // verdict from the attempt that failed before it.
+                tunnel.clearErrorOnRise()
 
             case .disconnected:
                 // Captured before the bookkeeping resets: "the session
@@ -903,6 +908,10 @@ class TunnelsManager {
 
             case .reasserting:
                 tunnel.status = .reasserting
+                // The third rising write, carrying the same rule by
+                // hand for the same reason as `.connected` above: it
+                // does not pass through the status gate.
+                tunnel.clearErrorOnRise()
 
             default:
                 break

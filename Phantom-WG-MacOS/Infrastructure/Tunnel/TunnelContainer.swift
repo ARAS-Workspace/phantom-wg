@@ -140,25 +140,69 @@ class TunnelContainer: Identifiable {
     /// future case to `.inactive`, so both are covered by the same test
     /// instead of each needing its own.
     ///
-    /// Four callers reach this gate, and they are the only writes
-    /// that DERIVE the row from the system's reading: the reload's
-    /// `ingest`, the status observer's non-attempting branch, the
-    /// activation watchdog's withdrawal, and the rung save-catch —
-    /// the last two lower the attempt flag before they derive, which
-    /// opens the gate everywhere but the one place it must stay shut:
-    /// a row the queue has since taken is `.waiting`, manager-driven
-    /// whatever the flag says, and the save-catch's lowering derive
-    /// is rightly refused there. Everything else
-    /// that writes `status` is the manager writing its own decision —
-    /// the rung's optimistic paint, the queue slot, the other give-up
-    /// exits, `performDeactivation`, the uninstall sweep, and the observer's
-    /// attempting branch, which belongs to the drop belt and owns a
-    /// drop during an attempt. The gate has nothing to say to any of
-    /// them, so this is not a chokepoint for `status`; it is a
-    /// chokepoint for the system's opinion of it.
+    /// Five callers reach this gate, and they are the only writes that
+    /// DERIVE the row from the system's reading: the reload's `ingest`,
+    /// the status observer's non-attempting branch, the activation
+    /// watchdog's withdrawal, the rung save-catch, and — newest — the
+    /// give-up exits, which reach it through one shared helper rather
+    /// than each declaring a ground of its own. All but the first two
+    /// lower the attempt flag before they derive, which opens the gate
+    /// everywhere but the one place it must stay shut: a row the queue
+    /// has since taken is `.waiting`, manager-driven whatever the flag
+    /// says, and a lowering derive is rightly refused there.
+    ///
+    /// Everything else that writes `status` is the manager writing its
+    /// own decision — the rung's optimistic paint, the queue slot,
+    /// `performDeactivation`, the uninstall sweep, the give-up helper's
+    /// own ground for a row the system still reads as connecting, and
+    /// the observer's attempting branch, which belongs to the drop belt
+    /// and owns a drop during an attempt. The gate has nothing to say
+    /// to any of them, so this is not a chokepoint for `status`; it is
+    /// a chokepoint for the system's opinion of it.
     func refreshStatus() {
         let derived = TunnelStatus(from: tunnelProvider.connectionStatus)
         if isManagerDriven, derived == .inactive || derived == .deactivating { return }
         status = derived
+        clearErrorOnRise()
+    }
+
+    /// An activation error is an ATTEMPT's verdict, and a session the
+    /// system reports as up outranks it.
+    ///
+    /// Recovery is designed to bring a tunnel back on its own: a
+    /// `retryLimitReached` keeps its rule precisely so the OS can
+    /// reconnect when the network returns. Nothing cleared the error
+    /// when it did — the only site that cleared one was rung 0, which a
+    /// system-driven revival never climbs — so every success of the
+    /// designed recovery painted a green row with a red timeout caption
+    /// under it, and the user's only escape was to tear the working
+    /// session down and start it again by hand.
+    ///
+    /// Cleared where the row RISES rather than where each error is
+    /// written: the writers are thirteen and the direct risings three —
+    /// this gate, and the observer's `.connected` and `.reasserting`
+    /// branches, which write the row without passing through it.
+    ///
+    /// One verdict survives the rise, and it is the one a rise
+    /// CONFIRMS rather than refutes: a STOP's failed disarm says the
+    /// rule may still be in the store and the system may bring this
+    /// tunnel back on its own. When it does, that caption is the only
+    /// thing in the app telling the user why a tunnel they switched off
+    /// is running — clearing it would leave the revival unexplained
+    /// twice over.
+    ///
+    /// Keyed on the PRODUCER, not on the case, because `.savingFailed`
+    /// has two kinds of author. The rung's arm-save catch writes it
+    /// too, and there a session coming up refutes the verdict rather
+    /// than confirming it — that one has to shed like any other
+    /// attempt's. The ledger tells them apart without a new case: a
+    /// stop withdraws the attempt id synchronously BEFORE its disarm is
+    /// even issued, so an empty ledger under this error is the stop's
+    /// signature, while the rung's catch writes it with its own attempt
+    /// still on the books.
+    func clearErrorOnRise() {
+        guard status == .active || status == .reasserting else { return }
+        if case .savingFailed = lastActivationError, activationAttemptId == nil { return }
+        lastActivationError = nil
     }
 }
