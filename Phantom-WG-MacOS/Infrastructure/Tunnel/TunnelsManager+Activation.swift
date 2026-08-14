@@ -132,7 +132,88 @@ extension TunnelsManager {
                 performDeactivation(of: tunnel)
             }
         } else {
+            // The flag is what THIS PROCESS last wrote, and the branch
+            // above is where it goes wrong: a disarm save that never
+            // answers leaves the flag down over a rule the store still
+            // holds. Every stop after that reads the same false flag,
+            // takes this branch, and stops a session the system then
+            // brings straight back — with nothing anywhere to say why,
+            // and no way out from inside the app. So the rule is stood
+            // down here too, unconditionally, through the same gate
+            // every other deferred disarm uses.
+            //
+            // Ordered the opposite way from the armed branch, and both
+            // orders are deliberate. There the store is KNOWN armed, so
+            // the disarm must land before the session drops or the rule
+            // revives it — the stop pays a save's wait for that. Here
+            // the flag says there is nothing to wait for, and the state
+            // that proves it wrong is the state where waiting is worst:
+            // the save that lies about is a save that HUNG, so a stop
+            // sequenced behind it would never go out at all. The stop
+            // goes first, and the revive it may invite is answered
+            // below rather than prevented — one bounce, bounded by the
+            // save, instead of a stop that never happens.
+            //
+            // The cost is one save per stop that reaches this branch —
+            // an active row whose flag reads disarmed, not the ordinary
+            // stop of a running tunnel, which is armed and pays its
+            // save above. The cost of reading the flag was a tunnel the
+            // user could not turn off.
             performDeactivation(of: tunnel)
+            repairRuleAfterStop(tunnel)
+        }
+    }
+
+    /// The disarmed stop's repair, issued behind the stop it belongs to.
+    ///
+    /// Split out under its own name rather than inlined: the branch it
+    /// serves is a sequence of decisions about a save that has already
+    /// been overtaken by the stop, and the entrance above stays a
+    /// reviewed narrative about ORDER, not about outcomes.
+    private func repairRuleAfterStop(_ tunnel: TunnelContainer) {
+        Task {
+            // Only while the withdrawal still stands: a start granted
+            // in the meantime owns the rule it just armed, and this
+            // save would strip it. Asked twice — once before the save
+            // and once after — because the save is where a user's mind
+            // changes.
+            guard tunnel.activationAttemptId == nil else { return }
+            let outcome = await guardedStandDown(tunnel, loggingRefusal: false)
+            guard tunnel.activationAttemptId == nil else { return }
+            switch outcome {
+            case .barred:
+                // A removal owns this row now. It stands the rule down
+                // itself, sequentially, before the entry goes — on the
+                // paths where it gets that far.
+                break
+            case .refused(let disarmError):
+                // Same promise the armed branch makes: a rule that
+                // could not be cleared is the user's business, because
+                // the system may bring this tunnel back on its own.
+                // Written only onto a row that is down, like every
+                // other error on this path: a session the system has
+                // meanwhile raised wears no red caption for a save that
+                // failed under it.
+                if tunnel.status == .inactive || tunnel.status == .deactivating {
+                    tunnel.lastActivationError = .savingFailed(systemError: disarmError)
+                }
+            case .done:
+                // The rule is gone; if it revived the session while the
+                // repair was in flight, the user's stop still stands —
+                // it was withdrawn before any of this and nothing since
+                // has granted a new intent. A revive is most often
+                // `.activating`, because it reaches the row as the
+                // system's own `.connecting`: an attempt of OURS could
+                // never read that way with no id in the ledger, since
+                // the rung stamps the id in the same synchronous block
+                // that paints the row. `.waiting` is excluded on
+                // purpose — a queue park carries no id either, and it
+                // is not a session.
+                if tunnel.status == .active || tunnel.status == .reasserting
+                    || tunnel.status == .activating {
+                    performDeactivation(of: tunnel)
+                }
+            }
         }
     }
 
@@ -254,7 +335,9 @@ extension TunnelsManager {
     /// Returns nil when the rule is down for real. NOT the only place
     /// the rule comes down — the connection gate's engage sweep still
     /// writes the flag and saves by hand; it belongs to the gate's own
-    /// package and should end up here.
+    /// package and should end up here. It also still SELECTS by the
+    /// flag, which is the defect rung 0 dropped: a rule the store holds
+    /// under a disarmed flag is exactly what that sweep walks past.
     @discardableResult
     static func standDownRecovery(on provider: TunnelProviding) async -> Error? {
         // What was true before we touched it, so the pessimistic
@@ -308,8 +391,15 @@ extension TunnelsManager {
     /// `removingIds` entry, so routing it here would only bar itself.
     ///
     /// Refusals log in the standard format unless the caller carries
-    /// its own reporting surface (the watchdog's truest-reading line,
-    /// the stop's `savingFailed`).
+    /// its own reporting surface — both halves of the stop write
+    /// `savingFailed`, which reaches the user rather than the log.
+    ///
+    /// One deferred disarm still escapes this gate's guarantee, and it
+    /// is named rather than implied: on the delete path the stop's task
+    /// is enqueued BEFORE `remove()` sets its bar, so the bars can find
+    /// nothing to bar. `remove()` waits the rung out, not this task.
+    /// Closing it belongs with the removal-latch work, which is where
+    /// the container gains a handle this can be parked on.
     @discardableResult
     func guardedStandDown(
         _ tunnel: TunnelContainer,
@@ -323,7 +413,13 @@ extension TunnelsManager {
         }
         if loggingRefusal {
             let ctx = context()
-            NSLog("[activation] recovery rule stayed armed on \(tunnel.name)\(ctx.isEmpty ? "" : " \(ctx)") — \(error.localizedDescription)")
+            // What is reported is the SAVE's refusal and the truest
+            // reading available after it — never "the rule stayed
+            // armed", which this refusal does not establish: the
+            // helper re-read the store on its way out, and callers now
+            // include a sweep that disarms rows which were never armed
+            // in the first place.
+            NSLog("[activation] disarm save refused on \(tunnel.name)\(ctx.isEmpty ? "" : " \(ctx)") — armed=\(tunnel.tunnelProvider.isOnDemandEnabled) is the truest reading available: \(error.localizedDescription)")
         }
         return .refused(error)
     }
@@ -391,12 +487,32 @@ extension TunnelsManager {
             // disarm left a second armed rule in the store while the
             // app counted one. On refusal the helper re-reads the store
             // and sets the flag to what is actually there, and the log
-            // says which tunnel kept its rule.
-            for other in tunnels where other.id != tunnel.id && other.isActivateOnDemandEnabled {
+            // names the tunnel whose disarm save was refused together
+            // with the truest reading left after it — never that the
+            // rule survived, which a refusal does not establish.
+            //
+            // Unconditional, no armed-filter, for the reason
+            // `standDownRecovery` states about itself: the flag is
+            // this process's answer, not the store's, and a save that
+            // was refused — or that hung and never answered — leaves
+            // the two disagreeing, flag down over a rule still in the
+            // store. Reading the flag here made this the one sweep
+            // that skipped precisely the tunnel it exists to find, and
+            // the invariant it serves (Armed<=1) was then counted from
+            // the same lying flag. The uninstall sweep already made
+            // this choice and says so. What it costs is one save per
+            // other tunnel per activation; what filtering cost was a
+            // second armed rule nobody could see.
+            for other in tunnels where other.id != tunnel.id {
                 Task {
                     // Liveness reads at RUN time, and both bars, live
                     // inside the gate — the site cannot forget them.
-                    await guardedStandDown(other)
+                    // Held strongly, and there is no weaker option that
+                    // would help: the call itself is on the manager, so
+                    // a save that hangs pins it either way. What this
+                    // loop costs is one such task per OTHER tunnel per
+                    // activation.
+                    await guardedStandDown(other, context: "during another tunnel's rung 0")
                 }
             }
 
@@ -458,15 +574,40 @@ extension TunnelsManager {
             // plus the two that say this row is still ours to write —
             // the same pair every deferred writer on this path carries,
             // and load-bearing here because the lines below now include
-            // a save. A row that is `.active`, `.inactive` or parked
-            // `.waiting` is not an unresolved attempt: the first two
-            // resolved, and the third belongs to the queue.
+            // a save. A row that is `.active` or parked `.waiting` is
+            // not an unresolved attempt: the first resolved, and the
+            // second belongs to the queue.
+            //
+            // `.inactive` is admitted, and it is the correction that
+            // matters most here: the ledger above — this attempt id,
+            // the flag still up, no error — is what says an attempt is
+            // live, and NO path that resolves one leaves it intact.
+            // Every give-up exit lowers the attempt flag BEFORE it
+            // grounds the row (the error follows synchronously, in the
+            // same block, and one exit deliberately writes none at
+            // all), the stop withdraws the ledger synchronously, and
+            // the observer's own drop branch lowers the flag too. The
+            // flag is the load-bearing half: an exit that grounded the
+            // row first and lowered the ledger after an await would
+            // carry this exact shape across the suspension and earn
+            // itself a withdrawal. One ground-write deliberately does
+            // NOT touch the ledger — the queue eviction in
+            // `beginActivation` — and that row is admitted on purpose:
+            // an evicted slot's attempt is unresolved by definition.
+            // What is left is the case this guard used to
+            // read as "resolved": a system reading that grounded the
+            // row under a live attempt — a refresh landing while the
+            // row sat `.deactivating`, whose notification never came —
+            // after which the watchdog withdrew from the one attempt
+            // nobody else was going to finish. Silence, no error, and
+            // an armed rule left standing on a tunnel this manager had
+            // given up on.
             guard let self,
                   tunnel.activationAttemptId == attemptId,
                   tunnel.isAttemptingActivation,
                   tunnel.lastActivationError == nil,
                   tunnel.status == .activating || tunnel.status == .reasserting
-                    || tunnel.status == .deactivating,
+                    || tunnel.status == .deactivating || tunnel.status == .inactive,
                   !self.removingIds.contains(tunnel.id),
                   self.tunnels.contains(where: { $0 === tunnel }) else { return }
             // The floor is under SILENCE, and silence is the one fact
@@ -495,7 +636,9 @@ extension TunnelsManager {
             // Re-derived rather than grounded flat: with the flag down
             // the gate is open, so this lands what the system actually
             // reads — `.inactive` for the wedged save (no session ever
-            // existed), `.deactivating` for the stuck `.disconnecting`,
+            // existed) and for the row a refresh already grounded,
+            // where it is a no-op that keeps one shape for all three
+            // causes, `.deactivating` for the stuck `.disconnecting`,
             // kept honestly: the system still holds a dying session, a
             // flat `.inactive` would only last until the next refresh
             // (the save below broadcasts one itself when it lands) and
@@ -525,9 +668,9 @@ extension TunnelsManager {
             // queue must not wait on it. The hand-off proves the slot
             // free itself — a row still `.deactivating` above keeps
             // the queue parked — and a tunnel it does start issues its
-            // own rung-0 sweep, which still sees this row's armed flag
-            // (nothing here has touched it yet), so ordering ahead of
-            // the disarm cannot let a second armed rule settle.
+            // own rung-0 sweep, which covers this row whatever its flag
+            // reads by then, so ordering ahead of the disarm cannot let
+            // a second armed rule settle.
             self.activateWaitingTunnelIfNeeded()
             // The rule comes down, and this is a decision rather than
             // an omission. `retryLimitReached` keeps its rule because
@@ -543,15 +686,16 @@ extension TunnelsManager {
             // here promised to "the cleanup family": the open window
             // is now the landing alone, the narrowest an uncancellable
             // surface allows.
-            if case .refused(let disarmError) = await self.guardedStandDown(tunnel, loggingRefusal: false) {
-                // The error means the SAVE was refused, not that the
-                // rule survived. The helper re-reads the store on a
-                // refusal, so the flag usually carries the store's own
-                // answer — and when even the re-read fails, the last
-                // value known true. Either way it is the truest reading
-                // this process has, which is how the line reports it.
-                NSLog("[activation] disarm save refused on \(tunnel.name) after an unresolved attempt — armed=\(tunnel.tunnelProvider.isOnDemandEnabled) is the truest reading available: \(disarmError.localizedDescription)")
-            }
+            //
+            // The refusal is reported by the gate rather than here. A
+            // refused save does not mean the rule survived — the helper
+            // re-reads the store on its way out, so the flag carries
+            // the store's own answer, or the last value known true when
+            // even the re-read failed — and that is precisely the
+            // sentence the gate prints, context and all. Keeping a copy
+            // of it here is how two lines that must say the same thing
+            // start saying different ones.
+            await self.guardedStandDown(tunnel, context: "after an unresolved attempt")
         }
 
         // Held so `remove()` can wait for this rung to finish before it

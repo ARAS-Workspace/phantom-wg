@@ -27,8 +27,18 @@ class TunnelContainer: Identifiable {
         identity?.isGhost ?? false
     }
 
-    /// Whether the recovery rule is armed (NE's `isOnDemandEnabled`) —
-    /// true for the tunnel the system is committed to reviving.
+    /// The recovery flag as THIS PROCESS last wrote it (NE's
+    /// `isOnDemandEnabled`), which is not the same thing as the rule
+    /// the system would revive on: a disarm save that was refused, or
+    /// that never answered at all, leaves this reading and the store
+    /// disagreeing. So it reports and it displays, and WHETHER a rule
+    /// comes down may not be decided from it — `standDownRecovery`
+    /// re-reads for exactly that reason, and the rung-0 sweep stopped
+    /// filtering on this value because filtering skipped precisely the
+    /// rows where the two had parted. One decision still rests on it,
+    /// named here so it is not mistaken for the old habit: the ORDER of
+    /// the stop's own disarm, where a lying flag costs at most one
+    /// revive bounce before the repair lands.
     var isActivateOnDemandEnabled: Bool {
         tunnelProvider.isOnDemandEnabled
     }
@@ -95,6 +105,14 @@ class TunnelContainer: Identifiable {
     /// for that row — it withdraws the attempt at the ceiling — which
     /// turns the cost of a repeat of this mistake from permanent into
     /// ceiling-long. Smaller is not small; the exclusion stays.)
+    ///
+    /// That second writer only holds because the watchdog reads the
+    /// LEDGER rather than the row: a `.deactivating` row this gate
+    /// lets a refresh ground to `.inactive` still carries a live
+    /// attempt, and the watchdog admits it on exactly those terms. The
+    /// gate opening on `.inactive` is therefore not a way out of the
+    /// attempt — it is a way for the row to be grounded while the
+    /// attempt stays owned.
     var isManagerDriven: Bool {
         switch status {
         case .waiting: return true

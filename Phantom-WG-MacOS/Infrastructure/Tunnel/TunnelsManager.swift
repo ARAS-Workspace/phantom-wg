@@ -1001,7 +1001,12 @@ class TunnelsManager {
         // background leaves none, and this pass is the catch-all for
         // exactly that. (A row WITH an attempt has its own: the
         // watchdog's withdrawal re-derives and hands off at the
-        // ceiling.) It grounds the blocker, and
+        // ceiling — including a row this very pass has just grounded,
+        // which is why that watchdog reads the attempt ledger and not
+        // the status. When it read the status, the `ingest` above was
+        // the silencer: it grounded the row, the ceiling then found it
+        // "resolved", and the attempt ended with no error, no hand-off
+        // and its recovery rule still armed.) It grounds the blocker, and
         // the status gate rightly refuses to touch the queued row — so
         // without this line the slot would survive with nothing left to
         // start it. The hand-off tests both the slot and the queued
