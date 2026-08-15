@@ -5,8 +5,8 @@ import NetworkExtension
 // MARK: - Custody writes — which store a removal empties first, and
 // what a removal that only half finishes leaves behind.
 //
-// The file holds three kinds of step, and the difference is what each
-// one arranges:
+// The file holds NINE steps in five kinds, and the difference is what
+// each one arranges:
 //
 //   - Three steps fail one STORE and read which one the removal had
 //     already emptied, because an order is only visible in what
@@ -17,6 +17,17 @@ import NetworkExtension
 //   - One fails the ENTRY and then reads the ROW rather than either
 //     store: it drives the removal into a world where the row and the
 //     system already disagree, and asks what the removal hands back.
+//   - One fails a store and then keeps going, because the claim is not
+//     what the failure left but what the process does about it
+//     AFTERWARDS: the trailing pass that turns entry-first's residue
+//     back into a whole tunnel.
+//   - Three fail NOTHING and take the STORE instead: they raise the
+//     uninstall latch and read what a restore, a realign, and the
+//     teardown's own disarm sweep each do about it. Those three are
+//     the only steps here whose subject is a teardown rather than a
+//     removal, and the first two must arrange the latch DURING a
+//     suspension, because a latch raised beforehand is answered by an
+//     earlier guard and proves the wrong thing.
 //
 // The fault vault supplies the failures and the verdict that chooses
 // the order; the providers are canned, so the entry side is observable
@@ -77,21 +88,391 @@ extension VaultIntegrityWorkflow {
         check(manager.tunnels.contains(where: { $0.id == payload.id }),
               "the row was not evicted over a removal that did not finish, so the list still agrees with the vault")
 
-        // WHAT THIS STEP DOES NOT MEASURE, said plainly because the
-        // omission is the interesting part.
+        // The repair half is NOT measured here, and deliberately so:
+        // the row is never evicted on this path, so any "wait for the
+        // tunnel to come back" written into this step would be answered
+        // by a row that never left. The sibling step below arranges the
+        // eviction first and measures it properly.
+    }
+
+    /// A teardown that has taken the store stops the restore from
+    /// minting into it — both before the pass starts and once it is
+    /// already running.
+    ///
+    /// The uninstall flow classifies which entries it may remove while
+    /// the vault still answers, and then removes exactly that set with
+    /// the extensions down. Every entry a reconcile mints after that
+    /// classification carries an id the classification never saw, so
+    /// the removal step skips it and the flow reports a clean uninstall
+    /// over a row still sitting in System Settings. Barring the
+    /// SCHEDULER was never enough for this: the pass that matters is
+    /// the one already in flight, which was admitted before the latch
+    /// went up and then suspends on a system read, an ingest, a probe
+    /// per candidate and two round-trips behind each.
+    ///
+    /// The flow itself cannot be driven from here — it deactivates the
+    /// extensions this engine is talking to — so this step isolates the
+    /// half that can be: the latch, and what the restore does about it.
+    ///
+    /// Three halves, and the first exists to make the others mean
+    /// something. Half one mints with the latch DOWN, which is what
+    /// proves the arrangement really produces a candidate that would
+    /// otherwise be created; without it, "nothing was minted" is a
+    /// sentence a broken rig prints just as happily.
+    func aTeardownThatTookTheStoreStopsTheRestore() async {
+        let first = "TE-Latch-Control-\(runTag)"
+        let second = "TE-Latch-Barred-\(runTag)"
+        guard var control = TestConfigFactory.throwaway(name: first),
+              var barred = TestConfigFactory.throwaway(name: second) else {
+            fail("could not build the latch configs")
+            return
+        }
+        // Candidate order is by `createdAt`, and this step's whole
+        // claim is about WHICH candidate got through, so the order is
+        // pinned rather than inherited from clock resolution.
+        control.createdAt = Date(timeIntervalSince1970: 1_000_000)
+        barred.createdAt = Date(timeIntervalSince1970: 1_000_100)
+
+        let faultVault = FaultVaultClient()
+        faultVault.readAnswer = .answers(.unreachable)
+        faultVault.storeAnswer = .answers(.done)
+        faultVault.deleteAnswer = .answers(.done)
+        faultVault.readAllAnswer = .answers(.configs([control]))
+        faultVault.readAnswers = [control.id: .answers(.config(control))]
+
+        // An empty system list, so both payloads read as entries the
+        // system has lost — which is exactly what makes them candidates.
+        let manager = TunnelsManager(
+            tunnelProviders: [],
+            providerFactory: FakeSlotFactory(canned: []),
+            vault: faultVault,
+            observesSystemChanges: false
+        )
+
+        // HALF ONE — the control. Latch down, so the pass mints.
+        await manager.refresh()
+        guard manager.tunnels.contains(where: { $0.id == control.id }) else {
+            fail("the arrangement never produced a mintable candidate — a restore with the latch DOWN created nothing,"
+                 + " so the bar below would prove nothing")
+            return
+        }
+        check(manager.tunnels.contains(where: { $0.id == control.id }),
+              "with the latch down the restore minted the entry the system had lost — the rig can mint")
+
+        // HALF TWO — the latch is up BEFORE the pass starts, which is
+        // the guard in `reload` ahead of the reconcile.
+        faultVault.readAllAnswer = .answers(.configs([control, barred]))
+        faultVault.readAnswers[barred.id] = .answers(.config(barred))
+        manager.suspendRefreshForUninstall()
+
+        await manager.refresh()
+
+        check(!manager.tunnels.contains(where: { $0.id == barred.id }),
+              "a teardown holding the store got no new entry minted under it — the pass stood down"
+              + " where the scheduler could no longer bar it")
+        // Nothing at all, which is the stronger reading and the one this
+        // rig can actually give. With the bar reverted BOTH payloads are
+        // candidates here — the control row is evicted by the ingest
+        // above, since this rig's system list is empty by construction
+        // and a minted provider never enters it (the harness cannot
+        // reach what `makeProvider()` returns; the gap is recorded as
+        // 44d). So an empty list after a raised latch says no mint
+        // happened, while a reverted bar leaves two rows behind.
         //
-        // The repair half — the trailing pass `remove()` schedules,
-        // which is the whole reason entry-first is preferred — has NO
-        // witness here or anywhere. Asserting it from this arrangement
-        // is harder than it looks: the row is never evicted on this
-        // path (the removal throws before it retires the row, and
-        // deliberately so), so "wait for the tunnel to come back" is
-        // answered by a row that never left, and any such check passes
-        // with the production line deleted. Measuring it needs the row
-        // dropped first by an ingest that does NOT reconcile, and then
-        // an identity test on the container, because a restore mints a
-        // NEW provider rather than reviving this fake. That belongs to
-        // the restore package, with its own rounds.
+        // What this rig therefore CANNOT show is the other half of the
+        // production claim — that ingest goes on narrowing the list
+        // while the restore stands down. Asserting it here measured the
+        // rig's own eviction rather than the product, and said so in a
+        // sentence that read like proof.
+        check(manager.tunnels.isEmpty,
+              "and nothing was minted under it at all — rows=\(manager.tunnels.count), expected 0")
+
+        // HALF THREE — the one the package exists for, and the one the
+        // two halves above CANNOT reach. Both of them raise the latch
+        // before the pass, so `reload`'s guard answers and returns;
+        // whatever the mint loop does is never consulted. The claim
+        // that "the pass that matters is the one already in flight"
+        // needs the latch to go up while the pass is SUSPENDED.
+        //
+        // So the bulk read is held open and the store is taken during
+        // it — and the pass is entered through `reconcileFromVault`
+        // DIRECTLY rather than through `refresh()`.
+        //
+        // That is not a shortcut, it is the arrangement. Going through
+        // `refresh()` puts `reload`'s own guard on the path, and a
+        // green result then cannot say which guard answered: "nothing
+        // was minted" reads the same whether the mint loop stood down
+        // or the pass never reached it. Entering here removes that
+        // guard from the path entirely, so the only thing left that can
+        // return zero is the per-candidate re-read inside the loop —
+        // and the count comes back as a NUMBER rather than as an
+        // absence to be inferred from the list.
+        // Released through the flow's own door, not the gate's:
+        // An earlier version called a gate-side resume here; it was
+        // refused while the teardown held the store, so the latch
+        // stayed UP, the mid-pass raise below was inert, and this half
+        // was a second copy of the one above. The live run said so by
+        // omission: the mint loop's own bail line never printed.
+        manager.releaseStoreAfterUninstall()
+        // And the arrangement is PROVEN rather than assumed. A leaked
+        // latch produces exactly the same three greens as the window
+        // this half means to open, so without this the step could pass
+        // while measuring the wrong thing — which it did.
+        guard !manager.isStoreHeldForTeardown else {
+            fail("the arrangement leaked a latch from the half above — the mid-pass window was never opened")
+            return
+        }
+        faultVault.readAllAnswer = .answersAfter(seconds: 1.5, .configs([control, barred]))
+        let probesBefore = faultVault.readIds.count
+
+        let pass = Task { @MainActor in await manager.reconcileFromVault() }
+        try? await Task.sleep(for: .milliseconds(400))
+        manager.suspendRefreshForUninstall()
+        let restored = await pass.value
+
+        check(restored == 0,
+              "a teardown that took the store MID-PASS got nothing minted under it — restored=\(restored), expected 0")
+        check(manager.tunnels.isEmpty,
+              "and no row was added for either candidate — rows=\(manager.tunnels.count), expected 0")
+        // The sharper reading, and what separates this half from the
+        // two above: the loop stood down BEFORE it spent a probe on its
+        // first candidate. A pass that had reached its minting would
+        // have read at least one payload by id.
+        check(faultVault.readIds.count == probesBefore,
+              "and it stood down before spending a probe on its first candidate — probes=\(faultVault.readIds.count), unchanged from \(probesBefore)")
+    }
+
+    /// The uninstall's disarm sweep does not write to a row a removal
+    /// is taking.
+    ///
+    /// This is the one the stage review found, and it lived BETWEEN two
+    /// packages rather than inside either: the sweep saves to every
+    /// listed row, the entry-first order keeps a row listed for the
+    /// whole payload-delete ladder AFTER its entry is gone, and a save
+    /// landing there re-mints the entry the removal just took. The
+    /// result is an entry with no payload — hidden by the ownership
+    /// boundary, undeletable from the app, and left in System Settings
+    /// if the teardown then throws before its own removal step.
+    ///
+    /// The arrangement is the window itself: the payload delete is held
+    /// open, so the removal is parked with its entry gone and its row
+    /// still listed, and the sweep runs into exactly that.
+    func theUninstallSweepDoesNotWriteToARowBeingRemoved() async {
+        let name = "TE-Sweep-Removing-\(runTag)"
+        guard let payload = TestConfigFactory.throwaway(name: name) else {
+            fail("could not build the sweep config")
+            return
+        }
+        let identity = TunnelIdentity(id: payload.id, name: name, createdAt: payload.createdAt, isGhost: false)
+        let fake = FakeSlotProvider(name: name, identity: identity, status: .disconnected)
+        fake.arrangeArmed()
+
+        let faultVault = FaultVaultClient()
+        faultVault.readAnswers = [payload.id: .answers(.config(payload))]
+        faultVault.readAnswer = .answers(.unreachable)
+        faultVault.readAllAnswer = .answers(.configs([payload]))
+        faultVault.storeAnswer = .answers(.done)
+        // Held open: this is the stretch where the entry is already
+        // gone and the row is still listed.
+        faultVault.deleteAnswer = .answersAfter(seconds: 2, .done)
+
+        let manager = TunnelsManager(
+            tunnelProviders: [fake],
+            providerFactory: FakeSlotFactory(canned: [fake]),
+            vault: faultVault,
+            observesSystemChanges: false
+        )
+        guard let container = manager.tunnels.first(where: { $0.id == payload.id }) else {
+            fail("side manager did not materialize the tunnel")
+            return
+        }
+
+        let removal = Task { @MainActor in (try? await manager.remove(tunnel: container)) != nil }
+        // The delete ledger is the signal that the entry has gone and
+        // the payload delete is in flight.
+        var waited = 0.0
+        while !faultVault.deletedIds.contains(payload.id), waited < 3 {
+            try? await Task.sleep(for: .milliseconds(50))
+            waited += 0.05
+        }
+        guard faultVault.deletedIds.contains(payload.id), !fake.entryExists else {
+            fail("the arrangement never opened the window — the removal did not reach its payload delete with the entry gone")
+            _ = await removal.value
+            return
+        }
+        let savesBefore = fake.saveCount
+
+        await manager.disarmAllRecovery()
+
+        check(fake.saveCount == savesBefore,
+              "the sweep issued no save for a row being removed — saves=\(fake.saveCount), unchanged from \(savesBefore)")
+        check(!fake.entryExists,
+              "so the entry the removal took stayed gone rather than being written back (entryExists=\(fake.entryExists))")
+        _ = await removal.value
+    }
+
+    /// The realign half stands down mid-walk when a teardown takes the
+    /// store, which is a separate claim from the minting half's.
+    ///
+    /// Realign is the pass's OTHER writer: it saves identity onto
+    /// entries that already exist. Under an uninstall that is the
+    /// sharper of the two — the teardown is removing those very
+    /// entries, and a save landing behind a removal re-mints what it
+    /// just took. A guard at the call site only bars a realign that has
+    /// not begun; this one has to bar the rest of a walk already in
+    /// progress, because each row costs a system round-trip and a long
+    /// list gives a teardown ample room to arrive part-way down it.
+    ///
+    /// Two drifted rows, and the first one's save answers slowly. The
+    /// store is taken while that save is in flight, so the first row is
+    /// realigned and the second must not be. Anything that stopped the
+    /// walk earlier would leave the FIRST row stale too, which is what
+    /// tells this apart from a pass that never ran.
+    func realignStandsDownWhenATeardownTakesTheStore() async {
+        let firstName = "TE-Realign-Ahead-\(runTag)"
+        let secondName = "TE-Realign-Behind-\(runTag)"
+        guard var ahead = TestConfigFactory.throwaway(name: firstName),
+              var behind = TestConfigFactory.throwaway(name: secondName) else {
+            fail("could not build the realign configs")
+            return
+        }
+        ahead.createdAt = Date(timeIntervalSince1970: 2_000_000)
+        behind.createdAt = Date(timeIntervalSince1970: 2_000_100)
+
+        // Both rows are LISTED, so neither is a mint candidate and the
+        // pass goes straight to its realign half. Both projections
+        // carry a stale name, which is what realign exists to repair.
+        let staleAhead = TunnelIdentity(id: ahead.id, name: firstName + "-stale",
+                                        createdAt: ahead.createdAt, isGhost: false)
+        let staleBehind = TunnelIdentity(id: behind.id, name: secondName + "-stale",
+                                         createdAt: behind.createdAt, isGhost: false)
+        let fakeAhead = FakeSlotProvider(name: staleAhead.name, identity: staleAhead, status: .disconnected)
+        let fakeBehind = FakeSlotProvider(name: staleBehind.name, identity: staleBehind, status: .disconnected)
+
+        let faultVault = FaultVaultClient()
+        faultVault.readAnswer = .answers(.unreachable)
+        faultVault.storeAnswer = .answers(.done)
+        faultVault.deleteAnswer = .answers(.done)
+        faultVault.readAllAnswer = .answers(.configs([ahead, behind]))
+
+        let manager = TunnelsManager(
+            tunnelProviders: [fakeAhead, fakeBehind],
+            providerFactory: FakeSlotFactory(canned: [fakeAhead, fakeBehind]),
+            vault: faultVault,
+            observesSystemChanges: false
+        )
+
+        // The row ahead answers its save slowly; that suspension is the
+        // window the teardown arrives in.
+        fakeAhead.saveAnswer = .succeedsAfter(seconds: 1.5)
+
+        let pass = Task { @MainActor in await manager.refresh() }
+        try? await Task.sleep(for: .milliseconds(400))
+        manager.suspendRefreshForUninstall()
+        await pass.value
+
+        check(fakeAhead.saveCount == 1,
+              "the row ahead of the teardown was realigned — saves=\(fakeAhead.saveCount), expected 1")
+        check(fakeBehind.saveCount == 0,
+              "and the row behind it was not written at all once the store was taken — saves=\(fakeBehind.saveCount), expected 0")
+        check(fakeBehind.tunnelIdentity?.name == staleBehind.name,
+              "so its projection still carries the stale name the teardown will remove it under"
+              + " — name=\(fakeBehind.tunnelIdentity?.name ?? "nil")")
+    }
+
+    /// The residue entry-first accepts is the one the restore repairs,
+    /// and this is the step that makes the repair a measurement rather
+    /// than a promise.
+    ///
+    /// `remove()` schedules one trailing pass when its payload delete
+    /// fails, because the configuration change its own entry removal
+    /// broadcast was consumed by a reload that ran while the removal
+    /// latch was still up — correctly barred, since a re-mint then
+    /// would have raced the delete. Nothing else is due to fire. Delete
+    /// that one line and every other custody step stays green while the
+    /// entire argument for entry-first quietly stops being true.
+    ///
+    /// Two things make this measurable, and both are the shape an
+    /// earlier attempt got wrong:
+    ///
+    /// The row must be DROPPED first. It is not evicted by the failed
+    /// removal — that is the sibling step's subject — so a poll written
+    /// without this would be waiting for something already there. The
+    /// drop is taken with `prune()`, the ingest that does NOT reconcile,
+    /// because the pass being measured IS a reconcile: arranging it with
+    /// `refresh()` would have this step's own setup perform the repair
+    /// it is checking for.
+    ///
+    /// And the return must be proven by IDENTITY, not by presence. A
+    /// restore mints a fresh provider from the factory and wraps it in a
+    /// new container; the planted fake is never revived. So a row under
+    /// the same id is only proof if it is a DIFFERENT object from the
+    /// one the removal was called on.
+    func aFailedPayloadDeleteLeavesATunnelTheRestorePutsBack() async {
+        let name = "TE-Remove-Restored-\(runTag)"
+        guard let payload = TestConfigFactory.throwaway(name: name) else {
+            fail("could not build the restore config")
+            return
+        }
+        let identity = TunnelIdentity(id: payload.id, name: name, createdAt: payload.createdAt, isGhost: false)
+        let fake = FakeSlotProvider(name: name, identity: identity, status: .disconnected)
+
+        let faultVault = FaultVaultClient()
+        faultVault.readAnswers = [payload.id: .answers(.config(payload))]
+        faultVault.readAnswer = .answers(.unreachable)
+        faultVault.readAllAnswer = .answers(.configs([payload]))
+        faultVault.storeAnswer = .answers(.done)
+        // The payload delete fails, which is the only shape that
+        // schedules the trailing pass.
+        faultVault.deleteAnswer = .answers(.refused)
+
+        let manager = TunnelsManager(
+            tunnelProviders: [fake],
+            providerFactory: FakeSlotFactory(canned: [fake]),
+            vault: faultVault,
+            observesSystemChanges: false
+        )
+        guard let container = manager.tunnels.first(where: { $0.id == payload.id }) else {
+            fail("side manager did not materialize the tunnel")
+            return
+        }
+
+        do {
+            try await manager.remove(tunnel: container)
+            fail("the removal reported success over a payload delete that was refused")
+            return
+        } catch {
+            log("the removal refused to claim success — \(error.localizedDescription)")
+        }
+
+        // The eviction the failed removal deliberately does not perform.
+        // `prune()` and not `refresh()`: the restore is the subject, so
+        // the arrangement must not run one.
+        await manager.prune()
+        guard !manager.tunnels.contains(where: { $0.id == payload.id }) else {
+            fail("the row survived an ingest taken after its entry was removed — the arrangement never opened the window")
+            return
+        }
+
+        // Now the only thing that can bring it back is the pass the
+        // removal scheduled on its way out. The wait is the 400ms
+        // debounce plus the pass itself.
+        var waited = 0.0
+        while !manager.tunnels.contains(where: { $0.id == payload.id }), waited < 3 {
+            try? await Task.sleep(for: .milliseconds(50))
+            waited += 0.05
+        }
+        guard let restored = manager.tunnels.first(where: { $0.id == payload.id }) else {
+            fail("the payload outlived its entry with nothing scheduled to repair it — the trailing pass never ran (waited \(String(format: "%.1f", waited))s)")
+            return
+        }
+
+        check(restored !== container,
+              "the tunnel came back on a NEW container, so a restore built it rather than the old row never leaving (waited \(String(format: "%.1f", waited))s)")
+        check(restored.name == name,
+              "and it carries the name its surviving payload holds — name=\(restored.name), expected \(name)")
+        check(!fake.entryExists,
+              "on an entry the restore minted, not the one the removal took — the planted provider stays removed (plantedEntryExists=\(fake.entryExists))")
     }
 
     /// A custody row is the exception: its entry is the only anchor its

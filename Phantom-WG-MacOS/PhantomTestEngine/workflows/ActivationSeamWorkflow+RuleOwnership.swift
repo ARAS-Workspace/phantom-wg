@@ -726,9 +726,20 @@ extension ActivationSeamWorkflow {
         // From here every OTHER save answers at once, so the only slow
         // one in the run is the disarm already in flight.
         fake.saveAnswer = .succeeds
-        let startedRemoval = Date()
+        // The origin is the moment the SAVE was issued, not the moment
+        // this step noticed it. The planted delay starts its clock
+        // inside `savePreferences`, while the settle above learns of it
+        // up to one poll interval later — measuring from here would
+        // therefore report a duration shorter than the delay even when
+        // the removal waited the whole thing out, and did: this
+        // assertion passed at 2.1s and 2.0s and then failed at 1.9s on
+        // a busy machine, with the product behaving identically.
+        guard let disarmIssuedAt = fake.lastSaveIssuedAt else {
+            fail("the armed stop's disarm was counted but never stamped — the wait cannot be measured from an honest origin")
+            return
+        }
         let removed = await Task { @MainActor in (try? await manager.remove(tunnel: container)) != nil }.value
-        let removalTook = Date().timeIntervalSince(startedRemoval)
+        let removalTook = Date().timeIntervalSince(disarmIssuedAt)
         guard removed else {
             skip("environment: the removal failed (vault dark?) — the ordering contract is unproven this run")
             return
@@ -738,7 +749,7 @@ extension ActivationSeamWorkflow {
         // planted save could land never waited for it, whatever the
         // entry says later on a slow machine.
         check(removalTook >= slowDisarm,
-              "the removal waited the stop's disarm out before it finished (took \(String(format: "%.1f", removalTook))s, the disarm needed \(String(format: "%.1f", slowDisarm))s)")
+              "the removal waited the stop's disarm out before it finished (took \(String(format: "%.1f", removalTook))s from the save's own issue, the disarm needed \(String(format: "%.1f", slowDisarm))s)")
         check(!manager.tunnels.contains(where: { $0.id == identity.id }), "the tunnel left the list")
         check(fake.removeCount == 1, "the entry was removed exactly once (removePreferences=\(fake.removeCount))")
         check(fake.saveCount == 2,

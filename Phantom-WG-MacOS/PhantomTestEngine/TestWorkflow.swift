@@ -292,22 +292,32 @@ class TestWorkflow {
 
     private var teardowns: [(label: String, body: @MainActor () async -> Void)] = []
 
-    /// Re-derived for the verified-sweep bodies: the longest single-
-    /// residue chain is a retried three-valued read (16.8s dark), a
-    /// retried delete (16.8s), the delete's single-attempt re-read
-    /// (5s), an NE entry removal and a prune — call it ~45s against a
-    /// vault that stays dark throughout, and the ceiling sits above
-    /// it so a net that is merely PATIENT is never clipped mid-claim.
-    /// `remove()` is now up to ~33.6s on its own, not the ~17s the old
-    /// sizing assumed: it spends a read ladder to choose its order and
-    /// a delete ladder behind it. A net that grounds a live tunnel
-    /// (15s) and then calls it can therefore approach this ceiling
-    /// against a vault that answers late, and a net that also resolves
-    /// the failure afterwards can pass it. This number is a BACKSTOP
-    /// for a wedged call, not a budget: the bodies that can chain
-    /// ladders must bound themselves, and the one that reports residue
-    /// after a failed `remove()` does so by reporting rather than
-    /// spending another ladder on it.
+    /// Re-derived whenever an input to it changes, and one just did:
+    /// `remove()` spends TWO vault ladders now, a read to choose its
+    /// order and a delete behind it, where the old sizing assumed one.
+    ///
+    /// The longest chain any net can reach, against a vault that is
+    /// slow rather than merely absent, is the corruption base's:
+    ///
+    ///   remove()                 read ladder 16.8s + delete ladder 16.8s
+    ///   resolveFailedRemove      readPayloadState ladder            16.8s
+    ///   sweepOrphanedPayload     debounce wait 0.8s + delete ladder 16.8s
+    ///                            + the delete's single-attempt re-read 5s
+    ///                            + two NE list reads and a 600ms beat
+    ///   the mirror prune         one more NE list read, and the ingest
+    ///                            behind it can spend a per-id probe on
+    ///                            every row it cannot attribute        ~10s
+    ///   ------------------------------------------------------------
+    ///                                                        ~84s
+    ///
+    /// So the number moved with its inputs rather than the warning
+    /// being tuned away: 100s sits above that chain, and a net that is
+    /// merely PATIENT is still never clipped mid-claim.
+    ///
+    /// It is still a BACKSTOP for a wedged call, not a budget. Nothing
+    /// above is spent on a healthy run — every ladder in that sum is a
+    /// vault that stopped answering — and the bodies are expected to
+    /// bound themselves rather than spend up to this line.
     ///
     /// A body that loops over many ids can still exceed this against a
     /// dark vault — the vault-throwaway net is the one that can, which
@@ -320,7 +330,7 @@ class TestWorkflow {
     /// "this run stopped waiting", not "this cleanup was cancelled".
     /// A run that ends that way can report done while a sweep is still
     /// going, so the bodies stay bounded on their own.
-    private static let teardownCeiling: Double = 60
+    private static let teardownCeiling: Double = 100
 
     private func runTeardowns() async {
         guard !teardowns.isEmpty else { return }

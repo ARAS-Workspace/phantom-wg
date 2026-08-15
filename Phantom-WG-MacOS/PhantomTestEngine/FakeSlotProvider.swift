@@ -123,6 +123,11 @@ final class FakeSlotProvider: TunnelProviding {
     var onDemandRules: [NEOnDemandRule]?
     private(set) var connectionStatus: NEVPNStatus
     private(set) var saveCount = 0
+    /// Wall-clock at which the most recent `savePreferences` was
+    /// ISSUED. Steps that plant a slow save and then assert someone
+    /// waited it out must measure from here, never from the moment they
+    /// noticed the save themselves.
+    private(set) var lastSaveIssuedAt: Date?
     /// Counts the re-reads, so a step can prove the repair path RAN
     /// rather than infer it from a value the rollback would have
     /// produced too.
@@ -251,6 +256,14 @@ final class FakeSlotProvider: TunnelProviding {
 
     func savePreferences(completion: @escaping @Sendable (Error?) -> Void) {
         saveCount += 1
+        // When the LAST save was issued, which is the only honest origin
+        // for a step measuring "did the caller wait this save out".
+        // A delayed answer starts its clock HERE, while a step polling
+        // `saveCount` learns about it up to one poll interval later —
+        // so a duration measured from the step's own discovery is
+        // shorter than the delay by that much, and an assertion written
+        // against it fails on a busy machine while the product behaved.
+        lastSaveIssuedAt = Date()
         switch saveAnswer {
         case .succeeds:
             storedOnDemand = isOnDemandEnabled
