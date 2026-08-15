@@ -17,9 +17,15 @@ import NetworkExtension
 /// restores vault payloads the system lost and realigns drifted
 /// projections (purely additive — under the ownership boundary an
 /// unbacked entry cannot be told apart from another local user's) —
-/// `creatingIds` keeps a pass from minting an entry for a tunnel
-/// mid-import, and the debounced refresh coalesces the system's
-/// change-notification bursts into single reload+reconcile passes.
+/// `creatingIds` marks two different sentences under one set — an
+/// import's "this tunnel is on its way to the list", raised one id at
+/// a time, and a restore pass's "a pass in flight is deciding about
+/// this payload", raised over its whole candidate set and just as
+/// often ending in a skip — which together keep a pass from minting a
+/// second entry for a marked id and keep a concurrent write's
+/// duplicate purge from reading their payloads as orphans. The
+/// debounced refresh coalesces the system's change-notification bursts
+/// into single reload+reconcile passes.
 /// Activation lives in `TunnelsManager+Activation`: one active tunnel
 /// at a time — a newly toggled tunnel waits out the previous one's
 /// deactivation before it starts. Every activation that passes the
@@ -62,12 +68,37 @@ class TunnelsManager {
     /// same tunnel twice.
     @ObservationIgnored private var isReconciling = false
 
-    /// Ids whose system entry is being written right now. An add puts
-    /// the payload in the vault before `savePreferences` lands the
-    /// entry, and a reconcile pass squeezing into that gap — off a
-    /// change notification whose reload still read the old, emptier
-    /// list — sees "payload with no entry" and mints a second one.
-    /// Field-measured on a first import; this set forbids it.
+    /// Ids a write has spoken for. The two writers mean different
+    /// things by it and both are load-bearing: an add's mark says the
+    /// entry is on its way, while a restore pass's says a pass in
+    /// flight is deciding about that payload — a decision that ends in
+    /// a skip as readily as in an entry, when the name turns out to be
+    /// taken or the payload turns out to be gone. A reader that treats
+    /// membership as "an entry is imminent" will be wrong for the
+    /// majority of a restore's marks. An add puts the payload in the vault before
+    /// `savePreferences` lands the entry, and a reconcile pass
+    /// squeezing into that gap — off a change notification whose reload
+    /// still read the old, emptier list — sees "payload with no entry"
+    /// and mints a second one. Field-measured on a first import; this
+    /// set forbids it.
+    ///
+    /// Two readers now, and the second is why a restore marks itself
+    /// too: "payload with no entry" is also what the duplicate purge
+    /// reads as an orphan, and a same-name import landing inside either
+    /// window would delete a payload whose tunnel is on its way to the
+    /// list. A restore marks its whole candidate set, before its first
+    /// PROBE — its candidates' payloads are already in the vault when
+    /// the pass begins, where an add's does not exist yet, so the mark
+    /// has to lead the reads rather than follow them.
+    ///
+    /// One leg of that is uncovered by construction, and naming it is
+    /// the honest form: a pass cannot mark a candidate before it knows
+    /// there is one, and candidacy is unknowable until the bulk read
+    /// answers. So the pass's own `readAll` is unmarked. That window is
+    /// a slice of a longer one nothing marks — from the moment the
+    /// system loses an entry, through the refresh debounce and the
+    /// ingest before it, and between passes entirely — which is the
+    /// hidden-entry class rather than this mark's business.
     @ObservationIgnored private var creatingIds: Set<UUID> = []
 
     /// Coalesces the refresh triggers. The system announces one change
@@ -215,8 +246,13 @@ class TunnelsManager {
 
         try await purgeVaultDuplicates(of: config)
 
-        // From the vault write until the entry lands, this id is
-        // reconcile's blind spot — mark it in flight.
+        // From the vault write until the entry lands, this id has a
+        // payload and no list row. That shape has two readers now:
+        // reconcile, which must not mint a second entry for it, and a
+        // CONCURRENT write's run of the duplicate purge — this call's
+        // own run is already past, and excludes this id anyway — which
+        // would otherwise read it as an orphan and delete the payload
+        // out from under a tunnel on its way to the list.
         creatingIds.insert(config.id)
         defer { creatingIds.remove(config.id) }
 
@@ -254,10 +290,12 @@ class TunnelsManager {
     /// vault does not back reads as another local user's tunnel, and
     /// `ingest` has already kept it out of this list.
     ///
-    /// Every restore rests on the vault having actually answered. A
+    /// Every restore rests on the vault having actually answered, and
+    /// on it still answering the same way when the entry is minted. A
     /// vault that cannot be reached teaches us nothing — there is no
-    /// telling what should be put back — so the pass simply does not
-    /// run.
+    /// telling what should be put back — so the pass does not run at
+    /// all, and one that goes dark partway stops minting where it
+    /// went.
     @discardableResult
     func reconcileFromVault() async -> Int {
         // Idempotent by construction — it only creates entries the
@@ -284,31 +322,85 @@ class TunnelsManager {
             .filter { !known.contains($0.id) && !creatingIds.contains($0.id) }
             .sorted { $0.createdAt < $1.createdAt }
 
+        // The whole candidate set is marked in flight here, where
+        // candidacy is DECIDED, and stays marked for the pass.
+        //
+        // Marking each one as its turn came was not enough, and the
+        // reason is the queue rather than the candidate: from this line
+        // on, every candidate is a payload with no list row — precisely
+        // what the duplicate purge reads as an orphan — while the loop
+        // spends a probe and two NE round-trips on each one AHEAD of
+        // it, handing the main actor back at every await. On an
+        // extension reinstall, where the system lost many entries at
+        // once and the user is looking at a short list, a re-import of
+        // a name further down the queue would find its payload
+        // unlisted and unmarked, and delete the only copy of that
+        // tunnel's key. `add`'s mark has no such gap because its
+        // payload does not exist until after the mark.
+        //
+        // Subtracting is safe against the only other writer there is.
+        // `add` marks an id it has just minted, so it can never collide
+        // with a payload the vault already holds; and the filter above
+        // excluded ids already marked, so a candidate carrying someone
+        // else's mark never enters this set in the first place. This
+        // pass therefore only ever clears marks it raised.
+        let candidateIds = Set(missing.map(\.id))
+        creatingIds.formUnion(candidateIds)
+        defer { creatingIds.subtract(candidateIds) }
+
         var restored = 0
-        for config in missing {
+        // What this pass wrote, or tried to write, from a reading newer
+        // than its own snapshot — so the realign half below can tell
+        // its own work from drift.
+        var attempted: Set<UUID> = []
+        // One dark answer stops the minting, exactly as it stops the
+        // probing in `ingest`: a single timeout bounds the stall rather
+        // than one per candidate, and a payload that cannot be proven
+        // present is the one thing this loop must not mint from.
+        var vaultWentDark = false
+        for (index, config) in missing.enumerated() where !vaultWentDark {
             // `known` is a snapshot. An import finishing mid-pass — or
             // a bulk answer that carried the same id twice — would land
             // a config here whose tunnel already exists, and creating a
             // second entry for the same id is the one thing this pass
-            // must never do. The live list is the authority.
+            // must never do. This reading is the cheap early-out, taken
+            // before a round-trip is spent on the candidate; the
+            // invariant itself rests on `listAdmits`, which reads the
+            // list again where it counts, because this test does not
+            // survive the probe's suspension.
             guard !tunnels.contains(where: { $0.id == config.id }) else { continue }
 
-            // Names stay unique here too. Import and edit both refuse
-            // a duplicate name, so reconcile must not be the one path
-            // that manufactures one — a second tunnel with the same
-            // name is indistinguishable to the operator and collides
-            // in the name-keyed accessibility identifiers. The
-            // payload is left in the vault rather than deleted:
-            // renaming the tunnel that holds the name frees it, and
-            // the next launch brings this one back.
-            let name = config.name.trimmingCharacters(in: .whitespacesAndNewlines)
-            guard !tunnels.contains(where: { $0.name.caseInsensitiveCompare(name) == .orderedSame }) else {
-                NSLog("[vault] reconcile skipped \(config.id): a tunnel named '\(name)' already exists")
+            let current: TunnelConfig
+            switch await provePayload(config) {
+            case .mint(let fresh):
+                current = fresh
+            case .skip:
+                continue
+            case .dark:
+                vaultWentDark = true
+                NSLog("[vault] reconcile stopped minting at \(config.id): the vault went dark — \(missing.count - index - 1) further candidate(s) left unproven, for whichever trigger reconciles next")
                 continue
             }
 
+            guard listAdmits(current) else { continue }
+
+            // Recorded BEFORE the attempt, not after it. `createEntry`
+            // saves and then re-reads, and a save that lands under a
+            // re-read that refuses leaves a system entry written from
+            // the fresh body with no container to show for it. A reload
+            // can list that entry while this pass is still running, and
+            // the realign half below would then find "drift" against
+            // the pass's own opening snapshot and write the stale name
+            // over the fresh one — the exact undoing the skip exists to
+            // prevent, reached through the failure path instead of the
+            // success one. Recording an id whose save never landed
+            // costs at most one pass: realign only looks at rows the
+            // list holds, and the one way such a row exists is a hidden
+            // entry a concurrent reload materialised, whose genuine
+            // drift the next pass then repairs.
+            attempted.insert(current.id)
             do {
-                _ = try await createEntry(for: config)
+                _ = try await createEntry(for: current)
                 restored += 1
             } catch {
                 // The payload stays put; the next launch tries again.
@@ -316,12 +408,147 @@ class TunnelsManager {
             }
         }
 
-        await realignDriftedProjections(with: payloads)
+        // The realign half reads the SNAPSHOT, which is older than
+        // every mint above — so a row this pass just wrote from a
+        // fresher read would be found "drifted" against the stale name
+        // and rewritten back to it, the pass undoing its own work one
+        // line later. Comparing a just-minted row against this array
+        // measures the age of the snapshot rather than any drift, so
+        // those rows sit this half out; if one of them really has
+        // drifted since, the next pass reads a snapshot new enough to
+        // say so.
+        await realignDriftedProjections(with: payloads, skipping: attempted)
 
         if restored > 0 {
             NSLog("[vault] reconcile restored \(restored) tunnel(s) the system had lost")
         }
         return restored
+    }
+
+    /// The two things the live list has to say before a proven payload
+    /// becomes an entry, both read in the same breath as the mint.
+    ///
+    /// Synchronous on purpose: these tests are only worth what they are
+    /// still true for, and an await between them and `createEntry`
+    /// would be the very gap they exist to close.
+    ///
+    /// The ID test comes first and repeats the one at the top of the
+    /// iteration, because the probe between them suspended. Before the
+    /// probe existed the two lines were adjacent and one reading served
+    /// both; a reload
+    /// landing in the probe's window can list the very id being proven
+    /// — an entry the ownership boundary held back in an earlier dark
+    /// window is the shape that does it — and minting on the older
+    /// reading would create the second entry for one id that the pass
+    /// must never create. What remains is `createEntry`'s own two
+    /// round-trips, and that residue is NOT closed here: a reload
+    /// landing in there rebuilds the list from the system, which by
+    /// then holds the entry this pass has just saved, so the append at
+    /// the end of `createEntry` adds a second container for an id the
+    /// list already carries. `add` has shared that window since long
+    /// before this pass did — the fix belongs to `createEntry` and is
+    /// recorded with the custody-writing work rather than half-paid
+    /// from here.
+    ///
+    /// The NAME test is the restore's share of a rule the whole app
+    /// keeps: import and edit both refuse a duplicate name, so the
+    /// restore must not be the one path that manufactures one. A second
+    /// tunnel with the same name is indistinguishable to the operator
+    /// and collides in the name-keyed accessibility identifiers. It
+    /// reads the payload's CURRENT name, since that is what would be
+    /// written. The payload is left in the vault rather than deleted:
+    /// renaming the tunnel that holds the name frees it, and the next
+    /// launch brings this one back.
+    private func listAdmits(_ current: TunnelConfig) -> Bool {
+        // Identity first, and not for taste: a row that carries this id
+        // is refused for THAT reason whatever name it projects, and a
+        // relisted row commonly projects a stale name — testing the
+        // name first would refuse on the wrong ground and log a
+        // sentence that describes a different problem.
+        guard !tunnels.contains(where: { $0.id == current.id }) else {
+            NSLog("[vault] reconcile skipped \(current.id): the list took that id while the payload was being proven")
+            return false
+        }
+        let name = current.name.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !tunnels.contains(where: { $0.name.caseInsensitiveCompare(name) == .orderedSame }) else {
+            NSLog("[vault] reconcile skipped \(current.id): a tunnel named '\(name)' already exists")
+            return false
+        }
+        return true
+    }
+
+    /// What one candidate is worth at the moment its entry would be
+    /// minted, as opposed to when the pass began.
+    private enum ProvenPayload {
+        /// Still there — and this is what it says NOW, which is what
+        /// gets written.
+        case mint(TunnelConfig)
+        /// Not this pass's to restore. Already reported.
+        case skip
+        /// No answer. The caller stops minting here.
+        case dark
+    }
+
+    /// Re-reads one candidate at mint time, because the pass's snapshot
+    /// is older than this loop in both directions.
+    ///
+    /// `readAll` suspended, every candidate before this one suspended
+    /// again minting its entry, and `add`/`modify` drop stale payloads
+    /// while all of that runs. So a candidate is one of two opposite
+    /// things by the time its turn comes: a payload the system
+    /// genuinely lost (put it back) or one that has since been DELETED,
+    /// where minting hands the world an entry whose secret is gone —
+    /// absent from the list because `ingest`'s ownership boundary reads
+    /// it as another user's, undeletable for the same reason, and
+    /// self-reconnecting if it was minted armed. The snapshot cannot
+    /// tell the two apart because it predates both; one read at the
+    /// moment of minting can, and it is the same probe `ingest` runs
+    /// one suspension after its own bulk answer.
+    ///
+    /// Free in the steady state: candidates exist only when the system
+    /// has lost an entry the vault still backs, so an ordinary pass
+    /// never calls this at all. Single attempt, never
+    /// `read(id:attempts:)` — the retrying variant spends up to ~16.8s
+    /// per candidate against a dark vault, and it would spend all of it
+    /// holding `isReconciling`, so no later trigger could reconcile
+    /// either. (The main actor is not held: the ladder's backoff
+    /// sleeps, like every await here, hands it back — which is exactly
+    /// why the in-flight mark above has to be raised before the first
+    /// one.)
+    ///
+    /// What comes back to be minted is the FRESH payload, not the
+    /// snapshot's copy: a rename that landed in between would otherwise
+    /// be projected wrong the moment the entry is born, which is drift
+    /// manufactured by the pass that exists to end it. The caller's
+    /// name guard reads the fresh name for the same reason — it guards
+    /// what is about to be written.
+    private func provePayload(_ config: TunnelConfig) async -> ProvenPayload {
+        switch await vault.read(id: config.id) {
+        case .config(let fresh):
+            // The vault answers with whatever body sits under THIS KEY,
+            // while every decision the caller made — the candidate
+            // filter, the list check, the absence being repaired — was
+            // made about `config.id`. A body whose own id contradicts
+            // its key would carry all of that to a different tunnel,
+            // including the one guarantee the mint loop must never
+            // break: that no second entry is created for an id already
+            // listed. Nothing the app writes can produce it, since the
+            // key IS the id the payload encodes, so it is a custody
+            // anomaly to report rather than a case to normalize.
+            guard fresh.id == config.id else {
+                NSLog("[vault] reconcile skipped \(config.id): the payload under that key carries a different id (\(fresh.id))")
+                return .skip
+            }
+            return .mint(fresh)
+        case .missing:
+            NSLog("[vault] reconcile skipped \(config.id): the payload is gone — the snapshot predates its removal")
+            return .skip
+        case .undecodable:
+            NSLog("[vault] reconcile skipped \(config.id): the payload no longer decodes — its entry would project a name the vault can no longer back")
+            return .skip
+        case .unreachable:
+            return .dark
+        }
     }
 
     /// Realigns entries whose projection no longer matches their
@@ -336,8 +563,21 @@ class TunnelsManager {
     /// as everywhere in this pass — the drift waits for the session
     /// to end. A realign that would collide with another tunnel's
     /// name is skipped the same way a restore would be.
-    private func realignDriftedProjections(with payloads: [TunnelConfig]) async {
-        for config in payloads {
+    ///
+    /// `skipping` carries the ids the caller reached the mint for in
+    /// this same pass, landed or not. They are excluded because the
+    /// payload array here is the pass's opening snapshot while those
+    /// rows were written from a per-id read taken much later, so
+    /// comparing them measures the age of the snapshot rather than any
+    /// drift. "Or not" matters: an entry whose save landed under a
+    /// re-read that refused is listed by the next reload without ever
+    /// becoming a row this pass appended, and it carries the fresh name
+    /// too.
+    private func realignDriftedProjections(
+        with payloads: [TunnelConfig],
+        skipping attempted: Set<UUID>
+    ) async {
+        for config in payloads where !attempted.contains(config.id) {
             guard let tunnel = tunnels.first(where: { $0.id == config.id }),
                   tunnel.status == .inactive,
                   let projected = tunnel.tunnelProvider.tunnelIdentity,
@@ -390,7 +630,7 @@ class TunnelsManager {
         }
     }
 
-    /// Drops any *other* payload that already claims this tunnel's
+    /// Drops any *orphaned* payload that already claims this tunnel's
     /// name. Names are unique among listed tunnels, but a payload can
     /// outlive its entry — and one of those, holding a name the user
     /// is now reusing, would otherwise sit in the vault forever:
@@ -400,7 +640,60 @@ class TunnelsManager {
     ///
     /// A vault that cannot answer aborts the write instead of being
     /// skipped: letting a write proceed past an unanswered dedup is
-    /// the one way a name collision can ever be born.
+    /// the one way a name collision could be born HERE.
+    ///
+    /// "Outlive its entry" is the whole licence, and the two bars below
+    /// are what hold this method to it. The name guards that run before
+    /// this one read the LIST's names while this reads the VAULT's, and
+    /// the two part company on their own: `modify` writes the new name
+    /// to the vault first and rolls the projection back when the
+    /// preference save is refused, leaving a LISTED tunnel whose
+    /// payload already carries a name the list does not show. Reusing
+    /// that name then walks straight past the list guard and arrives
+    /// here, where the payload looks exactly like an orphan — and
+    /// deleting it takes a live tunnel's only copy of its secret.
+    ///
+    /// So a payload is spared when its id is on the list, and equally
+    /// when its id is marked in `creatingIds` — which covers two
+    /// different sentences. An add's mark means "this tunnel is on its
+    /// way to the list", the payload having been written seconds before
+    /// its entry lands. A reconcile pass's mark means "a pass in flight
+    /// is deciding about this payload", raised over its whole candidate
+    /// set: it may end in a restore, or in a skip because the name is
+    /// taken or the payload turned out to be gone. Sparing the second
+    /// kind is deliberately generous, and the generosity outlives the
+    /// pass: a genuine orphan that dodges one write's dedup is not
+    /// picked up by "the next write", because the list-name guard above
+    /// refuses a second import of that name before this method is ever
+    /// reached. It waits for a write that does reach the dedup with
+    /// that name — a save on the tunnel now holding it — or for the
+    /// name to be freed. Uninstall does not collect it either, and not
+    /// because of the row: that sweep removes system ENTRIES and leaves
+    /// every payload where it is. A stale payload costs keychain space.
+    /// The other error costs a key nothing else holds a copy of, and
+    /// that is the one this method must not make.
+    ///
+    /// What is deliberately NOT covered, because covering it would put
+    /// a system round-trip on every write: a tunnel the list does not
+    /// hold and is not creating — an entry `ingest` held back in a dark
+    /// vault window is the real case. Its payload still reads as an
+    /// orphan here. That residue belongs to the same class as the
+    /// hidden entry itself and is named with it rather than half-paid
+    /// from this side.
+    ///
+    /// Sparing a payload can leave the VAULT holding two records with
+    /// one name. That is a state the app already survives, though not
+    /// because the list is incapable of showing it: the list-name guard
+    /// runs at the top of `add`, and the row is appended only after
+    /// this method's own vault read, the payload write and the two
+    /// system round-trips that create the entry — plus a delete for
+    /// every duplicate dropped — so two imports overlapping anywhere in
+    /// that stretch both land, and the list DOES show one name twice.
+    /// What survives the duplicate is everything downstream: reconcile
+    /// refuses to restore a payload whose name is taken, realign
+    /// refuses to project one, and a duplicate the user
+    /// can see is one they can rename or delete. A deleted secret is
+    /// not.
     private func purgeVaultDuplicates(of config: TunnelConfig) async throws {
         let name = config.name.trimmingCharacters(in: .whitespacesAndNewlines)
 
@@ -411,10 +704,26 @@ class TunnelsManager {
         for other in payloads where other.id != config.id {
             let otherName = other.name.trimmingCharacters(in: .whitespacesAndNewlines)
             guard otherName.caseInsensitiveCompare(name) == .orderedSame else { continue }
+            guard !tunnels.contains(where: { $0.id == other.id }) else {
+                NSLog("[vault] kept payload \(other.id) claiming the name '\(name)': it belongs to a listed tunnel")
+                continue
+            }
+            guard !creatingIds.contains(other.id) else {
+                NSLog("[vault] kept payload \(other.id) claiming the name '\(name)': its entry is being created, or a restore pass is deciding about it")
+                continue
+            }
             // A failed delete must abort the write: letting it proceed
             // past an unanswered dedup is the one way a name collision
             // can be born — exactly what this method's contract forbids.
-            guard await vault.delete(id: other.id, attempts: 3) == .done else {
+            // The two failures abort alike but do not READ alike: a
+            // refusal is the keychain answering no to three attempts,
+            // while silence may yet have landed. The error handed to
+            // the user still says "vault unavailable" for both — the
+            // typed surfacing of that difference is a class the CRUD
+            // paths share, not this one site's to pay.
+            let dropped = await vault.delete(id: other.id, attempts: 3)
+            guard dropped == .done else {
+                NSLog("[vault] could not drop stale payload \(other.id) claiming '\(name)': outcome=\(dropped.label)")
                 throw TunnelManagementError.vaultUnavailable
             }
             NSLog("[vault] dropped stale payload \(other.id) that claimed the name '\(name)'")
@@ -1084,10 +1393,11 @@ class TunnelsManager {
     /// must prune the mirror deterministically, but running the full
     /// reload there would let reconcile MINT entries for any decodable
     /// payload a later net is still due to sweep: teardown must never
-    /// create what teardown exists to remove. Production's own entry
-    /// removals — `remove()` and the uninstall sweep — prune or
-    /// rebuild the list by their own hands; this stays a harness
-    /// surface.
+    /// create what teardown exists to remove. `remove()` prunes the
+    /// mirror by its own hand; the uninstall sweep deliberately does
+    /// not — it removes entries under a raised latch and leaves the
+    /// mirror to whatever refresh comes next. This stays a harness
+    /// surface either way.
     func prune() async {
         guard let providers = try? await providerFactory.loadAllFromPreferences() else { return }
         await ingest(providers)

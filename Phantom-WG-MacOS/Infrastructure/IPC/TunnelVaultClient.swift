@@ -11,8 +11,14 @@ import os.log
 /// the read path is what the detail and edit screens use to show a
 /// configuration.
 ///
-/// Subclassed by the preview support so the canvas can serve fixtures
-/// without an extension.
+/// Subclassed twice, and neither subclass is optional to know about
+/// when this file changes: the preview support serves the canvas its
+/// fixtures without an extension, and the DEBUG harness fabricates
+/// custody states no real vault can be asked to produce. Both rely on
+/// every RPC below staying non-final and in the class body — an
+/// extension cannot be overridden — and on the retry ladders
+/// dispatching their single-shot call through `self`, which is what
+/// lets a subclass drive the ladder without reimplementing it.
 @Observable
 @MainActor
 class TunnelVaultClient {
@@ -156,7 +162,9 @@ class TunnelVaultClient {
         case unreachable
     }
 
-    /// One attempt. Overridden by the preview support.
+    /// One attempt, and the one the ladders call: overriding this
+    /// method alone is what lets a subclass answer for every retrying
+    /// caller too.
     func read(id: UUID) async -> Read {
         let key = id.uuidString
 
