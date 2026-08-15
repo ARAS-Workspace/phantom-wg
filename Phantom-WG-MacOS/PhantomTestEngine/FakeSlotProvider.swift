@@ -112,6 +112,14 @@ final class FakeSlotProvider: TunnelProviding {
     /// lands the value that save carried. A refusal, and a silence
     /// released as a refusal, leave it alone.
     private(set) var storedOnDemand = false
+    /// Whether the system still holds a configuration for this
+    /// provider. A removal takes it away and a save PUTS IT BACK —
+    /// which is the entry re-mint every removal path here exists to
+    /// prevent, and the one shape this fake could not express while it
+    /// modelled the rule alone. Counters cannot stand in for it: a save
+    /// is COUNTED when it is issued and LANDS later, so a count says
+    /// nothing about which side of the removal it fell on.
+    private(set) var entryExists = true
     var onDemandRules: [NEOnDemandRule]?
     private(set) var connectionStatus: NEVPNStatus
     private(set) var saveCount = 0
@@ -246,6 +254,7 @@ final class FakeSlotProvider: TunnelProviding {
         switch saveAnswer {
         case .succeeds:
             storedOnDemand = isOnDemandEnabled
+            entryExists = true
             completion(nil)
         case .fails(let error):
             completion(error)
@@ -262,6 +271,9 @@ final class FakeSlotProvider: TunnelProviding {
             let landing = isOnDemandEnabled
             DispatchQueue.main.asyncAfter(deadline: .now() + seconds) { [weak self] in
                 self?.storedOnDemand = landing
+                // The re-mint: a save that lands after a removal puts
+                // the configuration back, armed or not.
+                self?.entryExists = true
                 completion(nil)
             }
         case .hangs:
@@ -311,12 +323,14 @@ final class FakeSlotProvider: TunnelProviding {
         switch removeAnswer {
         case .succeeds:
             storedOnDemand = false
+            entryExists = false
             completion(nil)
         case .fails(let error):
             completion(error)
         case .succeedsAfter(let seconds):
             DispatchQueue.main.asyncAfter(deadline: .now() + seconds) { [weak self] in
                 self?.storedOnDemand = false
+                self?.entryExists = false
                 completion(nil)
             }
         case .hangs:

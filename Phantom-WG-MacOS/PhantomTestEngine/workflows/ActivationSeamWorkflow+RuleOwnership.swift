@@ -610,6 +610,152 @@ extension ActivationSeamWorkflow {
               "and no session was ever raised from a configuration that would not load (starts=\(fake.startCount))")
     }
 
+    /// The latch is a SET, so it belongs to exactly one caller.
+    ///
+    /// Two removals of the same tunnel can overlap — the detail sheet
+    /// stays up for the seconds a removal takes, and its button can be
+    /// pressed again — and while the second one ran, the first one's
+    /// `defer` lowered the bar for both. Every deferred writer on these
+    /// paths reads that bar to decide whether it may still write, so
+    /// the second half of an overlapping pair ran with its own bar
+    /// already down, and the system entry was removed twice.
+    ///
+    /// The second entrance is a silent no-op by decision: nothing went
+    /// wrong, the deletion the user asked for is in flight, and an
+    /// error banner over it would be a lie they have to act on. So the
+    /// contract is counted rather than thrown — one `removePreferences`
+    /// for one tunnel, whatever the user pressed.
+    func secondRemovalIsASilentNoOp() async {
+        let identity = TunnelIdentity(id: UUID(), name: "TE-Seam-TwiceRemoved-\(runTag)", createdAt: Date(), isGhost: false)
+        let fake = FakeSlotProvider(name: identity.name, identity: identity, status: .disconnected)
+        // The removal is held open long enough to press again inside it.
+        fake.removeAnswer = .succeedsAfter(seconds: 3)
+        let manager = TunnelsManager(
+            tunnelProviders: [fake],
+            providerFactory: FakeSlotFactory(canned: [fake]),
+            vault: vault,
+            observesSystemChanges: false
+        )
+        guard let container = manager.tunnels.first(where: { $0.id == identity.id }) else {
+            fail("side manager did not materialize the twice-removed tunnel")
+            return
+        }
+
+        let first = Task { @MainActor in (try? await manager.remove(tunnel: container)) != nil }
+        guard await settle(within: 5, until: { manager.removingIds.contains(identity.id) }) else {
+            _ = await first.value
+            skip("environment: the removal never reached its in-flight window (vault slow?)")
+            return
+        }
+        // The second press, squarely inside the first removal.
+        let second = Task { @MainActor in (try? await manager.remove(tunnel: container)) != nil }
+        let secondAnswered = await second.value
+        check(secondAnswered,
+              "the second removal answered without an error for a deletion that is already happening")
+        check(manager.removingIds.contains(identity.id),
+              "and it left the bar where it found it — up, because the first removal still owns it")
+
+        let firstAnswered = await first.value
+        guard firstAnswered else {
+            skip("environment: the removal itself failed (vault dark?) — the latch contract is unproven this run")
+            return
+        }
+        check(fake.removeCount == 1,
+              "the system entry was removed exactly once for two presses (removePreferences=\(fake.removeCount))")
+        check(!manager.tunnels.contains(where: { $0.id == identity.id }),
+              "the tunnel left the list")
+        check(!manager.removingIds.contains(identity.id),
+              "and the bar came down once, with the removal that owned it")
+    }
+
+    /// The delete flow's own ordering, which is the reverse of the one
+    /// the sibling step drives.
+    ///
+    /// `deleteTunnel` stops first and removes second, so the stop's
+    /// disarm task is already queued when the removal raises its bar:
+    /// the gate reads the bars when the save is ISSUED, finds none, and
+    /// that save can then land after `removePreferences` — re-minting
+    /// the entry, armed, with its payload already deleted. The removal
+    /// therefore waits the parked task out in the same bounded window
+    /// it waits the rung.
+    ///
+    /// Measured on the ENTRY, because that is the only place a re-mint
+    /// shows: a save is counted when it is ISSUED and lands later, so
+    /// no counter can say which side of the removal it fell on. The
+    /// counters here are flow accounting — one save for the stop, one
+    /// for the removal's own stand-down, one removal — and the entry
+    /// carries the contract.
+    ///
+    /// The seal's window is DERIVED from the delay the step plants: a
+    /// window that closes before the planted save lands is a check that
+    /// cannot fail, which is how this step's first version passed
+    /// against the very bug it was written for.
+    func deleteFlowStopCannotOutrunItsRemoval() async {
+        let identity = TunnelIdentity(id: UUID(), name: "TE-Seam-DeleteOrder-\(runTag)", createdAt: Date(), isGhost: false)
+        let fake = FakeSlotProvider(name: identity.name, identity: identity, status: .connected)
+        fake.isEnabled = true
+        fake.arrangeArmed()                 // armed: the stop takes the disarm path
+        // The stop's disarm answers slowly, which is what gives the
+        // removal something to outrun. The delay is captured when the
+        // save is ISSUED, so the answer mode can be put back to
+        // immediate straight afterwards — and it must be, or the
+        // removal's own stand-down would inherit the same five seconds
+        // and land in step with the one it is racing. Two saves landing
+        // out of issue order is exactly the shape under test here.
+        let slowDisarm = 2.0
+        fake.saveAnswer = .succeedsAfter(seconds: slowDisarm)
+        let manager = TunnelsManager(
+            tunnelProviders: [fake],
+            providerFactory: FakeSlotFactory(canned: [fake]),
+            vault: vault,
+            observesSystemChanges: false
+        )
+        guard let container = manager.tunnels.first(where: { $0.id == identity.id }) else {
+            fail("side manager did not materialize the delete-order tunnel")
+            return
+        }
+
+        // The user's own sequence, in the app's own order.
+        manager.startDeactivation(of: container)
+        guard await settle(within: 3, until: { fake.saveCount >= 1 }) else {
+            fail("the armed stop never issued its disarm save (saves=\(fake.saveCount))")
+            return
+        }
+        // From here every OTHER save answers at once, so the only slow
+        // one in the run is the disarm already in flight.
+        fake.saveAnswer = .succeeds
+        let startedRemoval = Date()
+        let removed = await Task { @MainActor in (try? await manager.remove(tunnel: container)) != nil }.value
+        let removalTook = Date().timeIntervalSince(startedRemoval)
+        guard removed else {
+            skip("environment: the removal failed (vault dark?) — the ordering contract is unproven this run")
+            return
+        }
+        // The wait itself, read directly rather than inferred from what
+        // did not happen afterwards: a removal that returned before the
+        // planted save could land never waited for it, whatever the
+        // entry says later on a slow machine.
+        check(removalTook >= slowDisarm,
+              "the removal waited the stop's disarm out before it finished (took \(String(format: "%.1f", removalTook))s, the disarm needed \(String(format: "%.1f", slowDisarm))s)")
+        check(!manager.tunnels.contains(where: { $0.id == identity.id }), "the tunnel left the list")
+        check(fake.removeCount == 1, "the entry was removed exactly once (removePreferences=\(fake.removeCount))")
+        check(fake.saveCount == 2,
+              "two saves belong to this flow — the stop's disarm and the removal's own stand-down (saves=\(fake.saveCount), expected 2)")
+
+        // The seal, and it is the ENTRY rather than a counter: a save
+        // is counted when it is ISSUED and lands later, so no count can
+        // say which side of the removal it fell on. The entry can. A
+        // stop-disarm that outran its removal puts the configuration
+        // back — armed or not, invisible and undeletable, because its
+        // payload is already gone.
+        // Derived, not typed: the window has to outlive the save this
+        // step planted, or it scans the wrong stretch of time and the
+        // check becomes decoration.
+        let reminted = await settle(within: slowDisarm + 3) { fake.entryExists }
+        check(!reminted,
+              "and no save landed after the entry went — the removal waited the stop's disarm out instead of racing it (entryExists=\(fake.entryExists))")
+    }
+
     /// The other local give-up: the system refuses the start itself.
     ///
     /// Same doctrine, different evidence — `startTunnel` throwing is

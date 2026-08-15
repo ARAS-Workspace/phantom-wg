@@ -46,6 +46,8 @@ final class ActivationSeamWorkflow: TestWorkflow {
             WorkflowStep("The Watchdog Leaves A Rising Session Alone", peekLeavesARisingSessionAlone),
             WorkflowStep("A Config That Will Not Load Loses Its Rule", loadFailureStandsTheRuleDown),
             WorkflowStep("A Start The System Refuses Loses Its Rule", startFailureStandsTheRuleDown),
+            WorkflowStep("A Second Removal Is A Silent No-Op", secondRemovalIsASilentNoOp),
+            WorkflowStep("The Delete Flow's Stop Cannot Outrun Its Removal", deleteFlowStopCannotOutrunItsRemoval),
         ]
     }
 
@@ -222,6 +224,11 @@ final class ActivationSeamWorkflow: TestWorkflow {
         try? await Task.sleep(for: .milliseconds(400))
         check(fake.saveCount == savesAtEnd,
               "no preferences save landed after the entry was deleted (saves=\(fake.saveCount))")
+        // The same window read on the ENTRY, which is the only surface
+        // that can tell a late LANDING from a late issue: a save is
+        // counted when it goes out. Nothing put the configuration back.
+        check(!fake.entryExists,
+              "and the entry stayed gone rather than being re-minted (entryExists=\(fake.entryExists))")
     }
 
     /// A drop whose cause the system DOES answer for: the record must
