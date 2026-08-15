@@ -161,16 +161,34 @@ class TunnelContainer: Identifiable {
     /// future case to `.inactive`, so both are covered by the same test
     /// instead of each needing its own.
     ///
-    /// Five callers reach this gate, and they are the only writes that
-    /// DERIVE the row from the system's reading: the reload's `ingest`,
-    /// the status observer's non-attempting branch, the activation
-    /// watchdog's withdrawal, the rung save-catch, and — newest — the
-    /// give-up exits, which reach it through one shared helper rather
-    /// than each declaring a ground of its own. All but the first two
-    /// lower the attempt flag before they derive, which opens the gate
-    /// everywhere but the one place it must stay shut: a row the queue
-    /// has since taken is `.waiting`, manager-driven whatever the flag
-    /// says, and a lowering derive is rightly refused there.
+    /// SEVEN callers reach this gate, and they are the only writes that
+    /// DERIVE the row from the system's reading. Counted by grepping
+    /// `refreshStatus()` over the production targets, not by adding one
+    /// to the last number written here — the count stood at "five" for
+    /// two of them: the reload's `ingest`, the status observer's
+    /// non-attempting branch, the activation watchdog's withdrawal, the
+    /// rung save-catch, the give-up exits (which reach it through one
+    /// shared helper rather than each declaring a ground of its own),
+    /// `withdrawQueueSlot`'s non-`.waiting` exit, where a row that left
+    /// its slot on the system's own initiative is handed back, and
+    /// `remove()`, on the one failure path that leaves a tunnel
+    /// standing. All but the first two lower the attempt flag before
+    /// they derive, which opens the gate everywhere but the one place it
+    /// must stay shut: a row the queue has since taken is `.waiting`,
+    /// manager-driven whatever the flag says, and a lowering derive is
+    /// rightly refused there.
+    ///
+    /// `remove()`'s is the sharpest of the seven: it derives a row whose
+    /// manager-written status the PROVIDER contradicts, and the two
+    /// states it settles — a row grounded flat to `.inactive` over a
+    /// session the system still holds, and a stop that drew no callback
+    /// and left `.deactivating` behind — are both terminal for the user,
+    /// with nothing else in the process due to write that row again.
+    /// Note what does NOT open the gate for it: both of those statuses
+    /// are non-manager-driven on the STATUS alone, so the intent the
+    /// removal withdraws beforehand is beside the point there. The
+    /// intent matters for an `.activating` row under a live attempt,
+    /// which is a case that path does not reach.
     ///
     /// Everything else that writes `status` is the manager writing its
     /// own decision — the rung's optimistic paint, the queue slot,

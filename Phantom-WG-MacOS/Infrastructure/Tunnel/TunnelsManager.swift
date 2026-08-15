@@ -158,6 +158,15 @@ class TunnelsManager {
     /// editor — started inside that window would re-arm or re-write an
     /// entry that is about to be deleted, which is how a system entry
     /// outlives the app's list.
+    ///
+    /// The restore reads it too, and since the removal takes the ENTRY
+    /// before the payload that reader is not optional: the entry's
+    /// removal broadcasts a configuration change, the reload behind it
+    /// evicts the row, and a restore would then see a payload the system
+    /// lacks and mint the entry straight back — into the window where
+    /// the payload delete is still in flight. The bar is what keeps the
+    /// pass from manufacturing the very residue the new order exists to
+    /// avoid.
     @ObservationIgnored private(set) var removingIds: Set<UUID> = []
 
     // MARK: - Factory
@@ -319,7 +328,22 @@ class TunnelsManager {
 
         let known = Set(tunnels.map(\.id))
         let missing = payloads
-            .filter { !known.contains($0.id) && !creatingIds.contains($0.id) }
+            // `removingIds` is barred here for the same reason
+            // `creatingIds` is, and since the removal takes the entry
+            // before the payload it is no longer optional. The entry's
+            // removal broadcasts a configuration change; 400ms later a
+            // reload runs while `remove()` is still inside its vault
+            // delete, ingest drops the row because the entry is gone,
+            // and this filter would then see a payload the system lacks
+            // and mint the entry straight back — landing it just in time
+            // for the delete to take the payload out from under it. That
+            // is the hidden entry this pass exists to avoid, minted by
+            // the pass itself.
+            .filter {
+                !known.contains($0.id)
+                    && !creatingIds.contains($0.id)
+                    && !removingIds.contains($0.id)
+            }
             .sorted { $0.createdAt < $1.createdAt }
 
         // The whole candidate set is marked in flight here, where
@@ -753,12 +777,14 @@ class TunnelsManager {
 
     func modify(tunnel: TunnelContainer, with config: TunnelConfig) async throws {
         // Barred during removal like the activation gates, and for a
-        // sharper reason: this path WRITES THE PAYLOAD BACK. Landing
-        // between the delete and the entry removal, it restores the
-        // very secret that was just erased, and the next reconcile
-        // finds a payload without an entry and rebuilds the tunnel the
-        // user deleted. A save the user asked for deserves an error,
-        // not a silent no-op.
+        // sharper reason: this path writes BOTH stores. Landing inside a
+        // removal it can restore the very secret that was just erased,
+        // or save an entry back over one already removed — and with the
+        // entry-first order the second is the likelier half, since the
+        // entry goes before the payload. Either way the next reconcile
+        // finds a pair the user asked to be rid of and rebuilds it. A
+        // save the user asked for deserves an error, not a silent
+        // no-op.
         guard !removingIds.contains(tunnel.id) else {
             throw TunnelManagementError.vpnSystemErrorOnModifyTunnel(
                 systemError: Self.noSystemDetail(LocalizationManager.shared.t("error_detail_session_ended")))
@@ -810,13 +836,23 @@ class TunnelsManager {
     }
 
     func remove(tunnel: TunnelContainer) async throws {
-        // Removal suspends for seconds below (three vault attempts,
-        // then the system entry), and the sheet that asked for it
-        // stays on screen the whole time — `deleteTunnel` only
+        // Removal suspends for seconds below, and the sheet that asked
+        // for it stays on screen the whole time — `deleteTunnel` only
         // dismisses after this returns. So the window is not just
         // "what was already running", it is "anything the user can
-        // still press". Three withdrawals, in order of what they
-        // actually stop:
+        // still press".
+        //
+        // The window is now TWO vault ladders wide, not one: a read to
+        // choose the order, then the entry, then a delete behind it
+        // (the custody order swaps the last two). A read that answers
+        // on its last attempt followed by a delete that goes dark is
+        // roughly double what a single ladder cost, and every bar below
+        // has to cover the longer one.
+        //
+        // What follows is a bar, a wait, and THREE withdrawals, in the
+        // order of what each one actually stops. 1 and 1b are the bar
+        // and the wait; they stop nothing themselves, they make the
+        // withdrawals safe to perform:
         //
         // 1. The door is barred for this id. Clearing the attempt id
         //    alone would not have done it: a FRESH activation writes
@@ -864,35 +900,31 @@ class TunnelsManager {
             throw TunnelManagementError.vpnSystemErrorOnRemoveTunnel(
                 systemError: Self.noSystemDetail(LocalizationManager.shared.t("error_detail_timeout")))
         }
-        // The payload goes first, and its failure stops everything.
-        //
-        // Removing the system entry first looks tidier but loses the
-        // race with our own machinery: that removal makes the system
-        // broadcast a configuration change, which reconciles, which
-        // finds a payload with no entry and dutifully puts the entry
-        // back. Taking the truth away first means every later pass
-        // agrees the tunnel is gone. And if the vault cannot be
-        // reached, refusing outright leaves the tunnel whole rather
-        // than half-deleted.
-        //
-        // Nothing has been withdrawn from the tunnel at this point,
-        // and that is deliberate: on the failure below it keeps its
-        // ladder, its retry and its revive, exactly as if the user had
-        // never asked. An earlier version withdrew first and left a
-        // surviving tunnel frozen mid-activation with nothing running
-        // to move it — a worse outcome than the failure it reported.
-        guard await vault.delete(id: tunnel.id, attempts: 3) == .done else {
-            throw TunnelManagementError.vaultUnavailable
+        // Not a withdrawal, so it is not numbered with them: WHICH GOES
+        // FIRST is decided here, by what the payload turns out to be.
+        // See `entryGoesFirst(for:)` for why the order is not uniform.
+        let entryFirst = try await entryGoesFirst(for: tunnel)
+
+        if !entryFirst {
+            guard await vault.delete(id: tunnel.id, attempts: 3) == .done else {
+                throw TunnelManagementError.vaultUnavailable
+            }
         }
 
-        // 2. Past this line the tunnel's secret is gone and there is no
-        //    tunnel left to activate, so now the intent comes down.
-        //    Every rung re-reads the attempt id after its await, so
-        //    `nil` fails them closed; the scheduled retry, the one task
-        //    we hold a handle to, is cancelled outright. Clearing
-        //    `isAttemptingActivation` also keeps the teardown's own
-        //    `.disconnected` from reading as a mid-activation drop and
-        //    handing this entry to the drop belt mid-deletion.
+        // 2. The intent comes down before the ENTRY goes, which is the
+        //    step that matters for it: a scheduled retry landing after
+        //    the entry is gone would save it straight back. In the
+        //    custody order the payload delete has already run above, and
+        //    that is deliberate — it is the old order preserved whole,
+        //    including its property that a tunnel whose payload delete
+        //    failed keeps its ladder, its retry and its revive, exactly
+        //    as if the user had never asked. Every rung re-reads the
+        //    attempt id after its await, so `nil` fails them closed; the
+        //    scheduled retry, the one task we hold a handle to, is
+        //    cancelled outright. Clearing `isAttemptingActivation` also
+        //    keeps the teardown's own `.disconnected` from reading as a
+        //    mid-activation drop and handing this entry to the drop belt
+        //    mid-deletion.
         tunnel.isAttemptingActivation = false
         tunnel.activationAttemptId = nil
         tunnel.activationTask?.cancel()
@@ -902,57 +934,122 @@ class TunnelsManager {
         tunnel.respawnReviveTask?.cancel()
         tunnel.respawnReviveTask = nil
 
-        // The rule comes down before the entry does, and this is not
-        // belt-and-braces — it is the only place that can do it for
-        // the common case. Armed-and-inactive is a NORMAL resting
-        // state here: both the anonymous drop and the exhausted ladder
-        // keep their rule on purpose, and a tunnel in that state skips
-        // `startDeactivation` entirely when the user deletes it (the
-        // delete flow only stops what is running). Leave it, and a
-        // failed `removePreferences` below strands an entry that is
-        // armed, payload-less, hidden from the list by the ownership
-        // filter, and retried by the OS on every network change.
-        // Sequential await, so nothing here can outrun the removal.
+        // 3. The rule comes down before the entry does, and this is not
+        //    belt-and-braces — it is the only place that can do it for
+        //    the common case. Armed-and-inactive is a NORMAL resting
+        //    state here: both the anonymous drop and the exhausted
+        //    ladder keep their rule on purpose, and a tunnel in that
+        //    state skips `startDeactivation` entirely when the user
+        //    deletes it (the delete flow only stops what is running).
+        //    Leave it, and a failed `removePreferences` below strands an
+        //    entry the OS still retries on every network change —
+        //    payload-less and hidden from the list in the custody order,
+        //    or merely armed behind the user's back in the entry-first
+        //    one. Sequential await, so nothing here can outrun the
+        //    removal.
         if let disarmError = await Self.standDownRecovery(on: tunnel.tunnelProvider) {
             NSLog("[remove] recovery rule stayed armed on \(tunnel.name) — \(disarmError.localizedDescription)")
         }
 
-        // Half-deleted from here on: the payload is gone, so a failure
-        // below leaves an entry the app can no longer decode. The next
-        // ingest reads `.missing` for it and files it under another
-        // user, which hides it from the list — the throw is the only
+        // The entry goes. What a failure here costs depends on the order
+        // chosen above, and neither cost is nothing.
+        //
+        // ENTRY-FIRST keeps the payload: it was never touched, so the
+        // tunnel's secret is safe whatever happens here. The entry is a
+        // weaker claim and the comment must not overstate it — a throw
+        // means the removal was not CONFIRMED, not that it did not
+        // land, since NE can commit and lose the reply. What is certain
+        // is the withdrawal above: the revive is spent, the ladder is
+        // gone, and the recovery rule was asked to come down at step 3.
+        // If that save landed the tunnel survives DISARMED; if it was
+        // refused it survives ARMED with the refusal logged. Either
+        // way the banner says the deletion failed and nothing tells the
+        // user which of the two they now have. That is the accepted
+        // price of standing the rule down before the entry, which step
+        // 3 argues for: an armed entry the removal leaves behind is
+        // worse than a disarmed tunnel it leaves standing, because only
+        // one of the two is visible.
+        //
+        // The row is handed back to the system's own reading, and that
+        // matters here rather than being tidiness. `remove()` writes no
+        // status at all, so the row still wears whatever the last
+        // writer left on it, and two of those writers leave a value the
+        // provider contradicts: the exhausted ladder grounds a row FLAT
+        // to `.inactive` over a session the system still holds at
+        // `.connecting`, and a stop the system never answers guesses
+        // `.deactivating` and never hears back. Both are terminal for
+        // the user — the first refuses `startDeactivation` on its own
+        // reading, the second disables Delete and Edit and parks the
+        // queue behind a row that will never move. Both are also
+        // non-manager-driven on their STATUS alone, so the gate is open
+        // for them whatever the intent says; the withdrawal above is
+        // not what admits this derive, and a `.waiting` row is still
+        // rightly refused.
+        //
+        // In the CUSTODY order the payload is already gone, so a failure
+        // here leaves an entry the app can no longer decode, hidden from
+        // the list by the ownership filter, and the throw is the only
         // notice the user gets that something is still in System
-        // Settings. Nothing paints the row here on purpose: the status
-        // it carries was written by this manager, not observed, and
-        // overwriting it with a session reading would erase a
-        // `.waiting` queue slot or dress an armed entry as idle.
+        // Settings. No hand-back there: there is no tunnel left to
+        // paint honestly.
         do {
             try await tunnel.tunnelProvider.removePreferences()
         } catch {
+            if entryFirst { tunnel.refreshStatus() }
             throw TunnelManagementError.vpnSystemErrorOnRemoveTunnel(systemError: error)
         }
 
+        // The payload follows, and its failure is now the recoverable
+        // one: the entry is gone, so the next reload drops the row and
+        // the reconcile behind it finds a payload the system lacks and
+        // puts the tunnel back — whole, with its secret, for the user to
+        // delete again. The row is deliberately NOT evicted here: the
+        // entry's own removal already broadcast the configuration change
+        // that arms that reload, and evicting first would only widen the
+        // window in which the list disagrees with both stores.
+        if entryFirst {
+            guard await vault.delete(id: tunnel.id, attempts: 3) == .done else {
+                // The tunnel comes back — but only if something asks.
+                // The configuration change the entry's removal broadcast
+                // was consumed by a reload that ran while this call
+                // still held the removal latch, so its restore half was
+                // barred (correctly: a re-mint then would have raced
+                // this very delete). Nothing else is due to fire, so the
+                // payload would sit entry-less until an unrelated
+                // trigger. One trailing pass is scheduled here instead;
+                // it runs after this call returns and the latch is down,
+                // which is exactly when the restore is safe and right.
+                scheduleRefresh()
+                throw TunnelManagementError.vaultUnavailable
+            }
+        }
+
+        retireFromListAndQueue(tunnel)
+    }
+
+    /// What is left once both stores are empty: the row leaves the list
+    /// and the queue is answered.
+    ///
+    /// A queue slot must not outlive the list it was queued in. The
+    /// removal may have taken the very session the queued tunnel was
+    /// waiting behind, in which case its turn is now; or the slot may
+    /// have gone stale, in which case the hand-off's own guards clear
+    /// it. Both answers are better than leaving it: before the status
+    /// gate a later reload repainted the orphan `.inactive`, and that
+    /// accidental repair is exactly what the gate removed.
+    ///
+    /// Safe for the unrelated-tunnel case only because the hand-off
+    /// tests the slot itself: deleting a bystander while another tunnel
+    /// is still up leaves the queue exactly where it was. No-op when the
+    /// removed tunnel WAS the queued one, since the slot is cleared
+    /// first.
+    private func retireFromListAndQueue(_ tunnel: TunnelContainer) {
         if let index = tunnels.firstIndex(where: { $0.id == tunnel.id }) {
             tunnels.remove(at: index)
         }
-
         if waitingTunnel?.id == tunnel.id {
             waitingTunnel = nil
         }
-
-        // A queue slot must not outlive the list it was queued in. The
-        // removal may have taken the very session the queued tunnel was
-        // waiting behind, in which case its turn is now; or the slot
-        // may have gone stale, in which case the hand-off's own guards
-        // clear it. Both answers are better than leaving it: before the
-        // status gate a later reload repainted the orphan `.inactive`,
-        // and that accidental repair is exactly what the gate removed.
-        //
-        // Safe for the unrelated-tunnel case only because the hand-off
-        // now tests the slot itself: deleting a bystander while another
-        // tunnel is still up leaves the queue exactly where it was.
-        // No-op when the removed tunnel WAS the queued one, since the
-        // line above just cleared the slot.
         activateWaitingTunnelIfNeeded()
     }
 
@@ -974,6 +1071,61 @@ class TunnelsManager {
         guard refreshSuspended else { return }
         refreshSuspended = false
         scheduleRefresh()
+    }
+
+    /// Which store a removal empties first, decided per tunnel by what
+    /// its payload turns out to be.
+    ///
+    /// The two orders fail differently, and the whole choice is about
+    /// which residue a half-finished removal leaves. Taking the PAYLOAD
+    /// first leaves an entry with no secret: the ownership boundary
+    /// reads it as another local user's, so it is invisible to the list,
+    /// undeletable through the app, and still armed if it carried a
+    /// rule. Taking the ENTRY first leaves a payload with no entry,
+    /// which is the shape reconcile exists to repair — the tunnel simply
+    /// comes back, whole, and the user deletes it again. Entry-first is
+    /// therefore the default: it fails toward "nothing happened".
+    ///
+    /// The exception is not a preference but a structural fact. An
+    /// undecodable payload cannot be restored by anything: `readAll`
+    /// returns only what decodes, so reconcile never sees it, and
+    /// `ingest` rescues it off its ENTRY — which is exactly why
+    /// `removableEntryIds` refuses to let uninstall take that entry
+    /// away. Delete such an entry first and then lose the payload
+    /// delete, and the secret is locked in the keychain with nothing in
+    /// the app able to name it again. For that row the entry is the only
+    /// anchor, so the entry goes last.
+    ///
+    /// A vault that will not answer refuses the removal outright, as a
+    /// failed delete always has: better a whole tunnel than a
+    /// half-deleted one, and better than guessing an order on evidence
+    /// that never arrived.
+    ///
+    /// This read is a suspension like any other, so the verdict it
+    /// returns is a moment old by the time the order runs on it. Nothing
+    /// the app writes can change a payload's decodability underneath it
+    /// — `modify` is barred for this id by the removal's own latch, and
+    /// a store rewrites a decodable payload with another decodable one —
+    /// so the only producer would be a write from outside this app,
+    /// which is the case the custody surfaces already treat as an
+    /// anomaly rather than a state to race.
+    private func entryGoesFirst(for tunnel: TunnelContainer) async throws -> Bool {
+        // The same patience the delete it replaces at the head of this
+        // flow always had. A removal used to open with
+        // `delete(id:attempts: 3)`, so a vault that lost one round-trip
+        // to a respawn cost the user a retry, not a refusal; asking with
+        // a single shot here would have quietly traded that away and
+        // turned a transient dark moment into "the tunnel cannot be
+        // deleted right now".
+        switch await vault.read(id: tunnel.id, attempts: 3) {
+        case .config, .missing:
+            return true
+        case .undecodable:
+            NSLog("[remove] \(tunnel.id): the payload does not decode — its entry is the only anchor, so the payload goes first")
+            return false
+        case .unreachable:
+            throw TunnelManagementError.vaultUnavailable
+        }
     }
 
     /// Uninstall support, computed while the vault still answers: the
