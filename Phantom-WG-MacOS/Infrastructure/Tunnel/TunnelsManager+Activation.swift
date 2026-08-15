@@ -294,11 +294,58 @@ extension TunnelsManager {
             for rung in rungs { await rung.value }
             return true
         }
-        // Unconditional, no armed-filter: a tunnel whose flag reads
-        // false may still hold the rule in the store from an earlier
-        // refused save, and the sweep is the last chance to clear it
-        // before the extensions go.
+        // No ARMED FILTER: a tunnel whose flag reads false may still
+        // hold the rule in the store from an earlier refused save, and
+        // the sweep is the last chance to clear it before the
+        // extensions go. That exemption is about the flag, and only
+        // about the flag.
+        //
+        // The LIVENESS bars still apply, and this sweep is the writer
+        // that needs them most. A save is a write to the system store,
+        // and a save landing on a row whose entry a removal has already
+        // taken RE-MINTS that entry. The entry-first order makes the
+        // window wide and certain rather than narrow and unlucky:
+        // `remove()` takes the entry, then spends a retry ladder on the
+        // payload, and deliberately keeps the row in the list for that
+        // whole stretch — while the uninstall latch this flow raised
+        // stops any reload from pruning the mirror. So the row is still
+        // here to be iterated, and writing to it hands the teardown an
+        // entry with no payload: invisible behind the ownership
+        // boundary, undeletable from the app, and left behind if the
+        // teardown then throws before its removal step.
+        //
+        // What the skip costs, counted rather than waved away. USUALLY
+        // nothing: `remove()` stands that row's rule down itself, in
+        // sequence, before it touches the entry. FOUR of its exits
+        // return before reaching that step — a rung wait that times
+        // out, a vault that will not say what it holds, the custody
+        // order's own payload delete failing, and a second press, which
+        // is harmless because the removal that owns the bar is still
+        // walking toward the stand-down.
+        //
+        // Three of those leave a rule the teardown then takes away with
+        // the entry, so the residue dies with it. The fourth does not,
+        // and it is named here rather than smoothed over: a CUSTODY row
+        // whose payload delete is refused keeps BOTH halves, and this
+        // teardown deliberately leaves such an entry in place — its
+        // entry is the only anchor an unreadable payload has. So that
+        // one entry can outlive the uninstall still carrying its rule,
+        // and a reinstall brings the extensions back to honour it.
+        //
+        // The bar is still right, and the asymmetry is the reason: the
+        // residue it PREVENTS is a re-minted entry with no payload —
+        // invisible, undeletable, permanent. The residue it leaves is
+        // an armed rule on a row the user can still see and delete. One
+        // of those the user can act on. Both are logged.
+        //
+        // The membership half of the bar is not redundant either: the
+        // array is snapshotted at the loop head and every iteration
+        // suspends, so a row can leave the list underneath it.
         for tunnel in tunnels {
+            guard mayWriteStore(tunnel) else {
+                NSLog("[uninstall] recovery sweep skipped \(tunnel.name): it is being removed, or the list no longer holds it")
+                continue
+            }
             // Best-effort, but not blind: a rule that survives its
             // save is exactly what this sweep exists to prevent, and
             // the uninstall continues either way — so it gets said out
@@ -416,8 +463,11 @@ extension TunnelsManager {
     /// Exempt by contract, not by oversight: the rung's own inline
     /// give-up disarms (a `remove()` WAITS the rung out before
     /// deleting, so an in-rung save cannot race a completed removal)
-    /// `disarmAllRecovery` (unconditional by design — the uninstall
-    /// sweep is the last chance to clear a rule whose flag lies), and
+    /// `disarmAllRecovery` (exempt from the ARMED FILTER only — the
+    /// uninstall sweep is the last chance to clear a rule whose flag
+    /// lies, but it reads `mayWriteStore` like every other deferred
+    /// writer, because a save landing on a row whose entry a removal
+    /// has taken re-mints that entry), and
     /// `remove()`'s own sequenced disarm — it runs under its own
     /// `removingIds` entry, so routing it here would only bar itself.
     ///

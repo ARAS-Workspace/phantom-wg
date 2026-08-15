@@ -113,12 +113,39 @@ class TunnelsManager {
     /// configuration-change bursts, and a reload pass sampling the
     /// vault mid-teardown would resurrect what the flow is removing
     /// (reconcile restores any answered payload missing its entry).
-    /// The teardown owns the store during this window; refreshes
-    /// stand down instead of racing it. Lowered again only at the two
-    /// provable returns to list-world — a failed teardown, or
-    /// extensions reactivated from the gate (`resumeRefresh`) — so a
-    /// process that comes back does not live on with every self-heal
-    /// silently dead.
+    /// The teardown owns the store during this window; refreshes stand
+    /// down instead of racing it. Two doors lower it, and they are
+    /// named for what entitles each: `releaseStoreAfterUninstall` is
+    /// the flow's own, called from a `defer` so every exit releases it;
+    /// `releaseAbandonedStoreLatch` is the gate's, for the case a
+    /// `defer` cannot cover — a flow suspended on a system approval
+    /// that is never answered never ends its scope at all.
+    ///
+    /// There is deliberately NO ownership flag behind that. One was
+    /// tried and it enforced nothing: with the gate's door removed,
+    /// nothing ever read it, so it promised a guarantee that lived only
+    /// in two assignments. The entitlement is the gate's readiness
+    /// itself, which is a fact about the world rather than a bit this
+    /// class sets — the teardown exists to take the extensions DOWN, so
+    /// their return says no teardown of theirs is running.
+    ///
+    /// BARRED at SIX points, counted by grepping rather than by adding
+    /// one to the last number written here — it has been wrong twice.
+    /// `scheduleRefresh` refuses to start a pass; `reload` re-reads it
+    /// before the reconcile, whose job is to CREATE entries, and again
+    /// before the queue hand-off at its tail, which raises a session
+    /// and arms a rule to do it; `reconcileFromVault` re-reads it
+    /// before the realign half; the mint loop re-reads it per
+    /// candidate, since each iteration spends a probe and two
+    /// round-trips; and the realign loop re-reads it per ROW, since
+    /// each row is a system round-trip and it writes identity onto
+    /// entries the teardown may be removing at that moment. Every one
+    /// of those is a writer to the system store.
+    ///
+    /// The readers deliberately NOT barred are `ingest` and the list
+    /// eviction behind it: they only ever narrow the list to what the
+    /// system already holds, so they can create nothing for a teardown
+    /// to miss.
     @ObservationIgnored private var refreshSuspended = false
 
     @ObservationIgnored var waitingTunnel: TunnelContainer?
@@ -372,65 +399,7 @@ class TunnelsManager {
         creatingIds.formUnion(candidateIds)
         defer { creatingIds.subtract(candidateIds) }
 
-        var restored = 0
-        // What this pass wrote, or tried to write, from a reading newer
-        // than its own snapshot — so the realign half below can tell
-        // its own work from drift.
-        var attempted: Set<UUID> = []
-        // One dark answer stops the minting, exactly as it stops the
-        // probing in `ingest`: a single timeout bounds the stall rather
-        // than one per candidate, and a payload that cannot be proven
-        // present is the one thing this loop must not mint from.
-        var vaultWentDark = false
-        for (index, config) in missing.enumerated() where !vaultWentDark {
-            // `known` is a snapshot. An import finishing mid-pass — or
-            // a bulk answer that carried the same id twice — would land
-            // a config here whose tunnel already exists, and creating a
-            // second entry for the same id is the one thing this pass
-            // must never do. This reading is the cheap early-out, taken
-            // before a round-trip is spent on the candidate; the
-            // invariant itself rests on `listAdmits`, which reads the
-            // list again where it counts, because this test does not
-            // survive the probe's suspension.
-            guard !tunnels.contains(where: { $0.id == config.id }) else { continue }
-
-            let current: TunnelConfig
-            switch await provePayload(config) {
-            case .mint(let fresh):
-                current = fresh
-            case .skip:
-                continue
-            case .dark:
-                vaultWentDark = true
-                NSLog("[vault] reconcile stopped minting at \(config.id): the vault went dark — \(missing.count - index - 1) further candidate(s) left unproven, for whichever trigger reconciles next")
-                continue
-            }
-
-            guard listAdmits(current) else { continue }
-
-            // Recorded BEFORE the attempt, not after it. `createEntry`
-            // saves and then re-reads, and a save that lands under a
-            // re-read that refuses leaves a system entry written from
-            // the fresh body with no container to show for it. A reload
-            // can list that entry while this pass is still running, and
-            // the realign half below would then find "drift" against
-            // the pass's own opening snapshot and write the stale name
-            // over the fresh one — the exact undoing the skip exists to
-            // prevent, reached through the failure path instead of the
-            // success one. Recording an id whose save never landed
-            // costs at most one pass: realign only looks at rows the
-            // list holds, and the one way such a row exists is a hidden
-            // entry a concurrent reload materialised, whose genuine
-            // drift the next pass then repairs.
-            attempted.insert(current.id)
-            do {
-                _ = try await createEntry(for: current)
-                restored += 1
-            } catch {
-                // The payload stays put; the next launch tries again.
-                NSLog("[vault] reconcile failed for \(config.id): \(error.localizedDescription)")
-            }
-        }
+        let (restored, attempted) = await mintMissingEntries(from: missing)
 
         // The realign half reads the SNAPSHOT, which is older than
         // every mint above — so a row this pass just wrote from a
@@ -441,6 +410,12 @@ class TunnelsManager {
         // those rows sit this half out; if one of them really has
         // drifted since, the next pass reads a snapshot new enough to
         // say so.
+        // And the realign half is barred by the same latch, because it
+        // is a WRITER too: it saves identity onto entries the teardown
+        // may be removing at this very moment, and a save landing after
+        // a removal re-mints the entry it just took. The mint loop's
+        // own bail does not cover this — it breaks out and lands here.
+        guard !refreshSuspended else { return restored }
         await realignDriftedProjections(with: payloads, skipping: attempted)
 
         if restored > 0 {
@@ -491,6 +466,21 @@ class TunnelsManager {
         // sentence that describes a different problem.
         guard !tunnels.contains(where: { $0.id == current.id }) else {
             NSLog("[vault] reconcile skipped \(current.id): the list took that id while the payload was being proven")
+            return false
+        }
+        // A removal that STARTED after candidacy was decided. The
+        // candidate filter reads `removingIds` once, where candidacy is
+        // settled, and that reading is a pass old by the time the mint
+        // is reached — a probe and two round-trips per candidate ahead
+        // of this one. Usually the id test above covers it, because a
+        // removal keeps its row listed until it finishes; it stops
+        // covering it the moment a concurrent reload's ingest evicts
+        // that row, which the entry-first order makes ordinary rather
+        // than exotic, since the entry is already gone by then. Minting
+        // there hands the removal an entry it did not ask for and will
+        // not take.
+        guard !removingIds.contains(current.id) else {
+            NSLog("[vault] reconcile skipped \(current.id): a removal took the tunnel while the payload was being proven")
             return false
         }
         let name = current.name.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -575,6 +565,88 @@ class TunnelsManager {
         }
     }
 
+    /// The minting half of a reconcile pass, lifted out so the pass
+    /// itself stays inside the body ruler and so this loop's three
+    /// exits — a dark vault, a raised teardown latch, and a candidate
+    /// the list or the payload refuses — read as one sequence.
+    ///
+    /// Returns what it wrote and what it TRIED to write: the realign
+    /// half behind it must skip both, since a row this loop touched was
+    /// written from a reading newer than the pass's own snapshot.
+    private func mintMissingEntries(from missing: [TunnelConfig]) async -> (restored: Int, attempted: Set<UUID>) {
+        var restored = 0
+        var attempted: Set<UUID> = []
+        // One dark answer stops the minting, exactly as it stops the
+        // probing in `ingest`: a single timeout bounds the stall rather
+        // than one per candidate, and a payload that cannot be proven
+        // present is the one thing this loop must not mint from.
+        var vaultWentDark = false
+        for (index, config) in missing.enumerated() where !vaultWentDark {
+            // A teardown that raised the latch while this loop was
+            // running stops it here, for the same reason a dark vault
+            // does: what this loop produces is a SYSTEM ENTRY, and
+            // uninstall has already fixed the set of entries it may
+            // remove. One minted after that decision is one the
+            // teardown is guaranteed to leave behind, in a store the
+            // user was told is clean. The check sits inside the loop
+            // rather than only at the top because every iteration
+            // spends a probe and two round-trips, which is ample room
+            // for the latch to go up underneath it.
+            guard !refreshSuspended else {
+                NSLog("[vault] reconcile stopped minting at \(config.id): a teardown took the store — \(missing.count - index) candidate(s) left unminted")
+                break
+            }
+            // `known` is a snapshot. An import finishing mid-pass — or
+            // a bulk answer that carried the same id twice — would land
+            // a config here whose tunnel already exists, and creating a
+            // second entry for the same id is the one thing this pass
+            // must never do. This reading is the cheap early-out, taken
+            // before a round-trip is spent on the candidate; the
+            // invariant itself rests on `listAdmits`, which reads the
+            // list again where it counts, because this test does not
+            // survive the probe's suspension.
+            guard !tunnels.contains(where: { $0.id == config.id }) else { continue }
+
+            let current: TunnelConfig
+            switch await provePayload(config) {
+            case .mint(let fresh):
+                current = fresh
+            case .skip:
+                continue
+            case .dark:
+                vaultWentDark = true
+                NSLog("[vault] reconcile stopped minting at \(config.id): the vault went dark — \(missing.count - index - 1) further candidate(s) left unproven, for whichever trigger reconciles next")
+                continue
+            }
+
+            guard listAdmits(current) else { continue }
+
+            // Recorded BEFORE the attempt, not after it. `createEntry`
+            // saves and then re-reads, and a save that lands under a
+            // re-read that refuses leaves a system entry written from
+            // the fresh body with no container to show for it. A reload
+            // can list that entry while this pass is still running, and
+            // the realign half below would then find "drift" against
+            // the pass's own opening snapshot and write the stale name
+            // over the fresh one — the exact undoing the skip exists to
+            // prevent, reached through the failure path instead of the
+            // success one. Recording an id whose save never landed
+            // costs at most one pass: realign only looks at rows the
+            // list holds, and the one way such a row exists is a hidden
+            // entry a concurrent reload materialised, whose genuine
+            // drift the next pass then repairs.
+            attempted.insert(current.id)
+            do {
+                _ = try await createEntry(for: current)
+                restored += 1
+            } catch {
+                // The payload stays put; the next launch tries again.
+                NSLog("[vault] reconcile failed for \(config.id): \(error.localizedDescription)")
+            }
+        }
+        return (restored, attempted)
+    }
+
     /// Realigns entries whose projection no longer matches their
     /// payload — the drift `modify` leaves behind when the vault write
     /// lands and the preference save fails. The vault's version wins:
@@ -602,6 +674,17 @@ class TunnelsManager {
         skipping attempted: Set<UUID>
     ) async {
         for config in payloads where !attempted.contains(config.id) {
+            // The uninstall latch, read HERE rather than only before
+            // this call. Each row below costs an NE round-trip, so a
+            // teardown can take the store part-way down a long list —
+            // and what this loop writes is identity onto entries that
+            // teardown may be removing at this very moment. A guard at
+            // the call site bars a realign that has not started; this
+            // one bars the rest of a realign already walking.
+            guard !refreshSuspended else {
+                NSLog("[vault] realign stopped at \(config.id): a teardown took the store")
+                return
+            }
             guard let tunnel = tunnels.first(where: { $0.id == config.id }),
                   tunnel.status == .inactive,
                   let projected = tunnel.tunnelProvider.tunnelIdentity,
@@ -1054,21 +1137,64 @@ class TunnelsManager {
     }
 
     /// The uninstall flow's hand on the refresh machinery: from this
-    /// call on, no debounced reload runs in this process until
-    /// `resumeRefresh()`. See `refreshSuspended` for why the teardown
-    /// must own the store.
+    /// call on, no debounced reload runs in this process until the same
+    /// flow gives the store back through `releaseStoreAfterUninstall`.
+    /// Pair it with a `defer` at the call site: a path that forgets
+    /// leaves the list unable to ingest, reconcile or realign until the
+    /// gate's own recovery fires, and that recovery only fires when the
+    /// extensions come back. See `refreshSuspended` for both doors.
     func suspendRefreshForUninstall() {
         refreshSuspended = true
         pendingRefresh?.cancel()
         pendingRefresh = nil
     }
 
-    /// Lowers the uninstall latch when the process provably returns
-    /// to list-world — a failed teardown, or extensions reactivated
-    /// from the gate — and runs one refresh so the list re-proves
-    /// itself against the store it stopped watching.
-    func resumeRefresh() {
+    #if DEBUG
+    /// Whether a teardown currently holds the store. Readable so a step
+    /// can PROVE its arrangement instead of assuming it: a latch that
+    /// leaked from an earlier half produces the same green as the
+    /// window the step meant to open, and the two must not be confused.
+    var isStoreHeldForTeardown: Bool { refreshSuspended }
+    #endif
+
+    /// Lowers the latch on behalf of the flow that raised it, which is
+    /// the only caller entitled to decide the teardown is over.
+    ///
+    /// It schedules NOTHING, and that is the load-bearing half. A pass
+    /// started here would run against a world the teardown has just
+    /// emptied: `ingest` finds no entries and clears the list, and the
+    /// restore behind it then reads every payload as one the system
+    /// lost and MINTS THEM ALL BACK — the app undoing its own uninstall
+    /// about 400ms after reporting it clean. The vault is no wall
+    /// either; it answers over its own launchd service for as long as
+    /// the extension is resident, and a deactivation that resolves
+    /// "will complete after reboot" is the ordinary way to still be
+    /// resident here, since a connected tunnel is never stopped by the
+    /// disarm sweep.
+    ///
+    /// Lowering the latch is enough on its own: the list's self-heal is
+    /// alive again from this line, and the ordinary triggers — a
+    /// configuration change, a return to the foreground — reach it when
+    /// there is something to heal.
+    func releaseStoreAfterUninstall() {
+        refreshSuspended = false
+    }
+
+    /// The recovery for a teardown that never came back, and the reason
+    /// it exists is worth stating: `uninstallAll` suspends on a system
+    /// approval that has no timeout and is resumed only by the system
+    /// answering. If the user simply never answers it, that task hangs
+    /// for the life of the process — the flow's own `defer` never runs,
+    /// and with ownership in force nobody else may lower the latch. The
+    /// list would then live on with every self-heal dead until relaunch.
+    ///
+    /// Gate readiness is the proof that entitles this caller. The
+    /// teardown's whole job is to take the extensions DOWN; if they are
+    /// reporting ready, no teardown of theirs is in flight, whatever a
+    /// stranded continuation still believes.
+    func releaseAbandonedStoreLatch() {
         guard refreshSuspended else { return }
+        NSLog("[uninstall] the refresh latch outlived its teardown — released on the extensions' return")
         refreshSuspended = false
         scheduleRefresh()
     }
@@ -1147,25 +1273,49 @@ class TunnelsManager {
     }
 
     /// Uninstall's last step: removes the classified entries from the
-    /// system store, off a FRESH system list — so an entry a
-    /// mid-teardown pass managed to mint is caught too, and no stale
-    /// provider object is replayed. Best-effort by design: a survivor
-    /// is inert without the extensions, hidden from the list by
-    /// ingest, and self-heals on reinstall (payload present — an
-    /// existing entry is adopted, a missing one restored by
-    /// reconcile; both converge).
+    /// system store, off a FRESH system list, so no stale provider
+    /// object is replayed. Best-effort by design: a survivor is inert
+    /// without the extensions, hidden from the list by ingest, and
+    /// self-heals on reinstall (payload present — an existing entry is
+    /// adopted, a missing one restored by reconcile; both converge).
+    ///
+    /// The set is NOT recomputed here and cannot be. This runs with the
+    /// extensions down, so the vault answers `.unreachable` for every
+    /// row, and treating that as removable would take the custody
+    /// entries the classification exists to preserve — an unreadable
+    /// payload's entry is the only anchor it has. The set's freshness is
+    /// therefore bought upstream, by the refresh latch going up BEFORE
+    /// the classification and by the reconcile pass re-reading that
+    /// latch at each of its writing points.
+    ///
+    /// Which leaves one honest gap, and it is logged rather than
+    /// skipped in silence: an entry in the fresh list that carries an
+    /// identity and is not in the set. On a sound run that is another
+    /// local user's row, or one of ours whose payload did not decode —
+    /// both correctly left alone. But it is also the shape a latch
+    /// failure would produce, and a teardown that walks past it without
+    /// a word is how "uninstall reported clean" and "there is still an
+    /// entry in System Settings" become true at the same time.
     func removeEntriesForUninstall(_ removableIds: Set<UUID>) async {
         guard let providers = try? await providerFactory.loadAllFromPreferences() else {
             NSLog("[uninstall] entry removal skipped — the system list did not load")
             return
         }
+        var unclassified = 0
         for provider in providers {
-            guard let id = provider.tunnelIdentity?.id, removableIds.contains(id) else { continue }
+            guard let id = provider.tunnelIdentity?.id else { continue }
+            guard removableIds.contains(id) else {
+                unclassified += 1
+                continue
+            }
             do {
                 try await provider.removePreferences()
             } catch {
                 NSLog("[uninstall] entry removal failed for \(provider.localizedDescription ?? id.uuidString): \(error.localizedDescription)")
             }
+        }
+        if unclassified > 0 {
+            NSLog("[uninstall] \(unclassified) identified entry(ies) were outside the removable set and stay in the system store — another user's, or ours with a payload that does not decode")
         }
     }
 
@@ -1506,6 +1656,22 @@ class TunnelsManager {
     private func reload() async {
         guard let providers = try? await providerFactory.loadAllFromPreferences() else { return }
         await ingest(providers)
+        // The latch is re-read HERE, and not only at the scheduler.
+        // `scheduleRefresh` bars passes that have not started; this bars
+        // the one already running, which is a different pass and the
+        // dangerous one — the system read above and the ingest behind it
+        // are both suspensions, so a teardown can raise the latch after
+        // this pass was admitted and before it reaches the line that
+        // MINTS. Uninstall classifies its removable set under the latch
+        // and then removes exactly that set: an entry minted here would
+        // be one the classification never saw, so it survives the
+        // teardown and the flow reports clean over it.
+        //
+        // `ingest` above is deliberately left to finish. It only ever
+        // narrows the list to what the system already holds, so it
+        // creates nothing for a teardown to miss, and stopping it
+        // half-way would leave the mirror describing neither world.
+        guard !refreshSuspended else { return }
         // The list now mirrors this user's slice of the system store;
         // put back whatever the vault says should be in it.
         await reconcileFromVault()
@@ -1526,6 +1692,15 @@ class TunnelsManager {
         // start it. The hand-off tests both the slot and the queued
         // row's membership itself, so on the ordinary pass, where
         // nothing changed, it is a no-op.
+        //
+        // Barred by the teardown latch like every other writer on this
+        // path, and it belongs in that list even though it starts a
+        // SESSION rather than saving an entry: raising a tunnel arms
+        // its recovery rule and writes the store to do it, which is
+        // precisely what the teardown is trying to empty. Handing the
+        // queue on while the extensions are going down would also start
+        // a session that has nowhere to run.
+        guard !refreshSuspended else { return }
         activateWaitingTunnelIfNeeded()
     }
 

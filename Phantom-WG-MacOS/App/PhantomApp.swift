@@ -114,12 +114,22 @@ struct PhantomApp: App {
                 // entry must probe again rather than trust a stale
                 // `.ready`.
                 if !ready { vaultSession.invalidate() }
-                // Reactivation from the gate returns THIS process to
-                // the list. If an uninstall raised the refresh latch,
-                // lower it with the extensions' return — otherwise
-                // the reused manager lives on with every self-heal
-                // (restore, prune, realign) silently dead.
-                if ready { tunnelsManager.manager?.resumeRefresh() }
+                // The escape hatch for a teardown that never returned.
+                // The uninstall flow releases the store from a `defer`,
+                // so its ordinary exits are covered — but `defer` only
+                // runs when the scope ENDS, and that flow suspends on a
+                // system approval with no timeout, resumed only by the
+                // system answering. A user who never answers strands
+                // it, and with ownership in force nobody else may lower
+                // the latch: the list would live on with every self-heal
+                // dead until relaunch.
+                //
+                // Readiness is what entitles this caller rather than a
+                // guess about the world: the teardown exists to take the
+                // extensions DOWN, so their return says no teardown of
+                // theirs is running, whatever a stranded continuation
+                // still believes.
+                if ready { tunnelsManager.manager?.releaseAbandonedStoreLatch() }
             }
             .task(id: vaultSession.state) {
                 // The slot verdict needs the vault to answer ownership,
