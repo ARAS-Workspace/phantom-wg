@@ -22,12 +22,27 @@ final class VaultIntegrityWorkflow: TestWorkflow {
             WorkflowStep("Upsert Semantics (Heal + Idempotent Store/Delete)", upsertSemantics),
             WorkflowStep("Delete Proof", deleteProof),
             WorkflowStep("No Materialization", noMaterialization),
+            // Custody reads (sibling file). Placed here rather than
+            // after the two below so their "run LAST" contract keeps
+            // meaning what it says: these drive a fault vault and side
+            // managers, touch neither the real vault nor the system's
+            // preferences, and plant nothing for a later pass to find.
+            WorkflowStep("A Purge Never Touches A Listed Tunnel's Payload", purgeSparesAListedPayload),
+            WorkflowStep("Reconcile Proves A Payload Before Minting", reconcileProvesAPayloadBeforeMinting),
+            WorkflowStep("Reconcile Marks Its Candidates Before It Probes", reconcileMarksItsCandidateBeforeItAsks),
+            WorkflowStep("Reconcile Reads The List Again After Probing", reconcileReadsTheListAgainAfterProbing),
+            WorkflowStep("Reconcile Guards The Name It Is About To Write", reconcileGuardsTheNameItIsAboutToWrite),
+            WorkflowStep("Reconcile Refuses A Payload It Cannot Trust", reconcileRefusesAPayloadItCannotTrust),
+            WorkflowStep("A Dark Vault Stops The Minting Where It Went Dark", reconcileStopsMintingWhenTheVaultGoesDark),
             // These two run LAST, on a vault holding only the door
-            // configs: they are the only steps that trigger a reconcile
-            // (via add) — and the visibility gate drives a full reload
-            // besides. Keeping them after Delete Proof stops those
-            // passes from materialising the bulk throwaways this run
-            // had stored.
+            // configs: they are the only steps whose reconcile reads
+            // the REAL vault (via add) — and the visibility gate drives
+            // a full reload besides. Keeping them after Delete Proof
+            // stops those passes from materialising the bulk throwaways
+            // this run had stored. The custody-read steps above
+            // reconcile too, but every one of them over a fabricated
+            // vault, so no throwaway of this run is ever a candidate
+            // for them.
             WorkflowStep("Entry Survives Corruption (Reconcile)", corruptionSurvival),
             WorkflowStep("Undecodable Payload Stays Listed (Reload)", custodyVisibility),
         ]
@@ -39,7 +54,9 @@ final class VaultIntegrityWorkflow: TestWorkflow {
     /// Ids written as RAW (undecodable) bytes via the injection client;
     /// swept alongside `tracked` so no corrupt payload is left behind.
     private var rawIds: [UUID] = []
-    private let runTag = String(UUID().uuidString.prefix(8))
+    // Reachable from the sibling file that carries the custody-read
+    // steps.
+    let runTag = String(UUID().uuidString.prefix(8))
 
     // MARK: - Steps
 
@@ -959,11 +976,20 @@ extension VaultIntegrityWorkflow {
         //
         // BOUNDED RE-LOOK, not one shot: a reconcile already in
         // flight took its readAll snapshot BEFORE the payload
-        // sweep, and its createEntry loop can keep landing
-        // entries after any single fresh list was read. Payloads
-        // are gone, so every LATER reconcile mints nothing — the
-        // race is finite, and a couple of beats-and-looks drain
-        // it. A clean look is the only exit that claims clean.
+        // sweep, so it can still be holding candidates this net
+        // has already deleted. It no longer mints them — the pass
+        // re-reads each candidate per id at the moment it mints,
+        // and every id swept above answers `.missing` — which
+        // leaves one window per CANDIDATE: a probe that answered
+        // `.config` in the instant before that id's delete landed,
+        // whose entry then arrives a suspension later. The sweep
+        // above deletes payloads one at a time, so more than one
+        // candidate can be caught that way in the same pass; what
+        // shrank is each straggler's odds, not their count. The
+        // extra passes below are not sized on any number: they
+        // exist because the FIRST clean look is the only thing
+        // that can claim clean, and a look taken before a
+        // straggler lands is not one.
         var entriesSwept = 0
         var entriesStuck = 0
         var entriesUnverified = 0

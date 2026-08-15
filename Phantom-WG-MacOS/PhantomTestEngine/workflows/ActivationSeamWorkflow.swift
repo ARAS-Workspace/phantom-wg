@@ -753,9 +753,15 @@ final class ActivationSeamWorkflow: TestWorkflow {
     /// 0 of this rig's 2 synthetic providers and files them as other
     /// users', and — when the real vault holds payloads — a reconcile
     /// line claims to have restored tunnels the system had lost. Both
-    /// describe the side manager's private list. Nothing reaches the
-    /// real system store or the real vault: the stand-ins reconcile
-    /// mints come from the rig's own fake factory.
+    /// describe the side manager's private list. Nothing is WRITTEN to
+    /// the real system store or the real vault: the stand-ins reconcile
+    /// mints come from the rig's own fake factory. The vault is READ,
+    /// though, and on two counts: the ownership boundary has always
+    /// probed per id for a provider the bulk answer did not cover (this
+    /// rig's two synthetic ones), and since the custody-read package
+    /// the reconcile behind it probes once more per PAYLOAD the rig's
+    /// list lacks — on a machine holding real tunnels, one round-trip
+    /// each, which is where this step's wall clock goes.
     private func staleQueueSlotIsDiscarded() async {
         let idA = TunnelIdentity(id: UUID(), name: "TE-Seam-StaleA-\(runTag)", createdAt: Date(), isGhost: false)
         let idB = TunnelIdentity(id: UUID(), name: "TE-Seam-StaleB-\(runTag)", createdAt: Date(), isGhost: false)
