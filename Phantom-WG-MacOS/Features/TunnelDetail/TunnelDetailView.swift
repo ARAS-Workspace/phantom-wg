@@ -35,6 +35,19 @@ struct TunnelDetailView: View {
 
     @State var showingEdit = false
     @State var showingDeleteConfirmation = false
+    /// A removal is in flight from this sheet.
+    ///
+    /// The manager answers a second removal of the same tunnel with
+    /// silence — nothing is wrong, the deletion the user asked for is
+    /// already happening — but silence reads as SUCCESS here, and this
+    /// sheet's success is `dismiss()`. Pressed twice, the second press
+    /// would pop the view while the first removal was still running,
+    /// and the failure it might report (a dark vault, a refused
+    /// `removePreferences` that leaves an entry in System Settings)
+    /// would be written into the state of a screen that no longer
+    /// exists. The user's only notice would be gone. So the button
+    /// closes for the duration instead.
+    @State var deleting = false
     @State var errorMessage: String?
     @State var showingError = false
 
@@ -70,6 +83,7 @@ struct TunnelDetailView: View {
                 copyAction: copyConf,
                 editAction: { showingEdit = true },
                 resetAction: resetConnection,
+                deleting: deleting,
                 showingDeleteConfirmation: $showingDeleteConfirmation
             )
         }

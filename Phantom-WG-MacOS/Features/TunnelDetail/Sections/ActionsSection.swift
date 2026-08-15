@@ -19,6 +19,10 @@ struct ActionsSection: View {
     let copyAction: () -> Void
     let editAction: () -> Void
     let resetAction: () -> Void
+    /// A removal already in flight from this sheet — see the detail
+    /// view's `deleting`. The button closes rather than answering a
+    /// second press with a dismissal the first removal still needs.
+    let deleting: Bool
     @Binding var showingDeleteConfirmation: Bool
     @State private var copiedItem: String?
     @Environment(LocalizationManager.self) private var loc
@@ -49,7 +53,7 @@ struct ActionsSection: View {
             } label: {
                 Label(loc.t("detail_delete_tunnel"), systemImage: "trash")
             }
-            .disabled(tunnel.status != .inactive)
+            .disabled(tunnel.status != .inactive || deleting)
             .listRowSeparator(.hidden)
             .accessibilityIdentifier(AXID.TunnelDetail.Actions.deleteButton)
         } header: {
@@ -98,6 +102,7 @@ struct ActionsSection: View {
                 copyAction: {},
                 editAction: {},
                 resetAction: {},
+                deleting: false,
                 showingDeleteConfirmation: showingDelete
             )
         }
@@ -117,6 +122,7 @@ struct ActionsSection: View {
                 copyAction: {},
                 editAction: {},
                 resetAction: {},
+                deleting: false,
                 showingDeleteConfirmation: showingDelete
             )
         }

@@ -30,6 +30,12 @@ extension TunnelDetailView {
     }
 
     func deleteTunnel() {
+        // One removal per sheet — see `deleting`. The manager's own
+        // answer to a second one is silence, and silence here would
+        // dismiss the screen the first removal still needs to report
+        // to.
+        guard !deleting else { return }
+        deleting = true
         if tunnel.status != .inactive {
             tunnelsManager.startDeactivation(of: tunnel)
         }
@@ -38,6 +44,7 @@ extension TunnelDetailView {
                 try await tunnelsManager.remove(tunnel: tunnel)
                 dismiss()
             } catch {
+                deleting = false
                 errorMessage = error.localizedDescription
                 showingError = true
             }

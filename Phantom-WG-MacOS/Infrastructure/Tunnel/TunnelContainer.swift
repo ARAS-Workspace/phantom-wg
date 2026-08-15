@@ -57,6 +57,27 @@ class TunnelContainer: Identifiable {
     /// that a `savePreferences` already on its way to the system has
     /// landed. `remove()` uses exactly that before it deletes.
     @ObservationIgnored var activationRungTask: Task<Void, Never>?
+    /// The stop's own disarm, held for the one reason the rung above is
+    /// held: a removal has to be able to WAIT it out. The delete flow
+    /// issues the stop and the removal in that order, so this task is
+    /// already queued when `remove()` raises its bar — the gate's
+    /// liveness checks then find nothing to bar, and the save can land
+    /// after the entry is gone and re-mint it. Parked here, the removal
+    /// waits instead of racing.
+    ///
+    /// One handle, but never a REPLACED one: what is parked here is a
+    /// JOIN that awaits the previous handle and the new disarm, so the
+    /// newest handle covers every save still in flight. The rung next
+    /// door can hold a single handle safely because two rungs never
+    /// live at once; stops carry no such invariant — the toggle reads
+    /// ON while a disarm save is in flight, and switching tunnels
+    /// issues a second stop by itself. The join is deliberately empty
+    /// of work: chaining the disarms themselves would sequence a user's
+    /// stop behind a save that may hang, and the second tap on a wedged
+    /// stop is the documented way out of that state. Not self-clearing,
+    /// like the rung: a finished task answers instantly, a cleared
+    /// handle costs the wait.
+    @ObservationIgnored var pendingDisarmTask: Task<Void, Never>?
     /// One in-app revive per user intent, for the respawn-window class
     /// where the system drops a just-started session without an error
     /// record. Granted (reset) by `startActivation(of:)`, spent by the

@@ -352,6 +352,19 @@ class TunnelsManager {
                 continue
             }
 
+            // Read at ISSUE, like every other deferred writer here.
+            // This loop runs after the pass's `readAll` suspension and
+            // then writes the SYSTEM store, so by now the row may be
+            // under a removal or already evicted from the list — and a
+            // save landing on an entry being deleted re-mints it, while
+            // one landing on a row the list no longer holds writes for
+            // nobody. Until this bar existed, the realign was the only
+            // store-writing path on either side with none.
+            guard mayWriteStore(tunnel) else {
+                NSLog("[vault] reconcile skipped realigning \(config.id): the row is no longer this manager's to write")
+                continue
+            }
+
             tunnel.tunnelProvider.localizedDescription = config.name
             tunnel.tunnelProvider.configure(with: config.identity)
             do {
@@ -360,6 +373,18 @@ class TunnelsManager {
                 tunnel.name = config.name
                 NSLog("[vault] reconcile realigned \(config.id): the projection had gone stale")
             } catch {
+                // Put the projection back to what the store actually
+                // holds — the same rollback `modify()` documents as
+                // load-bearing, and load-bearing here for a sharper
+                // reason. The two lines above wrote the new identity
+                // into the provider BEFORE the save, and the drift test
+                // at the top of this loop reads exactly that memory
+                // (`tunnelIdentity`), so a refused save left the
+                // projection agreeing with the vault while the SYSTEM
+                // still held the old name: the test could never fire
+                // again and the drift became permanent instead of
+                // waiting for the next pass.
+                try? await tunnel.tunnelProvider.loadPreferences()
                 NSLog("[vault] reconcile could not realign \(config.id): \(error.localizedDescription)")
             }
         }
@@ -489,6 +514,17 @@ class TunnelsManager {
         //    its own id and undoes every flag below, and one tap on
         //    the toggle while this call hangs is enough. With the id
         //    listed here, both entrances refuse it.
+        //    One removal per id, and a second entrance is a SILENT
+        //    no-op. The latch is a set, so whichever call finished
+        //    first would lower it for both — and every deferred writer
+        //    on these paths reads exactly that latch to decide whether
+        //    it may still write, so the second half of an overlapping
+        //    pair would run with its own bar already down. Nothing is
+        //    thrown because nothing went wrong: the detail sheet stays
+        //    up for the seconds this takes and its button can be
+        //    pressed again, and an error banner over a deletion that IS
+        //    happening would be a lie the user has to act on.
+        guard !removingIds.contains(tunnel.id) else { return }
         removingIds.insert(tunnel.id)
         defer { removingIds.remove(tunnel.id) }
         // 1b. Then the rung already in flight is waited out, BEFORE
@@ -503,8 +539,16 @@ class TunnelsManager {
         //     a wedged call answers "could not delete, try again"
         //     instead of leaving an entry no one can decode. The bar
         //     above already keeps a NEW rung from taking its place.
+        //     The stop's own disarm is waited out in the same breath
+        //     and for the same reason. The delete flow issues the stop
+        //     FIRST and the removal second, so that task is already
+        //     queued when the bar goes up: the gate reads the bars when
+        //     the save is issued, finds none, and its save can then
+        //     land after `removePreferences` — re-minting the entry
+        //     this call is deleting. One bounded wait covers both.
         let rungSettled: Bool? = await bounded(20) {
             await tunnel.activationRungTask?.value
+            await tunnel.pendingDisarmTask?.value
             return true
         }
         guard rungSettled == true else {

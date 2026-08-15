@@ -105,18 +105,16 @@ extension TunnelsManager {
         // Stand the recovery rule down first — with it armed, the
         // system would reconnect the moment the tunnel drops.
         if tunnel.isActivateOnDemandEnabled {
-            Task {
+            let disarm = Task {
                 // The gate carries the liveness bars, read when the
-                // save RUNS. The window they close is narrow here and
-                // worth naming precisely, so nobody later mistakes it
-                // for the common path: the Delete button is disabled
-                // unless the tunnel is inactive, so `deleteTunnel`'s
-                // stop-then-remove pair only fires when the tunnel
-                // came UP between the confirmation dialog opening and
-                // the user confirming — an on-demand rule reconnecting
-                // it, or the respawn revive. Narrow, but the cost of
-                // losing that race is a re-minted entry the app can no
-                // longer see or delete.
+                // save RUNS — which answers every stop that is not part
+                // of a deletion. The delete flow itself is answered by
+                // the parking above rather than by these bars: it
+                // issues the stop BEFORE the removal raises its bar, so
+                // the bars would find nothing, and `remove()` waits the
+                // parked chain out instead. Both halves matter, because
+                // the cost of losing that race is a re-minted entry the
+                // app can no longer see or delete.
                 let outcome = await guardedStandDown(tunnel, loggingRefusal: false)
                 if case .barred = outcome { return }
                 // A newer intent may have been granted while that save
@@ -138,6 +136,7 @@ extension TunnelsManager {
                 }
                 performDeactivation(of: tunnel)
             }
+            park(disarm, on: tunnel)
         } else {
             // The flag is what THIS PROCESS last wrote, and the branch
             // above is where it goes wrong: a disarm save that never
@@ -178,7 +177,7 @@ extension TunnelsManager {
     /// been overtaken by the stop, and the entrance above stays a
     /// reviewed narrative about ORDER, not about outcomes.
     private func repairRuleAfterStop(_ tunnel: TunnelContainer) {
-        Task {
+        let repair = Task {
             // Only while the withdrawal still stands: a start granted
             // in the meantime owns the rule it just armed, and this
             // save would strip it. Asked twice — once before the save
@@ -221,6 +220,31 @@ extension TunnelsManager {
                     performDeactivation(of: tunnel)
                 }
             }
+        }
+        park(repair, on: tunnel)
+    }
+
+    /// Parks a stop's disarm where a removal can wait for it, without
+    /// putting anything in front of the stop itself.
+    ///
+    /// The handle has to cover EVERY disarm still in flight, because a
+    /// removal waits on one handle and a stop can be issued twice — the
+    /// toggle still reads ON while a disarm save is in flight, and
+    /// switching tunnels issues a second stop on its own. An
+    /// overwritten handle is a save nobody can wait for, and it lands
+    /// after the entry is gone.
+    ///
+    /// So the JOIN is chained, never the work. The disarm task itself
+    /// was started by the caller and is already running: putting the
+    /// previous one in front of it would sequence a user's stop behind
+    /// a save that may hang, and the second tap on a wedged stop —
+    /// documented as the way out of exactly that state — would stop
+    /// answering. This task waits for both and does nothing else.
+    private func park(_ disarm: Task<Void, Never>, on tunnel: TunnelContainer) {
+        let previous = tunnel.pendingDisarmTask
+        tunnel.pendingDisarmTask = Task {
+            await previous?.value
+            await disarm.value
         }
     }
 
@@ -401,12 +425,13 @@ extension TunnelsManager {
     /// its own reporting surface — both halves of the stop write
     /// `savingFailed`, which reaches the user rather than the log.
     ///
-    /// One deferred disarm still escapes this gate's guarantee, and it
-    /// is named rather than implied: on the delete path the stop's task
-    /// is enqueued BEFORE `remove()` sets its bar, so the bars can find
-    /// nothing to bar. `remove()` waits the rung out, not this task.
-    /// Closing it belongs with the removal-latch work, which is where
-    /// the container gains a handle this can be parked on.
+    /// The deferred disarms that could escape these bars are waited out
+    /// instead: on the delete path a stop's task is enqueued BEFORE
+    /// `remove()` raises its bar, so the bars would find nothing to bar
+    /// — those tasks are therefore parked on the container as a CHAIN
+    /// (`pendingDisarmTask`, each awaiting the one it supersedes) and
+    /// `remove()` waits the chain out in the same bounded window it
+    /// waits the rung.
     @discardableResult
     func guardedStandDown(
         _ tunnel: TunnelContainer,
@@ -561,6 +586,21 @@ extension TunnelsManager {
             return
         }
         tunnel.status = .inactive
+    }
+
+    /// The same two liveness bars, for a deferred write that is NOT a
+    /// disarm.
+    ///
+    /// `guardedStandDown` carries them for the disarm family, and it
+    /// cannot serve the other one: the projection realign writes an
+    /// IDENTITY, so routing it through a helper whose job is to stand a
+    /// rule down would either disarm a row that is only being renamed
+    /// or strip the gate of the meaning it was built with. What both
+    /// families share is the question — may this suspended writer still
+    /// touch the system store for this row — and that question lives
+    /// here, once, so a third deferred writer has somewhere to ask it.
+    func mayWriteStore(_ tunnel: TunnelContainer) -> Bool {
+        !removingIds.contains(tunnel.id) && tunnels.contains(where: { $0 === tunnel })
     }
 
     // Sealed at size, on purpose: this is the ladder's single entrance,
