@@ -34,6 +34,13 @@ final class VaultIntegrityWorkflow: TestWorkflow {
             WorkflowStep("Reconcile Guards The Name It Is About To Write", reconcileGuardsTheNameItIsAboutToWrite),
             WorkflowStep("Reconcile Refuses A Payload It Cannot Trust", reconcileRefusesAPayloadItCannotTrust),
             WorkflowStep("A Dark Vault Stops The Minting Where It Went Dark", reconcileStopsMintingWhenTheVaultGoesDark),
+            // Custody writes (sibling file): which store a removal
+            // empties first, and what a half-finished removal leaves.
+            WorkflowStep("A Removal Takes The Entry First", removalTakesTheEntryFirst),
+            WorkflowStep("A Custody Row Keeps Its Entry Until Last", removalKeepsACustodyRowsEntryUntilLast),
+            WorkflowStep("A Removal Refuses When The Vault Will Not Answer", removalRefusesWhenTheVaultWillNotAnswer),
+            WorkflowStep("Reconcile Does Not Re-Mint An Entry Being Removed", reconcileDoesNotReMintAnEntryBeingRemoved),
+            WorkflowStep("A Refused Entry Removal Hands The Row Back", aRefusedEntryRemovalHandsTheRowBack),
             // These two run LAST, on a vault holding only the door
             // configs: they are the only steps whose reconcile reads
             // the REAL vault (via add) — and the visibility gate drives
@@ -755,18 +762,42 @@ extension VaultIntegrityWorkflow {
         }
     }
 
-    /// The catch arm's resolution, asked rather than inferred:
-    /// `remove()` deletes the payload BEFORE the entry, so its throw
-    /// alone does not say which half survived — the pre-deletion
-    /// exits leave the pair intact, the removePreferences exit
-    /// leaves the bytes already gone.
+    /// The catch arm's resolution, asked rather than inferred. Which
+    /// half a throw left behind depends on the order `remove()` chose,
+    /// and it chooses per row: a decodable payload is emptied ENTRY
+    /// first, so a throw can leave the bytes with no entry; an
+    /// undecodable one keeps the old payload-first order, so a throw
+    /// there can leave an entry with no bytes. Both pre-deletion exits
+    /// leave the pair intact.
+    ///
+    /// The payload read narrows it but does NOT settle it, and assuming
+    /// otherwise is how this arm read the world before the order became
+    /// per-row: `.present` is the signature of a pre-deletion exit AND
+    /// of an entry-first removal whose payload delete was refused. Only
+    /// `.missing` identifies its half on its own, and only it acts. The
+    /// `.present` arm therefore REPORTS rather than resolves; separating
+    /// the two worlds needs a fresh system-list read and a second look
+    /// after the sweep, which is a package of its own.
     private func resolveFailedRemove(_ listed: TunnelContainer, id: UUID, error: Error) async -> (notes: [String], stuck: Bool) {
         switch await readPayloadState(id) {
         case .present:
-            // Visible custody: sweeping the payload out from under a
-            // listed entry would hide the row on the next reload —
-            // the strand every arm here refuses.
-            return (["entry still listed, payload intact — visible custody kept (\(error.localizedDescription))"], true)
+            // This arm deliberately does NOT act, and it no longer
+            // claims to know why it is not acting.
+            //
+            // Sweeping a payload out from under a LISTED entry would
+            // hide the row on the next reload — the strand every arm
+            // here refuses — and `.present` can still be that case. But
+            // it can equally be an entry-first removal whose payload
+            // delete was refused, where the bytes are an orphan and
+            // keeping them is the wrong answer. The payload alone
+            // cannot separate the two, so the residue is REPORTED and
+            // the run is flagged rather than guessed at.
+            //
+            // Clearing it properly needs a fresh system-list read and,
+            // because `remove()` has just scheduled a restore that can
+            // mint an entry into the window, a second look AFTER the
+            // sweep. That is its own package, not a line in this one.
+            return (["payload present, entry unverified — residue kept for inspection (\(error.localizedDescription))"], true)
         case .missing:
             // The second half failed: bytes gone, entry listed. Kept,
             // the next reload would file it as another user's and
@@ -797,10 +828,19 @@ extension VaultIntegrityWorkflow {
     /// twin names its inline path (`cleanupVisibilityBase`), and
     /// carrying one rule through every arm: the ENTRY never comes down
     /// while bytes it backs might survive — payload first, entry
-    /// second, because a payload-less entry is only hidden by the next
-    /// reload while a payload without its entry is unreachable for
-    /// ever. Success is claimed only where it was observed, and an
-    /// unreachable vault claims nothing.
+    /// second.
+    ///
+    /// The reason is narrower than it used to read here. It is NOT that
+    /// a payload without its entry is unreachable in general: for a
+    /// DECODABLE payload that is the shape a restore repairs, which is
+    /// why `remove()` now empties such a row entry-first on purpose.
+    /// It holds for THIS base, whose payload is deliberately corrupt:
+    /// `readAll` returns only what decodes, so no restore will ever see
+    /// it, and its entry is the only anchor `ingest` can rescue it from.
+    /// A payload-less entry is merely hidden by the next reload; an
+    /// entry-less undecodable payload is unreachable for ever. Success
+    /// is claimed only where it was observed, and an unreachable vault
+    /// claims nothing.
     private func sweepCorruptionBase(_ base: TunnelContainer, id: UUID, name: String) async {
         var notes: [String] = []
         var stuck = false
@@ -832,9 +872,10 @@ extension VaultIntegrityWorkflow {
                     stuck = true
                 }
             } catch {
-                // `remove()` deletes the payload BEFORE the entry, so
-                // the throw alone does not say which half survived —
-                // the resolver asks the vault rather than infer.
+                // `remove()` chooses its order PER ROW, so the throw
+                // says even less than it used to about which half
+                // survived — which is exactly why the resolver asks the
+                // stores instead of inferring from the failure.
                 let resolved = await resolveFailedRemove(listed, id: id, error: error)
                 notes.append(contentsOf: resolved.notes)
                 stuck = stuck || resolved.stuck
@@ -843,11 +884,17 @@ extension VaultIntegrityWorkflow {
             switch await readPayloadState(id) {
             case .present:
                 // Not listed, but the bytes say the step never swept:
-                // the row is hidden rather than gone. Payload first,
-                // and a failed delete KEEPS the entry — with both
-                // halves present the next reload reads `.undecodable`
-                // and puts the custody row back on the list, the only
-                // surface that can still reach this pair.
+                // the row is hidden rather than gone. Both orders can
+                // land here and they leave different things behind, so
+                // the arm sweeps the payload FIRST and then asks the
+                // system about the entry rather than assuming one.
+                // Custody order: a failed payload delete keeps the
+                // entry, and with both halves present the next reload
+                // reads `.undecodable` and puts the custody row back on
+                // the list. Entry-first: the entry is already gone and
+                // the payload is an orphan a restore would re-mint. The
+                // pair of calls below covers both without having to
+                // know which ran.
                 let verdict = await verifiedDelete(id)
                 switch verdict {
                 case .swept, .sweptOnReread:

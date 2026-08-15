@@ -675,7 +675,9 @@ extension ActivationSeamWorkflow {
     /// disarm task is already queued when the removal raises its bar:
     /// the gate reads the bars when the save is ISSUED, finds none, and
     /// that save can then land after `removePreferences` — re-minting
-    /// the entry, armed, with its payload already deleted. The removal
+    /// the entry, armed, behind a list that no longer holds it. Whether
+    /// its payload is still there depends on the order the removal
+    /// chose, and the entry comes back either way. The removal
     /// therefore waits the parked task out in the same bounded window
     /// it waits the rung.
     ///

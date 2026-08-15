@@ -118,9 +118,10 @@ final class ActivationSeamWorkflow: TestWorkflow {
     /// `deleteTunnel` calls `startDeactivation` and then `remove()`
     /// without waiting for the first to finish. The stop of an armed
     /// tunnel does its disarm on a queued, actor-inherited task, and a
-    /// save landing
-    /// after `removePreferences` writes the entry back, armed, with
-    /// its vault payload already gone — invisible and undeletable.
+    /// save landing after `removePreferences` writes the entry back,
+    /// armed — whether its payload is still there depends on the order
+    /// the removal chose, but the entry comes back either way, behind a
+    /// list that no longer holds it.
     ///
     /// The contract as of this session, and what each count proves:
     /// `remove()` stands the rule down ITSELF, sequentially, before it
@@ -190,9 +191,10 @@ final class ActivationSeamWorkflow: TestWorkflow {
         // stand-down, which is the ordering this step exists to pin.
         //
         // Waited for rather than assumed inside the sleep above: the
-        // removal reaches its stand-down only after three vault delete
-        // attempts, and a slow vault would otherwise turn "not yet"
-        // into a verdict about the product.
+        // removal reaches its stand-down only after the vault has been
+        // asked what it holds — with the same three attempts a delete
+        // spends — and a slow vault would otherwise turn "not yet" into
+        // a verdict about the product.
         guard await settle(within: 3, until: { fake.saveCount > savesBefore }) else {
             _ = await removal.value
             skip("environment: the removal never reached its own stand-down (vault slow?)")

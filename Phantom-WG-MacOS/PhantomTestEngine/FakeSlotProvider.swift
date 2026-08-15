@@ -315,9 +315,13 @@ final class FakeSlotProvider: TunnelProviding {
 
     /// The store's second writer: a removal takes the configuration and
     /// its rule together, so an entry that answered a remove cannot go
-    /// on reporting a stored rule — this object outlives the entry
-    /// (the factory hands the same instance back), and a later re-read
-    /// would otherwise paint a flag for something that is gone.
+    /// on reporting a stored rule. The object still outlives the entry
+    /// — the manager holds it through the container until an ingest
+    /// drops the row — and a `loadPreferences` on it in that gap would
+    /// otherwise paint a flag for something that is gone. What does NOT
+    /// happen any more is the factory handing it back: once
+    /// `entryExists` is false the fake system list leaves it out, the
+    /// same disappearance a real removal reports.
     func removePreferences(completion: @escaping @Sendable (Error?) -> Void) {
         removeCount += 1
         switch removeAnswer {
@@ -362,6 +366,17 @@ struct FakeSlotFactory: TunnelProviderFactory {
     func makeProvider() -> TunnelProviding {
         FakeSlotProvider(name: nil, identity: nil, status: .invalid)
     }
-    func loadAllFromPreferences() async throws -> [TunnelProviding] { canned }
+    /// The system lists CONFIGURATIONS, not objects, so a provider whose
+    /// entry has been removed is not in this answer any more — the same
+    /// disappearance a real `loadAllFromPreferences` reports, and the
+    /// one a reload turns into an evicted row. While this returned the
+    /// whole set regardless, a removal's own window could not be driven
+    /// at all: the row stayed listed after its entry was gone, so every
+    /// pass that reads the list saw a tunnel the system no longer had.
+    /// Providers that model no entry state (anything not ours) are kept,
+    /// since they never claimed one.
+    func loadAllFromPreferences() async throws -> [TunnelProviding] {
+        canned.filter { ($0 as? FakeSlotProvider)?.entryExists ?? true }
+    }
 }
 #endif

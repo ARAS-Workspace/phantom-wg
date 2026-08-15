@@ -298,8 +298,16 @@ class TestWorkflow {
     /// (5s), an NE entry removal and a prune — call it ~45s against a
     /// vault that stays dark throughout, and the ceiling sits above
     /// it so a net that is merely PATIENT is never clipped mid-claim.
-    /// (Grounding a live tunnel is 15s and `remove()` about 17s more —
-    /// the old sizing — both comfortably inside.)
+    /// `remove()` is now up to ~33.6s on its own, not the ~17s the old
+    /// sizing assumed: it spends a read ladder to choose its order and
+    /// a delete ladder behind it. A net that grounds a live tunnel
+    /// (15s) and then calls it can therefore approach this ceiling
+    /// against a vault that answers late, and a net that also resolves
+    /// the failure afterwards can pass it. This number is a BACKSTOP
+    /// for a wedged call, not a budget: the bodies that can chain
+    /// ladders must bound themselves, and the one that reports residue
+    /// after a failed `remove()` does so by reporting rather than
+    /// spending another ladder on it.
     ///
     /// A body that loops over many ids can still exceed this against a
     /// dark vault — the vault-throwaway net is the one that can, which
