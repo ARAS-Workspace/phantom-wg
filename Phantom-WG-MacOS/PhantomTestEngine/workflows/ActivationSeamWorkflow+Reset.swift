@@ -13,6 +13,67 @@ import Foundation
 // the DEPLOYED extension, in `PhantomTunnelWorkflow`.
 extension ActivationSeamWorkflow {
 
+    /// The window the interface could not see, now that it can.
+    ///
+    /// A stop on an ARMED row waits for the recovery rule's save
+    /// before anything moves: the status stays `.active`, the toggle
+    /// stays ON, and if the save hangs that is the whole experience.
+    /// The count is what the row reads to say otherwise, so what has
+    /// to be proven is that it is UP during the wait and back DOWN
+    /// after — on the ordinary exit and on the refused one, which are
+    /// the two that reach the end of the task body by different
+    /// routes.
+    ///
+    /// Read as a count, not as a flag, and driven that way: the second
+    /// tap is the documented escape from a wedged stop and it puts a
+    /// second disarm in flight beside the first, so a flag would come
+    /// down on whichever finished first and the row would go quiet
+    /// with a save still outstanding.
+    func stopOnAnArmedRowIsVisibleWhileItWaits() async {
+        guard let rig = await drivenActiveRig("TE-Seam-StopSeen-\(runTag)") else { return }
+        guard rig.fake.storedOnDemand else {
+            skip("environment: the rig's activation did not leave a rule armed, so the armed stop branch is not the one under test")
+            return
+        }
+        // Held open on purpose: without a slow save there is no window
+        // to observe, and a step that measured an instant one would
+        // pass against a row that never showed anything.
+        rig.fake.saveAnswer = .succeedsAfter(seconds: 2)
+        rig.manager.startDeactivation(of: rig.container)
+
+        let rose = await settle(within: 2, until: { rig.container.pendingDisarmCount > 0 })
+        check(rose, "the row can say a stop is under way before the status moves — count=\(rig.container.pendingDisarmCount)")
+        check(rig.container.status == .active,
+              "and it says it while the status still reads active, which is the whole reason it exists — status=\(rig.container.status)")
+        // The second tap, which is the documented way out of a wedged
+        // stop. Both disarms are in flight now, and a flag would be
+        // wrong here in a way a count is not.
+        rig.manager.startDeactivation(of: rig.container)
+        check(rig.container.pendingDisarmCount == 2,
+              "a second stop is counted beside the first rather than replacing it (count=\(rig.container.pendingDisarmCount))")
+
+        let cleared = await settle(within: 12, until: { rig.container.pendingDisarmCount == 0 })
+        check(cleared, "and both came down when their saves answered — count=\(rig.container.pendingDisarmCount)")
+        check(rig.container.status == .inactive || rig.container.status == .deactivating,
+              "with the stop itself landing past them — status=\(rig.container.status)")
+
+        // The refused exit reaches the end of the same task body by a
+        // different route: it writes a verdict first. A count left
+        // standing there would leave the row claiming to be stopping
+        // for the life of the process.
+        guard let refused = await drivenActiveRig("TE-Seam-StopRefused-\(runTag)") else { return }
+        refused.fake.saveAnswer = .fails(NSError(domain: "TE.Seam", code: 48,
+                                                 userInfo: [NSLocalizedDescriptionKey: "driven disarm refusal"]))
+        refused.manager.startDeactivation(of: refused.container)
+        let refusedCleared = await settle(within: 8, until: { refused.container.pendingDisarmCount == 0 })
+        check(refusedCleared,
+              "a refused disarm lowers the count too, rather than leaving the row stopping forever — count=\(refused.container.pendingDisarmCount)")
+        var surfaced = false
+        if case .savingFailed = refused.container.lastActivationError { surfaced = true }
+        check(surfaced,
+              "and the refusal still surfaced, so the count came down past a verdict rather than instead of one — \(refused.container.lastActivationError.map { String(describing: $0) } ?? "nil")")
+    }
+
     /// Brings a rig's row to `.active`, which is the only state the
     /// reset path will act on. Separated so the two steps below share
     /// one arrangement and neither of them re-states it.

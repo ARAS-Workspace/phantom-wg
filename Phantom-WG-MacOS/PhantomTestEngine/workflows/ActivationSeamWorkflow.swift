@@ -66,6 +66,8 @@ final class ActivationSeamWorkflow: TestWorkflow {
                          resetOutcomeByteDecidesTheVerdict),
             WorkflowStep("A Reset Nobody Answers Ends Its Own Wait",
                          resetNobodyAnswersEndsItsOwnWait),
+            WorkflowStep("A Stop On An Armed Row Is Visible While It Waits",
+                         stopOnAnArmedRowIsVisibleWhileItWaits),
         ]
     }
 
