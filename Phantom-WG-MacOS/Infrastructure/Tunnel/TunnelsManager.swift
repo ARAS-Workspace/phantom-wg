@@ -117,9 +117,13 @@ class TunnelsManager {
     /// down instead of racing it. Two doors lower it, and they are
     /// named for what entitles each: `releaseStoreAfterUninstall` is
     /// the flow's own, called from a `defer` so every exit releases it;
-    /// `releaseAbandonedStoreLatch` is the gate's, for the case a
-    /// `defer` cannot cover — a flow suspended on a system approval
-    /// that is never answered never ends its scope at all.
+    /// `releaseAbandonedStoreLatch` is the gate's, and it is a backstop
+    /// rather than the primary door. The case it was written for — a
+    /// flow suspended on a system approval nobody answers, whose scope
+    /// therefore never ends and whose `defer` therefore never runs — is
+    /// bounded at the wait itself now (`ExtensionGateController`'s
+    /// deactivation carries a budget), so that flow ends and releases
+    /// through the first door like every other exit.
     ///
     /// There is deliberately NO ownership flag behind that. One was
     /// tried and it enforced nothing: with the gate's door removed,
@@ -1215,13 +1219,23 @@ class TunnelsManager {
         refreshSuspended = false
     }
 
-    /// The recovery for a teardown that never came back, and the reason
-    /// it exists is worth stating: `uninstallAll` suspends on a system
-    /// approval that has no timeout and is resumed only by the system
-    /// answering. If the user simply never answers it, that task hangs
-    /// for the life of the process — the flow's own `defer` never runs,
-    /// and with ownership in force nobody else may lower the latch. The
-    /// list would then live on with every self-heal dead until relaunch.
+    /// The recovery for a teardown that never came back — and no longer
+    /// the one that answers the case it was written for.
+    ///
+    /// That case was `uninstallAll` suspending on a system approval the
+    /// user never answers: the task hung for the life of the process,
+    /// the flow's own `defer` never ran, and with ownership in force
+    /// nobody else could lower the latch, so the list lived on with
+    /// every self-heal dead until relaunch. The wait carries its own
+    /// budget now, so it ends and its `defer` runs.
+    ///
+    /// What is left for this door is what a per-request budget cannot
+    /// reach: a latch raised by a task the system tore down some other
+    /// way, leaving no exit to run at all. That is an EDGE, and the
+    /// pairing must not be misread — a teardown parked on a prompt
+    /// leaves the gate sitting at ready without moving, so its trigger
+    /// never fires. Neither of the two covers the other; do not delete
+    /// one believing it does.
     ///
     /// Gate readiness is the proof that entitles this caller. The
     /// teardown's whole job is to take the extensions DOWN; if they are

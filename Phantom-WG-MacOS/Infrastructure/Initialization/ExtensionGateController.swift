@@ -2,6 +2,41 @@ import Foundation
 import SystemExtensions
 import os.log
 
+/// The one way this app reaches the system-extension framework, behind
+/// a seam.
+///
+/// `OSSystemExtensionManager.shared` is a process-wide singleton and
+/// every submission through it is real: an activation stages an
+/// install, a deactivation takes an extension down, and the user's own
+/// machine answers. So the surfaces the gate controller owns — the
+/// approval budget, the answer that lands after this app stopped
+/// waiting for it, the gate state each of those produces — could not be
+/// driven from a step at all, because driving them meant installing and
+/// removing the user's extensions for real.
+///
+/// What makes a seam here work is that building a request is inert;
+/// only submitting it is not. A substitute that captures a request and
+/// never submits it hands a step the entire delegate lifecycle — the
+/// request object is a genuine one, and its delegate is already wired
+/// by the caller — with nothing at all reaching the system extension
+/// store.
+///
+/// Deliberately ONE method: not an abstraction over the framework, just
+/// the single call site that has to be interceptable. Everything else
+/// the controller does with a request (constructing it, holding it,
+/// comparing identities) stays exactly as it is.
+protocol SystemExtensionSubmitting {
+    func submit(_ request: OSSystemExtensionRequest)
+}
+
+/// The production submitter: the singleton, called the way it always
+/// was.
+struct RealSystemExtensionSubmitter: SystemExtensionSubmitting {
+    func submit(_ request: OSSystemExtensionRequest) {
+        OSSystemExtensionManager.shared.submitRequest(request)
+    }
+}
+
 /// Generic activation / approval / deactivation surface for a single
 /// system extension bundle. One instance per extension; the app's
 /// three extensions (Tunnel / Split-Tunnel / DNSProxy) each own their
@@ -52,11 +87,61 @@ final class ExtensionGateController: NSObject, OSSystemExtensionRequestDelegate 
     private(set) var isSettling = false
 
     @ObservationIgnored private var deactivationContinuation: CheckedContinuation<Void, Error>?
+    /// The request that continuation belongs to. Held because the
+    /// terminal callbacks are delivered for EVERY request this
+    /// controller has in flight, and an open ledger cannot tell them
+    /// apart: a failing activation would otherwise resolve a pending
+    /// deactivation with a foreign error, and the real answer — landing
+    /// later to an empty ledger — would be dropped on the floor. The
+    /// settle probe next to it already demuxes by identity; this is the
+    /// same test, applied to the request that can strand a teardown.
+    @ObservationIgnored private var deactivationRequest: OSSystemExtensionRequest?
+    /// The ceiling under that continuation, and the reason it exists is
+    /// not the system: it is the USER, who may never answer the approval
+    /// prompt a deactivation raises.
+    ///
+    /// Everything else the uninstall flow does is bounded. This await
+    /// was not, and what hangs on it is not just the flow: the flow
+    /// raises the refresh latch and lowers it from a `defer`, and a
+    /// `defer` only runs when the scope ENDS. A prompt nobody answers
+    /// therefore left the latch up for the life of the process, with
+    /// ingest, restore and realign all dead behind it and no cure but a
+    /// relaunch.
+    ///
+    /// The gate had a second door for exactly this, keyed to the gate
+    /// leaving readiness and coming back — but the only thing that used
+    /// to take it out of readiness during a parked teardown was the
+    /// `.needsApproval` paint, which is the WRONG status for a removal
+    /// and was rightly removed. Rather than manufacture a state change
+    /// for a net to watch, the wait itself is bounded here, which is
+    /// what every other unresolved await in this app already does.
+    @ObservationIgnored private var deactivationDeadline: Task<Void, Never>?
+    /// Deactivations this controller stopped waiting on, kept so their
+    /// terminal callbacks are still recognised for what they are.
+    ///
+    /// macOS holds a submitted request whatever we do — there is no
+    /// cancel API, the delegate stays wired, and the answer arrives
+    /// whenever the user finally acts. Clearing the identity pointer on
+    /// the budget's way out therefore did not make the request go away;
+    /// it made the late answer demux as an ACTIVATION, and the gate
+    /// painted `.needsApproval` over an extension that had just been
+    /// removed — offering the user a button that reinstalls it. That is
+    /// the exact wrongness this controller's approval branch was changed
+    /// to stop telling, arriving by another door.
+    ///
+    /// Identities rather than the objects: nothing here needs to keep a
+    /// request alive, only to recognise one.
+    @ObservationIgnored private var abandonedDeactivations: Set<ObjectIdentifier> = []
 
     /// The daemon probe injected at composition. `nil` (previews, or
     /// a composition without clients) makes `settle()` fall back to a
     /// plain `activate()` — the pre-measurement boot behavior.
     @ObservationIgnored private let identityProbe: IdentityProbe?
+
+    /// How this controller reaches the framework. Every request it
+    /// submits goes through here and nowhere else, which is what makes
+    /// the seam a seam — see `SystemExtensionSubmitting`.
+    @ObservationIgnored private let submitter: SystemExtensionSubmitting
 
     /// One-shot bridge between `settle()` and the delegate: the
     /// properties request `settle` submits is remembered by object
@@ -109,11 +194,18 @@ final class ExtensionGateController: NSObject, OSSystemExtensionRequestDelegate 
     /// Production always starts at `.unknown` and lets the delegate
     /// callbacks settle the real state; previews pass a fixed `status`
     /// to render a specific gate scenario.
+    ///
+    /// The last two parameters carry production values and exist so a
+    /// step can supply its own — the same shape `TunnelsManager` uses
+    /// for its retry pacing and its reload observation. Nothing in the
+    /// app passes either.
     init(
         bundleID: String,
         displayName: String,
         status: Status = .unknown,
-        identityProbe: IdentityProbe? = nil
+        identityProbe: IdentityProbe? = nil,
+        submitter: SystemExtensionSubmitting = RealSystemExtensionSubmitter(),
+        deactivationBudget: Duration = .seconds(60)
     ) {
         self.bundleID = bundleID
         self.displayName = displayName
@@ -123,6 +215,8 @@ final class ExtensionGateController: NSObject, OSSystemExtensionRequestDelegate 
         )
         self.status = status
         self.identityProbe = identityProbe
+        self.submitter = submitter
+        self.deactivationBudget = deactivationBudget
         super.init()
     }
 
@@ -207,7 +301,7 @@ final class ExtensionGateController: NSObject, OSSystemExtensionRequestDelegate 
             )
             settlePropsRequest = request
             request.delegate = self
-            OSSystemExtensionManager.shared.submitRequest(request)
+            submitter.submit(request)
         }
     }
 
@@ -232,7 +326,7 @@ final class ExtensionGateController: NSObject, OSSystemExtensionRequestDelegate 
             queue: .main
         )
         request.delegate = self
-        OSSystemExtensionManager.shared.submitRequest(request)
+        submitter.submit(request)
     }
 
     /// Pull ground-truth state from the OS. The delegate writes the
@@ -244,22 +338,71 @@ final class ExtensionGateController: NSObject, OSSystemExtensionRequestDelegate 
             queue: .main
         )
         request.delegate = self
-        OSSystemExtensionManager.shared.submitRequest(request)
+        submitter.submit(request)
     }
 
     /// Refusals this controller raises itself, as opposed to the ones
     /// the system hands back.
-    enum ExtensionGateError: Error {
+    ///
+    /// Localized, because both of them reach the user: the uninstall
+    /// flow puts `localizedDescription` straight into its alert, and an
+    /// unconformed error there reads as "The operation couldn't be
+    /// completed. (ExtensionGateError error 1.)".
+    enum ExtensionGateError: Error, LocalizedError {
         /// A second `deactivate()` arrived while one was still
         /// awaiting its delegate callback.
         case deactivationAlreadyInFlight
+        /// The approval prompt went unanswered for the whole budget, so
+        /// the flow was handed its answer back rather than left holding
+        /// the refresh latch. The removal itself is NOT cancelled — the
+        /// system keeps the request, and approving it later still takes
+        /// the extension down; what ended is this app's wait on it.
+        case deactivationNotAnswered
+
+        var errorDescription: String? {
+            let loc = LocalizationManager.shared
+            switch self {
+            case .deactivationAlreadyInFlight:
+                return loc.t("error_uninstall_already_running")
+            case .deactivationNotAnswered:
+                return loc.t("error_uninstall_not_approved")
+            }
+        }
     }
+
+    /// How long a deactivation may wait on its approval prompt.
+    ///
+    /// The number is not a guess about macOS — the system answers in
+    /// milliseconds once the user acts. It is what this app is willing
+    /// to spend holding every self-heal shut while a dialog goes
+    /// unanswered, and the two costs it sits between are asymmetric: a
+    /// user still reading the prompt loses an uninstall they can start
+    /// again with the reason named, while a user who has walked away
+    /// otherwise loses the running app until they relaunch it. The
+    /// uninstall awaits three of these but `uninstallAll` is sequential
+    /// and throws on the first, so the worst case is one budget, not
+    /// three.
+    ///
+    /// Held per instance rather than as a type constant because a step
+    /// proving the budget ENDS the wait has to outlast it, and no step
+    /// may sit for a minute. Sixty seconds is what the app is composed
+    /// with; what a step shortens is only how long it waits for the
+    /// same path to run.
+    @ObservationIgnored private let deactivationBudget: Duration
 
     /// Submit a deactivation request and await completion. Throws on
     /// hard error, resolves to `.notInstalled` on success.
     func deactivate() async throws {
-        log("deactivate() submitted (status=\(status))")
-        // One deactivation at a time. A second call would overwrite the
+        // "requested", not "submitted": this line prints BEFORE the
+        // re-entrance guard below, so a second press reaches it too and
+        // the old wording announced a submission the very next line
+        // refuses. The harness counts real submissions, and a log that
+        // disagrees with that count is the copy that gets believed.
+        log("deactivate() requested (status=\(status))")
+        // One AWAITED deactivation at a time — the SYSTEM may well hold
+        // more, since a budget that gives up cancels nothing; see
+        // `resumeDeactivation` for what that costs and how the exit is
+        // keyed. A second call would overwrite the
         // stored continuation and strand the first caller for ever —
         // nothing would ever resume it — and the uninstall flow awaits
         // three of these in sequence, so a stall there stops the whole
@@ -274,14 +417,83 @@ final class ExtensionGateController: NSObject, OSSystemExtensionRequestDelegate 
                 forExtensionWithIdentifier: bundleID,
                 queue: .main
             )
+            self.deactivationRequest = request
             request.delegate = self
-            OSSystemExtensionManager.shared.submitRequest(request)
+            submitter.submit(request)
+            // Armed after the submit, and what that order buys is
+            // narrower than it looks: a deadline is never armed for a
+            // request that was never handed over. It is NOT protection
+            // against a synchronous failure, because there is no such
+            // thing here — every delegate callback hops to the main
+            // actor before it runs, so none of them can land inside
+            // `submit` whatever order this code is written in. Whoever
+            // gets there first, `resumeDeactivation` is the single exit
+            // and it cancels this task on its way through.
+            //
+            // The budget is read HERE, not inside the task: a weak
+            // `self` that has gone would otherwise need a fallback
+            // number, and a second copy of this ceiling is exactly the
+            // kind of duplicate that drifts from the one above it.
+            let budget = self.deactivationBudget
+            self.deactivationDeadline = Task { @MainActor [weak self] in
+                try? await Task.sleep(for: budget)
+                guard !Task.isCancelled, let self else { return }
+                self.log("deactivate() gave up waiting on the approval prompt"
+                         + " — the flow gets its answer back and the refresh latch comes down with it")
+                // Remembered BEFORE the pointer is cleared. Giving up on
+                // an answer is not the same as the answer never coming,
+                // and the callback that eventually lands has to be read
+                // as the removal it is.
+                self.abandonedDeactivations.insert(ObjectIdentifier(request))
+                self.resumeDeactivation(request, with: .failure(ExtensionGateError.deactivationNotAnswered))
+            }
         }
     }
 
-    private func resumeDeactivation(with result: Result<Void, Error>) {
+    /// Whether a callback belongs to a removal this controller asked
+    /// for — the one still being awaited, or one it gave up waiting on.
+    ///
+    /// Both are removals as far as the SYSTEM is concerned, and the gate
+    /// state each produces is the same: the extension is going, or gone.
+    ///
+    /// What differs is the app's own WAIT, and the difference is not
+    /// spent when the callback arrives — it is the whole reason
+    /// `resumeDeactivation` takes a request. This answers "is this a
+    /// removal of ours", never "is this the removal we are waiting on";
+    /// the second question has exactly one right answer and only the
+    /// identity pointer holds it.
+    private func isOurDeactivation(_ request: OSSystemExtensionRequest) -> Bool {
+        request === deactivationRequest || abandonedDeactivations.contains(ObjectIdentifier(request))
+    }
+
+    /// The single exit for that continuation, and it belongs to ONE
+    /// request — which is why the request has to be named.
+    ///
+    /// Giving up on an answer does not cancel the request, and it does
+    /// not stop the user: the alert says the uninstall can be started
+    /// again, and the re-entrance guard above is keyed to the
+    /// continuation the budget has just cleared, so starting again is
+    /// exactly what it admits. From that moment two removals are live —
+    /// the one the system still holds and the one this app is waiting
+    /// on — and an exit guarded only on the continuation's EXISTENCE
+    /// hands the first one's answer to the second one's caller. Worse
+    /// than the wrong answer: it also clears the pointer, so the second
+    /// request's own answer lands as a stranger and takes the
+    /// ACTIVATION branch, painting `.needsApproval` over an extension
+    /// that was just removed. That is the wrongness the abandoned
+    /// ledger was added to stop, arriving by a third door.
+    ///
+    /// So a late answer for an abandoned request resumes nothing, keeps
+    /// the live deadline armed, and leaves the pointer where it is. It
+    /// still carries its own gate state — the extension really is gone
+    /// — which is the reason the ledger exists at all.
+    private func resumeDeactivation(_ request: OSSystemExtensionRequest, with result: Result<Void, Error>) {
+        guard request === deactivationRequest else { return }
+        deactivationDeadline?.cancel()
+        deactivationDeadline = nil
         guard let continuation = deactivationContinuation else { return }
         deactivationContinuation = nil
+        deactivationRequest = nil
         continuation.resume(with: result)
     }
 
@@ -400,6 +612,25 @@ final class ExtensionGateController: NSObject, OSSystemExtensionRequestDelegate 
 
     nonisolated func requestNeedsUserApproval(_ request: OSSystemExtensionRequest) {
         Task { @MainActor in
+            // A DEACTIVATION can need approval too, and painting the
+            // gate `.needsApproval` for it says the opposite of what
+            // happened: that status is the install story — "this
+            // extension is waiting to be allowed IN" — and the gate
+            // screen it drives offers the user Settings to approve an
+            // extension they just asked to remove. The teardown is
+            // still legitimately parked on the prompt, so nothing is
+            // resumed here; it is named instead, because this line is
+            // the only field evidence that a teardown is sitting on a
+            // dialog. Not resuming it is safe now in a way it was not
+            // when this branch was written: the wait carries its own
+            // budget, so an unanswered prompt ends the flow rather than
+            // outliving the process. Leaving the gate state alone here
+            // is what makes that budget the ONLY thing that ends it,
+            // which is the point — one exit, named, with a deadline.
+            guard !isOurDeactivation(request) else {
+                log("requestNeedsUserApproval on the DEACTIVATION — waiting on the user, gate state left alone")
+                return
+            }
             log("requestNeedsUserApproval → .needsApproval")
             status = .needsApproval
         }
@@ -410,8 +641,14 @@ final class ExtensionGateController: NSObject, OSSystemExtensionRequestDelegate 
         didFinishWithResult result: OSSystemExtensionRequest.Result
     ) {
         Task { @MainActor in
-            log("didFinishWithResult: \(result.rawValue) (deactivating=\(deactivationContinuation != nil))")
-            if deactivationContinuation != nil {
+            log("didFinishWithResult: \(result.rawValue) (deactivating=\(isOurDeactivation(request)))")
+            if isOurDeactivation(request) {
+                // Answered, so the ledger is done with it. Discarded
+                // here rather than inside `resumeDeactivation`, which
+                // an abandoned request's answer deliberately does not
+                // get past — that exit belongs to the request this app
+                // is currently waiting on, and this one is not it.
+                abandonedDeactivations.remove(ObjectIdentifier(request))
                 // `.willCompleteAfterReboot` is a legal deactivation
                 // outcome: the request succeeded but the provider may
                 // keep running until the machine restarts. The flow
@@ -424,7 +661,7 @@ final class ExtensionGateController: NSObject, OSSystemExtensionRequestDelegate 
                     log("deactivation will complete after reboot — the provider may keep running until then")
                 }
                 status = .notInstalled
-                resumeDeactivation(with: .success(()))
+                resumeDeactivation(request, with: .success(()))
                 return
             }
             activationsInFlight = max(0, activationsInFlight - 1)
@@ -463,8 +700,9 @@ final class ExtensionGateController: NSObject, OSSystemExtensionRequestDelegate 
                 settleContinuation = nil
                 return
             }
-            if deactivationContinuation != nil {
-                resumeDeactivation(with: .failure(error))
+            if isOurDeactivation(request) {
+                abandonedDeactivations.remove(ObjectIdentifier(request))
+                resumeDeactivation(request, with: .failure(error))
                 return
             }
             activationsInFlight = max(0, activationsInFlight - 1)

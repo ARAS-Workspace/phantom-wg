@@ -32,6 +32,25 @@ final class ConnectionGateCoordinator {
 
     @ObservationIgnored private let providerFactory: TunnelProviderFactory
     @ObservationIgnored private let vault: TunnelVaultClient
+    /// How the sweep finds the manager, ASKED at sweep time rather than
+    /// handed over once.
+    ///
+    /// A one-shot handover cannot work here, and the ordering is not a
+    /// matter of care but of shape: the manager is created by the view
+    /// that renders only once this gate reports `.slotFree`
+    /// (`PhantomApp` switches on that state, `TunnelContentView` builds
+    /// the manager in its `.task`). So at the sweep that matters most —
+    /// the launch-time one, which is the ordinary case when a foreign
+    /// session already holds the slot — there is no manager to hand
+    /// over at all. A property assigned when one is finally published
+    /// reads nil for exactly that sweep, and cannot follow a manager
+    /// that is later rebuilt; both times the sweep takes the unbarred
+    /// fallback below while this doc claims the bars are in force.
+    ///
+    /// A closure has no such moment to miss. It is installed before
+    /// anything runs and evaluated when the answer is needed, so it is
+    /// right whether the manager exists yet or has since been replaced.
+    @ObservationIgnored var currentTunnelsManager: (@MainActor () -> TunnelsManager?)?
     @ObservationIgnored private var observationTokens: [NSObjectProtocol] = []
     @ObservationIgnored private var pendingCheck: Task<Void, Never>?
     @ObservationIgnored private var pollTask: Task<Void, Never>?
@@ -152,12 +171,90 @@ final class ConnectionGateCoordinator {
         }
     }
 
+    /// The gate's stand-down, now through the same gate every other
+    /// deferred disarm uses.
+    ///
+    /// What it used to do wrong was the reporting: it lowered the flag,
+    /// spent the save under a `try?`, and then logged "disarmed"
+    /// whatever the system answered. What it also did wrong, and less
+    /// visibly, was carry neither liveness bar — and this is the site
+    /// that runs while a foreign session holds the slot, which is
+    /// exactly when a user is likely to be deleting the tunnel that
+    /// will not connect. A save landing on an entry that removal has
+    /// just taken re-mints it, invisible and undeletable. Routing
+    /// through `standDownForSlotGate` buys the bars, the single refusal
+    /// sentence, and a write through the manager's own provider instead
+    /// of this pass's copy of it.
+    ///
+    /// The armed FILTER stays, and the reason is not the one written
+    /// here before. That reason said the flag is fresh because these
+    /// providers came from a system read in this same pass — but the
+    /// pass suspends between that read and this loop: the bulk vault
+    /// read, and then a per-id probe for each OCCUPYING provider the
+    /// owned set does not claim (not one per unmatched provider, which
+    /// is the count this sentence used to give). One probe is enough
+    /// for the flag to be seconds old. The cost of that staleness is
+    /// bounded and small: a rule armed inside the gap is skipped once
+    /// and caught by the poll a few seconds later.
+    ///
+    /// What the filter actually buys is TERMINATION, and without it
+    /// this method does not terminate. `standDownRecovery` saves
+    /// unconditionally, a landed save broadcasts a configuration
+    /// change, and this coordinator listens for exactly that — so an
+    /// unfiltered sweep would save, wake itself 400ms later, still find
+    /// the slot held, and save again, for as long as the foreign
+    /// session lasts. The filter breaks that loop because each pass
+    /// re-reads the system list and a disarmed rule drops out of it. Do
+    /// not remove this filter for consistency with its siblings; their
+    /// reasons are about staleness, and this one is about a loop.
     private func disarmOwnArmedRules(providers: [TunnelProviding], ownedIDs: Set<UUID>) async {
         for provider in providers where provider.isOnDemandEnabled {
             guard let id = provider.tunnelIdentity?.id, ownedIDs.contains(id) else { continue }
-            provider.isOnDemandEnabled = false
-            try? await provider.savePreferences()
-            NSLog("[slot] gate disarmed recovery on \(provider.localizedDescription ?? id.uuidString)")
+            let name = provider.localizedDescription ?? id.uuidString
+            guard let manager = currentTunnelsManager?() else {
+                // Two ways in, and the same fact makes both safe — but
+                // the fact is about REMOVALS, not about existence: no
+                // manager is reachable from any view, so no `remove()`
+                // can have been issued through one, so the bars this
+                // write is missing would refuse nothing. (A manager
+                // object can exist here, mid-creation, with a fully
+                // materialized list; what it cannot have is a removal
+                // in flight.) Either the supplier was never installed
+                // (previews, a step building a bare gate), or it has
+                // been and answers nil because nothing is published. Once one IS
+                // published the closure answers and this branch stops
+                // being taken — the one thing a property assigned at a
+                // single moment could not offer, since no such moment
+                // exists here.
+                if let error = await TunnelsManager.standDownRecovery(on: provider) {
+                    NSLog("[slot] gate could not disarm recovery on \(name), written without the removal bars — armed=\(provider.isOnDemandEnabled) is the truest reading available: \(error.localizedDescription)")
+                } else {
+                    // Said differently from the routed line below on
+                    // purpose: the one thing this package changed about
+                    // a successful disarm is WHICH object it went
+                    // through, and a field log that spells both the same
+                    // way cannot answer the only question a report about
+                    // a re-minted entry would ask.
+                    NSLog("[slot] gate disarmed recovery on \(name) — no manager yet, written without the removal bars")
+                }
+                continue
+            }
+            switch await manager.standDownForSlotGate(id: id, context: "at the connection gate, over a proven foreign holder") {
+            case .done:
+                NSLog("[slot] gate disarmed recovery on \(name)")
+            case .barred:
+                NSLog("[slot] gate left \(name) alone: it is being removed, or the list no longer holds it")
+            case .refused:
+                // The refusal is already reported, in the one format
+                // every disarm site shares — but a reader following the
+                // `[slot]` narrative would otherwise watch this row
+                // vanish between an engage and a release with nothing
+                // said about it. One line naming the outcome, pointing
+                // at that report rather than copying it: a second copy
+                // of the error text here is exactly the drift the shared
+                // format exists to prevent.
+                NSLog("[slot] gate could not disarm recovery on \(name) — the save was refused, reported above")
+            }
         }
     }
 

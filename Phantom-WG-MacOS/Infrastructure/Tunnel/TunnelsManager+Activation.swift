@@ -410,12 +410,32 @@ extension TunnelsManager {
     /// earlier failed save leaves behind, and skipping on it would
     /// make this the one call that cannot repair that state.
     ///
-    /// Returns nil when the rule is down for real. NOT the only place
-    /// the rule comes down — the connection gate's engage sweep still
-    /// writes the flag and saves by hand; it belongs to the gate's own
-    /// package and should end up here. It also still SELECTS by the
-    /// flag, which is the defect rung 0 dropped: a rule the store holds
-    /// under a disarmed flag is exactly what that sweep walks past.
+    /// Returns nil when the rule is down for real. Every caller that
+    /// HAS a container arrives through `guardedStandDown` or the exempt
+    /// list it names: the connection gate's engage sweep was the last
+    /// hand-made one and goes through `standDownForSlotGate` today.
+    ///
+    /// One caller does not have a container and calls here directly —
+    /// that same gate, on the path where no manager has been PUBLISHED
+    /// yet. It is unbarred and entitled to be, and the entitlement is
+    /// about REMOVALS rather than existence: a manager object can exist
+    /// mid-creation with a fully materialized list, since the loader
+    /// reconciles before it publishes, but until it is published no
+    /// view holds it and no `remove()` can have been issued through it
+    /// — so the bars this write is missing would refuse nothing. That
+    /// is the ordinary case on a launch where a foreign session already
+    /// holds the slot, since the view that builds the manager renders
+    /// only once the gate reports the slot free — so this is a live
+    /// path, not a theoretical one, and the gate's own site carries the
+    /// same argument in the same words.
+    ///
+    /// One thing that sweep still does is SELECT by the flag, and it is
+    /// the only caller that may: rung 0 dropped its flag filter because
+    /// a rule the store holds under a disarmed flag is exactly what it
+    /// existed to clear, whereas the gate's filter is what stops its own
+    /// pass from re-triggering itself through the configuration-change
+    /// notification. Same-looking line, opposite reason — see the
+    /// sweep's own doc before making them agree.
     @discardableResult
     static func standDownRecovery(on provider: TunnelProviding) async -> Error? {
         // What was true before we touched it, so the pessimistic
@@ -442,6 +462,42 @@ extension TunnelsManager {
         case refused(Error)
     }
 
+    /// The connection gate's way through `guardedStandDown`.
+    ///
+    /// The gate stands our armed rules down when another local user's
+    /// session holds the system's one VPN slot, and it does that from
+    /// providers it loaded ITSELF — different objects from the ones this
+    /// manager's containers wrap, describing the same configurations. So
+    /// the gate has nothing to hand `guardedStandDown`, which takes a
+    /// container: one of that gate's two bars is an identity test, and
+    /// identity can never match across two system reads. (The other bar
+    /// is by id and would have been reachable — it is the pair that
+    /// needs a row of this manager's own, not each bar separately.)
+    ///
+    /// It asks by ID instead, and the write then goes through the
+    /// manager's own provider rather than the gate's copy. Two things
+    /// come out of that. The bars apply — a stand-down landing on an
+    /// entry a removal has just taken would re-mint it, which is the
+    /// hidden-entry class this campaign exists to close, and the gate
+    /// engages exactly when a user might be deleting a tunnel that will
+    /// not connect. And the manager's own projection stops diverging
+    /// from what was written, which the gate's copy could never fix.
+    ///
+    /// An id the list does not hold is BARRED rather than written
+    /// through the gate's object, and the reason is what this manager
+    /// can VOUCH for rather than what the system has. Absence from the
+    /// list does not prove the entry is gone: an ingest also drops a row
+    /// it cannot attribute, which is what a dark vault produces for
+    /// every row at once. What absence does establish is that no
+    /// container here backs this id, so a save issued for it is either
+    /// writing for nobody or minting an entry the list will not show —
+    /// and the cost of refusing is one pass, since the gate re-checks
+    /// every few seconds and a row that returns is picked up then.
+    func standDownForSlotGate(id: UUID, context: @autoclosure () -> String) async -> StandDownOutcome {
+        guard let tunnel = tunnels.first(where: { $0.id == id }) else { return .barred }
+        return await guardedStandDown(tunnel, context: context())
+    }
+
     /// THE gate for every disarm save issued after a suspension point.
     /// A deferred save's liveness facts must be read when the save
     /// RUNS, never when it was decided: a save landing on an entry
@@ -459,6 +515,12 @@ extension TunnelsManager {
     /// the stale-provider-handle replay the house forbids ("no stale
     /// provider object is replayed") — the new container's rule
     /// belongs to its own lifecycle.
+    ///
+    /// The connection gate reaches this through
+    /// `standDownForSlotGate(id:context:)` rather than directly,
+    /// because its providers come from its own system read and object
+    /// identity cannot match across two reads — see that method for why
+    /// an id it cannot find is barred rather than written.
     ///
     /// Exempt by contract, not by oversight: the rung's own inline
     /// give-up disarms (a `remove()` WAITS the rung out before

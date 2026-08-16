@@ -30,6 +30,9 @@ final class ExtensionGateCoordinator {
     )
     @ObservationIgnored private var foregroundObserver: NSObjectProtocol?
     @ObservationIgnored private var workspaceEcho: WorkspaceEcho?
+    /// The echo's second measurement, held so a burst of transitions
+    /// collapses into one rather than queueing a probe per callback.
+    @ObservationIgnored private var pendingEchoRecheck: Task<Void, Never>?
 
     /// One boot measurement per process. The window's `onAppear`
     /// re-runs `start()` on every re-creation, so without this guard
@@ -96,6 +99,7 @@ final class ExtensionGateCoordinator {
         if let workspaceEcho {
             OSSystemExtensionsWorkspace.shared.removeObserver(workspaceEcho)
         }
+        pendingEchoRecheck?.cancel()
     }
 
     /// All three extensions report `.activated`. Root switch keys off
@@ -144,8 +148,10 @@ final class ExtensionGateCoordinator {
         if workspaceEcho == nil {
             let echo = WorkspaceEcho { [weak self] bundleID in
                 Task { @MainActor in
-                    self?.log("workspace transition (\(bundleID)) → checkAll()")
-                    self?.checkAll()
+                    guard let self else { return }
+                    self.log("workspace transition (\(bundleID)) → checkAll()")
+                    self.checkAll()
+                    self.scheduleEchoRecheck(for: bundleID)
                 }
             }
             do {
@@ -189,6 +195,17 @@ final class ExtensionGateCoordinator {
     /// so the caller can surface them; on success every controller
     /// settles to `.notInstalled` and the root view falls back to the
     /// gate.
+    /// Sequential, and it throws on the first refusal — so a teardown
+    /// that fails partway leaves the later extensions installed and the
+    /// user is told only why it stopped, never how far it got.
+    ///
+    /// Named rather than fixed, because the alternative is a product
+    /// decision and not a correction: continuing past a failure would
+    /// take extensions down that the user has no reason to expect gone
+    /// after being shown an error. What the sequence does buy is the
+    /// bound on the worst case — each wait carries its own budget, and
+    /// stopping at the first means one budget can be spent here, not
+    /// three.
     func uninstallAll() async throws {
         log("uninstallAll() — sequential deactivate")
         try await tunnel.deactivate()
@@ -200,6 +217,30 @@ final class ExtensionGateCoordinator {
 
     private func log(_ message: String) {
         os_log("%{public}@", log: oslog, type: .default, message)
+    }
+
+    /// The echo's callbacks are WILL-transitions: the workspace names
+    /// the change before it is committed, so the measurement the first
+    /// `checkAll` takes can still read the world as it was. That is not
+    /// a flaw in the callback, it is what "will" means — but it undoes
+    /// the one blind spot this observer exists to close, since a
+    /// Settings toggle flipped while the app stays frontmost has no
+    /// second trigger behind it.
+    ///
+    /// So the transition is measured TWICE: once now, which is right
+    /// whenever the commit has already landed, and once past it. The
+    /// task is held and cancelled on each new transition because macOS
+    /// delivers these in bursts — three extensions changing together is
+    /// the ordinary case here — and one settled measurement answers for
+    /// all of them.
+    private func scheduleEchoRecheck(for bundleID: String) {
+        pendingEchoRecheck?.cancel()
+        pendingEchoRecheck = Task { [weak self] in
+            try? await Task.sleep(for: .seconds(1))
+            guard !Task.isCancelled, let self else { return }
+            self.log("workspace transition (\(bundleID)) → second measurement, past the commit")
+            self.checkAll()
+        }
     }
 }
 

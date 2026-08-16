@@ -107,6 +107,19 @@ struct PhantomApp: App {
             .onAppear {
                 interfaceResolver.start()
                 coordinator.start()
+                // Installed here because here is the only place that is
+                // before everything. The manager cannot be handed over
+                // at readiness — the view that creates it renders only
+                // once the gate has already reported a free slot — so
+                // the gate is given a way to ASK instead, and asks when
+                // its sweep needs the answer.
+                // The LOADER is captured, not `self`: this is a struct,
+                // so an implicit capture would copy the whole App —
+                // including the `State` box holding the gate — and the
+                // gate would then transitively retain itself. Harmless
+                // where both live for the process, and a trap anywhere
+                // it is copied from.
+                connectionGate.currentTunnelsManager = { [tunnelsManager] in tunnelsManager.manager }
             }
             .onChange(of: coordinator.allReady) { _, ready in
                 // A gate that drops voids the session proof: a
@@ -114,15 +127,21 @@ struct PhantomApp: App {
                 // entry must probe again rather than trust a stale
                 // `.ready`.
                 if !ready { vaultSession.invalidate() }
-                // The escape hatch for a teardown that never returned.
-                // The uninstall flow releases the store from a `defer`,
-                // so its ordinary exits are covered — but `defer` only
-                // runs when the scope ENDS, and that flow suspends on a
-                // system approval with no timeout, resumed only by the
-                // system answering. A user who never answers strands
-                // it, and with ownership in force nobody else may lower
-                // the latch: the list would live on with every self-heal
-                // dead until relaunch.
+                // The backstop for a teardown that never returned, and
+                // no longer the primary one. The flow lowers the latch
+                // from a `defer`, and the case a `defer` cannot reach —
+                // an approval prompt nobody answers — is now bounded at
+                // the wait itself (`deactivate()` carries a budget), so
+                // that flow ends and its `defer` runs.
+                //
+                // This stays because it covers what a per-request budget
+                // cannot: a latch raised by a task the system tore down
+                // some other way, leaving no exit to run at all. What it
+                // does NOT cover is the parked-prompt case it was
+                // written for — this is an EDGE, and a parked teardown
+                // leaves the gate sitting at ready without moving, so
+                // nothing fires here. That gap is why the budget exists;
+                // do not delete one believing the other has it.
                 //
                 // Readiness is what entitles this caller rather than a
                 // guess about the world: the teardown exists to take the
