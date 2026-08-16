@@ -2,6 +2,25 @@ import Foundation
 import Observation
 import os.log
 
+/// Whether a verdict is an ANSWER or the absence of one.
+///
+/// Every verdict that crosses `withRaceTimeout` carries an
+/// `.unreachable` case, and the distinction has to reach that method
+/// because it decides whether a proven silence may be thrown away — a
+/// fast `.unreachable` from an interrupted XPC connection is the
+/// strongest proof of silence there is, not a reason to forget one.
+///
+/// The conformance list is closed by GREP over the helper's call sites,
+/// never by a number written here: a count in a comment is the thing
+/// this campaign has now caught wrong four times.
+///
+/// A protocol rather than a closure parameter with a default: a default
+/// would let a fifth surface inherit "yes, it spoke" without anyone
+/// deciding that, which is exactly how the conflation happened.
+protocol VaultAnswerable {
+    var isAnswer: Bool { get }
+}
+
 /// App-side XPC client for the tunnel extension's secret custody.
 ///
 /// The System keychain is root-owned and this app is a sandboxed user
@@ -29,6 +48,15 @@ class TunnelVaultClient {
     /// next successful answer logs unconditionally — the initial
     /// baseline, and the first light after a dark window.
     @ObservationIgnored private var lastLoggedUsableCount: Int?
+    /// How long a proven silence is trusted for. Short on purpose: it
+    /// exists to stop a burst of callers each paying the full timeout,
+    /// not to decide the extension is gone. Recovery is never delayed
+    /// by more than this, and `ping` does not honour it at all.
+    private static let darkWindow: TimeInterval = 2
+    /// When the last timeout said the extension is not answering, and
+    /// how many calls have been spared a full timeout since.
+    @ObservationIgnored private var darkUntil: Date?
+    @ObservationIgnored private var sparedWhileDark = 0
 
     @ObservationIgnored private let log = OSLog(
         subsystem: "com.remrearas.Phantom-WG-MacOS",
@@ -36,6 +64,17 @@ class TunnelVaultClient {
     )
 
     init() {}
+
+    /// The app's own client lives for the process, so this is for the
+    /// OTHER kind: an instance a caller owns and drops. `connect()`
+    /// resumes an `NSXPCConnection` on first use and nothing else here
+    /// ever tears one down, so without this a DEBUG step that builds its
+    /// own client leaks a live connection to the vault's Mach service on
+    /// every suite run. Harmless for the shared instance, correct for an
+    /// owned one — the same shape the raw test client already carries.
+    deinit {
+        connection?.invalidate()
+    }
 
     // MARK: - Connection lifecycle
 
@@ -52,6 +91,91 @@ class TunnelVaultClient {
         conn.resume()
         connection = conn
     }
+
+    /// A retry declares the last silence STALE, so the cached verdict
+    /// is dropped before the ladder asks again.
+    ///
+    /// The dark window is for INDEPENDENT callers piling onto a silence
+    /// someone else already paid for. A ladder is the opposite act: one
+    /// caller spending time on purpose so that it can ask a second time,
+    /// and what it is asking is exactly the question the cache cannot
+    /// answer — has the extension come back? Reading the window on a
+    /// retry collapses all three attempts into the first one's verdict.
+    ///
+    /// Caught live rather than reasoned about: a removal issued right
+    /// after a deactivation, which is the documented respawn race and
+    /// the one `entryGoesFirst`'s own doc names, reported "the tunnel
+    /// cannot be deleted right now" over a vault that was merely
+    /// restarting. The first attempt is still allowed to read the
+    /// window — a caller arriving mid-storm should not pay for a
+    /// silence just proven — so what a ladder costs at worst is
+    /// unchanged from before the window existed.
+    ///
+    /// The clear is global, which is the honest reading: the ladder has
+    /// just declared the cached silence stale, so no other caller
+    /// should be answered from it either.
+    ///
+    /// What that costs is stated exactly, because an earlier version of
+    /// this sentence overstated the recovery. The window comes back only
+    /// two ways — a TIMEOUT arms it, an ANSWER makes it unnecessary —
+    /// and the ladder's own next attempt is guaranteed to be neither. A
+    /// fast `.unreachable` from the XPC error handler resolves in
+    /// milliseconds, `isAnswer` is false so nothing is cleared, and
+    /// nothing arms. That is the canonical respawn shape, so a retrying
+    /// ladder can leave the window down until some OTHER caller pays a
+    /// full timeout to re-prove the silence. Bounded and deliberate —
+    /// the ladder is the one caller whose whole purpose is to re-ask —
+    /// but not self-healing, and not to be described as if it were.
+    ///
+    /// A CANCELLED ladder would not even re-ask, so each call site tests
+    /// for cancellation first rather than relying on the loop's own
+    /// check, which sits a line too late.
+    private func discardProvenSilence() {
+        darkUntil = nil
+    }
+
+    #if DEBUG
+    /// Arms a proven silence by hand, so a step can put a ladder inside
+    /// one without taking the extension down.
+    ///
+    /// The window opens no other way than a real 5-second timeout, and
+    /// the only thing that produces one is a vault genuinely away — an
+    /// arrangement a step can only reach by deactivating a tunnel and
+    /// waiting out a respawn, which would then be measuring the respawn
+    /// rather than the ladder. The live proof that the collapse was
+    /// real is elsewhere and stays there: it is the removal a run makes
+    /// right after an abort.
+    func armProvenSilenceForTesting() {
+        darkUntil = Date().addingTimeInterval(Self.darkWindow)
+    }
+
+    /// Whether a proven silence is standing right now. A step that arms
+    /// one and then runs a ladder reads this after: a ladder that read
+    /// the window on its retries would have left it up and answered
+    /// from it.
+    var hasProvenSilence: Bool {
+        guard let darkUntil else { return false }
+        return Date() < darkUntil
+    }
+
+    /// Every call the window has ever answered, monotonically.
+    ///
+    /// This is what lets a step judge the ladder by COUNT rather than by
+    /// wall clock. Under an armed window a ladder that discards the
+    /// silence spares exactly its first attempt and really asks the
+    /// second; one that honours the window on every retry spares all
+    /// three. One versus three is a reading no slow machine and no slow
+    /// vault can blur, which a duration threshold cannot say.
+    ///
+    /// It has to be its OWN counter, and that was measured rather than
+    /// reasoned: `sparedWhileDark` belongs to the log line and means
+    /// "since the last timeout", so a real answer zeroes it — and a real
+    /// answer is precisely what a ladder produces on its way out. A step
+    /// reading that one after the ladder read 0 whatever had happened,
+    /// which is how the first version of this witness failed twice while
+    /// the product was doing exactly the right thing.
+    private(set) var darkWindowAnswersTotal = 0
+    #endif
 
     private func proxy(
         _ onError: @escaping @Sendable (Error) -> Void
@@ -71,7 +195,7 @@ class TunnelVaultClient {
     /// where the write may even have LANDED with only its reply lost.
     /// Callers that report state must branch on the difference; a
     /// caller that only needs success compares `== .done`.
-    enum Write: Equatable {
+    enum Write: Equatable, VaultAnswerable {
         case done
         case refused
         case unreachable
@@ -83,6 +207,9 @@ class TunnelVaultClient {
             case .unreachable: return "unreachable"
             }
         }
+
+        /// A refusal is speech: the daemon was reached and said no.
+        var isAnswer: Bool { self != .unreachable }
     }
 
     /// Hands a tunnel's configuration to the extension for custody.
@@ -132,6 +259,16 @@ class TunnelVaultClient {
             if outcome == .done { return outcome }
             if attempt < attempts {
                 try? await Task.sleep(for: .milliseconds(600 * attempt))
+                // Only a ladder that is going to ASK may declare the
+                // silence stale. `try?` swallows the cancellation a
+                // cancelled sleep throws, so without this test a ladder
+                // whose caller walked away — the detail and edit screens
+                // both run theirs in a `.task` — would clear the window
+                // on its way out, re-exposing every other caller to the
+                // storm it had just been spared with nothing left to
+                // re-arm it.
+                if Task.isCancelled { return outcome }
+                discardProvenSilence()
             }
         }
         return outcome
@@ -230,6 +367,16 @@ class TunnelVaultClient {
 
             if attempt < attempts {
                 try? await Task.sleep(for: .milliseconds(600 * attempt))
+                // Only a ladder that is going to ASK may declare the
+                // silence stale. `try?` swallows the cancellation a
+                // cancelled sleep throws, so without this test a ladder
+                // whose caller walked away — the detail and edit screens
+                // both run theirs in a `.task` — would clear the window
+                // on its way out, re-exposing every other caller to the
+                // storm it had just been spared with nothing left to
+                // re-arm it.
+                if Task.isCancelled { return result }
+                discardProvenSilence()
             }
         }
 
@@ -270,6 +417,16 @@ class TunnelVaultClient {
             if outcome == .done { return outcome }
             if attempt < attempts {
                 try? await Task.sleep(for: .milliseconds(600 * attempt))
+                // Only a ladder that is going to ASK may declare the
+                // silence stale. `try?` swallows the cancellation a
+                // cancelled sleep throws, so without this test a ladder
+                // whose caller walked away — the detail and edit screens
+                // both run theirs in a `.task` — would clear the window
+                // on its way out, re-exposing every other caller to the
+                // storm it had just been spared with nothing left to
+                // re-arm it.
+                if Task.isCancelled { return outcome }
+                discardProvenSilence()
             }
         }
         return outcome
@@ -281,19 +438,22 @@ class TunnelVaultClient {
     /// extension's build identity — an answer proves liveness whatever
     /// the door says, and the extension gate reads the identity off
     /// the same probe the vault session uses.
-    enum Ping {
+    enum Ping: VaultAnswerable {
         case ready(payloads: Int, identity: String)
         /// The extension answered; the System keychain did not.
         case doorFailed(identity: String)
         /// No answer at all — the extension is not awake (yet).
         case unreachable
+
+        /// A closed keychain door is still the extension answering.
+        var isAnswer: Bool { if case .unreachable = self { false } else { true } }
     }
 
     /// Session probe — wakes the extension through launchd if needed
     /// and proves the custody chain end to end. Single attempt;
     /// patience lives in `TunnelVaultSession`.
     func ping() async -> Ping {
-        await withRaceTimeout("ping", seconds: 5, fallback: .unreachable) { [log] in
+        await withRaceTimeout("ping", seconds: 5, fallback: .unreachable, honouringDarkWindow: false) { [log] in
             await withCheckedContinuation { (continuation: CheckedContinuation<Ping, Never>) in
                 let resume = SingleResume(continuation)
                 guard let proxy = self.proxy({ error in
@@ -403,21 +563,109 @@ class TunnelVaultClient {
     /// cancellable from Swift — but its eventual result is dropped.
     /// A timeout win is logged: without that line an extension that
     /// never answers is indistinguishable from an empty vault.
-    private func withRaceTimeout<T: Sendable>(
+    ///
+    /// There are TWO exits, and only one of them races. A caller that
+    /// honours the dark window and arrives while a silence is still
+    /// proven takes the fallback immediately, spending no round-trip
+    /// and printing nothing — so the log is not a call counter and must
+    /// not be read as one. Those spared calls are counted instead, and
+    /// the count rides out on the NEXT TIMEOUT — so it is reported only
+    /// when the silence PERSISTS. An answer clears the window and zeroes
+    /// the counter without printing anything, which means the case where
+    /// the window did its job and recovery arrived is exactly the case
+    /// the field never sees a number for. Said here rather than left to
+    /// be discovered: this log under-reports by construction, and a step
+    /// that needs the real figure reads the DEBUG total instead.
+    private func withRaceTimeout<T: Sendable & VaultAnswerable>(
         _ label: String,
         seconds: Double,
         fallback: T,
+        honouringDarkWindow: Bool = true,
         operation: @escaping @MainActor () async -> T
     ) async -> T {
-        await withCheckedContinuation { (continuation: CheckedContinuation<T, Never>) in
+        // A silence already proven, reused instead of re-bought. When
+        // the extension respawns, three independent callers keep asking
+        // on their own cadences and each pays the full timeout — the
+        // field logs show that as twenty-five consecutive stalls in one
+        // window, which is not diagnosis, it is the same fact printed
+        // twenty-five times while the app freezes its vault surface for
+        // two minutes of wall clock.
+        //
+        // What this is NOT: a decision that the vault is gone. The
+        // verdict handed back is the same one a full timeout would have
+        // produced, so no caller learns anything it would not have
+        // learned — but "nothing downstream changes" would be too
+        // strong, and an earlier version of this comment said it.
+        // `.unreachable` IS acted on: `ownedProviders` holds back every
+        // provider it cannot verify (TunnelsManager's cached-keep rule)
+        // and the per-id form short-circuits the rest of that pass. The
+        // honest bound is therefore about TIME, not about consequence —
+        // recovery stays invisible for up to `darkWindow` after a proven
+        // silence, and rows stay held back for exactly that long. The
+        // window is short for that reason, and `ping` does not READ it
+        // — which is not the same as opting out. A ping timeout still
+        // proves a silence and arms the window for everyone else, and a
+        // ping answer still clears it. Only the reading is skipped, and
+        // that is the point: probing is how recovery is discovered, so
+        // the probe must never be answered from a cache.
+        //
+        // What it also is not, and what an earlier version of this
+        // comment claimed it was: harmless to a caller that RETRIES.
+        // "Every caller gets the same verdict, just sooner" is true of
+        // a single-shot caller and false of a ladder, whose later
+        // attempts are not re-buying a proven silence but asking
+        // whether the respawn that caused it has finished. The three
+        // ladders sleep 600ms then 1200ms — 1.8s against this 2s
+        // window — so a ladder that began inside one never reached the
+        // extension at all, and the patience every CRUD path is
+        // promised became a single shot taken at the worst possible
+        // moment. `discardProvenSilence()` is what keeps that from
+        // happening; the sentence above is left standing as a record of
+        // how a comfortable claim about a cache read as a guarantee.
+        if honouringDarkWindow, let darkUntil, Date() < darkUntil {
+            sparedWhileDark += 1
+            #if DEBUG
+            darkWindowAnswersTotal += 1
+            #endif
+            return fallback
+        }
+        return await withCheckedContinuation { (continuation: CheckedContinuation<T, Never>) in
             let resume = SingleResume(continuation)
             Task { @MainActor in
                 let result = await operation()
-                resume.finish(result)
+                // Winning the race is not the same as SPEAKING, and
+                // conflating them defeated the window with the calls
+                // that prove a silence hardest. Every RPC below resolves
+                // its own continuation with `.unreachable` from the XPC
+                // error handler, and an interrupted or invalidated
+                // connection is the canonical proof that the extension
+                // is absent — yet it resolves in milliseconds, so it
+                // beats the timeout, and clearing the window on it threw
+                // away a silence a full five seconds had just bought.
+                // The question is asked of the VERDICT rather than of
+                // this method, because only a verdict knows which of its
+                // own cases mean "no answer at all" — and it is a
+                // protocol requirement rather than a defaulted closure so
+                // that a surface added later has to answer it instead of
+                // inheriting a wrong yes.
+                if resume.finish(result), result.isAnswer {
+                    self.darkUntil = nil
+                    self.sparedWhileDark = 0
+                }
             }
-            Task { [log] in
+            Task { @MainActor [log] in
                 try? await Task.sleep(for: .seconds(seconds))
-                if resume.finish(fallback) {
+                guard resume.finish(fallback) else { return }
+                let spared = self.sparedWhileDark
+                self.darkUntil = Date().addingTimeInterval(Self.darkWindow)
+                self.sparedWhileDark = 0
+                if spared > 0 {
+                    os_log("""
+                           %{public}@ TIMED OUT after %{public}.0fs — extension unreachable \
+                           (%{public}d call(s) answered from the dark window since the last timeout)
+                           """,
+                           log: log, type: .error, label, seconds, spared)
+                } else {
                     os_log("%{public}@ TIMED OUT after %{public}.0fs — extension unreachable",
                            log: log, type: .error, label, seconds)
                 }
@@ -430,19 +678,23 @@ class TunnelVaultClient {
 /// and failure stay apart the whole way down: an answered "nothing
 /// here" is a fact, while a vault that answered "could not look"
 /// teaches as little as one that never spoke.
-private enum RawRead {
+private enum RawRead: VaultAnswerable {
     case payload(Data)
     case empty
     case failed
     case unreachable
+
+    var isAnswer: Bool { if case .unreachable = self { false } else { true } }
 }
 
 /// Same distinction for the bulk read: an answered-but-empty vault is
 /// a fact, a failed or silent one is an absence of facts.
-private enum RawReadAll {
+private enum RawReadAll: VaultAnswerable {
     case payloads([Data])
     case failed
     case unreachable
+
+    var isAnswer: Bool { if case .unreachable = self { false } else { true } }
 }
 
 // The one-shot continuation guard these races ride lives in

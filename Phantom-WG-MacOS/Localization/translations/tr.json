@@ -130,6 +130,7 @@
   "error_duplicate_name": "Bu adla zaten bir tünel mevcut.",
   "error_invalid_name": "Tünel adı geçersiz.",
   "error_vault_unavailable": "Tünel sırları TunnelVault üzerine yazılamadı. Sistem uzantısının etkin olduğundan emin olun.",
+  "error_vault_refused": "TunnelVault değişikliği reddetti, tünel sırları tam olarak olduğu gibi kaldı.",
   "vault_gate_connecting": "TunnelVault bağlantısı kuruluyor…",
   "vault_gate_silent_title": "PhantomTunnel yanıt vermiyor",
   "vault_gate_silent_message": "TunnelVault'a ulaşılamadı. Sistem uzantısının etkin olduğundan emin olun.",

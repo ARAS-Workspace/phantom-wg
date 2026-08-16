@@ -44,10 +44,47 @@ enum TunnelActivationError: Error {
 enum TunnelManagementError: Error, LocalizedError {
     case tunnelAlreadyExistsWithThatName
     case tunnelInvalidName
+    /// The vault could not be reached, or did not answer in time. The
+    /// write may even have landed with only its reply lost, so the
+    /// message points at the extension and a retry is reasonable.
     case vaultUnavailable
+    /// Something ANSWERED no, as opposed to nothing answering at all.
+    ///
+    /// Two things can say it and the difference does not reach here:
+    /// the daemon replying that the keychain would not do the write,
+    /// and this process failing to encode the payload before the daemon
+    /// is asked at all. Both are definitive in the sense that matters
+    /// to the user — a state that stands exactly as it was — which is
+    /// why they share a case; neither is silence, and silence is the
+    /// distinction this case exists to draw.
+    ///
+    /// What it does NOT promise is that the answer was given three
+    /// times. The ladders return the LAST attempt's outcome, so all a
+    /// refusal here establishes is that the final try was refused;
+    /// earlier ones may have been silence. That is also why the message
+    /// stops short of telling the user a retry is pointless: a keychain
+    /// can refuse for a moment and relent.
+    case vaultRefused
     case vpnSystemErrorOnAddTunnel(systemError: Error)
     case vpnSystemErrorOnModifyTunnel(systemError: Error)
     case vpnSystemErrorOnRemoveTunnel(systemError: Error)
+
+    /// The failure a vault write earns, or `nil` when it finished.
+    ///
+    /// Total over the enum on purpose: a helper that had to name a
+    /// verdict for `.done` would be describing a case its callers have
+    /// already excluded, and the only honest thing to put there is an
+    /// error nobody can reach. Returning an optional lets every call
+    /// site read the same way — ask for the failure, throw it if there
+    /// is one — with the compiler still forcing a new `Write` case to be
+    /// answered here rather than collapsed at five sites.
+    static func forVaultWrite(_ outcome: TunnelVaultClient.Write) -> TunnelManagementError? {
+        switch outcome {
+        case .done: return nil
+        case .refused: return .vaultRefused
+        case .unreachable: return .vaultUnavailable
+        }
+    }
 
     var errorDescription: String? {
         let loc = LocalizationManager.shared
@@ -58,6 +95,8 @@ enum TunnelManagementError: Error, LocalizedError {
             return loc.t("error_invalid_name")
         case .vaultUnavailable:
             return loc.t("error_vault_unavailable")
+        case .vaultRefused:
+            return loc.t("error_vault_refused")
         case .vpnSystemErrorOnAddTunnel(let error):
             return loc.t("error_add_tunnel", error.localizedDescription)
         case .vpnSystemErrorOnModifyTunnel(let error):

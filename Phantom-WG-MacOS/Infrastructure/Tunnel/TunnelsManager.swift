@@ -295,8 +295,8 @@ class TunnelsManager {
         // Secrets first. A tunnel entry whose vault payload is missing
         // cannot start, so the vault write gates the whole operation —
         // and a failure here leaves the system exactly as it was.
-        guard await vault.store(config, attempts: 3) == .done else {
-            throw TunnelManagementError.vaultUnavailable
+        if let failure = TunnelManagementError.forVaultWrite(await vault.store(config, attempts: 3)) {
+            throw failure
         }
 
         do {
@@ -439,15 +439,14 @@ class TunnelsManager {
     /// — an entry the ownership boundary held back in an earlier dark
     /// window is the shape that does it — and minting on the older
     /// reading would create the second entry for one id that the pass
-    /// must never create. What remains is `createEntry`'s own two
-    /// round-trips, and that residue is NOT closed here: a reload
-    /// landing in there rebuilds the list from the system, which by
-    /// then holds the entry this pass has just saved, so the append at
-    /// the end of `createEntry` adds a second container for an id the
-    /// list already carries. `add` has shared that window since long
-    /// before this pass did — the fix belongs to `createEntry` and is
-    /// recorded with the custody-writing work rather than half-paid
-    /// from here.
+    /// must never create. What this reading still does NOT survive is
+    /// `createEntry`'s own two round-trips, and that residue is closed
+    /// where it lives rather than here: `createEntry` reads the list
+    /// once more before it appends, and hands back the row an ingest
+    /// landing in that window created. So this test is the last word on
+    /// whether a candidate is WORTH minting, and not on whether the
+    /// append is safe — the two questions are separated by two
+    /// suspensions and only one of them can be answered from here.
     ///
     /// The NAME test is the restore's share of a rule the whole app
     /// keeps: import and edit both refuse a duplicate name, so the
@@ -601,10 +600,12 @@ class TunnelsManager {
             // a config here whose tunnel already exists, and creating a
             // second entry for the same id is the one thing this pass
             // must never do. This reading is the cheap early-out, taken
-            // before a round-trip is spent on the candidate; the
-            // invariant itself rests on `listAdmits`, which reads the
-            // list again where it counts, because this test does not
-            // survive the probe's suspension.
+            // before a round-trip is spent on the candidate; it does not
+            // survive the probe's suspension, so `listAdmits` reads the
+            // list again after it, and `createEntry` reads it a third
+            // time — at the append, past its own two round-trips, which
+            // is the only place left where an ingest can still get
+            // between a decision and the row it produces.
             guard !tunnels.contains(where: { $0.id == config.id }) else { continue }
 
             let current: TunnelConfig
@@ -823,22 +824,27 @@ class TunnelsManager {
             // past an unanswered dedup is the one way a name collision
             // can be born — exactly what this method's contract forbids.
             // The two failures abort alike but do not READ alike: a
-            // refusal is the keychain answering no to three attempts,
-            // while silence may yet have landed. The error handed to
-            // the user still says "vault unavailable" for both — the
-            // typed surfacing of that difference is a class the CRUD
-            // paths share, not this one site's to pay.
+            // refusal is something answering no, while silence may yet
+            // have landed. It is the LAST attempt's verdict either way —
+            // the ladder returns that one — so a refusal here does not
+            // establish that all three were refused. Both readings now
+            // reach the user under their own names, which is why the log
+            // line below is no longer the only place the difference
+            // survives.
             let dropped = await vault.delete(id: other.id, attempts: 3)
-            guard dropped == .done else {
+            if let failure = TunnelManagementError.forVaultWrite(dropped) {
                 NSLog("[vault] could not drop stale payload \(other.id) claiming '\(name)': outcome=\(dropped.label)")
-                throw TunnelManagementError.vaultUnavailable
+                throw failure
             }
             NSLog("[vault] dropped stale payload \(other.id) that claimed the name '\(name)'")
         }
     }
 
     /// Creates and persists the system entry for a config, then adds
-    /// it to the list. Shared by `add` and the reconcile restore path.
+    /// it to the list — unless an ingest listed that entry while this
+    /// call was suspended, in which case the list's row is handed back
+    /// and nothing is appended. Shared by `add` and the reconcile
+    /// restore path.
     private func createEntry(for config: TunnelConfig) async throws -> TunnelContainer {
         let provider = providerFactory.makeProvider()
         provider.localizedDescription = config.name
@@ -850,6 +856,35 @@ class TunnelsManager {
             try await provider.loadPreferences()
         } catch {
             throw TunnelManagementError.vpnSystemErrorOnAddTunnel(systemError: error)
+        }
+
+        // The list is read again HERE, and not because the caller might
+        // have raced: the two lines above are suspensions, and the
+        // system holds this configuration from the moment the first one
+        // answers. An `ingest` landing in the gap rebuilds the list from
+        // the system, finds an entry no row covers, and creates one —
+        // so an unconditional append puts the same id on the list twice.
+        // SwiftUI's `ForEach` then renders one id in two positions and
+        // the name-keyed accessibility identities collide.
+        //
+        // Both callers open the window and neither closes it. `add`
+        // marks the id in `creatingIds`, but that mark bars the restore
+        // and the duplicate purge — `ingest` reads neither, and rightly:
+        // it only mirrors what the system holds, and the system does
+        // hold this. The restore's own `listAdmits` re-test runs BEFORE
+        // these same two suspensions, so it goes stale across exactly
+        // this gap.
+        //
+        // The listed row wins. It wraps the provider a system read
+        // returned, which is the object every later reload keeps
+        // re-finding; the one in hand is this process's own, describing
+        // the same single configuration. Returning the list's row leaves
+        // the caller holding what the list holds — the alternative,
+        // replacing it, would swap the object out from under any view
+        // already bound to it and gain nothing.
+        if let listed = tunnels.first(where: { $0.id == config.id }) {
+            NSLog("[vault] entry \(config.id) was listed while it was being created — the ingest's row stands")
+            return listed
         }
 
         let tunnel = TunnelContainer(tunnel: provider)
@@ -889,8 +924,8 @@ class TunnelsManager {
         // this, the vault holds the edit while the identity projection
         // stays stale — the tunnel still starts from the new payload,
         // and the next reconcile pass realigns the projection.
-        guard await vault.store(config, attempts: 3) == .done else {
-            throw TunnelManagementError.vaultUnavailable
+        if let failure = TunnelManagementError.forVaultWrite(await vault.store(config, attempts: 3)) {
+            throw failure
         }
 
         tunnel.tunnelProvider.localizedDescription = name
@@ -989,8 +1024,8 @@ class TunnelsManager {
         let entryFirst = try await entryGoesFirst(for: tunnel)
 
         if !entryFirst {
-            guard await vault.delete(id: tunnel.id, attempts: 3) == .done else {
-                throw TunnelManagementError.vaultUnavailable
+            if let failure = TunnelManagementError.forVaultWrite(await vault.delete(id: tunnel.id, attempts: 3)) {
+                throw failure
             }
         }
 
@@ -1091,7 +1126,7 @@ class TunnelsManager {
         // that arms that reload, and evicting first would only widen the
         // window in which the list disagrees with both stores.
         if entryFirst {
-            guard await vault.delete(id: tunnel.id, attempts: 3) == .done else {
+            if let failure = TunnelManagementError.forVaultWrite(await vault.delete(id: tunnel.id, attempts: 3)) {
                 // The tunnel comes back — but only if something asks.
                 // The configuration change the entry's removal broadcast
                 // was consumed by a reload that ran while this call
@@ -1103,7 +1138,7 @@ class TunnelsManager {
                 // it runs after this call returns and the latch is down,
                 // which is exactly when the restore is safe and right.
                 scheduleRefresh()
-                throw TunnelManagementError.vaultUnavailable
+                throw failure
             }
         }
 

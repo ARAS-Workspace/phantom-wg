@@ -130,6 +130,7 @@
   "error_duplicate_name": "A tunnel with that name already exists.",
   "error_invalid_name": "The tunnel name is invalid.",
   "error_vault_unavailable": "Could not write the tunnel secrets to TunnelVault. Make sure the system extension is active.",
+  "error_vault_refused": "TunnelVault refused the change, so the tunnel secrets were left exactly as they were.",
   "vault_gate_connecting": "Connecting to TunnelVault…",
   "vault_gate_silent_title": "PhantomTunnel is not answering",
   "vault_gate_silent_message": "Could not reach TunnelVault. Make sure the system extension is active.",
