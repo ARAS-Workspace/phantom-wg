@@ -821,5 +821,67 @@ extension ActivationSeamWorkflow {
         check(disarmed,
               "and the rule came down in the store, so the OS cannot relaunch a start the system refuses (store=\(fake.storedOnDemand))")
     }
+
+    /// What the armed rule actually SAYS.
+    ///
+    /// Everything else in this engine counts rules: armed<=1 samplers,
+    /// disarm witnesses, sweep counters — all of them read the flag or
+    /// the store, and a flag says only that something is armed. The
+    /// content has never been read, so the whole recovery contract
+    /// rested on a line nobody checked: replace the rule body with one
+    /// matching Wi-Fi alone, or add a second rule with a different
+    /// action, and every existing claim in this file stays green while
+    /// the OS behaviour the feature exists for quietly changes.
+    ///
+    /// Three things are asserted and each is a separate way to get it
+    /// wrong. ONE rule, because `onDemandRules` is an array the system
+    /// evaluates in order and a second entry ahead of this one decides
+    /// first. A CONNECT rule, because the same array is how a
+    /// disconnect rule would be expressed, and an evaluation order that
+    /// reached one would keep the tunnel down exactly when recovery is
+    /// owed. ANY interface, because a rule narrowed to one interface
+    /// type does not bring the tunnel back on the network the user
+    /// actually reconnects to — the failure reported as "recovery does
+    /// not work" with the flag reading armed the whole time.
+    ///
+    /// What the third check does NOT do, said plainly because the run
+    /// output is what exposed it: `.any` is the value a fresh
+    /// `NEOnDemandRuleConnect` already carries, so deleting the
+    /// assignment in `armRecovery` leaves this green. It binds the
+    /// VALUE, not the assignment — it turns red if someone NARROWS the
+    /// rule, and it cannot turn red if the line simply goes away. There
+    /// is no arrangement that would fix this: the rule object is
+    /// created inside the production call, so no step can hand it a
+    /// different starting value to be overwritten. The first two checks
+    /// carry no such caveat — an empty array and a non-connect rule are
+    /// both reachable states that this step would catch.
+    ///
+    /// Read from the rig at the point `activatedRig` returns: the rung
+    /// arms the rule and saves it in the same breath, both before the
+    /// start this helper waits for, so the rule is on the object AND in
+    /// the store by then.
+    func theArmedRuleIsOneConnectRuleForAnyInterface() async {
+        guard let (fake, _, _) = await activatedRig(
+            name: "TE-Seam-RuleBody-\(runTag)",
+            configure: { _ in }
+        ) else { return }
+
+        check(fake.isOnDemandEnabled && fake.storedOnDemand,
+              "the rung armed the rule and the save landed — flag=\(fake.isOnDemandEnabled), store=\(fake.storedOnDemand)")
+
+        let rules = fake.onDemandRules ?? []
+        guard check(rules.count == 1,
+                    "exactly one rule was written — rules=\(rules.count), expected 1 (the system evaluates the array in order, so a second entry decides ahead of this one)") else {
+            return
+        }
+        guard let connect = rules[0] as? NEOnDemandRuleConnect else {
+            fail("the armed rule is a \(type(of: rules[0])) rather than a connect rule — the array that carries it can just as well carry one that keeps the tunnel down")
+            return
+        }
+        check(connect.interfaceTypeMatch == .any,
+              "and it is not narrowed to one interface type, so the recovery covers the network the user actually comes back on "
+              + "— interfaceTypeMatch=\(connect.interfaceTypeMatch.rawValue), which is also the framework's default: this reading "
+              + "catches a narrowing, not a missing assignment")
+    }
 }
 #endif

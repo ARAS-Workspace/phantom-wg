@@ -625,5 +625,98 @@ extension VaultIntegrityWorkflow {
         check(faultVault.readIds.count == 1,
               "the first silence stopped the pass — probes=\(faultVault.readIds.count), expected 1 for 3 candidates")
     }
+
+    /// The restore taken as the CLAIM, rather than as the setting for
+    /// one about its guards.
+    ///
+    /// Self-heal is visible in every run as a side effect, and the
+    /// steps above measure the things reconcile must REFUSE to do —
+    /// mint from a stale snapshot, mint past a name it would collide
+    /// with, mint through a vault that went dark. They establish the
+    /// guards; none of them establishes that a tunnel the system lost
+    /// comes back WHOLE, and a row on a list is not that.
+    ///
+    /// What a user needs back is an ENTRY: a configuration the system
+    /// holds, enabled, carrying this payload's identity, with the row
+    /// wrapping that very object. A pass that appended a container
+    /// around a provider whose save never landed would satisfy every
+    /// count in this file and leave the user looking at a tunnel that
+    /// cannot start — and the list would go on showing it until a
+    /// reload rebuilt from the system and dropped it.
+    ///
+    /// Fabricated end to end, like its siblings: the payload store is a
+    /// fault vault and the system's is a `FakeSlotFactory` that mints,
+    /// so the entry proven here is the fake's — the real surface's own
+    /// restore stays an accepted limit, exercised incidentally by the
+    /// live passes above rather than claimed by a step.
+    func aRestorePutsTheTunnelBackAsAnEntry() async {
+        guard let lost = TestConfigFactory.throwaway(name: "TE-Restore-Whole-\(runTag)") else {
+            fail("the config factory did not produce the throwaway this step needs")
+            return
+        }
+
+        let faultVault = FaultVaultClient()
+        faultVault.readAllAnswer = .answers(.configs([lost]))
+        // The mint-time re-read agrees with the snapshot: this step is
+        // about what a CONFIRMED candidate becomes, and the disagreeing
+        // cases are the siblings above.
+        faultVault.readAnswers = [lost.id: .answers(.config(lost))]
+        faultVault.readAnswer = .answers(.unreachable)
+        faultVault.storeAnswer = .answers(.done)
+        faultVault.deleteAnswer = .answers(.done)
+
+        // Empty canned set: the row cannot come from the list this
+        // manager was handed, so anything listed at the end was MINTED
+        // by the pass.
+        let factory = FakeSlotFactory(canned: [])
+        let manager = TunnelsManager(
+            tunnelProviders: [],
+            providerFactory: factory,
+            vault: faultVault,
+            observesSystemChanges: false
+        )
+
+        let restored = await manager.reconcileFromVault()
+
+        check(restored == 1, "the pass restored the tunnel the system had lost — restored=\(restored), expected 1")
+        check(manager.tunnels.filter { $0.id == lost.id }.count == 1,
+              "listed exactly once — rows=\(manager.tunnels.filter { $0.id == lost.id }.count)")
+        guard let row = manager.tunnels.first(where: { $0.id == lost.id }) else {
+            fail("the pass reported a restore that put no row on the list")
+            return
+        }
+        check(row.name == lost.name, "under the payload's own name — '\(row.name)'")
+
+        // One mint, so `.last` is unambiguous. This is an arrangement
+        // precondition rather than a claim: with a single candidate
+        // there is no production line that could make it two, and the
+        // no-double-mint claim is `Reconcile Reads The List Again After
+        // Probing`, which drives the window where it could happen.
+        guard factory.minted.providers.count == 1, let minted = factory.minted.last else {
+            fail("the pass minted \(factory.minted.providers.count) provider(s) for one candidate — "
+                 + "the entry checks below would not know which to read")
+            return
+        }
+        check(minted.entryExists,
+              "and the system really holds that configuration: the save landed, rather than the row being "
+              + "appended around an object nothing accepted")
+        check(minted.tunnelIdentity?.id == lost.id && minted.tunnelIdentity?.name == lost.name,
+              "carrying the payload's own identity — id and name both, which is what the next reload will match it by")
+        check(minted.isEnabled,
+              "with the manager enabled before that save, so the tunnel the user gets back is one that can start — read on "
+              + "the process's copy, since the fake models the store for the projection but not for this flag")
+        // Same object, and what forecloses the alternative is the
+        // absence of a TRIGGER, not the empty canned set — the sibling
+        // append-window step drives `createEntry`'s other row source
+        // with an empty canned set too, by arming a reload inside the
+        // window. Here nothing is armed and nothing is driven, so no
+        // ingest can list this id between the save and the append.
+        // Recorded as the reading it is: the guarantee that the list
+        // wraps the minted entry under a racing reload belongs to that
+        // sibling, which opens the race on purpose.
+        check(row.tunnelProvider === minted,
+              "and the row the user sees wraps that entry rather than a stand-in beside it — with no reload armed in this "
+              + "rig, the pass's own append is the only way the row could have arrived")
+    }
 }
 #endif

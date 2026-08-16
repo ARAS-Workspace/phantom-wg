@@ -117,8 +117,18 @@ final class RecoverySwitchWorkflow: TestWorkflow {
 
     /// Fire the second activation and, IN PARALLEL, sample the armed
     /// count every 100ms across the whole handover. The peak must never
-    /// exceed one. Sampling the observed `isActivateOnDemandEnabled` is
-    /// exactly the user-facing truth (what the OS would revive).
+    /// exceed one.
+    ///
+    /// What the sample reads is `isActivateOnDemandEnabled` — this
+    /// process's last-written flag, which is enough for the invariant
+    /// this workflow is about (how many tunnels this app believes it
+    /// has armed at once) and is NOT a reading of the rule the OS would
+    /// revive from. The two can disagree, and the seam owns both
+    /// halves: a rule surviving in the store under a flag that reads
+    /// disarmed is driven by the sweep and stop steps, and the rule's
+    /// CONTENT — one connect rule, any interface — by the rule-body
+    /// step. A sampler taken at 100ms across a live handover cannot ask
+    /// the store without changing what it measures.
     private func switchSampled() async {
         guard firstArmed, let a = first, let b = second else {
             // `firstArmed` is set only once the first tunnel reached

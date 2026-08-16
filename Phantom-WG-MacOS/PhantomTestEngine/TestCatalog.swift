@@ -18,6 +18,12 @@ enum TestCatalog {
             RecoverySwitchWorkflow(),
             UnreachableWorkflow(),
             ExtensionGateWorkflow(),
+            // Fabricated end of the list: this one and the gate above
+            // touch neither the real vault nor the system's
+            // preferences, so their position cannot perturb a pass that
+            // does — and nothing they leave can reach one, because they
+            // leave nothing.
+            TunnelEditWorkflow(),
             // ← register new workflows here
         ]
     }

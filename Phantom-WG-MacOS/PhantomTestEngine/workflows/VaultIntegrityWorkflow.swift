@@ -44,6 +44,7 @@ final class VaultIntegrityWorkflow: TestWorkflow {
             WorkflowStep("Reconcile Guards The Name It Is About To Write", reconcileGuardsTheNameItIsAboutToWrite),
             WorkflowStep("Reconcile Refuses A Payload It Cannot Trust", reconcileRefusesAPayloadItCannotTrust),
             WorkflowStep("A Dark Vault Stops The Minting Where It Went Dark", reconcileStopsMintingWhenTheVaultGoesDark),
+            WorkflowStep("A Restore Puts The Tunnel Back As An Entry", aRestorePutsTheTunnelBackAsAnEntry),
             // Custody writes (sibling file): which store a removal
             // empties first, and what a half-finished removal leaves.
             WorkflowStep("A Refused Vault Write Reads Differently From A Silent One",

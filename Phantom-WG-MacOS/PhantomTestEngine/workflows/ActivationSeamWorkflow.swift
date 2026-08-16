@@ -60,6 +60,8 @@ final class ActivationSeamWorkflow: TestWorkflow {
             WorkflowStep("A Start The System Refuses Loses Its Rule", startFailureStandsTheRuleDown),
             WorkflowStep("A Second Removal Is A Silent No-Op", secondRemovalIsASilentNoOp),
             WorkflowStep("The Delete Flow's Stop Cannot Outrun Its Removal", deleteFlowStopCannotOutrunItsRemoval),
+            WorkflowStep("The Armed Rule Is One Connect Rule For Any Interface",
+                         theArmedRuleIsOneConnectRuleForAnyInterface),
         ]
     }
 
