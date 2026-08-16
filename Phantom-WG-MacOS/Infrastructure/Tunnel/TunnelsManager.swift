@@ -733,9 +733,10 @@ class TunnelsManager {
                 // at the top of this loop reads exactly that memory
                 // (`tunnelIdentity`), so a refused save left the
                 // projection agreeing with the vault while the SYSTEM
-                // still held the old name: the test could never fire
-                // again and the drift became permanent instead of
-                // waiting for the next pass.
+                // still held the old name: the test could not fire
+                // again for this row until something else read or wrote
+                // its preferences, which is a far weaker guarantee than
+                // "the next pass picks it up".
                 try? await tunnel.tunnelProvider.loadPreferences()
                 NSLog("[vault] reconcile could not realign \(config.id): \(error.localizedDescription)")
             }
@@ -948,8 +949,19 @@ class TunnelsManager {
             // stale projection by comparing the vault payload against
             // exactly this value, so it would find them in agreement
             // and skip the repair the failure just made necessary. If
-            // the re-read fails too the drift survives, and then the
-            // only cure left is the user editing the tunnel again.
+            // the re-read fails too, the projection is left agreeing
+            // with the vault while the system holds neither, and the
+            // realign is blind to this row for as long as that lasts.
+            // It lasts until something else reads or writes this
+            // provider's preferences: an activation's arm save
+            // serializes the whole projection and carries the pending
+            // rename into the store, a refused disarm's own re-read
+            // puts the store's copy back and re-arms the drift test,
+            // another edit repairs it outright, and failing all of
+            // those the next launch rebuilds the row from the store.
+            // No timeline is promised here on purpose — which of those
+            // comes first is not this function's to know, and saying
+            // otherwise has been wrong twice.
             try? await tunnel.tunnelProvider.loadPreferences()
             throw TunnelManagementError.vpnSystemErrorOnModifyTunnel(systemError: error)
         }
