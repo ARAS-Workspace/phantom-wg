@@ -94,6 +94,8 @@ struct StatusSection: View {
     var tunnel: TunnelContainer
     let isGhost: Bool
 
+    @Environment(LocalizationManager.self) private var loc
+
     var body: some View {
         Section {
             TunnelStatusRow(
@@ -103,6 +105,20 @@ struct StatusSection: View {
                 errorAXID: AXID.TunnelDetail.activationError,
                 badgeAXID: AXID.TunnelDetail.modeBadge
             )
+        } footer: {
+            // The doctrine the app had never told anyone. Written from
+            // BOTH sides on purpose: the earlier one-line version of
+            // this note ("a tunnel started from System Settings is not
+            // armed") would have shipped a falsehood, because a start
+            // from there neither arms NOR disarms — it leaves the rule
+            // exactly as this app's last action left it, and three named
+            // paths deliberately leave an idle tunnel armed (an
+            // exhausted ladder, a refused arm-save, an anonymous drop).
+            // The half that was missing entirely is the stop.
+            Text(loc.t("detail_settings_toggle_note"))
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .accessibilityIdentifier(AXID.TunnelDetail.settingsToggleNote)
         }
     }
 }

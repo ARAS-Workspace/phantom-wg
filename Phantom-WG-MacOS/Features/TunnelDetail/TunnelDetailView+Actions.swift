@@ -99,12 +99,31 @@ extension TunnelDetailView {
         rxBytes = StatsFormatter.formatBytes(stats.rxBytes)
         txBytes = StatsFormatter.formatBytes(stats.txBytes)
 
-        if stats.lastHandshakeTimestamp > 0 {
+        // Three states, three sentences. `pollStats` only runs while the
+        // session is `.active`, so everything below is said about a
+        // tunnel the app is showing as up — which is what makes the
+        // first two worth telling apart at all.
+        //
+        // The dash used to cover the first two together, and it is the
+        // same dash `resetStats` prints for "no data yet". So a tunnel
+        // that came up and never completed a handshake — the
+        // green-but-dead shape this project measures in its own suite —
+        // read to the user exactly like one whose stats had not arrived.
+        // The app could tell them apart and did not say so.
+        if stats.lastHandshakeTimestamp == 0 {
+            lastHandshake = loc.t("detail_handshake_never")
+        } else {
             let date = Date(timeIntervalSince1970: TimeInterval(stats.lastHandshakeTimestamp))
             let elapsed = Date().timeIntervalSince(date)
-            lastHandshake = StatsFormatter.formatTimeAgo(elapsed, loc: loc)
-        } else {
-            lastHandshake = "—"
+            // WireGuard rekeys well inside three minutes on a live peer,
+            // so an age past it on an ACTIVE session is not a quiet link
+            // — it is one that has stopped answering. The threshold is
+            // named rather than tuned: it is the point past which the
+            // number stops being reassuring, and the copy says only
+            // that, never that the tunnel is broken.
+            lastHandshake = elapsed > 180
+                ? loc.t("detail_handshake_stale", StatsFormatter.formatTimeAgo(elapsed, loc: loc))
+                : StatsFormatter.formatTimeAgo(elapsed, loc: loc)
         }
     }
 }

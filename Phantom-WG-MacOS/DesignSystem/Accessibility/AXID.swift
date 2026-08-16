@@ -112,6 +112,7 @@ enum AXID {
 
     enum TunnelDetail {
         static let statusToggle    = "tunnel-detail.status-toggle"
+        static let settingsToggleNote = "tunnelDetail.settingsToggleNote"
         static let logsLink        = "tunnel-detail.logs-link"
         static let errorAlertOK    = "tunnel-detail.error-alert.ok"
         static let activationError = "tunnel-detail.status.activation-error"
