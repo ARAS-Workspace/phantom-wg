@@ -94,7 +94,13 @@ final class PreviewTunnelProvider: TunnelProviding {
             logLines.removeAll()
             responseHandler(Data())
         case 3:
-            responseHandler(Data())
+            // The reply's second byte is the reset's outcome, and a
+            // preview's layer always "comes back" — there is none to
+            // fail. Answering the real shape keeps the preview from
+            // exercising the app's older-extension branch, which is
+            // the one path a preview should never be the reason to
+            // walk.
+            responseHandler(Data([3, TunnelResetReply.rebuilt.rawValue]))
         default:
             responseHandler(nil)
         }

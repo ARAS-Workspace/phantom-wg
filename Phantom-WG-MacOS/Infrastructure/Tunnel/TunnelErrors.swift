@@ -69,6 +69,27 @@ enum TunnelManagementError: Error, LocalizedError {
     case vpnSystemErrorOnModifyTunnel(systemError: Error)
     case vpnSystemErrorOnRemoveTunnel(systemError: Error)
 
+    /// The extension answered the reset, and said it had no running
+    /// layer to rebuild. Worth surfacing rather than swallowing: the
+    /// app only offers Reset on a tunnel it is showing as up, so this
+    /// is the two sides disagreeing about what is running.
+    case resetNothingToRebuild
+    /// The extension answered the reset, and the layer did not come
+    /// back. Collapses wstunnel's failure and the adapter's on
+    /// purpose — they stay apart on the wire and in the extension's
+    /// log, which is where the next step differs, but what the user
+    /// is told is the same either way and what they can do about it
+    /// is the same too.
+    case resetLayerDown
+    /// The reset was never handed to the session. The text is the
+    /// system's own, since only it knows why the send was refused.
+    case resetSendFailed(systemError: String)
+    /// Nothing came back from the reset inside its budget. Not a
+    /// verdict about the layer: an extension that never answered may
+    /// still have rebuilt, so the copy asks for a retry rather than
+    /// describing a state it did not observe.
+    case resetUnanswered
+
     /// The failure a vault write earns, or `nil` when it finished.
     ///
     /// Total over the enum on purpose: a helper that had to name a
@@ -83,6 +104,22 @@ enum TunnelManagementError: Error, LocalizedError {
         case .done: return nil
         case .refused: return .vaultRefused
         case .unreachable: return .vaultUnavailable
+        }
+    }
+
+    /// The failure a reset earns, or `nil` when the layer came back.
+    ///
+    /// Same shape and same reason as `forVaultWrite` above: a helper
+    /// forced to name an error for `.rebuilt` could only invent one
+    /// its callers have already excluded. Returning an optional keeps
+    /// the call site reading as "ask for the failure, throw it if
+    /// there is one", while a case added to `TunnelResetReply` later
+    /// has to be answered here rather than defaulting into silence.
+    static func forReset(_ reply: TunnelResetReply) -> TunnelManagementError? {
+        switch reply {
+        case .rebuilt: return nil
+        case .skipped: return .resetNothingToRebuild
+        case .wstunnelFailed, .adapterFailed: return .resetLayerDown
         }
     }
 
@@ -103,6 +140,14 @@ enum TunnelManagementError: Error, LocalizedError {
             return loc.t("error_modify_tunnel", error.localizedDescription)
         case .vpnSystemErrorOnRemoveTunnel(let error):
             return loc.t("error_remove_tunnel", error.localizedDescription)
+        case .resetNothingToRebuild:
+            return loc.t("error_reset_nothing_to_rebuild")
+        case .resetLayerDown:
+            return loc.t("error_reset_layer_down")
+        case .resetSendFailed(let description):
+            return loc.t("error_reset_send_failed", description)
+        case .resetUnanswered:
+            return loc.t("error_reset_unanswered")
         }
     }
 }

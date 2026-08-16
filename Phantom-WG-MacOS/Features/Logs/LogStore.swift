@@ -60,7 +60,7 @@ final class LogStore: LogEntryProvider {
     /// tunnel continues to run.
     func clear() async {
         if tunnel?.status == .active || tunnel?.status == .activating {
-            _ = try? await sendMessage(Data([2]))
+            _ = await sendMessage(Data([2]))
         }
         entries.removeAll()
     }
@@ -74,7 +74,7 @@ final class LogStore: LogEntryProvider {
         }
 
         do {
-            let data = try await sendMessage(Data([1]))
+            let data = await sendMessage(Data([1]))
             guard let data else { return }
 
             let decoded = try JSONDecoder().decode([RemoteEntry].self, from: data)
@@ -91,18 +91,44 @@ final class LogStore: LogEntryProvider {
         }
     }
 
-    private func sendMessage(_ data: Data) async throws -> Data? {
+    /// Both opcodes this store sends go through here, and the wait is
+    /// BOUNDED. It was not: an extension that took the message and
+    /// never called back left this continuation suspended forever,
+    /// and both callers paid for it in a way the user could see. The
+    /// poll loop awaits this before it sleeps again, so a single mute
+    /// call ended log streaming for the rest of the session while the
+    /// panel kept showing the last lines it had — and `stopPolling`
+    /// could not undo it, since cancelling a task does not resume a
+    /// continuation nobody is going to resume. The Clear button
+    /// awaited it directly.
+    ///
+    /// A timeout is reported as an absent reply rather than as an
+    /// error, because that is what it is: both callers already treat
+    /// "no data" as nothing to do, and a mute extension is not a
+    /// failure of the log panel. Five seconds is the ceiling the
+    /// vault client uses for the same round trip to the same
+    /// extension.
+    private func sendMessage(_ data: Data) async -> Data? {
         guard let tunnel else { return nil }
-        return try await withCheckedThrowingContinuation { continuation in
+        return await withCheckedContinuation { (continuation: CheckedContinuation<Data?, Never>) in
+            let resume = SingleResume(continuation)
             do {
                 try tunnel.tunnelProvider.sendProviderMessage(data) { response in
-                    continuation.resume(returning: response)
+                    resume.finish(response)
                 }
             } catch {
-                continuation.resume(throwing: error)
+                resume.finish(nil)
+                return
+            }
+            Task {
+                try? await Task.sleep(for: .seconds(Self.replyBudget))
+                resume.finish(nil)
             }
         }
     }
+
+    /// Wall-clock ceiling for one provider-message round trip.
+    private nonisolated static let replyBudget: TimeInterval = 5
 
     private struct RemoteEntry: Codable {
         let timestamp: String

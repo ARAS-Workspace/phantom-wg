@@ -193,9 +193,14 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
             // Reset the tunnel layer without touching utun / routing.
             // Preserves the provider surface so no packet escapes to
             // the physical interface during the reset window.
+            //
+            // The reply carries the outcome as its second byte. A
+            // `self` that has gone away cannot have rebuilt anything,
+            // so it answers `skipped` rather than the success value a
+            // `??` on the optional would have handed back.
             Task { [weak self] in
-                await self?.resetConnection()
-                completionHandler(Data([3]))
+                let outcome = await self?.resetConnection() ?? .skipped
+                completionHandler(Data([3, outcome.rawValue]))
             }
         default:
             completionHandler(nil)
@@ -219,11 +224,17 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
     /// fallback to the physical route. The user retries via the UI
     /// or disables the tunnel — the provider surface keeps traffic
     /// contained until the user decides the next move.
-    private func resetConnection() async {
+    ///
+    /// Which of those four endings happened is the RETURN VALUE, and
+    /// it becomes the second byte of opcode 3's reply. Before it
+    /// existed, all four left the caller the same single byte, and
+    /// three of them were failures — including one that logged
+    /// "Reset complete" on its way out (see the adapter branch).
+    private func resetConnection() async -> TunnelResetReply {
         guard let config = currentTunnelConfig,
               let wireguardConfig = currentWireGuardConfig else {
             TunnelLogger.log(.tunnel, "Reset skipped — no active layer config")
-            return
+            return .skipped
         }
 
         let modeLabel = isGhostMode ? "Ghost (wstunnel + WireGuard)" : "Standalone (WireGuard)"
@@ -253,23 +264,38 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
             } catch {
                 TunnelLogger.log(.wstunnel, "Reset — wstunnel restart FAILED: \(error.localizedDescription)")
                 reasserting = false
-                return
+                return .wstunnelFailed
             }
         }
 
-        await withCheckedContinuation { continuation in
+        // The adapter's own failure is carried out of the closure
+        // rather than only logged inside it. It used to be logged and
+        // dropped, and control fell straight through to the line
+        // below — so a reset whose adapter never came back announced
+        // "Reset complete" to the log and answered the app with the
+        // same byte a working reset did. A description rather than
+        // the error itself, because only the text crosses back.
+        let adapterFailure: String? = await withCheckedContinuation { continuation in
             adapter.start(tunnelConfiguration: wireguardConfig) { error in
                 if let error {
                     TunnelLogger.log(.wireGuard, "Reset — adapter restart FAILED: \(error.localizedDescription)")
+                    continuation.resume(returning: error.localizedDescription)
                 } else {
                     TunnelLogger.log(.wireGuard, "Reset — adapter restarted")
+                    continuation.resume(returning: nil)
                 }
-                continuation.resume()
             }
         }
 
         reasserting = false
+        if adapterFailure != nil {
+            // Deliberately not "Reset complete". The layer is down
+            // under a utun that is still up: contained, not working.
+            TunnelLogger.log(.tunnel, "Reset ended with the layer down — the adapter did not restart")
+            return .adapterFailed
+        }
         TunnelLogger.log(.tunnel, "Reset complete")
+        return .rebuilt
     }
 
     // MARK: - Network Settings Override

@@ -1346,21 +1346,75 @@ extension TunnelsManager {
     /// rebuilt. Triggered by the user's "Reset Connection" button
     /// when the tunnel appears stuck.
     ///
-    /// Extension uses opcode `3`; the handler replies only after the
-    /// full stop/start sequence completes, so this wrapper returning
-    /// means the layer has been rebuilt (the WireGuard handshake
-    /// itself may still be settling).
+    /// Extension uses opcode `3`. The handler replies only after the
+    /// full stop/start sequence completes — but "it replied" and "the
+    /// layer was rebuilt" are not the same fact, and this doc used to
+    /// say they were: *returning means the layer has been rebuilt*.
+    /// That held for one of the extension's four exits. The other
+    /// three — no live layer to rebuild, wstunnel refusing to restart,
+    /// the adapter refusing to restart — also replied, and one of them
+    /// logged "Reset complete" doing it. The reply now carries the
+    /// outcome as its second byte (`TunnelResetReply`), so returning
+    /// without throwing means the layer really was rebuilt, and the
+    /// three failures each throw. A rebuilt layer still says nothing
+    /// about the WireGuard handshake, which may be settling after it.
+    ///
+    /// And the wait is BOUNDED. It was not: a `sendProviderMessage`
+    /// whose completion never fires left this continuation suspended
+    /// for the life of the process, with the user's Reset button
+    /// awaiting it and no error ever reaching the alert. The ceiling
+    /// is generous against the work — the suite measures a whole
+    /// reset at ~0.2s in both modes — because a slow-but-working
+    /// reset reported as a failure would be the worse mistake.
     func resetConnection(of tunnel: TunnelContainer) async throws {
         guard tunnel.status == .active || tunnel.status == .reasserting else { return }
 
-        try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
+        let outcome: ResetOutcome = await withCheckedContinuation { continuation in
+            let resume = SingleResume(continuation)
             do {
-                try tunnel.tunnelProvider.sendProviderMessage(Data([3])) { _ in
-                    continuation.resume()
+                try tunnel.tunnelProvider.sendProviderMessage(Data([3])) { data in
+                    resume.finish(.answered(TunnelResetReply.read(data)))
                 }
             } catch {
-                continuation.resume(throwing: error)
+                resume.finish(.sendFailed(error.localizedDescription))
+                return
+            }
+            Task {
+                try? await Task.sleep(for: .seconds(Self.resetBudget))
+                resume.finish(.unanswered)
             }
         }
+
+        switch outcome {
+        case .answered(let reply):
+            // A reply with no status byte is what every extension
+            // before this contract sent, and it meant exactly what
+            // this method used to conclude from any reply at all.
+            // Reading it as a failure would invent one; see
+            // `TunnelResetReply`'s own note.
+            guard let reply else { return }
+            if let failure = TunnelManagementError.forReset(reply) { throw failure }
+        case .sendFailed(let description):
+            throw TunnelManagementError.resetSendFailed(systemError: description)
+        case .unanswered:
+            throw TunnelManagementError.resetUnanswered
+        }
     }
+
+    /// Wall-clock ceiling for a reset round trip, in seconds.
+    private nonisolated static let resetBudget: TimeInterval = 10
+}
+
+/// What came back from opcode 3, before it is read as success or
+/// failure. Silence and a refusal to send stay apart from an answer
+/// the whole way, the same way the vault client keeps them apart:
+/// only an answer can carry a verdict about the layer.
+private enum ResetOutcome: Sendable {
+    /// The extension answered. The payload is `nil` when the reply
+    /// carried no status byte.
+    case answered(TunnelResetReply?)
+    /// The message could not be handed to the session at all.
+    case sendFailed(String)
+    /// Nothing came back inside the budget.
+    case unanswered
 }

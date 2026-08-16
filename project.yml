@@ -151,6 +151,10 @@ targets:
       - path: Phantom-WG-MacOS/Infrastructure/Persistence/NETunnelProviderProtocol+Config.swift
       - path: Phantom-WG-MacOS/Domain/IPC/TunnelVaultDaemonProtocol.swift
       - path: Phantom-WG-MacOS/Domain/IPC/ExtensionIdentity.swift
+      # Opcode 3's reply shape. Compiled into both sides so the bytes
+      # the extension writes and the bytes the app reads are one
+      # declaration rather than two that agree today.
+      - path: Phantom-WG-MacOS/Domain/IPC/TunnelResetReply.swift
       - path: Phantom-WG-MacOS/Shared/WstunnelBridge.swift
       # Extension-only shared domain — the System-keychain vault
       # that holds every tunnel's secrets.
