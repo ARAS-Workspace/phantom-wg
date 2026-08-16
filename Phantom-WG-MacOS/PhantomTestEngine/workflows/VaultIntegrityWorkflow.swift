@@ -86,9 +86,11 @@ final class VaultIntegrityWorkflow: TestWorkflow {
     /// Readable from the teardown file and writable only here, which is
     /// the shape the ledger actually has: the steps are the only things
     /// that may add to it, and the net is the only thing that reads it.
-    /// This is also the coupling that keeps the sweep kit tied to THIS
-    /// workflow rather than shared — promoting it means parameterising
-    /// these two out first.
+    /// This is the coupling that keeps `sweepThrowaways` tied to THIS
+    /// workflow. The kit it runs on is shared — it lives on the base as
+    /// `TestWorkflow+VerifiedSweep.swift` — but a net that reads these
+    /// two ledgers has no meaning on a workflow that planted something
+    /// else, so this arm stayed behind when the rest moved.
     private(set) var tracked: [TunnelConfig] = []
     /// Ids written as RAW (undecodable) bytes via the injection client;
     /// swept alongside `tracked` so no corrupt payload is left behind.
@@ -522,8 +524,17 @@ final class VaultIntegrityWorkflow: TestWorkflow {
                 log("cleanup: entry remove failed — \(name) lingers in the list (\(error.localizedDescription))", .warn)
             }
         }
-        if await vault.delete(id: cfg.id, attempts: 3) != .done {
-            log("cleanup: corrupt payload delete failed — \(name) lingers in the vault", .warn)
+        // Through the kit rather than `!= .done`: a silence is not a
+        // failure. A delete whose reply was lost has still landed, and
+        // reporting it as "lingers in the vault" sends a reader looking
+        // for a payload that is not there.
+        switch await verifiedDelete(cfg.id) {
+        case .swept, .sweptOnReread:
+            break
+        case .stillPresent:
+            log("cleanup: corrupt payload is still in the vault after a verified sweep — \(name)", .warn)
+        case .unverified:
+            log("cleanup: corrupt payload sweep unverified — the vault went dark, so whether \(name) is gone was never observed", .warn)
         }
     }
 
@@ -647,8 +658,30 @@ final class VaultIntegrityWorkflow: TestWorkflow {
     /// container ref survives ingest, so the entry comes down even
     /// while the list hides the tunnel (this gate's RED state).
     private func cleanupVisibilityBase(_ container: TunnelContainer, _ id: UUID) async {
-        guard await vault.delete(id: id, attempts: 3) == .done else {
-            log("cleanup: vault delete failed — NE entry left in place so the custody row stays reachable", .warn)
+        // The one place in this file where a delete's answer DECIDES
+        // something, so collapsing it was the most expensive of the
+        // three: on any non-`.done` the entry was kept, and for a
+        // SILENT vault that is a coin flip. If the delete had in fact
+        // landed, keeping the entry manufactures the payload-less pair
+        // this whole campaign exists to close — deliberately, in a
+        // cleanup, under a sentence that said "delete failed".
+        //
+        // Told apart, each answer earns its own decision. `.stillPresent`
+        // keeps the entry because the payload is provably there and the
+        // entry is what makes it reachable. `.unverified` keeps it too —
+        // the same choice, but now for a stated reason and with the risk
+        // named rather than hidden, because removing an entry over a
+        // payload that may have survived strands it for good while the
+        // reverse is repaired by the next reload.
+        switch await verifiedDelete(id) {
+        case .swept, .sweptOnReread:
+            break
+        case .stillPresent:
+            log("cleanup: the payload is still in the vault, so the NE entry stays — it is what keeps the custody row reachable", .warn)
+            return
+        case .unverified:
+            log("cleanup: the vault went dark, so the payload's fate was never observed — the NE entry stays; if the delete "
+                + "did land, the next reload hides that entry rather than repairing it", .warn)
             return
         }
         if (try? await container.tunnelProvider.removePreferences()) == nil {

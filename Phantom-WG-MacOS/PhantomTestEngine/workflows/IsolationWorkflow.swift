@@ -82,12 +82,29 @@ final class IsolationWorkflow: TestWorkflow {
         // sweep that still works on that path.
         onTeardown("corrupt plant") { [weak self] in
             guard let self else { return }
-            if case .missing = await self.vault.read(id: corruptId) {
+            // Three-valued at both ends. The read told `.missing` apart
+            // from the rest already; what it did not do was tell a
+            // SILENT vault apart from a present payload — both fell
+            // into the delete below, whose answer was then read as a
+            // Bool. A delete that goes dark has still possibly landed,
+            // and reporting that as a failed sweep sends a reader
+            // looking for bytes that are not there.
+            switch await self.readPayloadState(corruptId) {
+            case .missing:
                 self.log("teardown: corrupt plant already swept by the step")
-                return
+            case .unreachable:
+                self.log("teardown: corrupt plant unverified — the vault did not answer, so whether it is still there "
+                         + "was never observed", .error)
+            case .present:
+                switch await self.verifiedDelete(corruptId) {
+                case .swept, .sweptOnReread:
+                    self.log("teardown: corrupt plant swept", .warn)
+                case .stillPresent:
+                    self.log("teardown: corrupt plant is still in the vault after a verified sweep", .error)
+                case .unverified:
+                    self.log("teardown: corrupt plant sweep unverified — the vault went dark on the re-read", .error)
+                }
             }
-            let outcome = await self.vault.delete(id: corruptId, attempts: 3)
-            self.log("teardown: corrupt plant delete \(outcome.label)", outcome == .done ? .warn : .error)
         }
         // Precondition, proven not assumed: the probe channel is alive
         // and answers .undecodable RIGHT NOW — without this, a vault
@@ -152,45 +169,7 @@ final class IsolationWorkflow: TestWorkflow {
         // not.
         onTeardown("gate-own plant") { [weak self] in
             guard let self else { return }
-            var notes: [String] = []
-            var stuck = false
-            // Row first, payload second, and the order is the whole
-            // point: deleting the payload while a materialized row is
-            // still listed makes the next ingest read `.missing` for
-            // it, file it under another user and hide it — leaving a
-            // system entry nothing in this app can reach again.
-            // `remove()` takes the payload down with the row anyway.
-            if let materialized = self.tunnel(named: cfg.name) {
-                do {
-                    try await self.tunnels.remove(tunnel: materialized)
-                    notes.append("materialized row removed")
-                } catch {
-                    notes.append("materialized row still listed (\(error.localizedDescription))")
-                    stuck = true
-                }
-            }
-            switch await self.vault.read(id: cfg.id) {
-            case .missing:
-                break // Gone, by the step or by the remove above.
-            case .unreachable:
-                // A reading that verified nothing claims nothing —
-                // and loudly, per the cleanup doctrine.
-                notes.append("vault unreachable — payload state unverified")
-                stuck = true
-            default:
-                switch await self.vault.delete(id: cfg.id, attempts: 3) {
-                case .done:
-                    notes.append("payload swept")
-                case .refused:
-                    notes.append("payload delete refused")
-                    stuck = true
-                case .unreachable:
-                    notes.append("vault went unreachable — payload state unverified")
-                    stuck = true
-                }
-            }
-            self.log("teardown: gate-own plant — \(notes.isEmpty ? "already swept by the step" : notes.joined(separator: ", "))",
-                     stuck ? .error : (notes.isEmpty ? .info : .warn))
+            await self.sweepGateOwnPlant(cfg)
         }
         let own = FakeSlotProvider(
             name: cfg.name,
@@ -623,6 +602,72 @@ final class IsolationWorkflow: TestWorkflow {
         // else's object must not match this provider.
         check(!fake.matchesNotification(Notification(name: .NEVPNStatusDidChange, object: NSObject(), userInfo: nil)),
               "a foreign object's notification does not match this provider")
+    }
+
+    /// The gate-own plant's sweep, lifted out of its net when the
+    /// entry-probe gating pushed the closure past the length ruler.
+    /// The net stays the registration; this is what it does.
+    private func sweepGateOwnPlant(_ cfg: TunnelConfig) async {
+        var notes: [String] = []
+        var stuck = false
+        // Row first, payload second, and the order is the whole
+        // point: deleting the payload while a materialized row is
+        // still listed makes the next ingest read `.missing` for
+        // it, file it under another user and hide it — leaving a
+        // system entry nothing in this app can reach again.
+        // `remove()` takes the payload down with the row anyway.
+        if let materialized = tunnel(named: cfg.name) {
+            do {
+                try await tunnels.remove(tunnel: materialized)
+                notes.append("materialized row removed")
+            } catch {
+                notes.append("materialized row still listed (\(error.localizedDescription))")
+                stuck = true
+            }
+        }
+        // Through the kit at both ends. The `.unreachable` arm
+        // was already honest — that is not what changed. What did:
+        // the DELETE's answer was read as three values but never
+        // re-read, so a delete whose reply was lost counted as a
+        // refusal; and the entry side asked only the mirror above,
+        // which cannot see a payload-less entry at all, since the
+        // ownership boundary files one as another local user's and
+        // drops it from the list.
+        var payloadGone = false
+        switch await readPayloadState(cfg.id) {
+        case .missing:
+            payloadGone = true // Gone, by the step or by the remove above.
+        case .unreachable:
+            // A reading that verified nothing claims nothing —
+            // and loudly, per the cleanup doctrine.
+            notes.append("vault unreachable — payload state unverified")
+            stuck = true
+        case .present:
+            switch await verifiedDelete(cfg.id) {
+            case .swept, .sweptOnReread:
+                notes.append("payload swept")
+                payloadGone = true
+            case .stillPresent:
+                notes.append("payload still in the vault after a verified sweep")
+                stuck = true
+            case .unverified:
+                notes.append("payload sweep unverified — the vault went dark on the re-read")
+                stuck = true
+            }
+        }
+        // Gated on the payload being PROVABLY gone. The probe does
+        // not merely look — it removes a surviving entry — so over a
+        // payload that is still there, or whose state the vault never
+        // answered for, it would take away the bytes' only anchor.
+        if payloadGone {
+            let (entryNotes, entryStuck) = await probeHiddenSurvivor(id: cfg.id)
+            notes.append(contentsOf: entryNotes)
+            stuck = stuck || entryStuck
+        } else {
+            notes.append("entry left in place — its payload was not observed gone")
+        }
+        log("teardown: gate-own plant — \(notes.isEmpty ? "already swept by the step" : notes.joined(separator: ", "))",
+                 stuck ? .error : (notes.isEmpty ? .info : .warn))
     }
 }
 #endif

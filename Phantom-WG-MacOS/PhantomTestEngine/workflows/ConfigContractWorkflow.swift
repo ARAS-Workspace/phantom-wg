@@ -59,25 +59,7 @@ final class ConfigContractWorkflow: TestWorkflow {
         // for the ones it does not (a Stop inside the terminal wait).
         onTeardown("planted no-route tunnel") { [weak self] in
             guard let self else { return }
-            guard let leftover = self.tunnel(named: name) else {
-                self.log("teardown: \(name) already swept by the step")
-                return
-            }
-            if leftover.status != .inactive {
-                self.tunnels.startDeactivation(of: leftover)
-                guard await self.awaitStatus(leftover, is: .inactive, within: 15) else {
-                    // Removing an entry the system is still driving is
-                    // the very race the net exists to avoid widening.
-                    self.log("teardown: \(name) would not ground (status=\(leftover.status)) — left in the list on purpose", .warn)
-                    return
-                }
-            }
-            do {
-                try await self.tunnels.remove(tunnel: leftover)
-                self.log("teardown: removed \(name)", .warn)
-            } catch {
-                self.log("teardown: \(name) still in the list — remove failed (\(error.localizedDescription))", .warn)
-            }
+            await self.sweepPlantedTunnel(id: cfg.id, name: name)
         }
         tunnels.startActivation(of: t)
         // The safe outcome is that it never reaches active. If it does,
@@ -134,7 +116,30 @@ final class ConfigContractWorkflow: TestWorkflow {
         // `vault.delete(id:attempts:)` refuses to send a request once
         // the task is cancelled. Both paths are the teardown net's.
         try? await tunnels.remove(tunnel: t)
-        check(tunnel(named: name) == nil, "planted no-route tunnel removed")
+        // Judged from the STORE, not from the list. This line used to
+        // read "removed" off `tunnel(named:)` alone, and the mirror
+        // cannot carry that claim: a row leaves it when its payload is
+        // orphaned just as readily as when the removal finished. Under
+        // cancellation the removal cannot have run at all — the net
+        // above owns that case — so the claim is made only when this
+        // pass was allowed to finish.
+        if !Task.isCancelled {
+            // Three-valued, because a vault that did not ANSWER is not a
+            // product failure. The first version of this assertion read
+            // anything other than `.missing` as red, which turned a dark
+            // store — the very condition this engine spends a kit
+            // avoiding — into a claim that the payload survived.
+            switch await readPayloadState(cfg.id) {
+            case .missing:
+                check(tunnel(named: name) == nil,
+                      "planted no-route tunnel removed — its payload is gone from the vault and its row is off the list")
+            case .present:
+                fail("the planted no-route tunnel's payload survived its removal")
+            case .unreachable:
+                log("cleanup: the vault did not answer, so this step cannot say whether the payload went — "
+                    + "the teardown net below owns it", .warn)
+            }
+        }
     }
 
     private func multiPeer() async {

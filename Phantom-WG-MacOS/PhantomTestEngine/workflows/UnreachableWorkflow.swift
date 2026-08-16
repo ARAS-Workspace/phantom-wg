@@ -81,23 +81,7 @@ final class UnreachableWorkflow: TestWorkflow {
         // with an armed recovery rule.
         onTeardown("planted unreachable tunnel") { [weak self] in
             guard let self else { return }
-            guard let leftover = self.tunnel(named: name) else {
-                self.log("teardown: \(name) already swept by the step")
-                return
-            }
-            if leftover.status != .inactive {
-                self.tunnels.startDeactivation(of: leftover)
-                guard await self.awaitStatus(leftover, is: .inactive, within: 15) else {
-                    self.log("teardown: \(name) would not ground (status=\(leftover.status)) — left in the list on purpose", .warn)
-                    return
-                }
-            }
-            do {
-                try await self.tunnels.remove(tunnel: leftover)
-                self.log("teardown: removed \(name)", .warn)
-            } catch {
-                self.log("teardown: \(name) still in the list — remove failed (\(error.localizedDescription))", .warn)
-            }
+            await self.sweepPlantedTunnel(id: cfg.id, name: name)
         }
         check(tunnel(named: cfg.name) != nil, "tunnel materialized in the list — \(cfg.name)")
         if case .config = await vault.read(id: cfg.id) {
