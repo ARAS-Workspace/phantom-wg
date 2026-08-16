@@ -68,10 +68,28 @@ final class ActivationSeamWorkflow: TestWorkflow {
         let identity = TunnelIdentity(id: UUID(), name: name, createdAt: Date(), isGhost: false)
         let fake = FakeSlotProvider(name: name, identity: identity, status: .disconnected)
         configure(fake)
+        // The reload triggers are OFF, and this is the case the flag's
+        // own doc describes: a rig held open across a long window. Every
+        // notification these steps care about is DRIVEN, and the status
+        // observer that carries it is not governed by the flag — what
+        // the flag removes is a real configuration change, anywhere in
+        // the system, sending this side manager through `ingest`. That
+        // pass asks the REAL vault who owns each row, and a synthetic
+        // provider it does not back reads as another local user's and is
+        // dropped: the list empties under the step.
+        //
+        // Measured, not feared. `Spent Revive Still Leaves An Error
+        // Behind` went red on two runs with `lastActivationError=nil`
+        // and `starts=1` — the belt's own guard finding the container no
+        // longer listed and returning without writing — while those runs
+        // printed `[vault] ingest uid 502: kept 0/1 via vault — 1 other
+        // users'` for exactly these rigs. A wider ceiling could not have
+        // helped: the row was gone, not late.
         let manager = TunnelsManager(
             tunnelProviders: [fake],
             providerFactory: FakeSlotFactory(canned: [fake]),
-            vault: vault
+            vault: vault,
+            observesSystemChanges: false
         )
         guard let container = manager.tunnels.first(where: { $0.id == identity.id }) else {
             fail("side manager did not materialize \(name)")
@@ -304,13 +322,38 @@ final class ActivationSeamWorkflow: TestWorkflow {
         }
         rig.container.respawnReviveConsumed = true
         rig.fake.drive(.disconnected)
-        // Two legs before the stand-in can land: the belt's unbounded
-        // verdict (up to readAll's 5s transport ceiling when the vault
-        // is dark) and then bounded(3) giving up on the mute fetch.
-        // The stand-in follows because the revive has no grant left to
-        // promise with.
+        // Two legs before the stand-in can land: the belt's verdict
+        // (readAll's 5s transport race — the system read beside it is
+        // this rig's FAKE factory and costs nothing) and then bounded(3)
+        // giving up on the mute fetch. Eight seconds of legs under a 10s
+        // ceiling.
+        //
+        // An earlier version read 20s here on the theory that an
+        // unbounded NE round-trip was the missing term. That was wrong
+        // twice over — the factory is fake, and the failure it was meant
+        // to explain was not slowness at all but the rig's row being
+        // evicted mid-step, which no ceiling reaches. The number is back
+        // where its derivation puts it; the real cause is barred at the
+        // rig (`observesSystemChanges: false`) and named below.
         let explained = await settle(within: 10) { rig.container.lastActivationError != nil }
         if !explained {
+            // The row itself, asked FIRST — and as a FAILURE, not an
+            // environment exit. It used to be the latter, written while
+            // a real configuration change could still evict this rig's
+            // row mid-step; the same correction that named that cause
+            // also barred it (`observesSystemChanges: false`), so an
+            // eviction here is no longer the world happening to the
+            // step, it is a broken promise about the rig. Kept rather
+            // than deleted because the belt's silent return
+            // (TunnelsManager.swift, the guard after its bounded fetch)
+            // reads from out here exactly like a mute system that was
+            // never explained, and a step must not report one as the
+            // other.
+            guard rig.manager.tunnels.contains(where: { $0 === rig.container }) else {
+                fail("the rig's row left its own list mid-step — the belt had nothing to write to,"
+                     + " and nothing should have been able to take it")
+                return
+            }
             if case .unreachable = await vault.ping() {
                 skip("environment: vault dark during the belt's verdict leg — stand-in timing unprovable this run")
                 return

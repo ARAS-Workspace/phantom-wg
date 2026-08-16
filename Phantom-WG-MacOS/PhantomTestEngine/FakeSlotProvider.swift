@@ -119,7 +119,16 @@ final class FakeSlotProvider: TunnelProviding {
     /// modelled the rule alone. Counters cannot stand in for it: a save
     /// is COUNTED when it is issued and LANDS later, so a count says
     /// nothing about which side of the removal it fell on.
-    private(set) var entryExists = true
+    ///
+    /// A provider a step CANNED starts with one, because it stands for
+    /// a configuration the system already had. A provider the factory
+    /// MINTS starts without one: `NETunnelProviderManager()` is an
+    /// object, and the system lists it only once its first save lands.
+    /// The difference is load-bearing — the window `createEntry` opens
+    /// between its save and its append exists precisely because the
+    /// entry is there while the row is not, and a mint that starts
+    /// listed would close that window by hand.
+    private(set) var entryExists: Bool
     var onDemandRules: [NEOnDemandRule]?
     private(set) var connectionStatus: NEVPNStatus
     private(set) var saveCount = 0
@@ -136,10 +145,11 @@ final class FakeSlotProvider: TunnelProviding {
     private(set) var stopCount = 0
     private(set) var removeCount = 0
 
-    init(name: String?, identity: TunnelIdentity?, status: NEVPNStatus) {
+    init(name: String?, identity: TunnelIdentity?, status: NEVPNStatus, entryExists: Bool = true) {
         self.localizedDescription = name
         self.identity = identity
         self.connectionStatus = status
+        self.entryExists = entryExists
     }
 
     // MARK: - Driving the manager
@@ -373,12 +383,70 @@ final class FakeSlotProvider: TunnelProviding {
     }
 }
 
+/// What the factory MINTED, and the answers a minted provider is born
+/// with. A reference type on purpose: the factory is a value the manager
+/// copies, so a record kept in the struct itself would die with the copy
+/// the step holds.
+///
+/// The answers live HERE rather than on the provider because of when
+/// production mints. `makeProvider()` is called from inside
+/// `createEntry`, and the save is issued three lines later — there is no
+/// moment between them in which a step could reach the object and
+/// configure it. A knob read at BIRTH is the only one that can be set in
+/// time, and it is enough for the two surfaces `createEntry` touches.
+/// Everything a minted provider is asked AFTER that (a start, a removal,
+/// a disconnect record) is set on the object through `providers`, which
+/// by then the step is holding.
+///
+/// Two things were unreachable while the factory forgot what it minted:
+/// a `createEntry` that FAILS — so the ordering of `attempted.insert`
+/// against its own `do` block had no witness — and the append window
+/// itself, which needs the minted entry to be listed by the reload that
+/// lands inside it.
+///
+/// Only the second of those is spent so far. `saveAnswer` is the knob
+/// the first one needs and no step arms it yet, so the failing-mint
+/// branch is REACHABLE rather than witnessed — said here plainly,
+/// because a knob nobody turns reads like coverage.
+final class MintedProviderLedger {
+
+    /// What `savePreferences` answers on a provider minted from here.
+    /// `.fails` is how `createEntry` is made to throw; `.succeedsAfter`
+    /// holds the entry's arrival open.
+    var saveAnswer: FakeSlotProvider.SaveAnswer = .succeeds
+    /// What `loadPreferences` answers on a minted provider. This is the
+    /// second suspension in `createEntry`, and the one that keeps the
+    /// append window open AFTER the entry has landed — the shape where
+    /// the system holds a configuration this pass has not yet put in the
+    /// list.
+    var loadAnswer: FakeSlotProvider.SaveAnswer = .succeeds
+
+    /// Every provider minted, oldest first.
+    private(set) var providers: [FakeSlotProvider] = []
+
+    var last: FakeSlotProvider? { providers.last }
+
+    func record(_ provider: FakeSlotProvider) { providers.append(provider) }
+}
+
 /// Hands a manager a fixed set of providers instead of the system's.
 struct FakeSlotFactory: TunnelProviderFactory {
     let canned: [TunnelProviding]
+
+    /// Constant with a value, so the memberwise initialiser keeps its
+    /// single `canned:` parameter and every existing call site is
+    /// untouched. A step that needs the ledger reaches it through the
+    /// factory it built — the manager's copy shares this same object.
+    let minted = MintedProviderLedger()
+
     func makeProvider() -> TunnelProviding {
-        FakeSlotProvider(name: nil, identity: nil, status: .invalid)
+        let provider = FakeSlotProvider(name: nil, identity: nil, status: .invalid, entryExists: false)
+        provider.saveAnswer = minted.saveAnswer
+        provider.loadAnswer = minted.loadAnswer
+        minted.record(provider)
+        return provider
     }
+
     /// The system lists CONFIGURATIONS, not objects, so a provider whose
     /// entry has been removed is not in this answer any more — the same
     /// disappearance a real `loadAllFromPreferences` reports, and the
@@ -388,8 +456,17 @@ struct FakeSlotFactory: TunnelProviderFactory {
     /// pass that reads the list saw a tunnel the system no longer had.
     /// Providers that model no entry state (anything not ours) are kept,
     /// since they never claimed one.
+    ///
+    /// Minted providers answer here too, under the same rule. That is
+    /// the system's behaviour, not a convenience: an entry this app
+    /// created is one the system then lists, and while it was left out,
+    /// a restore's own entry vanished on the next reload and the pass
+    /// minted it a second time. What the rule keeps out is a mint that
+    /// never landed — a refused save leaves `entryExists` false, and a
+    /// configuration the system rejected is not one it lists.
     func loadAllFromPreferences() async throws -> [TunnelProviding] {
-        canned.filter { ($0 as? FakeSlotProvider)?.entryExists ?? true }
+        let all: [TunnelProviding] = canned + minted.providers
+        return all.filter { ($0 as? FakeSlotProvider)?.entryExists ?? true }
     }
 }
 #endif

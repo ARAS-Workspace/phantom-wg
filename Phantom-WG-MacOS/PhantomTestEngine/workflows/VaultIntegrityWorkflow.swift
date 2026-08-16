@@ -14,6 +14,8 @@ final class VaultIntegrityWorkflow: TestWorkflow {
         [
             WorkflowStep("Ping Ready", pingReady),
             WorkflowStep("Round-Trip Fidelity", roundTrip),
+            WorkflowStep("A Retry Does Not Answer From A Proven Silence",
+                         retryDoesNotAnswerFromAProvenSilence),
             WorkflowStep("Rewrite Semantics", rewrite),
             WorkflowStep("Duty Separation (Same Name, Two IDs)", dutySeparation),
             WorkflowStep("Stress Interleave (10 Configs, 3 Rounds)", stressInterleave),
@@ -36,6 +38,10 @@ final class VaultIntegrityWorkflow: TestWorkflow {
             WorkflowStep("A Dark Vault Stops The Minting Where It Went Dark", reconcileStopsMintingWhenTheVaultGoesDark),
             // Custody writes (sibling file): which store a removal
             // empties first, and what a half-finished removal leaves.
+            WorkflowStep("A Refused Vault Write Reads Differently From A Silent One",
+                         aRefusedVaultWriteReadsDifferentlyFromASilentOne),
+            WorkflowStep("A Creation Yields To A Row The List Already Took",
+                         createEntryYieldsToARowTheListAlreadyTook),
             WorkflowStep("A Removal Takes The Entry First", removalTakesTheEntryFirst),
             WorkflowStep("A Custody Row Keeps Its Entry Until Last", removalKeepsACustodyRowsEntryUntilLast),
             WorkflowStep("A Removal Refuses When The Vault Will Not Answer", removalRefusesWhenTheVaultWillNotAnswer),
@@ -49,6 +55,8 @@ final class VaultIntegrityWorkflow: TestWorkflow {
                          realignStandsDownWhenATeardownTakesTheStore),
             WorkflowStep("The Uninstall Sweep Does Not Write To A Row Being Removed",
                          theUninstallSweepDoesNotWriteToARowBeingRemoved),
+            WorkflowStep("The Uninstall Removal Takes Only The Classified Entries",
+                         theUninstallRemovalTakesOnlyTheClassifiedEntries),
             // These two run LAST, on a vault holding only the door
             // configs: they are the only steps whose reconcile reads
             // the REAL vault (via add) — and the visibility gate drives
@@ -104,6 +112,156 @@ final class VaultIntegrityWorkflow: TestWorkflow {
             // CLEANUP that cannot reach the vault reports an error
             // (residue is real whatever the reason).
             skip("environment: vault unreachable")
+        }
+    }
+
+    /// A retry does not answer itself from a silence that was already
+    /// proven — it asks again, which is the only thing a retry is for.
+    ///
+    /// The dark window spares independent callers the cost of a silence
+    /// someone else has just paid for. A ladder is not one of those: it
+    /// sleeps precisely so it can ask a second time, and what it needs
+    /// to learn is whether the extension has come back. The three
+    /// ladders sleep 600ms then 1200ms, against a 2s window, so while
+    /// the retries read the window every attempt fell inside the first
+    /// one's verdict and the extension was never asked at all.
+    ///
+    /// The claim is carried by the OUTCOME. A ladder that honours the
+    /// window on its retries answers `.unreachable` over a vault that is
+    /// right there; one that discards the proven silence answers
+    /// `.done`.
+    ///
+    /// The arrangement is proven by the client's own SPARED COUNT rather
+    /// than by wall clock, and on a client this step OWNS rather than
+    /// the app's. Both halves of that were learned from red runs:
+    ///
+    /// A duration read against the 0.6s backoff left a couple of hundred
+    /// milliseconds between "the window was in the way" and "the window
+    /// had lapsed and the first attempt simply answered" — a step whose
+    /// whole job is to notice a reverted fix must not be one scheduling
+    /// slip from a false green. One spared call says the discard ran;
+    /// MORE than one says the ladder answered itself from the window.
+    ///
+    /// That reading rests on one relation, named so it can be rechecked
+    /// rather than trusted: the ladder's backoffs before its last
+    /// attempt must total less than `darkWindow`. Today that is
+    /// 600ms + 1200ms against 2s. Widen the window or lengthen the
+    /// backoffs and a reverted discard starts spending its third attempt
+    /// outside the window, which lowers the spared count and softens
+    /// this step's red — so those two numbers are this assertion's
+    /// premise, not incidental.
+    ///
+    /// And the count has to come off a PRIVATE client. Measured on the
+    /// app's shared one it read 0 on two runs and 2 on a third, for two
+    /// different reasons: the log's own counter is zeroed by any real
+    /// answer, and a monotonic one is inflated by whatever else the main
+    /// actor answers inside the 600ms this step holds the window open.
+    /// The shared client cannot serve this claim at all — a background
+    /// call that ANSWERS also clears `darkUntil`, which would hand the
+    /// ladder its second attempt for free and pass with the fix gone.
+    private func retryDoesNotAnswerFromAProvenSilence() async {
+        guard let cfg = TestConfigFactory.throwaway(name: "TE-Ladder-\(runTag)") else {
+            fail("factory produced no config")
+            return
+        }
+        tracked.append(cfg)
+
+        // A client of this step's OWN. The window, the counter and the
+        // discard are all private state on ONE client, and the app's
+        // shared one is answering calls for the whole suite while this
+        // step runs — the gate polls it, every reload reads it. Three
+        // versions of this step measured that shared client and all
+        // three were wrong in a different direction: a duration with a
+        // 200ms margin, a counter a real answer zeroes, and then a
+        // monotonic counter a CONCURRENT caller inflates by getting
+        // itself spared inside the 600ms this step holds the window
+        // open. The contamination is not only in the reading either —
+        // a background call that ANSWERS clears `darkUntil`, which
+        // would hand the ladder its second attempt for free and make
+        // the whole claim pass with the fix reverted.
+        //
+        // A fresh instance ends all of it. It reaches the same mach
+        // service, so the store really lands in the real vault and the
+        // read really asks it; nothing else in the app holds this
+        // object, so nothing else can arm, clear or count on it.
+        let client = TunnelVaultClient()
+        client.armProvenSilenceForTesting()
+        guard client.hasProvenSilence else {
+            fail("the arrangement never armed a proven silence — nothing below would be measured")
+            return
+        }
+
+        let sparedBefore = client.darkWindowAnswersTotal
+        let outcome = await client.store(cfg, attempts: 3)
+        let spared = client.darkWindowAnswersTotal - sparedBefore
+
+        // The environment exit comes FIRST, and it is discriminated by
+        // the pair rather than by the outcome alone. One spared call
+        // means the discard ran and the ladder really asked; if it then
+        // answers `.unreachable`, the vault was away for the attempts
+        // this step cannot control, and calling that a product failure
+        // would break the suite-wide doctrine stated at the top of this
+        // file. The red for a reverted discard is carried entirely by
+        // `spared != 1`, so nothing is softened by taking this exit.
+        if outcome == .unreachable && spared == 1 {
+            skip("environment: the vault never answered the ladder's real attempts")
+            return
+        }
+        check(outcome == .done,
+              "the ladder reached the extension through a proven silence — outcome=\(outcome.label), expected done")
+        // The arrangement's own proof, and it is a COUNT rather than a
+        // duration. An earlier version read the wall clock against the
+        // 0.6s backoff, which left about 200ms between "the window was
+        // in the way" and "the window had already lapsed and the first
+        // attempt simply answered" — a margin one scheduling slip
+        // closes, on a step whose whole job is to notice a reverted
+        // fix. The counter cannot be blurred: with the discard in place
+        // exactly the first attempt is answered from the window, and
+        // with it reverted all three are.
+        check(spared == 1,
+              "and exactly one attempt was answered from the window before it asked for real — spared=\(spared),"
+              + " expected 1 (more than one would mean the ladder answered itself from the window)")
+
+        // The DELETE ladder gets its own window, because it is the one
+        // the field bug came from. `entryGoesFirst` and the payload
+        // delete are what reported "the tunnel cannot be deleted right
+        // now" over a vault that was merely respawning, and the
+        // production doc credits that catch by name — yet the discard
+        // has three call sites and only the store's was witnessed here.
+        // Two of three is not coverage; it is a coin toss about which
+        // one a future edit breaks silently.
+        client.armProvenSilenceForTesting()
+        guard client.hasProvenSilence else {
+            fail("the arrangement never armed a second proven silence — the delete ladder below is unmeasured")
+            return
+        }
+        let sparedBeforeDelete = client.darkWindowAnswersTotal
+        let deleted = await client.delete(id: cfg.id, attempts: 3)
+        let sparedByDelete = client.darkWindowAnswersTotal - sparedBeforeDelete
+        if deleted == .unreachable && sparedByDelete == 1 {
+            skip("environment: the vault never answered the delete ladder's real attempts")
+            return
+        }
+        check(deleted == .done,
+              "the delete ladder reached the extension through a proven silence too — outcome=\(deleted.label), expected done")
+        check(sparedByDelete == 1,
+              "sparing exactly its first attempt, like the store's — spared=\(sparedByDelete), expected 1")
+        // Read LAST, and it now proves both ladders at once: the store
+        // really landed a payload in the real vault and the delete
+        // really took it away again. `.missing` here is the delete's
+        // proof, not an absence to worry about — and it is what says
+        // neither `.done` came from a cache.
+        switch await client.read(id: cfg.id) {
+        case .missing:
+            check(true, "and the daemon really did both — the payload landed and was then taken away")
+        case .config, .undecodable:
+            check(false, "the delete answered done over a payload the vault still holds")
+        case .unreachable:
+            // Not a product failure. The vault answering the ladder and
+            // then going dark for this read is an environment event, and
+            // calling it "the vault does not hold the payload" would be
+            // a sentence the step cannot support.
+            skip("environment: the vault went dark before the landing could be re-read")
         }
     }
 

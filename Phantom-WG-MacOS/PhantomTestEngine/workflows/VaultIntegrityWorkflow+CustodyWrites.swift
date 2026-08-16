@@ -5,8 +5,12 @@ import NetworkExtension
 // MARK: - Custody writes — which store a removal empties first, and
 // what a removal that only half finishes leaves behind.
 //
-// The file holds NINE steps in five kinds, and the difference is what
-// each one arranges:
+// The file holds TWELVE steps in nine kinds, and the difference is
+// what each one arranges. The count is grepped, not remembered: this
+// header has been wrong twice, both times because a step was added
+// without re-reading it, and a taxonomy that silently stops covering
+// the file is worse than none — a reader trusts it to say where a new
+// step belongs.
 //
 //   - Three steps fail one STORE and read which one the removal had
 //     already emptied, because an order is only visible in what
@@ -21,20 +25,246 @@ import NetworkExtension
 //     what the failure left but what the process does about it
 //     AFTERWARDS: the trailing pass that turns entry-first's residue
 //     back into a whole tunnel.
-//   - Three fail NOTHING and take the STORE instead: they raise the
-//     uninstall latch and read what a restore, a realign, and the
-//     teardown's own disarm sweep each do about it. Those three are
-//     the only steps here whose subject is a teardown rather than a
-//     removal, and the first two must arrange the latch DURING a
-//     suspension, because a latch raised beforehand is answered by an
-//     earlier guard and proves the wrong thing.
+//   - One reads neither store and neither row: it fails a write twice,
+//     each way a vault can fail, and reads what the USER is handed. The
+//     two failures give opposite instructions and were arriving under
+//     one sentence, so the claim is that they now differ.
+//   - One fails nothing at all and reads WHICH ROW comes back: it holds
+//     a creation open inside its own append window, drives a reload
+//     into it, and asks whether the list ends up carrying the id once
+//     or twice.
+//   - Two fail NOTHING and take the STORE instead: they raise the
+//     uninstall latch and read what a restore and a realign each do
+//     about it. Both must arrange the latch DURING a suspension,
+//     because a latch raised beforehand is answered by an earlier guard
+//     and proves the wrong thing.
+//   - One holds a REMOVAL open and runs a teardown method into it: the
+//     uninstall's disarm sweep, driven at a row whose entry a removal
+//     has already taken. It raises no latch — the bar it measures is
+//     the sweep's own liveness read, not the teardown's.
+//   - One drives the teardown's LAST step — the entry removal itself —
+//     and reads which entries it is allowed to take: the classified set
+//     and nothing else, with no payload touched by it at all.
 //
 // The fault vault supplies the failures and the verdict that chooses
 // the order; the providers are canned, so the entry side is observable
 // too. Nothing reaches the real vault or the system's preferences — as
 // in the sibling file, every surface is fabricated, including ones a
-// step's own path should never touch.
+// step's own path should never touch. That last clause is the part
+// worth re-reading when adding a step: a surface left `.real` because
+// "this path never writes it" is a bet on the code under test still
+// being correct, which is the one thing a step may not assume.
 extension VaultIntegrityWorkflow {
+
+    /// A vault that ANSWERS no and a vault that does not answer must not
+    /// reach the user under one sentence.
+    ///
+    /// The two verdicts have been typed at the client since Ö3, and the
+    /// CRUD paths still collapsed them: five sites compared `== .done`
+    /// and threw the same `vaultUnavailable`, whose text tells the user
+    /// to make sure the system extension is active and try again. That
+    /// is sound advice for silence and the wrong advice for a refusal —
+    /// the keychain answered, three times, and waiting changes nothing.
+    ///
+    /// The step drives `add`, which is the shortest path to the store,
+    /// and it drives it TWICE because neither half alone can carry the
+    /// claim: an assertion that a refusal says "refused" passes just as
+    /// well when everything says "refused". What is being measured is a
+    /// DIFFERENCE, so the closing check reads the two user-facing
+    /// sentences against each other. Point both cases at one string and
+    /// this is the line that reddens.
+    ///
+    /// Nothing shadows the measured line. `add` checks the name against
+    /// an empty list, then runs the duplicate purge — whose bulk read is
+    /// answered with an empty set here precisely so it passes rather
+    /// than throwing a verdict of its own — and the very next thing it
+    /// does is the store. The rollback delete is never reached: the
+    /// store guard throws ahead of the `do` block that owns it.
+    func aRefusedVaultWriteReadsDifferentlyFromASilentOne() async {
+        let name = "TE-Add-Refusal-\(runTag)"
+        guard let payload = TestConfigFactory.throwaway(name: name) else {
+            fail("could not build the refusal config")
+            return
+        }
+
+        let faultVault = FaultVaultClient()
+        faultVault.readAllAnswer = .answers(.configs([]))
+        faultVault.readAnswer = .answers(.missing)
+        faultVault.deleteAnswer = .answers(.done)
+
+        let manager = TunnelsManager(
+            tunnelProviders: [],
+            providerFactory: FakeSlotFactory(canned: []),
+            vault: faultVault,
+            observesSystemChanges: false
+        )
+
+        // HALF ONE — the vault answers no. Each half spends the whole
+        // retry ladder (three attempts, 600ms then 1200ms apart), which
+        // is production's patience and deliberately not shortened: the
+        // refusal that reaches the user is the LAST attempt's, and a
+        // step that skipped the ladder would be judging a verdict no
+        // caller ever sees.
+        faultVault.storeAnswer = .answers(.refused)
+        guard let refusal = await failureFromAdd(manager, payload, "refused the write") else { return }
+        if case .vaultRefused = refusal {
+            check(true, "a vault that answered no reached the user as a refusal")
+        } else {
+            check(false, "a vault that answered no reached the user as \(refusal)")
+        }
+
+        // HALF TWO — the vault says nothing at all.
+        faultVault.storeAnswer = .answers(.unreachable)
+        guard let silence = await failureFromAdd(manager, payload, "never answered") else { return }
+        if case .vaultUnavailable = silence {
+            check(true, "and a vault that never answered reached the user as unavailable")
+        } else {
+            check(false, "a vault that never answered reached the user as \(silence)")
+        }
+
+        // The claim itself. Two cases that map to one string would pass
+        // both checks above and fail here.
+        let refusalText = refusal.errorDescription ?? ""
+        let silenceText = silence.errorDescription ?? ""
+        // The keys themselves are excluded, because a missing
+        // translation resolves to the key and two DIFFERENT keys differ
+        // just as happily as two different sentences — so without this
+        // the string half of the fix would be unwitnessed and a dropped
+        // entry in either JSON would still read green.
+        check(refusalText != silenceText
+              && refusalText != "error_vault_refused"
+              && silenceText != "error_vault_unavailable",
+              "so the two failures no longer arrive under one sentence, and both resolved to real copy"
+              + " — refused=\"\(refusalText)\"")
+        check(manager.tunnels.isEmpty,
+              "and neither attempt left a row behind — rows=\(manager.tunnels.count), expected 0")
+    }
+
+    /// Runs `add` expecting it to fail, and hands back the management
+    /// error it threw. `nil` means the step has already been failed
+    /// here, with the sentence that actually fits what happened — and
+    /// that is the whole reason this reports rather than returning a
+    /// bare optional. Two different things end an `add` other than the
+    /// verdict under test, a success and a foreign error type, and a
+    /// caller that saw one `nil` for both would have to pick one
+    /// sentence and be wrong about the other.
+    ///
+    /// `vaultSaid` names the arrangement, so the failure line says which
+    /// half missed rather than making the reader count halves.
+    private func failureFromAdd(
+        _ manager: TunnelsManager,
+        _ payload: TunnelConfig,
+        _ vaultSaid: String
+    ) async -> TunnelManagementError? {
+        do {
+            _ = try await manager.add(config: payload)
+            fail("the add reported success over a vault that \(vaultSaid)")
+            return nil
+        } catch let error as TunnelManagementError {
+            return error
+        } catch {
+            fail("the add left the management surface entirely over a vault that \(vaultSaid) — \(error)")
+            return nil
+        }
+    }
+
+    /// A creation whose entry the list took while it was suspended hands
+    /// that row back rather than adding a second one for the same id.
+    ///
+    /// `createEntry` saves the configuration and then re-reads it, two
+    /// suspensions, and from the first answer onwards the system HOLDS
+    /// the entry while the list does not. An `ingest` landing there
+    /// mirrors the system honestly and creates the row; the creation
+    /// then appends its own, and the id is listed twice.
+    ///
+    /// The window is opened by holding the SECOND round-trip, not the
+    /// first: the entry has to exist for the ingest to have anything to
+    /// list, so a held save would arrange a world where nothing can go
+    /// wrong. And it is opened through the minted provider's own
+    /// answers, which is what the factory ledger is for — the object is
+    /// created inside `createEntry`, three lines before the save, so
+    /// there is no moment in which a step could configure it by hand.
+    ///
+    /// Both facts the arrangement rests on are MEASURED, not assumed:
+    /// that the entry landed, and that the creation had not appended
+    /// yet. A step that skipped either would report the same green while
+    /// measuring a window that never opened.
+    ///
+    /// `prune()` drives the reload, not `refresh()`. A reconcile here
+    /// would be a second path that creates entries, and the closing
+    /// check — one row for this id — could then be true because the
+    /// restore had been barred rather than because the creation yielded.
+    func createEntryYieldsToARowTheListAlreadyTook() async {
+        let name = "TE-Add-Window-\(runTag)"
+        guard let payload = TestConfigFactory.throwaway(name: name) else {
+            fail("could not build the append-window config")
+            return
+        }
+
+        let faultVault = FaultVaultClient()
+        // The ownership answer, so the ingest keeps the minted entry
+        // rather than reading it as another user's.
+        faultVault.readAllAnswer = .answers(.configs([payload]))
+        faultVault.readAnswers = [payload.id: .answers(.config(payload))]
+        faultVault.readAnswer = .answers(.missing)
+        faultVault.storeAnswer = .answers(.done)
+        faultVault.deleteAnswer = .answers(.done)
+
+        let factory = FakeSlotFactory(canned: [])
+        factory.minted.loadAnswer = .succeedsAfter(seconds: 1.5)
+
+        let manager = TunnelsManager(
+            tunnelProviders: [],
+            providerFactory: factory,
+            vault: faultVault,
+            observesSystemChanges: false
+        )
+
+        // The outcome is CAPTURED rather than discarded with `try?`. A
+        // thrown add and a slow one are different worlds, and the skip
+        // arm below reads the same in both — so an add that failed for a
+        // reason this step never anticipated would have been reported as
+        // an environment timeout, which is the sentence a broken rig
+        // hides behind.
+        let creation = Task { @MainActor in try await manager.add(config: payload) }
+
+        var waited = 0.0
+        while factory.minted.last?.entryExists != true, waited < 3 {
+            try? await Task.sleep(for: .milliseconds(50))
+            waited += 0.05
+        }
+        guard factory.minted.last?.entryExists == true else {
+            if case .failure(let error) = await creation.result {
+                fail("the creation threw instead of landing its entry — \(error.localizedDescription)")
+            } else {
+                skip("environment: the creation never landed its entry inside the budget")
+            }
+            return
+        }
+        guard !manager.tunnels.contains(where: { $0.id == payload.id }) else {
+            skip("environment: the creation appended before the reload could be driven")
+            _ = await creation.result
+            return
+        }
+
+        await manager.prune()
+        guard let ingested = manager.tunnels.first(where: { $0.id == payload.id }) else {
+            fail("the ingest did not list an entry the system already held — the window was never opened")
+            _ = await creation.result
+            return
+        }
+
+        guard case .success(let created) = await creation.result else {
+            fail("the creation threw after its entry had already landed — the window it opened was left half open")
+            return
+        }
+        check(manager.tunnels.filter { $0.id == payload.id }.count == 1,
+              "the id is on the list exactly once once the creation finished —"
+              + " rows=\(manager.tunnels.filter { $0.id == payload.id }.count), expected 1")
+        check(created === ingested,
+              "and the creation handed back the row the list already held, rather than a second container"
+              + " describing the same entry (waited \(String(format: "%.1f", waited))s)")
+    }
 
     /// The entry goes first, so a removal that loses its second half
     /// leaves the tunnel whole rather than leaving a secret-less entry.
@@ -156,8 +386,8 @@ extension VaultIntegrityWorkflow {
                  + " so the bar below would prove nothing")
             return
         }
-        check(manager.tunnels.contains(where: { $0.id == control.id }),
-              "with the latch down the restore minted the entry the system had lost — the rig can mint")
+        check(manager.tunnels.count == 1,
+              "with the latch down the restore minted the entry the system had lost — rows=\(manager.tunnels.count), expected 1")
 
         // HALF TWO — the latch is up BEFORE the pass starts, which is
         // the guard in `reload` ahead of the reconcile.
@@ -167,25 +397,36 @@ extension VaultIntegrityWorkflow {
 
         await manager.refresh()
 
+        // The claim is the OUTCOME, and deliberately not a guard. Three
+        // checks stand between a raised latch and a minted entry here —
+        // the scheduler's, `reload`'s before the reconcile, and the mint
+        // loop's own — and this arrangement raises the latch BEFORE the
+        // pass, so the first one it meets answers and the others are
+        // never consulted. Naming any single guard in this sentence
+        // would be crediting a line the step cannot separate from its
+        // neighbours; that separation is half three's whole job, and the
+        // mint loop's own check is witnessed there and nowhere else.
         check(!manager.tunnels.contains(where: { $0.id == barred.id }),
-              "a teardown holding the store got no new entry minted under it — the pass stood down"
-              + " where the scheduler could no longer bar it")
-        // Nothing at all, which is the stronger reading and the one this
-        // rig can actually give. With the bar reverted BOTH payloads are
-        // candidates here — the control row is evicted by the ingest
-        // above, since this rig's system list is empty by construction
-        // and a minted provider never enters it (the harness cannot
-        // reach what `makeProvider()` returns; the gap is recorded as
-        // 44d). So an empty list after a raised latch says no mint
-        // happened, while a reverted bar leaves two rows behind.
+              "a teardown holding the store got no new entry minted under it, whichever of its checks answered first")
+        // One row, and it is the one the system already holds. The count
+        // is what carries the claim: `barred` is the only candidate this
+        // pass has — the control's entry landed with its mint and the
+        // fake system list answers with it now (44d) — so a reverted bar
+        // mints it and the count reads two. The named check above says
+        // WHICH row is missing; this one says nothing else arrived in
+        // its place.
         //
-        // What this rig therefore CANNOT show is the other half of the
-        // production claim — that ingest goes on narrowing the list
-        // while the restore stands down. Asserting it here measured the
-        // rig's own eviction rather than the product, and said so in a
-        // sentence that read like proof.
-        check(manager.tunnels.isEmpty,
-              "and nothing was minted under it at all — rows=\(manager.tunnels.count), expected 0")
+        // What this does NOT read is `ingest`'s narrowing. A surviving
+        // control row is ingest agreeing with a system list that still
+        // holds the entry, which is the case where narrowing has
+        // nothing to do — so it is evidence that ingest ran, not that
+        // it narrows while a teardown holds the store. That claim needs
+        // a row whose entry has GONE under a raised latch, and this rig
+        // does not build one. Naming it here rather than implying it:
+        // an earlier version of this comment read as if the surviving
+        // row proved the unbarred-ingest sentence, and it does not.
+        check(manager.tunnels.count == 1 && manager.tunnels.contains(where: { $0.id == control.id }),
+              "and nothing arrived beside the row the system already holds — rows=\(manager.tunnels.count), expected 1")
 
         // HALF THREE — the one the package exists for, and the one the
         // two halves above CANNOT reach. Both of them raise the latch
@@ -224,6 +465,13 @@ extension VaultIntegrityWorkflow {
         }
         faultVault.readAllAnswer = .answersAfter(seconds: 1.5, .configs([control, barred]))
         let probesBefore = faultVault.readIds.count
+        // Read rather than assumed to be zero. This half enters
+        // `reconcileFromVault` directly, so no ingest runs on this path
+        // and the list arrives carrying whatever the half above left in
+        // it — today the control row, whose entry the mint put into the
+        // system list. An absolute count here would be measuring that
+        // inheritance instead of this pass.
+        let rowsBefore = manager.tunnels.count
 
         let pass = Task { @MainActor in await manager.reconcileFromVault() }
         try? await Task.sleep(for: .milliseconds(400))
@@ -232,14 +480,85 @@ extension VaultIntegrityWorkflow {
 
         check(restored == 0,
               "a teardown that took the store MID-PASS got nothing minted under it — restored=\(restored), expected 0")
-        check(manager.tunnels.isEmpty,
-              "and no row was added for either candidate — rows=\(manager.tunnels.count), expected 0")
+        check(manager.tunnels.count == rowsBefore && !manager.tunnels.contains(where: { $0.id == barred.id }),
+              "and no row was added for the candidate it stood down on — rows=\(manager.tunnels.count),"
+              + " unchanged from \(rowsBefore)")
         // The sharper reading, and what separates this half from the
         // two above: the loop stood down BEFORE it spent a probe on its
         // first candidate. A pass that had reached its minting would
         // have read at least one payload by id.
         check(faultVault.readIds.count == probesBefore,
               "and it stood down before spending a probe on its first candidate — probes=\(faultVault.readIds.count), unchanged from \(probesBefore)")
+    }
+
+    /// The uninstall's last step removes the classified entries and
+    /// nothing else.
+    ///
+    /// It is the only step of the flow that deletes anything from the
+    /// system store, it runs with the extensions already down, and it
+    /// works off a set computed minutes earlier — so what it must never
+    /// do is act on an id that set does not name. A custody row's entry
+    /// is the obvious one: it is deliberately excluded upstream because
+    /// an undecodable payload has no other anchor, and taking it here
+    /// would destroy the one thing a reinstall could rescue it from.
+    ///
+    /// The flow also PRINTS an accounting for the rows it walks past,
+    /// and this step does not read it — nothing here can, because that
+    /// count lives only in a log line. It is named rather than claimed:
+    /// on a sound run those rows are another user's entries or our own
+    /// custody rows, and the same line is what a latch failure would
+    /// surface, which is why the production side logs instead of
+    /// skipping silently. Turning it into an assertion needs a counter
+    /// the manager does not expose yet.
+    func theUninstallRemovalTakesOnlyTheClassifiedEntries() async {
+        let removableName = "TE-Uninstall-Removable-\(runTag)"
+        let keptName = "TE-Uninstall-Kept-\(runTag)"
+        let removableId = UUID()
+        let keptId = UUID()
+        let removable = FakeSlotProvider(
+            name: removableName,
+            identity: TunnelIdentity(id: removableId, name: removableName, createdAt: Date(), isGhost: false),
+            status: .disconnected)
+        let kept = FakeSlotProvider(
+            name: keptName,
+            identity: TunnelIdentity(id: keptId, name: keptName, createdAt: Date(), isGhost: false),
+            status: .disconnected)
+
+        let faultVault = FaultVaultClient()
+        faultVault.readAnswer = .answers(.unreachable)
+        faultVault.readAllAnswer = .answers(.configs([]))
+        // Fabricated even though this path writes neither: an unset
+        // surface forwards to the user's REAL vault, so leaving them
+        // `.real` would make the closing check — no payload deleted —
+        // into a bet that the code under test is already correct. If it
+        // ever were not, the step would prove the defect by destroying
+        // a real secret.
+        faultVault.storeAnswer = .answers(.done)
+        faultVault.deleteAnswer = .answers(.done)
+
+        let manager = TunnelsManager(
+            tunnelProviders: [removable, kept],
+            providerFactory: FakeSlotFactory(canned: [removable, kept]),
+            vault: faultVault,
+            observesSystemChanges: false
+        )
+
+        // Only one id is classified removable — the other stands for a
+        // custody row, or another user's entry.
+        await manager.removeEntriesForUninstall([removableId])
+
+        check(removable.removeCount == 1 && !removable.entryExists,
+              "the classified entry left the system store — removes=\(removable.removeCount), entryExists=\(removable.entryExists)")
+        // `removeCount == 0` alone: nothing else in this rig can clear
+        // that entry, so an `entryExists` conjunct beside it cannot go
+        // red on its own and would only restate the count.
+        check(kept.removeCount == 0,
+              "and the one outside the set was not touched — removes=\(kept.removeCount), expected 0")
+        // Read the SET, not the list: the flow acts off a fresh system
+        // read, so a row still in the mirror proves nothing about what
+        // the store now holds.
+        check(faultVault.deletedIds.isEmpty,
+              "with no payload deleted by this step at all — the flow removes entries and never secrets (deletes=\(faultVault.deletedIds.count))")
     }
 
     /// The uninstall's disarm sweep does not write to a row a removal
@@ -522,12 +841,12 @@ extension VaultIntegrityWorkflow {
         // a measurement rather than a caption.
         check(faultVault.deletedIds.contains(id) && fake.removeCount == 0,
               "the payload delete went first for a row whose payload does not decode — issued with the entry still untouched")
-        // `entryExists` and not `removeCount` again: the line above
-        // already proved the entry was never ASKED to go, so repeating
-        // that would add nothing. What this adds is that the anchor is
-        // still THERE — the property the exemption exists for.
-        check(fake.entryExists,
-              "and the entry — its only anchor — is still there, so the row can still be seen and deleted again (entryExists=\(fake.entryExists))")
+        // No `entryExists` check here, and the omission is the point:
+        // an entry is only ever taken by `removePreferences`, so
+        // `removeCount == 0` above already settles that the anchor is
+        // still there. A second line asserting it would read like a
+        // separate proof while being the same fact worded twice — the
+        // shape this file has had to remove three times now.
         check(manager.tunnels.contains(where: { $0.id == id }),
               "with the row still on the list to be seen from")
     }
