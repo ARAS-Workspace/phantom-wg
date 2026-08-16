@@ -34,6 +34,7 @@
   "detail_transfer": "Transfer",
   "detail_handshake_never": "No handshake yet",
   "detail_handshake_stale": "%@ — no reply since",
+  "detail_stopping_disarm": "Stopping. Waiting for the automatic reconnect rule to come down.",
   "detail_handshake": "Handshake",
   "detail_received": "Received",
   "detail_sent": "Sent",

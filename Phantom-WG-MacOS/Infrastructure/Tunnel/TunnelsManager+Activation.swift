@@ -105,7 +105,20 @@ extension TunnelsManager {
         // Stand the recovery rule down first — with it armed, the
         // system would reconnect the moment the tunnel drops.
         if tunnel.isActivateOnDemandEnabled {
+            // Raised HERE, synchronously, rather than inside the task:
+            // the interface must have something to show from the tap
+            // itself, and a task body starts a scheduling hop later.
+            tunnel.pendingDisarmCount += 1
             let disarm = Task {
+                // Lowered by `defer` rather than at each exit. This
+                // branch has four — barred, a newer intent outranking
+                // this stop, a refused save, and the ordinary one —
+                // and two of them are bare `return`s written years
+                // apart. A count left standing at any one of them
+                // would leave the row saying it is stopping forever,
+                // and `defer` is the only shape that also answers the
+                // fifth exit somebody adds later.
+                defer { tunnel.pendingDisarmCount -= 1 }
                 // The gate carries the liveness bars, read when the
                 // save RUNS — which answers every stop that is not part
                 // of a deletion. The delete flow itself is answered by

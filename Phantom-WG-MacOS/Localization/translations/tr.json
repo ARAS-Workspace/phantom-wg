@@ -34,6 +34,7 @@
   "detail_transfer": "Transfer",
   "detail_handshake_never": "Henüz el sıkışma yok",
   "detail_handshake_stale": "%@; o zamandan beri yanıt yok",
+  "detail_stopping_disarm": "Durduruluyor. Otomatik yeniden bağlanma kuralının inmesi bekleniyor.",
   "detail_handshake": "El Sıkışma",
   "detail_received": "Alınan",
   "detail_sent": "Gönderilen",

@@ -18,6 +18,7 @@ struct TunnelStatusRow: View {
     let errorAXID: String
     var badgeAXID: String = ""
     @Environment(TunnelsManager.self) private var tunnelsManager
+    @Environment(LocalizationManager.self) private var loc
 
     var body: some View {
         let color = tunnel.status.color
@@ -51,6 +52,19 @@ struct TunnelStatusRow: View {
                             .foregroundStyle(color)
                         modeBadge
                     }
+                }
+                // The one window where the row's own status says
+                // nothing: a stop asked for on an armed tunnel is
+                // waiting on the recovery rule's save, and until that
+                // answers the status is still Active and the toggle is
+                // still ON. Not red and not an error, because nothing
+                // has failed — this is work in progress that the row
+                // had no way to show.
+                if tunnel.pendingDisarmCount > 0 {
+                    Text(loc.t("detail_stopping_disarm"))
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .accessibilityIdentifier(AXID.TunnelDetail.stoppingDisarm)
                 }
                 if let error = tunnel.lastActivationError {
                     Text(error.alertText)

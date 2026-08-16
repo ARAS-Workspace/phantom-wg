@@ -78,6 +78,28 @@ class TunnelContainer: Identifiable {
     /// like the rung: a finished task answers instantly, a cleared
     /// handle costs the wait.
     @ObservationIgnored var pendingDisarmTask: Task<Void, Never>?
+    /// How many stop-path disarms are in flight on this row.
+    ///
+    /// OBSERVED, unlike the handle directly above it, and that is the
+    /// whole point. The handle is what the removal waits on; this is
+    /// what the interface can see. Between the moment a stop is asked
+    /// for on an armed row and the moment its save answers, the row
+    /// still reads `.active` and its toggle still reads ON — the
+    /// status only moves once `performDeactivation` runs, which is
+    /// past the save. Normally that window is imperceptible. When the
+    /// save HANGS it is the whole experience: the user taps stop,
+    /// nothing anywhere changes, and the documented way out is to tap
+    /// again — which the app never said, because it had nothing to
+    /// say it with. `pendingDisarmTask` could not carry the hint: it
+    /// is `@ObservationIgnored`, so no view redraws when it moves.
+    ///
+    /// A COUNT rather than a flag, because the second tap is the
+    /// documented escape and it puts a second disarm in flight beside
+    /// the first. A flag would be lowered by whichever one finished
+    /// first, and the interface would go quiet with a save still
+    /// outstanding — telling the user the opposite of the truth in
+    /// exactly the state this exists for.
+    var pendingDisarmCount = 0
     /// One in-app revive per user intent, for the respawn-window class
     /// where the system drops a just-started session without an error
     /// record. Granted (reset) by `startActivation(of:)`, spent by the
