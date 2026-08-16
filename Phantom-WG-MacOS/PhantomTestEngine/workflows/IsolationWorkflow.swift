@@ -22,6 +22,8 @@ final class IsolationWorkflow: TestWorkflow {
             WorkflowStep("Classifier: Own Undecodable Active Is Not Foreign", ownUndecodableIsOurs),
             WorkflowStep("Classifier: Idle Foreign Frees The Slot", idleForeignFrees),
             WorkflowStep("Gate: Engage Disarms Our Armed Rule, Release Follows", gateEngageAndRelease),
+            WorkflowStep("Gate: The Stand-Down Writes Through The Manager's Row", gateRoutesThroughTheManager),
+            WorkflowStep("Gate: A Row Being Removed Takes No Stand-Down", gateBarsARowBeingRemoved),
             WorkflowStep("Pre-flight: Foreign Holder Blocks Activation Cleanly", preflightBlocks),
             WorkflowStep("Seam: A Driven Status Reaches The Real Handler", drivenStatusReachesHandler),
         ]
@@ -201,6 +203,11 @@ final class IsolationWorkflow: TestWorkflow {
             identity: foreignIdentity(name: "TE-GateForeign-\(runTag)"),
             status: .connected
         )
+        // No supplier is installed here, and that is now what this step
+        // measures: the gate's NO-MANAGER fallback, which writes through
+        // its own copy without the removal bars. The routed path — the
+        // one production takes once a list exists — is the two steps
+        // below. Neither covers the other.
         let gate = ConnectionGateCoordinator(
             vault: vault,
             providerFactory: FakeSlotFactory(canned: [own, foreign])
@@ -237,6 +244,227 @@ final class IsolationWorkflow: TestWorkflow {
             try? await tunnels.remove(tunnel: leaked)
         }
         check(tunnel(named: cfg.name) == nil, "no residue row for '\(cfg.name)' in the live list")
+    }
+
+    /// Where the gate's stand-down actually lands.
+    ///
+    /// The gate loads its OWN providers, so its objects are never the
+    /// ones this app's containers wrap: the same configurations, two
+    /// system reads apart. That is why it cannot reach the liveness bars
+    /// by itself — they are read off a container and object identity
+    /// will never match across two reads — and why a save issued on its
+    /// own copy would repair nothing the manager can see.
+    ///
+    /// Two rows are given to the gate and only one of them is in the
+    /// manager's list, so the pass proves both halves at once: the write
+    /// goes through the manager's provider for the row it holds, and the
+    /// row it does not hold is barred rather than written through the
+    /// gate's object. Each half is the other's control — a bar that
+    /// silently swallowed the whole sweep would take the first check
+    /// down with it.
+    ///
+    /// Every surface is fabricated, the vault included. The ownership
+    /// answer is what decides which rows the sweep considers at all, and
+    /// buying it with real payloads would put throwaways in the user's
+    /// own vault for a claim that is not about the vault. Nothing here
+    /// touches NE preferences, the real vault, or a real provider, so
+    /// there is no residue and no teardown net.
+    private func gateRoutesThroughTheManager() async {
+        guard let held = TestConfigFactory.throwaway(name: "TE-GateRouted-\(runTag)"),
+              let absent = TestConfigFactory.throwaway(name: "TE-GateAbsent-\(runTag)") else {
+            fail("the config factory did not produce the two throwaways this step needs")
+            return
+        }
+        let foreignName = "TE-GateRoutedForeign-\(runTag)"
+
+        // The manager's side of the same configuration.
+        let managerHeld = armedProvider(for: held)
+        // The gate's side: different objects, same identities.
+        let gateHeld = armedProvider(for: held)
+        let gateAbsent = armedProvider(for: absent)
+        let foreign = FakeSlotProvider(
+            name: foreignName,
+            identity: foreignIdentity(name: foreignName),
+            status: .connected
+        )
+
+        let faultVault = FaultVaultClient()
+        // Both rows read as ours, which is what puts them in front of
+        // the sweep in the first place.
+        faultVault.readAllAnswer = .answers(.configs([held, absent]))
+        // The only per-id probe on this path is the classifier's, for
+        // the id outside the owned set — and absence IS the foreign
+        // verdict. Fabricated rather than left real so a call this step
+        // did not anticipate cannot reach the user's own vault.
+        faultVault.readAnswer = .answers(.missing)
+        faultVault.storeAnswer = .answers(.done)
+        faultVault.deleteAnswer = .answers(.done)
+
+        let manager = TunnelsManager(
+            tunnelProviders: [managerHeld],
+            providerFactory: FakeSlotFactory(canned: [managerHeld]),
+            vault: faultVault,
+            observesSystemChanges: false
+        )
+        // The arrangement is measured, not assumed: the whole claim
+        // rests on the manager holding exactly one of the two rows.
+        guard manager.tunnels.contains(where: { $0.id == held.id }),
+              !manager.tunnels.contains(where: { $0.id == absent.id }) else {
+            fail("the rig did not come up as this claim needs — manager rows=\(manager.tunnels.map(\.id))")
+            return
+        }
+
+        let gate = ConnectionGateCoordinator(
+            vault: faultVault,
+            providerFactory: FakeSlotFactory(canned: [gateHeld, gateAbsent, foreign])
+        )
+        gate.currentTunnelsManager = { manager }
+        await gate.evaluateNow()
+
+        guard check(gate.state == .slotHeld(holderName: foreignName),
+                    "the gate engaged on the foreign holder, which is the only thing that runs the sweep — state=\(String(describing: gate.state))") else {
+            return
+        }
+        check(managerHeld.saveCount == 1 && !managerHeld.storedOnDemand,
+              "the stand-down landed on the MANAGER's provider and persisted there (saves=\(managerHeld.saveCount), store=\(managerHeld.storedOnDemand))")
+        check(gateHeld.saveCount == 0 && gateHeld.isOnDemandEnabled,
+              "and never on the gate's own copy of that same configuration, which is where it used to go (saves=\(gateHeld.saveCount), flag=\(gateHeld.isOnDemandEnabled))")
+        check(gateAbsent.saveCount == 0 && gateAbsent.isOnDemandEnabled,
+              "the row the manager's list does not hold was barred rather than written through the gate's object (saves=\(gateAbsent.saveCount), flag=\(gateAbsent.isOnDemandEnabled))")
+    }
+
+    /// The bar the routing exists to buy.
+    ///
+    /// This site runs while another user's session holds the slot, which
+    /// is exactly when somebody is likely to be deleting the tunnel that
+    /// will not connect. A stand-down landing on an entry a removal has
+    /// just taken puts that entry back — armed, behind a list that no
+    /// longer holds it — which is the hidden-entry class this campaign
+    /// exists to close.
+    ///
+    /// A second row carries the control, and it is what makes the
+    /// negative mean anything: it is owned, armed and untouched by any
+    /// removal, so it must come down in the same pass. Without it, "no
+    /// save on the removing row" would read the same whether the bar
+    /// held or the sweep never reached the loop.
+    private func gateBarsARowBeingRemoved() async {
+        guard let removing = TestConfigFactory.throwaway(name: "TE-GateRemoving-\(runTag)"),
+              let control = TestConfigFactory.throwaway(name: "TE-GateControl-\(runTag)") else {
+            fail("the config factory did not produce the two throwaways this step needs")
+            return
+        }
+        let foreignName = "TE-GateRemovingForeign-\(runTag)"
+
+        let managerRemoving = armedProvider(for: removing)
+        // The removal is held open at the system entry, which is where
+        // the window this step needs actually is.
+        managerRemoving.removeAnswer = .succeedsAfter(seconds: 6)
+        let managerControl = armedProvider(for: control)
+        let gateRemoving = armedProvider(for: removing)
+        let gateControl = armedProvider(for: control)
+        let foreign = FakeSlotProvider(
+            name: foreignName,
+            identity: foreignIdentity(name: foreignName),
+            status: .connected
+        )
+
+        let faultVault = FaultVaultClient()
+        faultVault.readAllAnswer = .answers(.configs([removing, control]))
+        // Decodable, so the removal takes the entry FIRST — which is the
+        // order that opens the window at all: the entry is what a late
+        // save re-mints.
+        faultVault.readAnswers = [
+            removing.id: .answers(.config(removing)),
+            control.id: .answers(.config(control)),
+        ]
+        faultVault.readAnswer = .answers(.missing)
+        faultVault.storeAnswer = .answers(.done)
+        faultVault.deleteAnswer = .answers(.done)
+
+        let manager = TunnelsManager(
+            tunnelProviders: [managerRemoving, managerControl],
+            providerFactory: FakeSlotFactory(canned: [managerRemoving, managerControl]),
+            vault: faultVault,
+            observesSystemChanges: false
+        )
+        guard let container = manager.tunnels.first(where: { $0.id == removing.id }) else {
+            fail("the side manager did not materialize the row this step removes")
+            return
+        }
+
+        let removal = Task { @MainActor in (try? await manager.remove(tunnel: container)) != nil }
+        // Waited out to the HELD entry removal rather than to the bar
+        // alone: the removal lowers the rule before it touches the
+        // entry, so a snapshot taken at the bar would be racing that
+        // save instead of measuring past it.
+        guard await settle(within: 8, until: {
+            manager.removingIds.contains(removing.id) && managerRemoving.removeCount == 1
+        }) else {
+            _ = await removal.value
+            skip("environment: the removal never reached its held entry window")
+            return
+        }
+        let savesBefore = managerRemoving.saveCount
+        // WHICH bar answers is the claim. `standDownForSlotGate` also
+        // bars an id the list does not hold, and a row that had already
+        // left the list would take this step green for the wrong
+        // reason. It has not left while the entry removal is held — and
+        // if the hold has run out on a slow machine the arrangement is
+        // simply gone, which is an environment exit and not a broken
+        // contract: nothing was measured either way.
+        guard manager.tunnels.contains(where: { $0.id == removing.id }) else {
+            _ = await removal.value
+            skip("environment: the held removal window closed before the sweep could run")
+            return
+        }
+        log("the row is still listed while its removal is in flight, so what refuses the save below is the removal bar")
+
+        let gate = ConnectionGateCoordinator(
+            vault: faultVault,
+            providerFactory: FakeSlotFactory(canned: [gateRemoving, gateControl, foreign])
+        )
+        gate.currentTunnelsManager = { manager }
+        await gate.evaluateNow()
+
+        // The counters below are read with no await between them and
+        // the sweep, and that is load-bearing rather than tidy: an
+        // engaged gate polls every three seconds, and in THIS rig its
+        // canned providers never see the manager's save, so each poll
+        // finds them armed and sweeps again. Production does not repeat
+        // that way — its gate re-reads the system list, where the
+        // manager's write is visible — so the repetition is a property
+        // of the rig, and termination itself is not something this rig
+        // can witness.
+        check(gate.state == .slotHeld(holderName: foreignName),
+              "the gate engaged while a removal was in flight — state=\(String(describing: gate.state))")
+        check(managerControl.saveCount == 1 && !managerControl.storedOnDemand,
+              "the sweep ran and reached the loop: the row no removal owns came down (saves=\(managerControl.saveCount), store=\(managerControl.storedOnDemand))")
+        check(managerRemoving.saveCount == savesBefore,
+              "and the row being removed took no save at all, so nothing re-minted the entry the removal had already taken (saves=\(managerRemoving.saveCount), unchanged from \(savesBefore))")
+        check(gateRemoving.saveCount == 0 && gateControl.saveCount == 0,
+              "neither of the gate's own copies was written on either row (removing=\(gateRemoving.saveCount), control=\(gateControl.saveCount))")
+
+        let removed = await removal.value
+        guard removed else {
+            fail("the removal itself failed, so the window this step measured was not the one production opens")
+            return
+        }
+        check(!manager.tunnels.contains(where: { $0.id == removing.id })
+              && !manager.removingIds.contains(removing.id),
+              "the removal finished, its row left the list, and the bar came down with it —"
+              + " a leaked bar makes that id un-startable and un-deletable for the life of the process")
+    }
+
+    /// A provider standing for a config the system already holds, armed
+    /// the way one loaded from the system comes in.
+    private func armedProvider(for config: TunnelConfig) -> FakeSlotProvider {
+        let provider = FakeSlotProvider(
+            name: config.name,
+            identity: TunnelIdentity(id: config.id, name: config.name, createdAt: Date(), isGhost: false),
+            status: .disconnected
+        )
+        provider.arrangeArmed()
+        return provider
     }
 
     private func preflightBlocks() async {

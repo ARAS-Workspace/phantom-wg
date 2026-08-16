@@ -5,11 +5,23 @@ import NetworkExtension
 /// The activation machinery's interleavings, driven rather than waited
 /// for.
 ///
-/// Everything here tests a window a hand cannot AIM at. Two are
-/// closed by the interface outright (the Delete button is disabled
-/// unless a tunnel is inactive, and a toggle cannot be tapped twice
-/// in one runloop turn); the third — a stop landing while the rung's
-/// preferences save is in flight — is reachable by hand only by
+/// Everything here tests a window a hand cannot AIM at, and the file
+/// has grown well past the three it was opened for. What it covers
+/// today, indicatively rather than exhaustively — the registered steps
+/// are the authority, and a new one need not fit a name here: the drop
+/// belts and the one revive, a list refresh that must disturb neither a
+/// live activation nor the queue's turn, a stop that must not be
+/// answered with a start and a stop whose disarm the flag denies, the
+/// queue's hand-off and its stale slots, the withdrawal of an attempt
+/// the system never answers, rule ownership across every exit that
+/// gives up, the removal latch and its second entrance, and the
+/// ordering between a delete flow's stop and its removal.
+///
+/// The original three are still the clearest examples of the shape.
+/// Two are closed by the interface outright (the Delete button is
+/// disabled unless a tunnel is inactive, and a toggle cannot be tapped
+/// twice in one runloop turn); the third — a stop landing while the
+/// rung's preferences save is in flight — is reachable by hand only by
 /// chance, because the save window is invisible. All of them exist in
 /// the code, and the system walks into them on its own when an
 /// on-demand rule reconnects a tunnel at the wrong moment. A guard
@@ -111,21 +123,8 @@ final class ActivationSeamWorkflow: TestWorkflow {
         return nil
     }
 
-    /// Polls until `condition` holds or the budget runs out. Exits on
-    /// cancellation with the truth of that moment, the way the
-    /// deadline exit does: after a Stop the sleep below throws
-    /// immediately and `try?` swallows it, so without the check every
-    /// remaining pass would spin the main actor hot for its whole
-    /// wall-clock window while the user watches Stop do nothing.
-    func settle(within seconds: Double, until condition: () -> Bool) async -> Bool {
-        let start = Date()
-        while Date().timeIntervalSince(start) < seconds {
-            if condition() { return true }
-            if Task.isCancelled { break }
-            try? await Task.sleep(for: .milliseconds(100))
-        }
-        return condition()
-    }
+    // `settle(within:until:)` lives on `TestWorkflow` — it moved there
+    // when a second workflow needed it, rather than being copied.
 
     // MARK: - Steps
 

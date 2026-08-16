@@ -17,6 +17,7 @@ enum TestCatalog {
             PhantomTunnelWorkflow(.ghost),
             RecoverySwitchWorkflow(),
             UnreachableWorkflow(),
+            ExtensionGateWorkflow(),
             // ← register new workflows here
         ]
     }

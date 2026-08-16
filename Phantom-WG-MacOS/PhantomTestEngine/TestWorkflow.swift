@@ -213,6 +213,30 @@ class TestWorkflow {
         return false
     }
 
+    /// Polls until `condition` holds or the budget runs out. Exits on
+    /// cancellation with the truth of that moment, the way the
+    /// deadline exit does: after a Stop the sleep below throws
+    /// immediately and `try?` swallows it, so without the check every
+    /// remaining pass would spin the main actor hot for its whole
+    /// wall-clock window while the user watches Stop do nothing.
+    ///
+    /// Reading a NEGATIVE through this is legitimate and is how several
+    /// steps prove a guard held — `!(await settle(within: 1) { painted })`
+    /// says "it did not happen within a window big enough for it to".
+    /// What that reading costs is the window itself, every time, so keep
+    /// it short and pair it with a positive that orders after it;
+    /// otherwise a step cannot tell a guard that held from an
+    /// arrangement that never ran.
+    func settle(within seconds: Double, until condition: () -> Bool) async -> Bool {
+        let start = Date()
+        while Date().timeIntervalSince(start) < seconds {
+            if condition() { return true }
+            if Task.isCancelled { break }
+            try? await Task.sleep(for: .milliseconds(100))
+        }
+        return condition()
+    }
+
     /// Sends one app message to the tunnel extension and races the
     /// reply against a timeout, so a mute extension can never wedge
     /// the runner. `NETunnelProviderSession` RPCs aren't cancellable;
