@@ -83,7 +83,7 @@ extension VaultIntegrityWorkflow {
         // mid-commit, and an instant fresh read would report the old
         // state as residue that stops existing a second later.
         try? await Task.sleep(for: .milliseconds(600))
-        guard let fresh = try? await RealTunnelProviderFactory().loadAllFromPreferences() else {
+        guard let fresh = try? await systemProviders.loadAllFromPreferences() else {
             return .unverified
         }
         return fresh.contains(where: { $0.tunnelIdentity?.id == id }) ? .failed : .alreadyGone
@@ -102,7 +102,7 @@ extension VaultIntegrityWorkflow {
     /// unverified residue, never clean — the throwaways net's
     /// doctrine, a cleanup that cannot verify is an error.
     func probeHiddenSurvivor(id: UUID) async -> (notes: [String], stuck: Bool) {
-        guard let fresh = try? await RealTunnelProviderFactory().loadAllFromPreferences() else {
+        guard let fresh = try? await systemProviders.loadAllFromPreferences() else {
             return (["system list unreadable — entry cleanliness unverified"], true)
         }
         guard let survivor = fresh.first(where: { $0.tunnelIdentity?.id == id }) else {
@@ -175,7 +175,7 @@ extension VaultIntegrityWorkflow {
         // The second look. An entry here was minted by the restore
         // AFTER the read that sent us down this arm, so it is now
         // backed by bytes this sweep has just taken away.
-        guard let after = try? await RealTunnelProviderFactory().loadAllFromPreferences() else {
+        guard let after = try? await systemProviders.loadAllFromPreferences() else {
             notes.append("entry state after the sweep unverified — system list went unreadable")
             return (notes, true)
         }
@@ -231,7 +231,7 @@ extension VaultIntegrityWorkflow {
             // tidy case: it lets the restore either run or prove it is
             // not coming before anything is decided.
             try? await Task.sleep(for: .milliseconds(800))
-            guard let fresh = try? await RealTunnelProviderFactory().loadAllFromPreferences() else {
+            guard let fresh = try? await systemProviders.loadAllFromPreferences() else {
                 return (["payload present, entry unverifiable — system list went unreadable (\(error.localizedDescription))"], true)
             }
             guard !fresh.contains(where: { $0.tunnelIdentity?.id == id }) else {
@@ -504,7 +504,7 @@ extension VaultIntegrityWorkflow {
                 // inside it — the re-look then sees their work.
                 try? await Task.sleep(for: .milliseconds(800))
             }
-            guard let fresh = try? await RealTunnelProviderFactory().loadAllFromPreferences() else {
+            guard let fresh = try? await systemProviders.loadAllFromPreferences() else {
                 self.log("teardown: system list unreadable — minted-entry cleanliness unverified", .error)
                 return
             }

@@ -80,6 +80,34 @@ class TestWorkflow {
     /// encoder would never produce. Fresh per workflow.
     let vaultRaw = TestVaultRawClient()
 
+    /// The preference store a cleanup arm consults when it has to ask
+    /// the system itself, behind a seam.
+    ///
+    /// The verified-sweep arms cannot take a caller's word for what a
+    /// removal did — a lost reply and a refusal look alike — so they
+    /// re-read a FRESH list and judge from that. Composing the real
+    /// factory at each of those call sites made the answer come from
+    /// the user's own preferences no matter who was asking, which is
+    /// right for a workflow whose manager drives the real system and
+    /// wrong for one driving a fake: its cleanup would be judged
+    /// against a store its rig never wrote to, and every arm would
+    /// report residue it does not own or cleanliness it did not earn.
+    ///
+    /// Overriding this points those arms at the same store the
+    /// workflow's own manager uses. The default composes a fresh
+    /// factory per access exactly as the call sites did, because what
+    /// buys the freshness is `loadAllFromPreferences()`, not the
+    /// instance — a workflow that overrides with a stored fake gets
+    /// its own single object back, which is what a fake wants.
+    ///
+    /// NO WORKFLOW OVERRIDES IT TODAY, said plainly because a knob
+    /// nobody turns reads like coverage. As of this change the seam is
+    /// a refactor, not a witness: it removes the hard-wired real
+    /// factory from the arms so the kit can be promoted, and the first
+    /// caller that spends it will be the workflow that takes the
+    /// promoted kit with a fabricated system store.
+    var systemProviders: TunnelProviderFactory { RealTunnelProviderFactory() }
+
     /// How long an activation may honestly take, read from the
     /// manager's own ceiling instead of re-derived here. The ladder's
     /// real pacing exceeds `maxRetries * retryInterval`: rung 0 spends

@@ -92,12 +92,28 @@ final class FaultVaultClient: TunnelVaultClient {
     /// to be the one that made the answer late.
     private(set) var storedIds: [UUID] = []
 
-    // All three ledgers count SINGLE-SHOT issues, and the retry ladders
-    // sit above them: a caller using `delete(id:attempts: 3)` against a
-    // fabricated `.refused` or `.unreachable` records the same id three
-    // times, with the ladder's 600ms/1200ms sleeps between. A step that
-    // asserts an exact count therefore has to fabricate `.done`, or
-    // expect the ladder's multiple.
+    /// The BODIES those writes carried, appended on the same line.
+    ///
+    /// An id ledger answers "was a write issued for this row"; it cannot
+    /// answer "what did the write say". A step whose subject is two
+    /// stores holding DIFFERENT versions of one tunnel needs the second
+    /// question — an id appears in `storedIds` whether the payload
+    /// carried the old name or the new one, so a claim about the edge
+    /// the edit made would be resting on the id alone.
+    private(set) var storedConfigs: [TunnelConfig] = []
+
+    // EVERY ledger above counts SINGLE-SHOT issues, and the retry
+    // ladders sit on top of them: a caller using
+    // `delete(id:attempts: 3)` against a fabricated `.refused` or
+    // `.unreachable` records the same id three times, with the ladder's
+    // 600ms/1200ms sleeps between. A step that asserts an exact count
+    // therefore has to fabricate `.done`, or expect the ladder's
+    // multiple — and a step reading `storedConfigs` for a BODY has to
+    // take the last matching entry for the same reason.
+    //
+    // Phrased without a number on purpose: this block was "all three
+    // ledgers" until a fourth was added beside them, and a count in a
+    // sentence goes stale the moment the thing it counts grows.
 
     // MARK: - RPCs
 
@@ -121,6 +137,7 @@ final class FaultVaultClient: TunnelVaultClient {
     @discardableResult
     override func store(_ config: TunnelConfig) async -> Write {
         storedIds.append(config.id)
+        storedConfigs.append(config)
         switch storeAnswer {
         case .real: return await super.store(config)
         case .answers(let verdict): return verdict

@@ -129,6 +129,38 @@ final class FakeSlotProvider: TunnelProviding {
     /// entry is there while the row is not, and a mint that starts
     /// listed would close that window by hand.
     private(set) var entryExists: Bool
+    /// What the STORE holds of the PROJECTION — the name the system
+    /// shows and the identity it carries — as opposed to what this
+    /// process wrote into the object.
+    ///
+    /// The same separation `storedOnDemand` draws for the rule, drawn
+    /// for the other thing a save carries, and for the same reason. The
+    /// two paths that write the projection (`modify` and the reconcile
+    /// realign) both write it into the provider BEFORE the save, and
+    /// both answer a refused save by re-reading — and while a load
+    /// repainted the flag alone, the value the app had just written
+    /// stood either way. So the rollback could not be observed, and
+    /// neither could its ABSENCE: a step asserting the projection went
+    /// back would have passed against code that never put it back.
+    /// Both sites call that rollback load-bearing, the realign for the
+    /// sharper reason — its drift test reads `tunnelIdentity`, so a
+    /// projection left agreeing with the vault takes the row out of
+    /// that test's reach until something else reads or writes its
+    /// preferences. What is worth modelling here is only that: the
+    /// store and the process's copy can part, and a load is what puts
+    /// them back together.
+    ///
+    /// Born equal to what the provider came in with, since that stands
+    /// for a configuration the system already holds, and written only
+    /// where the system writes it: a save that ANSWERS.
+    ///
+    /// A removal deliberately leaves both alone. It takes the entry
+    /// (`entryExists`) and the rule (`storedOnDemand`) because paths
+    /// under measurement read those; what a load should paint for a
+    /// configuration that is gone has no caller here today, and
+    /// answering it would be behaviour no step drives.
+    private(set) var storedDescription: String?
+    private(set) var storedIdentity: TunnelIdentity?
     var onDemandRules: [NEOnDemandRule]?
     private(set) var connectionStatus: NEVPNStatus
     private(set) var saveCount = 0
@@ -148,6 +180,8 @@ final class FakeSlotProvider: TunnelProviding {
     init(name: String?, identity: TunnelIdentity?, status: NEVPNStatus, entryExists: Bool = true) {
         self.localizedDescription = name
         self.identity = identity
+        self.storedDescription = name
+        self.storedIdentity = identity
         self.connectionStatus = status
         self.entryExists = entryExists
     }
@@ -277,6 +311,8 @@ final class FakeSlotProvider: TunnelProviding {
         switch saveAnswer {
         case .succeeds:
             storedOnDemand = isOnDemandEnabled
+            storedDescription = localizedDescription
+            storedIdentity = identity
             entryExists = true
             completion(nil)
         case .fails(let error):
@@ -292,8 +328,12 @@ final class FakeSlotProvider: TunnelProviding {
             // `@Sendable`, so the delay still cannot keep this provider
             // alive past the step that planted it.
             let landing = isOnDemandEnabled
+            let landingDescription = localizedDescription
+            let landingIdentity = identity
             DispatchQueue.main.asyncAfter(deadline: .now() + seconds) { [weak self] in
                 self?.storedOnDemand = landing
+                self?.storedDescription = landingDescription
+                self?.storedIdentity = landingIdentity
                 // The re-mint: a save that lands after a removal puts
                 // the configuration back, armed or not.
                 self?.entryExists = true
@@ -312,15 +352,22 @@ final class FakeSlotProvider: TunnelProviding {
     ///
     /// A REFUSED load paints nothing, which is what makes the
     /// pessimistic fallback observable: the caller is left with the
-    /// value it wrote and has to decide what to report. It repaints the
-    /// on-demand flag alone; a real load restores the whole
-    /// configuration, which is why the projection rollback in
-    /// `modify()` still cannot be measured through this surface.
+    /// value it wrote and has to decide what to report.
+    ///
+    /// It repaints the rule AND the projection, because a real load
+    /// restores the whole configuration and the two paths that write a
+    /// projection answer a refused save by calling exactly this. While
+    /// it painted the flag alone, `modify()`'s rollback and the
+    /// realign's could not be measured here at all — the value the app
+    /// wrote survived the load, so a step could not tell a rollback
+    /// that ran from one that was never written.
     func loadPreferences(completion: @escaping @Sendable (Error?) -> Void) {
         loadCount += 1
         switch loadAnswer {
         case .succeeds:
             isOnDemandEnabled = storedOnDemand
+            localizedDescription = storedDescription
+            identity = storedIdentity
             completion(nil)
         case .fails(let error):
             completion(error)
@@ -328,7 +375,11 @@ final class FakeSlotProvider: TunnelProviding {
             // Read at ANSWER time, not at issue: a read reports what is
             // there when it answers.
             DispatchQueue.main.asyncAfter(deadline: .now() + seconds) { [weak self] in
-                if let self { self.isOnDemandEnabled = self.storedOnDemand }
+                if let self {
+                    self.isOnDemandEnabled = self.storedOnDemand
+                    self.localizedDescription = self.storedDescription
+                    self.identity = self.storedIdentity
+                }
                 completion(nil)
             }
         case .hangs:
