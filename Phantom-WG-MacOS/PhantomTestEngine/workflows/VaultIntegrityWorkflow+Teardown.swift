@@ -475,8 +475,21 @@ extension VaultIntegrityWorkflow {
         // whose entry then arrives a suspension later. The sweep
         // above deletes payloads one at a time, so more than one
         // candidate can be caught that way in the same pass; what
-        // shrank is each straggler's odds, not their count. The
-        // extra passes below are not sized on any number: they
+        // shrank is each straggler's odds, not their count.
+        //
+        // And that sweep is NOT the only delete this net stands
+        // behind — usually it is not even the one that pays. Every
+        // earlier delete in this workflow opens the same window,
+        // `Delete Proof`'s pass above all: it removes materialized
+        // rows through `remove()` and then deletes their payloads,
+        // and the removals themselves wake the reload whose probe
+        // straddles those deletes. On a run where that pass swept
+        // everything, the sweep above finds nothing to delete and
+        // its own window never opens — while a straggler can still
+        // be standing here. Read one clean look as the claim, not
+        // the delete count of any single pass.
+        //
+        // The extra passes below are not sized on any number: they
         // exist because the FIRST clean look is the only thing
         // that can claim clean, and a look taken before a
         // straggler lands is not one.

@@ -4,9 +4,17 @@ import Foundation
 /// Stressed data-integrity pass over the vault XPC surface, entirely
 /// server-free and deterministic. Uses throwaway configs from
 /// `TestConfigFactory`; every payload it stores is deleted before the
-/// run ends and `No Materialization` proves the user's tunnel list
-/// never noticed. Three failure gates it watches: duplicate entries,
-/// stale reads after a rewrite, and read(id) ↔ readAll divergence.
+/// run ends.
+///
+/// The user's tunnel list may legitimately NOTICE, and that is not a
+/// defect on either side: these payloads live in the real vault, so a
+/// reconcile pass firing mid-run restores them exactly as it would any
+/// payload the system had lost. What the suite owes is the order —
+/// `Delete Proof` removes such a row through `remove()` before any
+/// payload is deleted, so no entry is ever left without its secret —
+/// and `No Materialization` proves the list is clean when the pass is
+/// over. Three failure gates it watches: duplicate entries, stale reads
+/// after a rewrite, and read(id) ↔ readAll divergence.
 final class VaultIntegrityWorkflow: TestWorkflow {
     override var displayName: String { "Vault Integrity" }
 
@@ -728,6 +736,94 @@ final class VaultIntegrityWorkflow: TestWorkflow {
             skip("nothing was stored")
             return
         }
+        // What the LIVE app minted while this workflow ran goes first,
+        // and it goes through `remove()`.
+        //
+        // These payloads sit in the user's real vault, so a reconcile
+        // pass firing mid-run reads them as payloads the system lost
+        // and mints real entries for them. That is the app doing its
+        // job, not a defect — but deleting the payload underneath such
+        // a row manufactures the exact residue this campaign exists to
+        // close: an entry with no secret, which the ownership boundary
+        // files as another local user's, invisible to the list and
+        // undeletable through the app. The teardown net sweeps them
+        // afterwards, and afterwards is the wrong time to be right: the
+        // suite must not create that class at all, not even for the
+        // seconds until its own net runs.
+        //
+        // Cheap where it does not apply and correct where it does.
+        // `remove()` empties both stores in the order the row's own
+        // payload decides, and the delete below is idempotent over what
+        // it already took (Upsert Semantics proves that), so an
+        // ordinary run — where nothing materialized — pays nothing.
+        // A row whose removal REFUSED keeps its payload: leaving the
+        // pair intact is the whole point, since deleting the secret out
+        // from under an entry that is still in System Settings is the
+        // residue this loop exists to prevent. So the refusals are
+        // collected and the delete pass below skips them, and the
+        // absence check reports them as what they are.
+        //
+        // And the REMOVALS stop at the first vault that will not
+        // answer, the same dark-door rule the throwaway net already
+        // applies: one unreachable read is a symptom, a run of them is
+        // a door that is shut, and each further row would spend a read
+        // ladder — plus a delete ladder behind it, on any row whose
+        // read did answer — proving it again.
+        //
+        // The SCAN does not stop, and the difference is the whole
+        // correctness of the door. What the break used to skip was the
+        // listing check as well, so every row after it stayed unknown
+        // to `keptPaired` and the delete pass below took its payload —
+        // re-creating, on a vault that recovers a moment later, the
+        // payload-less entry this loop exists to prevent.
+        // One set decides which payloads the pass below must not touch;
+        // the counters beside it keep the REASONS apart, because they
+        // are different facts and the closing line reports them to
+        // somebody reading a red. A refusal already has its own `fail`;
+        // a row another removal owns is a race this step chose not to
+        // fight; a row the dark door reached was never tried at all.
+        var minted = 0
+        var removed = 0
+        var keptPaired: Set<UUID> = []
+        var keptRefused = 0
+        var keptRaced = 0
+        var keptUntried = 0
+        var darkDoor = false
+        for cfg in tracked {
+            guard let row = tunnels.tunnels.first(where: { $0.id == cfg.id }) else { continue }
+            minted += 1
+            guard !darkDoor else {
+                keptPaired.insert(cfg.id)
+                keptUntried += 1
+                continue
+            }
+            do {
+                try await tunnels.remove(tunnel: row)
+            } catch {
+                keptPaired.insert(cfg.id)
+                keptRefused += 1
+                if case TunnelManagementError.vaultUnavailable = error { darkDoor = true }
+                fail("a live restore minted '\(cfg.name)' into the list and the removal refused — its entry and its payload are both left standing, which is the safe pair — \(error.localizedDescription)")
+                continue
+            }
+            // "Did not throw" is not "is gone". `remove()` answers
+            // silently for an id already being removed — a deliberate
+            // no-op, and its row is still listed with its payload still
+            // needed. The list is what says whether this row left, so
+            // the list is what is read.
+            if tunnels.tunnels.contains(where: { $0.id == cfg.id }) {
+                keptPaired.insert(cfg.id)
+                keptRaced += 1
+                log("'\(cfg.name)' is still listed after its removal answered — another removal owns it, so its payload stays beside the entry", .warn)
+            } else {
+                removed += 1
+            }
+        }
+        if minted > 0 {
+            log("a live restore had already minted \(minted) of these throwaways into the list — \(removed) removed through the production path before any payload was touched"
+                + (darkDoor ? ", and the loop stopped at a vault that would not answer" : ""),
+                keptPaired.isEmpty ? .warn : .error)
+        }
         // Same patience for both stashes: a vault respawn window does
         // not care which client wrote the payload, and the impatient
         // single shot the tracked configs used to get was the one that
@@ -735,7 +831,7 @@ final class VaultIntegrityWorkflow: TestWorkflow {
         for id in rawIds {
             await vault.delete(id: id, attempts: 3)
         }
-        for cfg in tracked {
+        for cfg in tracked where !keptPaired.contains(cfg.id) {
             await vault.delete(id: cfg.id, attempts: 3)
         }
         var gone = 0
@@ -749,28 +845,45 @@ final class VaultIntegrityWorkflow: TestWorkflow {
         for id in rawIds {
             if case .missing = await vault.read(id: id) { rawGone += 1 }
         }
+        // The tail names the reasons apart, and it has to: a row another
+        // removal owns usually has its payload taken by that owner while
+        // this step is still reading, so the absence check passes and a
+        // clause blaming a refusal would print green over a refusal that
+        // never happened. When the owner has not finished, the same
+        // clause is the only account of why a documented-safe outcome is
+        // printing red.
+        var kept: [String] = []
+        if keptRefused > 0 { kept.append("\(keptRefused) after a refused removal") }
+        if keptRaced > 0 { kept.append("\(keptRaced) under a removal another caller owns") }
+        if keptUntried > 0 { kept.append("\(keptUntried) never tried, behind a vault that stopped answering") }
         check(gone == tracked.count && rawGone == rawIds.count,
-              "all \(tracked.count) throwaways and \(rawIds.count) raw plants read back .missing (\(gone)+\(rawGone) confirmed)")
+              "all \(tracked.count) throwaways and \(rawIds.count) raw plants read back .missing (\(gone)+\(rawGone) confirmed)"
+              + (kept.isEmpty ? "" : " — \(keptPaired.count) payload(s) left beside their entry on purpose: \(kept.joined(separator: ", "))"))
     }
 
     private func noMaterialization() async {
-        // The in-memory list is the sample, deliberately unforced.
-        // Two separate facts make it the right one: a reload now could
-        // not mint anything (the payloads are already deleted), and it
-        // WOULD hide a row minted earlier — ingest files a payload-less
-        // row under another user. The unreloaded list is therefore the
-        // only surface that can still show the damage. The suite's own
-        // steps do not reshape it (they touch only the vault, which
-        // posts no configuration-change notification), but one outside
-        // reshaper exists: a foreground return mid-run schedules a
-        // reload, and a row minted before it would be hidden by it.
-        // Accepted as a limit — a check that can miss under an
-        // app-switch is still worth more than one blinded by its own
-        // sampling.
+        // What this step still owns, now that `Delete Proof` removes a
+        // materialized row before it touches any payload: the list is
+        // clean at the END, and nothing arrived in the gap between the
+        // two steps. That gap is real rather than theoretical — the
+        // removals above broadcast configuration changes of their own,
+        // and the pass they wake reads whatever payloads are still in
+        // the vault at that moment.
+        //
+        // The in-memory list is the sample, deliberately unforced. A
+        // reload now could not mint anything (the payloads are gone)
+        // but it WOULD hide a row minted earlier: ingest files a
+        // payload-less row under another user. The unreloaded list is
+        // therefore the only surface that can still show the damage.
+        // The suite's own steps do not reshape it — they touch the
+        // vault, which posts no configuration-change notification —
+        // but one outside reshaper does: a foreground return mid-run
+        // schedules a reload. Accepted as a limit, and the reason this
+        // is no longer the only line of defence.
         let ids = Set(tracked.map(\.id))
         let materialized = tunnels.tunnels.filter { ids.contains($0.id) }
         check(materialized.isEmpty,
-              "no throwaway materialized into the tunnel list (\(materialized.count) found)")
+              "no throwaway is left in the tunnel list — a row here would be one a restore minted after the delete step swept the list, with its payload already gone (\(materialized.count) found)")
         // "Intact" must mean the PAYLOAD answers, not just the row:
         // custody-visibility keeps a row listed even when its payload
         // is broken, so presence-by-name alone cannot detect the
