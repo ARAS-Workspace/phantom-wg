@@ -1,6 +1,14 @@
 #if DEBUG
 import Foundation
 
+/// What a call to `resetConnection(of:)` did, with the refusal's own
+/// sentence carried out of the closure — `race` hands back a value,
+/// not a thrown error, and the reason is the half worth reporting.
+private enum ResetCall: Sendable {
+    case returned
+    case refused(String)
+}
+
 /// Live pass over the PhantomTunnel extension's XPC surface, driven as
 /// the app identity against one of the user-validated door configs.
 /// One class, two catalog registrations (standalone / ghost), so every
@@ -33,6 +41,7 @@ final class PhantomTunnelWorkflow: TestWorkflow {
             WorkflowStep("XPC 1: Log Buffer Streams", logBufferStreams),
             WorkflowStep("XPC 2: Flush Round-Trip", flushRoundTrip),
             WorkflowStep("XPC 3: Layer Reset In Place", layerResetInPlace),
+            WorkflowStep("XPC 3: The Reply Names The Outcome", resetReplyNamesOutcome),
             WorkflowStep("XPC 3 x2: Concurrent Reset Converges", concurrentReset),
             WorkflowStep("Negative: Empty and Unknown Opcode Rejected", negativeContract),
             WorkflowStep("Deactivate + Disarm Sweep", deactivateAndSweep),
@@ -228,18 +237,32 @@ final class PhantomTunnelWorkflow: TestWorkflow {
             return
         }
         // Three outcomes told apart, because they are three different
-        // facts: nil is the 15s ceiling (a mute extension), false is
-        // the reset call throwing (the old `try?`-only shape folded
-        // this into "returned"), true is a clean return.
-        let outcome: Bool? = await race(15) {
-            (try? await self.tunnels.resetConnection(of: t)) != nil
+        // facts: nil is the 15s ceiling (a mute extension), a throw is
+        // the wrapper refusing (the old `try?`-only shape folded this
+        // into "returned"), a plain return is a clean one.
+        //
+        // The throw's REASON is carried out now. It used to be
+        // reported as "the send failed before the extension could
+        // act", which was the only way the wrapper could throw when
+        // that line was written. It is not any more: the wrapper also
+        // throws when the extension answers that the layer did NOT
+        // come back, and when nothing answers inside its own budget.
+        // Reporting any of those as a failed send would name the
+        // wrong half of the stack to whoever reads the run.
+        let outcome: ResetCall? = await race(15) {
+            do {
+                try await self.tunnels.resetConnection(of: t)
+                return .returned
+            } catch {
+                return .refused(error.localizedDescription)
+            }
         }
-        guard let returned = outcome else {
+        guard let outcome else {
             fail("reset did not return within 15s — extension may be wedged")
             return
         }
-        guard returned else {
-            fail("reset call threw — the send failed before the extension could act")
+        if case .refused(let why) = outcome {
+            fail("the reset wrapper refused rather than rebuilding the layer — \(why)")
             return
         }
         // Only what is known at this line: the call came back. Whether
@@ -276,6 +299,46 @@ final class PhantomTunnelWorkflow: TestWorkflow {
         // mechanical core of the reset (echo + return to active) was
         // already checked above.
         skip("environment: layer rebuilt, no fresh handshake within 30s")
+    }
+
+    /// The outcome byte, read off the DEPLOYED extension rather than
+    /// off a fake — which is the half a driven rig cannot prove. The
+    /// step above measures whether the layer came back; this one
+    /// measures whether the extension SAID SO, because for as long as
+    /// opcode 3 answered with a single byte, "the layer came back"
+    /// and "the reset ended" were the same reply and three of the
+    /// four endings were failures wearing it.
+    ///
+    /// Sent raw, not through `resetConnection(of:)`: the wrapper
+    /// consumes the bytes and hands back a verdict, so going through
+    /// it would test the app's reading of the reply and never the
+    /// reply itself.
+    private func resetReplyNamesOutcome() async {
+        guard sessionUp, let t = target else {
+            skip("session not up")
+            return
+        }
+        // Wider than the default: this really does rebuild the layer,
+        // and the extension answers only once the sequence is done.
+        guard case .data(let reply) = await providerMessage(t, [3], timeout: 20) else {
+            fail("opcode 3 did not answer inside 20s — the layer reset is the one message that does real work before replying")
+            return
+        }
+        check(reply.count == 2, "the reply carries an outcome beside the opcode — bytes=\(reply.count), expected 2")
+        guard reply.count == 2 else { return }
+        check(reply[reply.startIndex] == 3,
+              "and its first byte still names the message it answers, so nothing already on the wire changed meaning — \(reply[reply.startIndex]), expected 3")
+        guard let outcome = TunnelResetReply.read(reply) else {
+            fail("the outcome byte is not one this app has a case for — raw=\(reply[reply.startIndex + 1])")
+            return
+        }
+        check(outcome == .rebuilt, "a live layer answers rebuilt — \(outcome)")
+        // The reset was real. Leave the tunnel where the next step
+        // expects to find it rather than mid-reassert.
+        guard await awaitStatus(t, is: .active, within: 30) else {
+            fail("the layer did not come back to active after the raw reset — status=\(t.status)")
+            return
+        }
     }
 
     /// Two resets fired without waiting between them. The extension

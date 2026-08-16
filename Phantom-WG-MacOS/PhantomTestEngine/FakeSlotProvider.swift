@@ -52,6 +52,26 @@ final class FakeSlotProvider: TunnelProviding {
         case fails(NSError)
     }
 
+    /// What opcode `3` answers. Every shape here is one a real
+    /// extension can put on the wire, plus the one no extension can
+    /// put there any more: `legacy` is what every build before the
+    /// outcome byte sent, and it is the only way to drive the app's
+    /// compatibility branch, since the deployed extension always
+    /// answers the new shape now.
+    ///
+    /// `silent` takes the message and drops the completion handler on
+    /// the floor. Nothing else in this fake can do that, and it is
+    /// the only way to observe a ceiling: before there was one, a
+    /// step driving this arm would never have returned at all.
+    enum ResetAnswer: Sendable {
+        case status(TunnelResetReply)
+        /// A second byte this app has no case for — a NEWER extension,
+        /// read by an older app.
+        case rawStatus(UInt8)
+        case legacy
+        case silent
+    }
+
     var saveAnswer: SaveAnswer = .succeeds
     /// What `removePreferences` does. A slow answer is the only way to
     /// hold a removal open long enough to drive anything against it,
@@ -74,6 +94,15 @@ final class FakeSlotProvider: TunnelProviding {
     /// behaves exactly as it did.
     var loadAnswer: SaveAnswer = .succeeds
     var startAnswer: StartAnswer = .succeeds
+    /// What opcode `3` answers. Defaults to the healthy shape so every
+    /// rig that never mentions a reset behaves as one whose layer came
+    /// back.
+    var resetAnswer: ResetAnswer = .status(.rebuilt)
+    /// How many provider messages were handed to this fake, whatever
+    /// it answered. A step asserting "the reset was issued" is asking
+    /// about the call; a step asserting "nobody answered" is asking
+    /// about the reply, and the two must not be read off one number.
+    var providerMessageCount = 0
     var disconnectAnswer: DisconnectAnswer = .none
 
     /// Handlers for the `.never`/`.hangs` answers, held on purpose. A
@@ -294,8 +323,31 @@ final class FakeSlotProvider: TunnelProviding {
 
     func stopTunnel() { stopCount += 1 }
 
+    /// Counted before it answers, for the same reason `startTunnel` is:
+    /// the call happened whatever came back, and `silent` below is a
+    /// shape where nothing comes back at all.
     func sendProviderMessage(_ data: Data, responseHandler: @escaping @Sendable (Data?) -> Void) throws {
-        responseHandler(nil)
+        providerMessageCount += 1
+        guard data.first == 3 else {
+            // Every other opcode keeps the answer it always gave. The
+            // stores that send them read an absent reply as nothing to
+            // do, so this is silence they already handle.
+            responseHandler(nil)
+            return
+        }
+        switch resetAnswer {
+        case .status(let reply):
+            responseHandler(Data([3, reply.rawValue]))
+        case .rawStatus(let raw):
+            responseHandler(Data([3, raw]))
+        case .legacy:
+            responseHandler(Data([3]))
+        case .silent:
+            // Deliberately dropped. The handler is never called, and
+            // the caller's own ceiling is the only thing that can end
+            // its wait.
+            break
+        }
     }
 
     func savePreferences(completion: @escaping @Sendable (Error?) -> Void) {

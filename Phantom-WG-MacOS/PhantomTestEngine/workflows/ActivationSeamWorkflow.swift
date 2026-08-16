@@ -62,6 +62,10 @@ final class ActivationSeamWorkflow: TestWorkflow {
             WorkflowStep("The Delete Flow's Stop Cannot Outrun Its Removal", deleteFlowStopCannotOutrunItsRemoval),
             WorkflowStep("The Armed Rule Is One Connect Rule For Any Interface",
                          theArmedRuleIsOneConnectRuleForAnyInterface),
+            WorkflowStep("A Reset's Outcome Byte Decides The Caller's Verdict",
+                         resetOutcomeByteDecidesTheVerdict),
+            WorkflowStep("A Reset Nobody Answers Ends Its Own Wait",
+                         resetNobodyAnswersEndsItsOwnWait),
         ]
     }
 
@@ -1121,6 +1125,5 @@ final class ActivationSeamWorkflow: TestWorkflow {
         if case .activationUnresolved = container.lastActivationError { explanationSurvived = true }
         check(explanationSurvived, "and the withdrawal's explanation survived the grounding")
     }
-
 }
 #endif
