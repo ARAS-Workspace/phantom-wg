@@ -48,6 +48,12 @@ struct TunnelDetailView: View {
     /// exists. The user's only notice would be gone. So the button
     /// closes for the duration instead.
     @State var deleting = false
+    /// A reset already in flight from this sheet. The extension
+    /// now serializes overlapping resets, so a second press is no
+    /// longer harmful — this closes the button anyway, for the same
+    /// reason `deleting` does: a control that answers nothing while
+    /// work is under way invites the second press in the first place.
+    @State var resetting = false
     @State var errorMessage: String?
     @State var showingError = false
 
@@ -83,6 +89,7 @@ struct TunnelDetailView: View {
                 copyAction: copyConf,
                 editAction: { showingEdit = true },
                 resetAction: resetConnection,
+                resetting: resetting,
                 deleting: deleting,
                 showingDeleteConfirmation: $showingDeleteConfirmation
             )

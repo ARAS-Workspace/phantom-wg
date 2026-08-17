@@ -18,8 +18,17 @@ extension TunnelDetailView {
     /// No user confirmation: reset is soft — worst case the user
     /// sees a brief disconnect and presses it again. utun / routes
     /// are preserved across the cycle (no physical-interface leak).
+    /// One reset per sheet while one is in flight — the same shape
+    /// `deleteTunnel` uses. The extension serializes overlapping
+    /// resets now, so a second press can no longer make the adapter
+    /// refuse itself; what this closes is the invitation, since the
+    /// button stays enabled through `reasserting`, which is exactly
+    /// the state a reset puts the session into.
     func resetConnection() {
+        guard !resetting else { return }
+        resetting = true
         Task {
+            defer { resetting = false }
             do {
                 try await tunnelsManager.resetConnection(of: tunnel)
             } catch {

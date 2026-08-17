@@ -27,6 +27,28 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
     private var currentTunnelConfig: TunnelConfig?
     private var currentWireGuardConfig: TunnelConfiguration?
 
+    /// The reset currently rebuilding the layer, if one is.
+    ///
+    /// Opcode 3 used to open a fresh `Task` per message with nothing
+    /// between them, and two overlapping resets then drove ONE
+    /// adapter: `WireGuardAdapter` serializes its own bodies on a
+    /// single work queue, and the first statement of a queued `start`
+    /// is `guard case .stopped = self.state`. So whichever start
+    /// reached that queue second found the other's `.started` and was
+    /// refused with `.invalidState` — an "already running" refusal
+    /// that this file then reported as `.adapterFailed`, over a layer
+    /// that was demonstrably up. In ghost mode the same pair also
+    /// raced `WstunnelLifecycle`'s process-global start/stop, and
+    /// both wrote `reasserting`.
+    ///
+    /// Guarded by a lock rather than an actor because this target
+    /// builds in Swift 5 language mode: nothing here is checked for
+    /// isolation, `handleAppMessage` carries no queue guarantee, and
+    /// the task bodies run on the global executor. The compiler would
+    /// not have caught the race, so the lock is written explicitly.
+    private let resetSlotLock = NSLock()
+    private var inFlightReset: Task<TunnelResetReply, Never>?
+
     // MARK: - Tunnel Lifecycle
 
     override func startTunnel(
@@ -198,8 +220,16 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
             // `self` that has gone away cannot have rebuilt anything,
             // so it answers `skipped` rather than the success value a
             // `??` on the optional would have handed back.
+            //
+            // Through the slot, never straight to `resetConnection()`:
+            // a second message arriving mid-rebuild JOINS the one in
+            // flight instead of driving the adapter a second time.
             Task { [weak self] in
-                let outcome = await self?.resetConnection() ?? .skipped
+                guard let self else {
+                    completionHandler(Data([3, TunnelResetReply.skipped.rawValue]))
+                    return
+                }
+                let outcome = await self.serializedReset()
                 completionHandler(Data([3, outcome.rawValue]))
             }
         default:
@@ -208,6 +238,44 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
     }
 
     // MARK: - Layer Reset
+
+    /// One rebuild at a time. A caller that arrives while a reset is
+    /// in flight waits for THAT reset and answers with its outcome.
+    ///
+    /// Joining rather than queueing, and the reason is what the byte
+    /// means: it describes the state of the layer the caller asked
+    /// about, not a receipt for work this particular message caused.
+    /// A rebuild is already under way; running a second one behind it
+    /// would buy the user a second outage window and tell them
+    /// nothing new. It stays truthful in the failing direction too —
+    /// if the in-flight reset ends `.adapterFailed`, the joiner is
+    /// told the layer is down, because it is.
+    ///
+    /// The slot is cleared only by the reset that owns it, and only
+    /// if it is still the one parked there, so a joiner can never
+    /// clear a newer owner's slot.
+    /// Scoped locking rather than bare `lock()`/`unlock()`: the latter
+    /// is unavailable from an async context and is an error outright
+    /// in Swift 6, because a suspension between the two would hold the
+    /// lock across it. Nothing suspends inside these bodies — the
+    /// `Task` is only enqueued — and every `await` is outside them.
+    private func serializedReset() async -> TunnelResetReply {
+        let (reset, isOwner): (Task<TunnelResetReply, Never>, Bool) = resetSlotLock.withLock {
+            if let existing = inFlightReset { return (existing, false) }
+            let mine = Task { await self.resetConnection() }
+            inFlightReset = mine
+            return (mine, true)
+        }
+        guard isOwner else {
+            TunnelLogger.log(.tunnel, "Reset — one is already rebuilding this layer, waiting for it")
+            return await reset.value
+        }
+        let outcome = await reset.value
+        resetSlotLock.withLock {
+            if inFlightReset == reset { inFlightReset = nil }
+        }
+        return outcome
+    }
 
     /// Restart the tunnel layer (wstunnel + WireGuard in ghost mode,
     /// WireGuard alone in standalone mode) without tearing the
@@ -246,10 +314,23 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
         reasserting = true
 
         // STOP PHASE — top-down
-        await withCheckedContinuation { continuation in
-            adapter.stop { _ in continuation.resume() }
+        //
+        // The stop's own error is read rather than discarded. It used
+        // to be `{ _ in }` under a log line that said "adapter
+        // stopped" whatever came back — and the adapter answers
+        // `.invalidState` when there was nothing to stop, so that line
+        // could report work that had not happened. Control is
+        // unchanged: an adapter that is already down is exactly the
+        // state the start phase below wants, so this reports rather
+        // than returns.
+        let stopFailure: String? = await withCheckedContinuation { continuation in
+            adapter.stop { error in continuation.resume(returning: error?.localizedDescription) }
         }
-        TunnelLogger.log(.wireGuard, "Reset — adapter stopped")
+        if let stopFailure {
+            TunnelLogger.log(.wireGuard, "Reset — adapter was not stopped: \(stopFailure)")
+        } else {
+            TunnelLogger.log(.wireGuard, "Reset — adapter stopped")
+        }
 
         if isGhostMode {
             WstunnelLifecycle.stop()

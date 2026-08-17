@@ -19,6 +19,9 @@ struct ActionsSection: View {
     let copyAction: () -> Void
     let editAction: () -> Void
     let resetAction: () -> Void
+    /// A reset already in flight from this sheet — see the detail
+    /// view's `resetting`.
+    let resetting: Bool
     /// A removal already in flight from this sheet — see the detail
     /// view's `deleting`. The button closes rather than answering a
     /// second press with a dismissal the first removal still needs.
@@ -44,7 +47,7 @@ struct ActionsSection: View {
             Button(action: resetAction) {
                 Label(loc.t("detail_reset_connection"), systemImage: "arrow.clockwise")
             }
-            .disabled(!canReset)
+            .disabled(!canReset || resetting)
             .listRowSeparator(.hidden)
             .accessibilityIdentifier(AXID.TunnelDetail.Actions.resetButton)
 
@@ -63,7 +66,10 @@ struct ActionsSection: View {
 
     /// Reset only applies when the extension is holding the tunnel
     /// surface. Inactive / deactivating states have no utun to
-    /// preserve; the button collapses to disabled.
+    /// preserve; the button collapses to disabled. `reasserting` is
+    /// deliberately included — it is the state a reset itself puts
+    /// the session into — so the in-flight gate is `resetting`, not
+    /// the status.
     private var canReset: Bool {
         tunnel.status == .active || tunnel.status == .reasserting
     }
@@ -102,6 +108,7 @@ struct ActionsSection: View {
                 copyAction: {},
                 editAction: {},
                 resetAction: {},
+                resetting: false,
                 deleting: false,
                 showingDeleteConfirmation: showingDelete
             )
@@ -122,6 +129,7 @@ struct ActionsSection: View {
                 copyAction: {},
                 editAction: {},
                 resetAction: {},
+                resetting: false,
                 deleting: false,
                 showingDeleteConfirmation: showingDelete
             )
