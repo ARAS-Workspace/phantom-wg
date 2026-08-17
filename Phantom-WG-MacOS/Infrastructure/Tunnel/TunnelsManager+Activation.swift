@@ -137,6 +137,13 @@ extension TunnelsManager {
                 // stop, and finishing it would tear down the session
                 // that start is bringing up.
                 guard tunnel.activationAttemptId == nil else { return }
+                if case .done = outcome {
+                    // An earlier stop may have left its own refusal on
+                    // the row; this one got the rule down, so the
+                    // sentence describing a rule that could not be
+                    // stood down is no longer about anything.
+                    tunnel.clearStopRefusalOnceDisarmed()
+                }
                 if case .refused(let disarmError) = outcome {
                     // Two facts to report, and both go out: the rule
                     // could not be stood down (so the system may
@@ -364,7 +371,7 @@ extension TunnelsManager {
             // the uninstall continues either way — so it gets said out
             // loud rather than swallowed by a `try?`.
             if let error = await Self.standDownRecovery(on: tunnel.tunnelProvider) {
-                NSLog("[uninstall] recovery rule survived the sweep on \(tunnel.name) — \(error.localizedDescription)")
+                NSLog("[uninstall] disarm save refused on \(tunnel.name) — armed=\(tunnel.tunnelProvider.isOnDemandEnabled) is the truest reading available: \(error.localizedDescription)")
             }
         }
     }
@@ -659,8 +666,9 @@ extension TunnelsManager {
     /// same thing is how they start saying different ones — the exact
     /// reason the watchdog stopped keeping its own. Two older lines
     /// still say it their own way and still say it wrongly: the
-    /// uninstall sweep's "survived the sweep" and `remove()`'s
-    /// "recovery rule stayed armed". Neither refusal establishes what
+    /// uninstall sweep's line and `remove()`'s, which used to read
+    /// "survived the sweep" and "recovery rule stayed armed" and now
+    /// say what this one says. Neither refusal establishes what
     /// it claims, and both belong to the passes that own those paths.
     private static func logDisarmRefusal(on tunnel: TunnelContainer, _ context: String, _ error: Error) {
         let suffix = context.isEmpty ? "" : " \(context)"

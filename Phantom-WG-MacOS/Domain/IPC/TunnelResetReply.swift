@@ -80,12 +80,6 @@ enum TunnelResetReply: UInt8, Sendable {
     /// logs to read next are different.
     case adapterFailed = 3
 
-    /// Whether the caller has a rebuilt layer on the other side of
-    /// this reply. Written as a property rather than left to each
-    /// call site's `== .rebuilt`, so a case added later has to be
-    /// answered here instead of quietly joining the success side.
-    var isRebuilt: Bool { self == .rebuilt }
-
     /// What a reply's bytes amount to. THREE answers, because the
     /// wire really does carry three different situations and the
     /// first version of this method collapsed two of them into `nil`.

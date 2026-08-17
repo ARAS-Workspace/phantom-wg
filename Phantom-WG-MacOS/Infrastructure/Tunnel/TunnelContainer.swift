@@ -288,6 +288,24 @@ class TunnelContainer: Identifiable {
     /// even issued, so an empty ledger under this error is the stop's
     /// signature, while the rung's catch writes it with its own attempt
     /// still on the books.
+    /// Clears a STOP's refused-disarm caption once a later stop got
+    /// the rule down.
+    ///
+    /// `clearErrorOnRise` deliberately preserves that caption — it
+    /// outlives the revive it warned about — and nothing else in the
+    /// stop path cleared it, so a row that was refused once, revived
+    /// by the surviving rule, and then stopped again for real sat
+    /// inactive and disarmed under "the reconnect rule could not be
+    /// stood down". Only the next activation cleared it.
+    ///
+    /// The attempt id is the same discriminator the rise-clear uses:
+    /// an empty ledger under `.savingFailed` is a stop's signature,
+    /// and a rung's own save refusal must survive this.
+    func clearStopRefusalOnceDisarmed() {
+        guard case .savingFailed = lastActivationError, activationAttemptId == nil else { return }
+        lastActivationError = nil
+    }
+
     func clearErrorOnRise() {
         guard status == .active || status == .reasserting else { return }
         if case .savingFailed = lastActivationError, activationAttemptId == nil { return }

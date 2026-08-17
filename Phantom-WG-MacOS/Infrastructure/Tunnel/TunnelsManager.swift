@@ -307,8 +307,23 @@ class TunnelsManager {
             return try await createEntry(for: config)
         } catch {
             // Roll the vault back so a failed add leaves no orphaned
-            // secrets behind.
-            await vault.delete(id: config.id, attempts: 3)
+            // secrets behind — and REPORT it when the rollback is the
+            // thing that failed, rather than answering the caller as
+            // if it had landed. The outcome used to be discarded under
+            // this comment, so a refused or unreachable delete left a
+            // payload with no entry behind it, and the next reconcile
+            // read that payload as a tunnel the system had lost and
+            // minted it back: the user is told the add failed and the
+            // tunnel appears anyway.
+            //
+            // The add's own error still wins the throw. This one is a
+            // second fact about the same failure, and no verdict the
+            // caller can act on — the reconcile that resurrects the
+            // row is what a reader needs the line for.
+            let rollback = await vault.delete(id: config.id, attempts: 3)
+            if let residue = TunnelManagementError.forVaultWrite(rollback) {
+                NSLog("[add] rollback of \(config.name) left its payload behind — \(residue.localizedDescription). A later reconcile may mint the entry this add reported as failed")
+            }
             throw error
         }
     }
@@ -1082,7 +1097,7 @@ class TunnelsManager {
         //    one. Sequential await, so nothing here can outrun the
         //    removal.
         if let disarmError = await Self.standDownRecovery(on: tunnel.tunnelProvider) {
-            NSLog("[remove] recovery rule stayed armed on \(tunnel.name) — \(disarmError.localizedDescription)")
+            NSLog("[remove] disarm save refused on \(tunnel.name) — armed=\(tunnel.tunnelProvider.isOnDemandEnabled) is the truest reading available: \(disarmError.localizedDescription)")
         }
 
         // The entry goes. What a failure here costs depends on the order
