@@ -1438,10 +1438,13 @@ class TunnelsManager {
                 tunnel.activationTask?.cancel()
                 tunnel.activationTask = nil
                 tunnel.status = .active
-                // The other rising write in the app, and the one that
-                // does not pass through the status gate — so it carries
-                // the same rule by hand: a session that came up wears no
-                // verdict from the attempt that failed before it.
+                // The second of the three rising writes, and one of the
+                // two that do not pass through the status gate — so it
+                // carries the same rule by hand: a session that came up
+                // wears no verdict from the attempt that failed before
+                // it. The count lives in one place, `clearErrorOnRise`'s
+                // own doc; this branch and `.reasserting` below point
+                // at it rather than restating it.
                 tunnel.clearErrorOnRise()
 
             case .disconnected:

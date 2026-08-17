@@ -124,6 +124,7 @@
   "field_err_int_out_of_range": "Value %d out of range [%d...%d].",
   "error_starting_failed": "Could not activate tunnel. %@",
   "error_saving_failed": "Could not save tunnel configuration. %@",
+  "error_stop_disarm_refused": "The tunnel was stopped, but the reconnect rule could not be stood down, so the system may bring it back on its own. %@",
   "error_loading_failed": "Could not load tunnel configuration. %@",
   "error_retry_limit": "Activation attempt limit exceeded. %@",
   "error_activation_failed": "Activation failed. %@",

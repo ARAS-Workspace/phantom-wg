@@ -152,7 +152,13 @@ extension TunnelsManager {
                     // instead — the previous shape — left the session
                     // running with its ladder already dismantled, so
                     // the tunnel could no longer be stopped at all.
-                    tunnel.lastActivationError = .savingFailed(systemError: disarmError)
+                    //
+                    // Its own case, not `savingFailed`: nothing here
+                    // was being configured, and the sentence the user
+                    // reads has to name the rule and the revival it
+                    // warns about, because it is the only thing that
+                    // will still be on screen when the revival comes.
+                    tunnel.lastActivationError = .stopDisarmRefused(systemError: disarmError)
                 }
                 performDeactivation(of: tunnel)
             }
@@ -213,15 +219,15 @@ extension TunnelsManager {
                 // paths where it gets that far.
                 break
             case .refused(let disarmError):
-                // Same promise the armed branch makes: a rule that
-                // could not be cleared is the user's business, because
-                // the system may bring this tunnel back on its own.
-                // Written only onto a row that is down, like every
-                // other error on this path: a session the system has
-                // meanwhile raised wears no red caption for a save that
-                // failed under it.
+                // Same promise the armed branch makes, and the same
+                // case: a rule that could not be cleared is the user's
+                // business, because the system may bring this tunnel
+                // back on its own. Written only onto a row that is
+                // down, like every other error on this path: a session
+                // the system has meanwhile raised wears no red caption
+                // for a save that failed under it.
                 if tunnel.status == .inactive || tunnel.status == .deactivating {
-                    tunnel.lastActivationError = .savingFailed(systemError: disarmError)
+                    tunnel.lastActivationError = .stopDisarmRefused(systemError: disarmError)
                 }
             case .done:
                 // The rule is gone; if it revived the session while the
@@ -555,7 +561,7 @@ extension TunnelsManager {
     ///
     /// Refusals log in the standard format unless the caller carries
     /// its own reporting surface — both halves of the stop write
-    /// `savingFailed`, which reaches the user rather than the log.
+    /// `stopDisarmRefused`, which reaches the user rather than the log.
     ///
     /// The deferred disarms that could escape these bars are waited out
     /// instead: on the delete path a stop's task is enqueued BEFORE

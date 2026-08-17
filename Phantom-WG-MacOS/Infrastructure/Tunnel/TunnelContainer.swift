@@ -254,6 +254,26 @@ class TunnelContainer: Identifiable {
         clearErrorOnRise()
     }
 
+    /// Clears a STOP's refused-disarm caption once a later stop got
+    /// the rule down.
+    ///
+    /// `clearErrorOnRise` deliberately preserves that caption — it
+    /// outlives the revive it warned about — and nothing else in the
+    /// stop path cleared it, so a row that was refused once, revived
+    /// by the surviving rule, and then stopped again for real sat
+    /// inactive and disarmed under "the reconnect rule could not be
+    /// stood down". Only the next activation cleared it.
+    ///
+    /// The case names the author now, so the ledger test no longer
+    /// carries that job — it guards SUPERSESSION instead: an attempt
+    /// on the books means the user has started this tunnel again
+    /// since, and a warning about a revival nobody asked for is no
+    /// longer about anything.
+    func clearStopRefusalOnceDisarmed() {
+        guard case .stopDisarmRefused = lastActivationError, activationAttemptId == nil else { return }
+        lastActivationError = nil
+    }
+
     /// An activation error is an ATTEMPT's verdict, and a session the
     /// system reports as up outranks it.
     ///
@@ -279,36 +299,22 @@ class TunnelContainer: Identifiable {
     /// is running — clearing it would leave the revival unexplained
     /// twice over.
     ///
-    /// Keyed on the PRODUCER, not on the case, because `.savingFailed`
-    /// has two kinds of author. The rung's arm-save catch writes it
-    /// too, and there a session coming up refutes the verdict rather
-    /// than confirming it — that one has to shed like any other
-    /// attempt's. The ledger tells them apart without a new case: a
-    /// stop withdraws the attempt id synchronously BEFORE its disarm is
-    /// even issued, so an empty ledger under this error is the stop's
-    /// signature, while the rung's catch writes it with its own attempt
-    /// still on the books.
-    /// Clears a STOP's refused-disarm caption once a later stop got
-    /// the rule down.
-    ///
-    /// `clearErrorOnRise` deliberately preserves that caption — it
-    /// outlives the revive it warned about — and nothing else in the
-    /// stop path cleared it, so a row that was refused once, revived
-    /// by the surviving rule, and then stopped again for real sat
-    /// inactive and disarmed under "the reconnect rule could not be
-    /// stood down". Only the next activation cleared it.
-    ///
-    /// The attempt id is the same discriminator the rise-clear uses:
-    /// an empty ledger under `.savingFailed` is a stop's signature,
-    /// and a rung's own save refusal must survive this.
-    func clearStopRefusalOnceDisarmed() {
-        guard case .savingFailed = lastActivationError, activationAttemptId == nil else { return }
-        lastActivationError = nil
-    }
-
+    /// Keyed on the CASE. It was once keyed on the producer, because
+    /// `savingFailed` had two kinds of author and the ledger told them
+    /// apart — a stop withdraws the attempt id synchronously BEFORE its
+    /// disarm is even issued, so an empty ledger under that error was
+    /// the stop's signature. That discrimination was built to keep one
+    /// sentence alive, and the sentence never said what it was being
+    /// kept alive for, so the author now has its own case and its own
+    /// words. `stopDisarmRefused` carries that meaning in the case itself,
+    /// so the rung's arm-save catch — which writes `savingFailed` and
+    /// whose verdict a rising session REFUTES — sheds here like any
+    /// other attempt's. The ledger test that used to tell the two
+    /// authors apart stays for a second job: an attempt on the books
+    /// means a deliberate restart has superseded the warning.
     func clearErrorOnRise() {
         guard status == .active || status == .reasserting else { return }
-        if case .savingFailed = lastActivationError, activationAttemptId == nil { return }
+        if case .stopDisarmRefused = lastActivationError, activationAttemptId == nil { return }
         lastActivationError = nil
     }
 }

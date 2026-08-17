@@ -19,6 +19,16 @@ enum TunnelActivationError: Error {
     /// and every rung answered; this one means the attempt stopped
     /// answering.
     case activationUnresolved
+    /// A STOP whose disarm save was refused. The stop itself went out;
+    /// what failed is standing the reconnect rule down, so the rule may
+    /// still be in the store and the system may bring this tunnel back
+    /// on its own. Distinct from `savingFailed` for the reason the
+    /// enum exists: nothing here was being configured, and telling the
+    /// user a configuration could not be saved describes neither what
+    /// happened nor what may happen next. This is the caption
+    /// `clearErrorOnRise` deliberately preserves across a revival,
+    /// which only works if the sentence names the revival.
+    case stopDisarmRefused(systemError: Error)
 
     var alertText: String {
         let loc = LocalizationManager.shared
@@ -31,6 +41,8 @@ enum TunnelActivationError: Error {
             return loc.t("error_starting_failed", error.localizedDescription)
         case .savingFailed(let error):
             return loc.t("error_saving_failed", error.localizedDescription)
+        case .stopDisarmRefused(let error):
+            return loc.t("error_stop_disarm_refused", error.localizedDescription)
         case .loadingFailed(let error):
             return loc.t("error_loading_failed", error.localizedDescription)
         case .retryLimitReached(let error):
