@@ -342,17 +342,27 @@ final class PhantomTunnelWorkflow: TestWorkflow {
     }
 
     /// Two resets fired without waiting between them. The extension
-    /// opens a fresh Task per opcode-3 message with no in-flight guard,
-    /// so their stop/start phases can interleave and fight over the
-    /// `reasserting` flag. Whatever the ordering, the tunnel must
-    /// converge to one consistent live state — never left down.
+    /// serializes them now: a second opcode-3 arriving mid-rebuild
+    /// JOINS the one in flight rather than driving the adapter a
+    /// second time. Whatever the ordering, the tunnel must converge to
+    /// one consistent live state — never left down — and neither
+    /// caller may be told the layer is down while it is up.
+    ///
+    /// That last clause is what a live run bought. Before the outcome
+    /// byte, both calls returned whatever happened, so this step's
+    /// throw check could not fail and the race underneath it was
+    /// invisible. The first run with the byte turned it red in BOTH
+    /// modes: `WireGuardAdapter` serializes its own bodies on one
+    /// queue and its `start` opens with `guard case .stopped`, so the
+    /// second start was refused `.invalidState` — "already running" —
+    /// which this extension then reported as a failed adapter.
     private func concurrentReset() async {
         guard sessionUp, let t = target else {
             skip("session not up")
             return
         }
         // Same three-way contract as the single reset above: nil is
-        // the ceiling, false is a throw, true is a clean return.
+        // the ceiling, a refusal is a throw, true is a clean return.
         async let first: Bool? = race(20) { (try? await self.tunnels.resetConnection(of: t)) != nil }
         async let second: Bool? = race(20) { (try? await self.tunnels.resetConnection(of: t)) != nil }
         let (a, b) = await (first, second)
@@ -360,16 +370,37 @@ final class PhantomTunnelWorkflow: TestWorkflow {
             fail("a concurrent reset did not return within 20s — wedge")
             return
         }
+        // MEASURED BEFORE the throw verdict, deliberately. This is the
+        // claim the step's own doc says it can earn, and it used to sit
+        // behind a `return` that a refusal took — so the one run where
+        // a racer was refused reported red without ever measuring
+        // whether the tunnel had converged, which is the reading that
+        // says how bad the refusal was.
+        check(await awaitStatus(t, is: .active, within: 30),
+              "tunnel is live after overlapping resets — status=\(t.status)")
         guard ra, rb else {
-            fail("a concurrent reset threw (first=\(ra) second=\(rb))")
+            fail("a concurrent reset was refused (first=\(ra) second=\(rb)) — with the layer live above, that refusal describes a state the tunnel is not in")
             return
         }
         log("both concurrent resets returned without throwing", .ok)
-        // The claim this step can actually earn: overlapping resets
-        // did not leave the tunnel down. Their internal ordering is
-        // the extension's business and is not observable from here.
-        check(await awaitStatus(t, is: .active, within: 30),
-              "tunnel is live after overlapping resets — status=\(t.status)")
+        // The serialization itself, read off the wire: two raw opcode-3
+        // messages in flight together must BOTH come back saying the
+        // layer was rebuilt. The joiner answers with the in-flight
+        // reset's own outcome, so a second `rebuilt` here is the
+        // signature of one rebuild answered twice — and the shape the
+        // refusal above would have broken.
+        async let rawFirst = providerMessage(t, [3], timeout: 20)
+        async let rawSecond = providerMessage(t, [3], timeout: 20)
+        let (r1, r2) = await (rawFirst, rawSecond)
+        guard case .data(let d1) = r1, case .data(let d2) = r2 else {
+            fail("a raw concurrent opcode 3 went unanswered inside 20s")
+            return
+        }
+        let o1 = TunnelResetReply.read(d1)
+        let o2 = TunnelResetReply.read(d2)
+        check(o1 == .rebuilt && o2 == .rebuilt,
+              "both overlapping resets were answered with a rebuilt layer — first=\(o1.map { "\($0)" } ?? "no outcome byte"), second=\(o2.map { "\($0)" } ?? "no outcome byte")")
+        _ = await awaitStatus(t, is: .active, within: 30)
     }
 
     private func negativeContract() async {
