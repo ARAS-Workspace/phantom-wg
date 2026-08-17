@@ -77,12 +77,24 @@ final class ConfigContractWorkflow: TestWorkflow {
             // PASS (the drop belt writes the record async after the
             // status flip, so inactive-with-nil keeps polling rather
             // than declaring a spurious miss); budget exhaustion
-            // reports the honest inconclusive. The budget covers the
-            // remaining rungs plus the anonymous-drop revive class;
-            // a full ladder hang is deliberately left inconclusive.
+            // reports the honest inconclusive.
+            //
+            // THE BUDGET IS THE LADDER'S OWN, not a number picked to
+            // feel generous. It used to be a flat 35s while
+            // `activationCeiling` is `(maxRetries + 1) * retryInterval
+            // + preflightBudget` = (8+1)*5+2 = 47s, so the step gave
+            // up twelve seconds before the thing it was waiting for —
+            // and a busy machine turned a correct refusal into
+            // "inconclusive: still activating". Sized against the
+            // ceiling it now outlives every rung, plus a margin for
+            // the drop belt to write its record after the last one:
+            // past this, a ladder really has hung, and THAT stays
+            // deliberately inconclusive rather than being called a
+            // product failure.
+            let terminalBudget = activationBudget + 8
             let terminalStart = Date()
             var verdictGiven = false
-            while Date().timeIntervalSince(terminalStart) < 35 {
+            while Date().timeIntervalSince(terminalStart) < terminalBudget {
                 if Task.isCancelled { return }
                 if t.status == .active {
                     fail("LEAK: no-route config reached .active on a later attempt — traffic would leave in the clear")
@@ -100,7 +112,7 @@ final class ConfigContractWorkflow: TestWorkflow {
                 if t.status == .inactive {
                     skip("inconclusive: settled inactive without a recorded refusal inside the budget")
                 } else {
-                    skip("inconclusive: still \(t.status) after the extended budget — refusal not yet terminal")
+                    skip("inconclusive: still \(t.status) after \(Int(terminalBudget))s, past the activation ceiling itself — the ladder hung rather than refusing")
                 }
             }
         }

@@ -38,11 +38,14 @@ final class SanityWorkflow: TestWorkflow {
     /// comparison an entire green run can describe code that never
     /// reached the machine.
     ///
-    /// A PROVEN mismatch stops the suite. Not out of severity theatre:
-    /// every verdict after it would be a sentence about code that is
-    /// not running, and a report full of confident claims about the
-    /// wrong binary is worse than a short report. Silence is different
-    /// and does not stop anything — see below.
+    /// A PROVEN mismatch ON PHANTOMTUNNEL stops the suite. Not out of
+    /// severity theatre: every verdict after it would be a sentence
+    /// about code that is not running, and a report full of confident
+    /// claims about the wrong binary is worse than a short report. A
+    /// stale PROXY extension earns a red line and nothing more — it is
+    /// measured here and exercised nowhere below, so the run carries
+    /// on; the asymmetry is argued at the branch itself. Silence is
+    /// different again and does not stop anything — see below.
     ///
     /// All three probes answer `ExtensionIdentity.current` computed
     /// inside their own process, which is exactly what the app

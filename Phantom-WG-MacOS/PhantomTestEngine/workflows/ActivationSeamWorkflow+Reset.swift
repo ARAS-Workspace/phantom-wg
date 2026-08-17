@@ -165,10 +165,11 @@ extension ActivationSeamWorkflow {
     /// wrapper returned cleanly over a layer that was down, and the
     /// user's Reset button reported success for it.
     ///
-    /// Four answers driven through the real wrapper, including the
-    /// one no deployed extension can send any more: a bare `[3]` must
-    /// still mean what it has always meant, because reading an older
-    /// extension's silence as a failure would invent one.
+    /// Five answers driven through the real wrapper, including the
+    /// two no deployed extension can send: a bare `[3]` from a build
+    /// that predates the byte, and a value from one that postdates
+    /// this app. Both must mean what a reply meant before the byte
+    /// existed, because reading either as a failure would invent one.
     func resetOutcomeByteDecidesTheVerdict() async {
         guard let rig = await drivenActiveRig("TE-Seam-ResetByte-\(runTag)") else { return }
         let verdict: (FakeSlotProvider.ResetAnswer) async -> Error? = { answer in

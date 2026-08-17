@@ -274,12 +274,18 @@ class TunnelVaultClient {
         return outcome
     }
 
-    /// Outcome of a single read. The two failures are different
+    /// Outcome of a single read. The THREE failures are different
     /// stories and callers must not tell them the same way: the vault
-    /// answering "no such payload" is final, while failing to reach
-    /// the vault at all is usually a moment old — the extension is
-    /// spawned on demand, and the first connection after it has been
-    /// idle can lose the race.
+    /// answering "no such payload" is final, a payload it holds but
+    /// cannot decode is present and unreadable rather than absent,
+    /// while failing to reach the vault at all is usually a moment
+    /// old — the extension is spawned on demand, and the first
+    /// connection after it has been idle can lose the race.
+    ///
+    /// The count is load-bearing: this header said "two" while
+    /// `.undecodable` sat ten lines below it, and folding that case
+    /// into `.missing` is how a present-but-unreadable secret gets
+    /// dropped as another user's.
     enum Read {
         case config(TunnelConfig)
         /// The vault answered and holds no payload for this id — or

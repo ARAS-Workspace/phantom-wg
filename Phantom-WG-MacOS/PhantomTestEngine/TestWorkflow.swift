@@ -372,8 +372,10 @@ class TestWorkflow {
     /// bills a grounding, TWO full `remove()` calls rather than one,
     /// an 8s respawn ping, a payload read, a verified delete with its
     /// own re-read, and the hidden-survivor probe — past 100s against
-    /// a vault that is slow rather than absent. The four nets that
-    /// call it can therefore have their RESULT dropped on a bad day.
+    /// a vault that is slow rather than absent. Every net that calls
+    /// it can therefore have its RESULT dropped on a bad day — two
+    /// today, and left uncounted here so the exception does not go
+    /// stale the next time a net takes the sweep up or puts it down.
     /// It is announced, not silent: `runTeardowns` prints a warn
     /// naming the net, and the member's own detached body still logs.
     /// Sizing the ceiling to that worst case would blunt the warning

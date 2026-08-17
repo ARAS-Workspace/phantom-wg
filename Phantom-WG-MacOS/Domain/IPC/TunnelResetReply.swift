@@ -3,8 +3,12 @@ import Foundation
 /// Opcode `3`'s reply, on the wire.
 ///
 /// The app↔extension provider-message channel is a byte protocol: the
-/// first byte of the request is the opcode, and until now every reply
-/// echoed that opcode back and said nothing else. Opcode 3 asks the
+/// first byte of the request is the opcode. What comes BACK differs by
+/// opcode and always has — 0 answers a uapi dump, 1 a JSON log blob,
+/// and only 2 echoes its own opcode and says nothing else. Opcode 3
+/// answered like 2, and that is the shape this type extends; nothing
+/// here licenses prefixing an opcode onto 0's or 1's payload, which
+/// their readers consume whole. Opcode 3 asks the
 /// extension to rebuild its tunnel layer in place, and its four exits
 /// — nothing to rebuild, wstunnel refused to come back, the adapter
 /// refused to come back, and a clean rebuild — all left the same
@@ -13,8 +17,9 @@ import Foundation
 /// the reply was discarded at the only site that read it.
 ///
 /// The reply now carries a SECOND byte, and this type is what both
-/// sides read it as. The extension is the only writer; the app and
-/// the preview surface are the readers.
+/// sides speak. The extension writes it on the real path, and the
+/// preview provider and the DEBUG fake write it standing in for the
+/// extension; the app is the only READER.
 ///
 /// WIRE SHAPE — `[3, status]`, where status is a `RawValue` below.
 /// The first byte is unchanged, deliberately: extending a message is

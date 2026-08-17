@@ -14,9 +14,11 @@ import SystemConfiguration
 ///
 /// We mirror `scutil --dns`'s precedence: read Setup first, fall back
 /// to State, return empty when neither has anything. Active-service
-/// filtering is done on the State `IPv4` dictionary (where runtime
-/// interface↔service binding lives) — Setup alone wouldn't tell us
-/// which service is bound to a given BSD name right now.
+/// filtering is done on the State per-family dictionaries, `IPv4`
+/// then `IPv6` (where runtime interface↔service binding lives) —
+/// Setup alone wouldn't tell us which service is bound to a given BSD
+/// name right now. Both families on purpose: an IPv6-only service has
+/// no State `IPv4` entry at all, and reading one family would drop it.
 enum InterfaceDNSResolver {
 
     /// Returns the configured DNS server addresses for `interfaceName`,

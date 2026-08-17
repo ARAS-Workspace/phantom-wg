@@ -701,8 +701,9 @@ extension ActivationSeamWorkflow {
         // removal something to outrun. The delay is captured when the
         // save is ISSUED, so the answer mode can be put back to
         // immediate straight afterwards — and it must be, or the
-        // removal's own stand-down would inherit the same five seconds
-        // and land in step with the one it is racing. Two saves landing
+        // removal's own stand-down would inherit the same planted
+        // delay and land in step with the one it is racing. The number
+        // itself is `slowDisarm` below; the prose does not keep a copy. Two saves landing
         // out of issue order is exactly the shape under test here.
         let slowDisarm = 2.0
         fake.saveAnswer = .succeedsAfter(seconds: slowDisarm)

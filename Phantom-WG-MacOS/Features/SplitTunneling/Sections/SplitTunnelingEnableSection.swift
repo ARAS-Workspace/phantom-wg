@@ -1,7 +1,9 @@
 import SwiftUI
 
 /// Master gate for the whole split tunneling feature. Disabling this
-/// parks the rest of the form (mode + app list) in read-only state but
+/// parks the interface picker and the app list in read-only state —
+/// the system DNS resolver toggle below them stays live, since it is
+/// the only section the view builds without an `isDisabled` — but
 /// preserves the configuration so re-enabling restores it exactly.
 struct SplitTunnelingEnableSection: View {
     @Binding var isEnabled: Bool
