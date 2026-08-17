@@ -60,7 +60,12 @@ struct TunnelStatusRow: View {
                 // still ON. Not red and not an error, because nothing
                 // has failed — this is work in progress that the row
                 // had no way to show.
-                if tunnel.pendingDisarmCount > 0 {
+                //
+                // The predicate lives on the container, and the status
+                // half of it is not decoration: this line used to read
+                // the count alone, and a count outlives its own stop
+                // whenever the save hangs. See `stopIsWaitingOnItsRule`.
+                if tunnel.stopIsWaitingOnItsRule {
                     Text(loc.t("detail_stopping_disarm"))
                         .font(.caption)
                         .foregroundStyle(.secondary)

@@ -21,18 +21,26 @@ import Foundation
 /// only safe while the meaning already on the wire keeps its meaning,
 /// and `3` still means "this is the answer to your reset".
 ///
-/// COMPATIBILITY, and why `unreported` is not a failure: a one-byte
-/// reply is what every build before this one sent, and it meant "the
-/// call completed" — the only thing the app could conclude. A reader
-/// that turned the missing byte into an error would be inventing a
-/// failure out of an older extension's silence, which is the exact
-/// mistake this whole channel is being audited for. So a short reply
-/// resolves to `unreported`, the app treats it as it always did, and
-/// the log line says the status was absent rather than bad. This
-/// matters for a window narrower than it looks: app and extension
-/// ship together, but the extension the system is running is the one
-/// approved before the update, so the pair is mismatched for exactly
-/// as long as it takes the new extension to be activated.
+/// COMPATIBILITY, and why an ABSENT outcome is not a failure: a
+/// one-byte reply is what every build before this one sent, and it
+/// meant "the call completed" — the only thing the app could
+/// conclude. A reader that turned the missing byte into an error
+/// would be inventing a failure out of an older extension's silence,
+/// which is the exact mistake this whole channel is being audited
+/// for. So absence is modelled as `nil` from `read(_:)` rather than
+/// as a case of this enum — there are four cases and every one of
+/// them is a thing the extension SAID — and the app treats `nil` as
+/// it treated any reply before the byte existed. This matters for a
+/// window narrower than it looks: app and extension ship together,
+/// but the extension the system is running is the one approved
+/// before the update, so the pair is mismatched for exactly as long
+/// as it takes the new extension to be activated.
+///
+/// Nothing logs that window. `resetConnection(of:)` returns silently
+/// on `nil`, and the sentences that name an absent byte live in the
+/// suite, against a fake that can produce one. A field reader
+/// looking for a mismatched pair has the suite's account and this
+/// note, not a live line — said here rather than promised.
 enum TunnelResetReply: UInt8, Sendable {
     /// The layer was torn down and built back up. The WireGuard
     /// handshake may still be settling — this says the rebuild

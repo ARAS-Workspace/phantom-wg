@@ -124,12 +124,23 @@ extension TunnelDetailView {
         } else {
             let date = Date(timeIntervalSince1970: TimeInterval(stats.lastHandshakeTimestamp))
             let elapsed = Date().timeIntervalSince(date)
-            // WireGuard rekeys well inside three minutes on a live peer,
-            // so an age past it on an ACTIVE session is not a quiet link
-            // — it is one that has stopped answering. The threshold is
-            // named rather than tuned: it is the point past which the
-            // number stops being reassuring, and the copy says only
-            // that, never that the tunnel is broken.
+            // 180s is REJECT_AFTER_TIME: past it the keypair behind the
+            // displayed timestamp has expired, so the sentence "nothing
+            // has replied since" is true whatever the cause. The
+            // threshold is named rather than tuned, and the copy says
+            // only that, never that the tunnel is broken.
+            //
+            // The stronger reading — that a peer this old has stopped
+            // answering — holds only while something is SENDING, since
+            // WireGuard rehandshakes on demand rather than on a clock.
+            // Persistent keepalive is what guarantees it, and this app
+            // supports the configuration that voids the guarantee:
+            // `ConfParser` defaults keepalive to 25 only when the key
+            // is ABSENT, validation admits 0, and the extension's
+            // builder writes no keepalive at all for 0. So an idle
+            // session on a keepalive-0 config ages past this line
+            // legitimately. The copy survives that case; the diagnosis
+            // would not, which is why it is not in the copy.
             lastHandshake = elapsed > 180
                 ? loc.t("detail_handshake_stale", StatsFormatter.formatTimeAgo(elapsed, loc: loc))
                 : StatsFormatter.formatTimeAgo(elapsed, loc: loc)

@@ -100,6 +100,33 @@ class TunnelContainer: Identifiable {
     /// outstanding — telling the user the opposite of the truth in
     /// exactly the state this exists for.
     var pendingDisarmCount = 0
+
+    /// Whether a stop is waiting on the recovery rule with nothing on
+    /// the row to show for it. NOT the same fact as the count being
+    /// up, and the difference is a bug that shipped inside this very
+    /// feature before it was extracted here.
+    ///
+    /// The count comes down only when the disarm save answers. The
+    /// STOP can land long before that: `standDownRecovery` writes the
+    /// provider's flag down SYNCHRONOUSLY and only then awaits the
+    /// save, so a second stop arriving during a hung save reads the
+    /// flag as already disarmed, takes the branch that deactivates
+    /// straight away, and grounds the row — leaving a count that
+    /// outlives its own stop. A hint gated on the count alone then
+    /// read "stopping" over an Inactive row with its toggle OFF, for
+    /// as long as the save stayed out; and after a restart, over an
+    /// Active one. The status clause is what makes the reading true.
+    ///
+    /// Past `.active`/`.reasserting` the row shows the work itself,
+    /// so there is nothing left for a hint to add anyway.
+    ///
+    /// Read by the detail row and asserted by the suite from this one
+    /// declaration, rather than each spelling the predicate out — two
+    /// copies of a rule are two chances for one of them to be the old
+    /// one.
+    var stopIsWaitingOnItsRule: Bool {
+        pendingDisarmCount > 0 && (status == .active || status == .reasserting)
+    }
     /// One in-app revive per user intent, for the respawn-window class
     /// where the system drops a just-started session without an error
     /// record. Granted (reset) by `startActivation(of:)`, spent by the

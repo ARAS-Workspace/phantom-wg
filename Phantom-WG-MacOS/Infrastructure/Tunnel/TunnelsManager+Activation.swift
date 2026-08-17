@@ -1367,10 +1367,20 @@ extension TunnelsManager {
     /// three — no live layer to rebuild, wstunnel refusing to restart,
     /// the adapter refusing to restart — also replied, and one of them
     /// logged "Reset complete" doing it. The reply now carries the
-    /// outcome as its second byte (`TunnelResetReply`), so returning
+    /// outcome as its second byte (`TunnelResetReply`), so WHEN A
+    /// RESET WAS ISSUED AND THE EXTENSION NAMED ITS OUTCOME, returning
     /// without throwing means the layer really was rebuilt, and the
     /// three failures each throw. A rebuilt layer still says nothing
     /// about the WireGuard handshake, which may be settling after it.
+    ///
+    /// That qualification is not decoration — two exits below return
+    /// cleanly having established nothing about the layer, and a
+    /// caller reading only the sentence above would take both for a
+    /// rebuild. There is no live session to reset (the status guard,
+    /// which sends no message at all), and the extension answered
+    /// without an outcome byte (an older build, whose reply cannot
+    /// mean more than it ever did). Neither is a failure; neither is
+    /// a rebuild either.
     ///
     /// And the wait is BOUNDED. It was not: a `sendProviderMessage`
     /// whose completion never fires left this continuation suspended
