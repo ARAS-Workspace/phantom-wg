@@ -203,15 +203,18 @@ extension ActivationSeamWorkflow {
         let legacy = await verdict(.legacy)
         check(legacy == nil,
               "while a reply with no outcome byte still means what it meant before the byte existed — \(legacy?.localizedDescription ?? "no error")")
-        // The other direction of the same compatibility question: a
-        // NEWER extension answering a byte this app has no case for.
-        // Read as unknown rather than as a failure, deliberately and
-        // for the same reason — the app cannot conclude a failure it
-        // was never told about, and inventing one here would be the
-        // exact mistake the legacy arm above avoids.
+        // The other direction of the same compatibility question, and
+        // the one that used to share an answer with the arm above. A
+        // byte this app has no case for is NOT silence: a newer
+        // extension named an ending added after this build, so the app
+        // can claim neither a rebuilt layer nor a broken one, and says
+        // exactly that. Reading it as success — the first shape of
+        // this code — claimed a rebuild nobody had reported.
         let unknown = await verdict(.rawStatus(200))
-        check(unknown == nil,
-              "and an outcome byte from a newer extension is not read as a failure this app was never told about — \(unknown?.localizedDescription ?? "no error")")
+        var unreadable = false
+        if case TunnelManagementError.resetOutcomeUnrecognised(let raw)? = unknown { unreadable = raw == 200 }
+        check(unreadable,
+              "and an outcome byte from a newer extension reaches the user as an answer that could not be read, carrying the byte itself — \(unknown?.localizedDescription ?? "NO ERROR")")
         check(rig.fake.providerMessageCount == 5,
               "all five verdicts came from a message that was really sent (messages=\(rig.fake.providerMessageCount), expected 5)")
     }

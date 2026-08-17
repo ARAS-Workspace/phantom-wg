@@ -332,7 +332,7 @@ final class PhantomTunnelWorkflow: TestWorkflow {
         guard reply.count == 2 else { return }
         check(reply[reply.startIndex] == 3,
               "and its first byte still names the message it answers, so nothing already on the wire changed meaning — \(reply[reply.startIndex]), expected 3")
-        guard let outcome = TunnelResetReply.read(reply) else {
+        guard case .outcome(let outcome) = TunnelResetReply.read(reply) else {
             fail("the outcome byte is not one this app has a case for — raw=\(reply[reply.startIndex + 1])")
             return
         }
@@ -402,8 +402,8 @@ final class PhantomTunnelWorkflow: TestWorkflow {
         }
         let o1 = TunnelResetReply.read(d1)
         let o2 = TunnelResetReply.read(d2)
-        check(o1 == .rebuilt && o2 == .rebuilt,
-              "both overlapping resets were answered with a rebuilt layer — first=\(o1.map { "\($0)" } ?? "no outcome byte"), second=\(o2.map { "\($0)" } ?? "no outcome byte")")
+        check(o1 == .outcome(.rebuilt) && o2 == .outcome(.rebuilt),
+              "both overlapping resets were answered with a rebuilt layer — first=\(o1), second=\(o2))")
         _ = await awaitStatus(t, is: .active, within: 30)
     }
 

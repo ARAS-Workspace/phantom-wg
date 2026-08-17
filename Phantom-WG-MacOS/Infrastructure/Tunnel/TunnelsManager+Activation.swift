@@ -1409,14 +1409,23 @@ extension TunnelsManager {
         }
 
         switch outcome {
-        case .answered(let reply):
-            // A reply with no status byte is what every extension
-            // before this contract sent, and it meant exactly what
-            // this method used to conclude from any reply at all.
-            // Reading it as a failure would invent one; see
-            // `TunnelResetReply`'s own note.
-            guard let reply else { return }
-            if let failure = TunnelManagementError.forReset(reply) { throw failure }
+        case .answered(let reading):
+            switch reading {
+            case .absent:
+                // What every extension before this contract sent, and
+                // it meant exactly what this method used to conclude
+                // from any reply at all. Reading it as a failure would
+                // invent one; see `TunnelResetReply`'s own note.
+                return
+            case .outcome(let reply):
+                if let failure = TunnelManagementError.forReset(reply) { throw failure }
+            case .unrecognised(let raw):
+                // A byte, just not one of ours. Kept apart from the
+                // absent case on purpose: something was reported and
+                // this app cannot read it, so it can claim neither a
+                // rebuilt layer nor a broken one.
+                throw TunnelManagementError.resetOutcomeUnrecognised(raw: raw)
+            }
         case .sendFailed(let description):
             throw TunnelManagementError.resetSendFailed(systemError: description)
         case .unanswered:
@@ -1433,9 +1442,10 @@ extension TunnelsManager {
 /// the whole way, the same way the vault client keeps them apart:
 /// only an answer can carry a verdict about the layer.
 private enum ResetOutcome: Sendable {
-    /// The extension answered. The payload is `nil` when the reply
-    /// carried no status byte.
-    case answered(TunnelResetReply?)
+    /// The extension answered. What its bytes amount to is the
+    /// `Reading` — an outcome, no outcome byte at all, or one this
+    /// build cannot read.
+    case answered(TunnelResetReply.Reading)
     /// The message could not be handed to the session at all.
     case sendFailed(String)
     /// Nothing came back inside the budget.

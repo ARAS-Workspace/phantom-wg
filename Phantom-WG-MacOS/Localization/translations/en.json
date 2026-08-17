@@ -159,6 +159,7 @@
   "error_reset_layer_down": "The tunnel layer did not come back up after the reset. The tunnel is not passing traffic; try again or stop it.",
   "error_reset_send_failed": "The reset could not be sent to the tunnel extension: %@",
   "error_reset_unanswered": "The tunnel extension did not answer the reset. Make sure the extension is active, then try again.",
+  "error_reset_outcome_unrecognised": "The tunnel extension answered the reset with an outcome this version does not recognise (%d). Check the tunnel before relying on it.",
   "sysext_err_unsupported_location": "The app must be in /Applications to install the system extension.",
   "sysext_err_code_signature": "Code signature is invalid. The app may need to be re-signed.",
   "sysext_err_validation": "System extension validation failed. Check entitlements and provisioning profile.",

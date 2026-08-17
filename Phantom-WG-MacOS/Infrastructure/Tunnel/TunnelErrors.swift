@@ -89,6 +89,12 @@ enum TunnelManagementError: Error, LocalizedError {
     /// still have rebuilt, so the copy asks for a retry rather than
     /// describing a state it did not observe.
     case resetUnanswered
+    /// The extension answered with an outcome byte this build has no
+    /// case for — a NEWER extension naming an ending added after this
+    /// app shipped. Neither a success nor a failure: the only fact
+    /// observed is that the answer could not be read, and that is
+    /// what the copy says.
+    case resetOutcomeUnrecognised(raw: UInt8)
 
     /// The failure a vault write earns, or `nil` when it finished.
     ///
@@ -148,6 +154,8 @@ enum TunnelManagementError: Error, LocalizedError {
             return loc.t("error_reset_send_failed", description)
         case .resetUnanswered:
             return loc.t("error_reset_unanswered")
+        case .resetOutcomeUnrecognised(let raw):
+            return loc.t("error_reset_outcome_unrecognised", Int(raw))
         }
     }
 }

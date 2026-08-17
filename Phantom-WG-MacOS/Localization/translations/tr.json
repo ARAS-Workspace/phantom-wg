@@ -159,6 +159,7 @@
   "error_reset_layer_down": "Reset sonrasında tünel katmanı geri gelmedi. Tünel trafik geçirmiyor; tekrar deneyin ya da tüneli durdurun.",
   "error_reset_send_failed": "Reset isteği tünel uzantısına gönderilemedi: %@",
   "error_reset_unanswered": "Tünel uzantısı reset isteğine yanıt vermedi. Uzantının etkin olduğundan emin olup tekrar deneyin.",
+  "error_reset_outcome_unrecognised": "Tünel uzantısı reset isteğini bu sürümün tanımadığı bir sonuçla yanıtladı (%d). Tünele güvenmeden önce durumunu kontrol edin.",
   "sysext_err_unsupported_location": "Sistem uzantısını yüklemek için uygulama /Applications klasöründe olmalıdır.",
   "sysext_err_code_signature": "Kod imzası geçersiz. Uygulamanın yeniden imzalanması gerekebilir.",
   "sysext_err_validation": "Sistem uzantısı doğrulaması başarısız oldu. Yetkilendirme ve sağlama profilini kontrol edin.",
