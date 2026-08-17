@@ -45,12 +45,22 @@ extension ActivationSeamWorkflow {
         check(rose, "the row can say a stop is under way before the status moves — count=\(rig.container.pendingDisarmCount)")
         check(rig.container.status == .active,
               "and it says it while the status still reads active, which is the whole reason it exists — status=\(rig.container.status)")
-        // The second tap, which is the documented way out of a wedged
-        // stop. Both disarms are in flight now, and a flag would be
-        // wrong here in a way a count is not.
+        // A second stop dispatched in the SAME main-actor turn, before
+        // the first disarm task has had a chance to run. Both are
+        // counted, which a flag could not do.
+        //
+        // Deliberately not called the second tap of a wedged stop —
+        // it is not that path, and saying so was a defect of its own.
+        // `settle` returns before its first sleep when the condition
+        // already holds, and `check` does not suspend, so nothing
+        // between the two calls yields the main actor: the first
+        // task's body has not started, the provider flag is still
+        // armed, and this second call takes the ARMED branch. A real
+        // second tap arrives after that flag is down and takes the
+        // other one — which is the step below.
         rig.manager.startDeactivation(of: rig.container)
         check(rig.container.pendingDisarmCount == 2,
-              "a second stop is counted beside the first rather than replacing it (count=\(rig.container.pendingDisarmCount))")
+              "two stops dispatched in one turn are both counted rather than one replacing the other (count=\(rig.container.pendingDisarmCount))")
 
         let cleared = await settle(within: 12, until: { rig.container.pendingDisarmCount == 0 })
         check(cleared, "and both came down when their saves answered — count=\(rig.container.pendingDisarmCount)")
@@ -72,6 +82,66 @@ extension ActivationSeamWorkflow {
         if case .savingFailed = refused.container.lastActivationError { surfaced = true }
         check(surfaced,
               "and the refusal still surfaced, so the count came down past a verdict rather than instead of one — \(refused.container.lastActivationError.map { String(describing: $0) } ?? "nil")")
+    }
+
+    /// The bug the count shipped with, and the reading that closes it.
+    ///
+    /// A hint gated on `pendingDisarmCount` alone outlives its own
+    /// stop. The count comes down when the disarm SAVE answers, but
+    /// `standDownRecovery` writes the provider flag down before it
+    /// awaits that save — so a second stop during a hung save reads
+    /// the row as already disarmed, takes the branch that deactivates
+    /// immediately, and grounds it. The count is still up, and the
+    /// row read "stopping" under an Inactive status with its toggle
+    /// off, for as long as the save stayed out.
+    ///
+    /// This drives the REAL second tap: it waits for the flag to go
+    /// down before pressing again, which is the whole difference
+    /// between this step and the one above.
+    func aLandedStopStopsClaimingToBeUnderWay() async {
+        guard let rig = await drivenActiveRig("TE-Seam-StopHint-\(runTag)") else { return }
+        guard rig.fake.storedOnDemand else {
+            skip("environment: the rig's activation left no armed rule, so the armed stop branch is not the one under test")
+            return
+        }
+        // Never answers. This is the wedged stop the hint exists for,
+        // and the only shape in which the count can outlive its stop.
+        rig.fake.saveAnswer = .hangs
+        onTeardown("stop-hint rig's held save") { [weak self] in
+            let released = rig.fake.releaseHeldCompletions()
+            self?.log("teardown: released \(released) held save(s) from the stop-hint rig")
+        }
+
+        rig.manager.startDeactivation(of: rig.container)
+        guard await settle(within: 3, until: { rig.container.pendingDisarmCount > 0 }) else {
+            fail("the armed stop never registered a pending disarm — count=\(rig.container.pendingDisarmCount)")
+            return
+        }
+        check(rig.container.stopIsWaitingOnItsRule,
+              "the row says a stop is under way while its own status still shows nothing — status=\(rig.container.status)")
+
+        // The task has started and written the flag down, which is
+        // what sends the next stop through the other branch. Read on
+        // the FAKE's own flag rather than on a sleep, so the step
+        // presses when the state is real rather than when a guess
+        // says it should be.
+        guard await settle(within: 3, until: { !rig.fake.isOnDemandEnabled }) else {
+            skip("environment: the disarm never reached its save, so the second stop would take the same branch as the first")
+            return
+        }
+        rig.manager.startDeactivation(of: rig.container)
+        guard await settle(within: 5, until: {
+            rig.container.status == .inactive || rig.container.status == .deactivating
+        }) else {
+            fail("the second stop did not land — status=\(rig.container.status)")
+            return
+        }
+        // Both readings together are the finding: a count that is
+        // still up, over a row that has already stopped.
+        check(rig.container.pendingDisarmCount > 0,
+              "the first disarm is still parked on a save nobody will answer, which is what makes the reading below worth taking (count=\(rig.container.pendingDisarmCount))")
+        check(!rig.container.stopIsWaitingOnItsRule,
+              "and the row stopped claiming a stop was under way once the stop actually landed — status=\(rig.container.status), count=\(rig.container.pendingDisarmCount)")
     }
 
     /// Brings a rig's row to `.active`, which is the only state the

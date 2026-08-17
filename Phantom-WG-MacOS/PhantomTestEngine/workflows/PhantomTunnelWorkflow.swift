@@ -237,9 +237,13 @@ final class PhantomTunnelWorkflow: TestWorkflow {
             return
         }
         // Three outcomes told apart, because they are three different
-        // facts: nil is the 15s ceiling (a mute extension), a throw is
-        // the wrapper refusing (the old `try?`-only shape folded this
-        // into "returned"), a plain return is a clean one.
+        // facts: nil is this step's own 15s ceiling, a throw is the
+        // wrapper refusing (the old `try?`-only shape folded this into
+        // "returned"), a plain return is a clean one. Nil no longer
+        // means a mute extension, and used to: the wrapper carries a
+        // 10s budget of its own now, so silence arrives here as a
+        // refusal that NAMES itself, and this ceiling is left as the
+        // belt behind it.
         //
         // The throw's REASON is carried out now. It used to be
         // reported as "the send failed before the extension could

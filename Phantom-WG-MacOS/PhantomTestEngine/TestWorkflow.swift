@@ -366,6 +366,21 @@ class TestWorkflow {
     /// being tuned away: 100s sits above that chain, and a net that is
     /// merely PATIENT is still never clipped mid-claim.
     ///
+    /// AND THAT PROMISE NOW HAS ONE EXCEPTION, named rather than
+    /// quietly outgrown. `sweepPlantedTunnel` was written after this
+    /// derivation and is longer than the chain above: its worst case
+    /// bills a grounding, TWO full `remove()` calls rather than one,
+    /// an 8s respawn ping, a payload read, a verified delete with its
+    /// own re-read, and the hidden-survivor probe — past 100s against
+    /// a vault that is slow rather than absent. The four nets that
+    /// call it can therefore have their RESULT dropped on a bad day.
+    /// It is announced, not silent: `runTeardowns` prints a warn
+    /// naming the net, and the member's own detached body still logs.
+    /// Sizing the ceiling to that worst case would blunt the warning
+    /// for every other net, so the exception is written down instead —
+    /// and a sweep net that overruns is read as the vault having been
+    /// slow, not as a cleanup that failed.
+    ///
     /// It is still a BACKSTOP for a wedged call, not a budget. Nothing
     /// above is spent on a healthy run — every ladder in that sum is a
     /// vault that stopped answering — and the bodies are expected to

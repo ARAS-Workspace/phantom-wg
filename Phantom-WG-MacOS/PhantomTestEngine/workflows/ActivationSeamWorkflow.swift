@@ -68,6 +68,8 @@ final class ActivationSeamWorkflow: TestWorkflow {
                          resetNobodyAnswersEndsItsOwnWait),
             WorkflowStep("A Stop On An Armed Row Is Visible While It Waits",
                          stopOnAnArmedRowIsVisibleWhileItWaits),
+            WorkflowStep("A Landed Stop Stops Claiming To Be Under Way",
+                         aLandedStopStopsClaimingToBeUnderWay),
         ]
     }
 
