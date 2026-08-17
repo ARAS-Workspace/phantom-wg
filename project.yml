@@ -82,7 +82,7 @@ targets:
           - "-lresolv"
           - "-Wl,-w"
         SWIFT_VERSION: "5.0"
-        MARKETING_VERSION: "2.1.0"
+        MARKETING_VERSION: "2.1.1"
         CURRENT_PROJECT_VERSION: 2
         CODE_SIGN_IDENTITY: "Developer ID Application"
         PROVISIONING_PROFILE_SPECIFIER: Phantom-WG Mac DeveloperID
@@ -201,7 +201,7 @@ targets:
           - "-lwstunnel_mac"
         ALWAYS_EMBED_SWIFT_STANDARD_LIBRARIES: YES
         SWIFT_VERSION: "5.0"
-        MARKETING_VERSION: "2.1.0"
+        MARKETING_VERSION: "2.1.1"
         CURRENT_PROJECT_VERSION: 2
         LIBRARY_SEARCH_PATHS:
           - "$(PROJECT_DIR)/Libraries/WstunnelKit"
@@ -287,7 +287,7 @@ targets:
         PROVISIONING_PROFILE_SPECIFIER: Phantom-WG Mac SplitTunnel DeveloperID
         ALWAYS_EMBED_SWIFT_STANDARD_LIBRARIES: YES
         SWIFT_VERSION: "5.0"
-        MARKETING_VERSION: "2.1.0"
+        MARKETING_VERSION: "2.1.1"
         CURRENT_PROJECT_VERSION: 2
     info:
       path: PhantomSplitTunnel/Info.plist
@@ -364,7 +364,7 @@ targets:
         PROVISIONING_PROFILE_SPECIFIER: Phantom-WG Mac DNSProxy DeveloperID
         ALWAYS_EMBED_SWIFT_STANDARD_LIBRARIES: YES
         SWIFT_VERSION: "5.0"
-        MARKETING_VERSION: "2.1.0"
+        MARKETING_VERSION: "2.1.1"
         CURRENT_PROJECT_VERSION: 2
     info:
       path: PhantomDNSProxy/Info.plist
