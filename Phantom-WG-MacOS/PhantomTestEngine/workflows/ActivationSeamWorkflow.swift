@@ -432,8 +432,11 @@ final class ActivationSeamWorkflow: TestWorkflow {
 
     /// The stop path's last undriven branch: the disarm save is
     /// REFUSED. Two promises meet here and both must hold — the
-    /// refusal surfaces as `savingFailed` (the RecoverySwitch doc's
-    /// "deliberate honesty" case), and the stop still goes out,
+    /// refusal surfaces as `stopDisarmRefused` (the RecoverySwitch
+    /// doc's "deliberate honesty" case, and its OWN case rather than
+    /// `savingFailed`, because nothing here was being configured and
+    /// the sentence has to name the revival it warns about), and the
+    /// stop still goes out,
     /// because a user's stop outranks our failure to persist a
     /// preference. The flag ends on the re-read store's answer, not on
     /// a guess.
@@ -474,8 +477,8 @@ final class ActivationSeamWorkflow: TestWorkflow {
         let stopped = await settle(within: 3) { fake.stopCount >= 1 }
         check(stopped, "the stop still went out past the refused save (stops=\(fake.stopCount))")
         var surfaced = false
-        if case .savingFailed = container.lastActivationError { surfaced = true }
-        check(surfaced, "the refusal surfaced as savingFailed — lastActivationError=\(container.lastActivationError.map { String(describing: $0) } ?? "nil")")
+        if case .stopDisarmRefused = container.lastActivationError { surfaced = true }
+        check(surfaced, "the refusal surfaced as stopDisarmRefused, the case whose sentence names the rule and the revival rather than a configuration save — lastActivationError=\(container.lastActivationError.map { String(describing: $0) } ?? "nil")")
         check(fake.loadCount > loadsBefore,
               "the refusal ASKED the store rather than reporting the value it had just written (loads=\(fake.loadCount), before=\(loadsBefore))")
         check(fake.isOnDemandEnabled && fake.storedOnDemand,

@@ -79,7 +79,7 @@ extension ActivationSeamWorkflow {
         check(refusedCleared,
               "a refused disarm lowers the count too, rather than leaving the row stopping forever — count=\(refused.container.pendingDisarmCount)")
         var surfaced = false
-        if case .savingFailed = refused.container.lastActivationError { surfaced = true }
+        if case .stopDisarmRefused = refused.container.lastActivationError { surfaced = true }
         check(surfaced,
               "and the refusal still surfaced, so the count came down past a verdict rather than instead of one — \(refused.container.lastActivationError.map { String(describing: $0) } ?? "nil")")
     }
