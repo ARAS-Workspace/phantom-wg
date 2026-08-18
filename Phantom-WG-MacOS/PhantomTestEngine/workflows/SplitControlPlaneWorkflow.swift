@@ -49,11 +49,6 @@ final class SplitControlPlaneWorkflow: TestWorkflow {
     /// steps driving a session the user owns.
     private var doorOpen = false
 
-    /// Highest `queuedLinks` the serialization step sampled. A property
-    /// rather than a local, so the sampler task and the step read one
-    /// place under the same actor.
-    private var queuePeak = 0
-
     /// The configuration the user actually has, captured before
     /// anything is driven so the teardown can put their own bootstrap
     /// blob back.
@@ -131,16 +126,22 @@ final class SplitControlPlaneWorkflow: TestWorkflow {
             return
         }
         check(split.state == .running, "the coordinator is running — state=\(split.state)")
-        check(splitManager.sessionStatus == .connected || splitManager.sessionStatus == .connecting,
-              "and the system raised the proxy session — status=\(splitManager.sessionStatus)")
+        // Polled, not read once. `sessionStatus` is written by the
+        // NEVPNStatusDidChange observer, so the value the instant
+        // `startVPNTunnel()` returns is still the old one — the first
+        // version of this check read `.disconnected` off a session that
+        // came up milliseconds later and called that a failure.
+        let raised = await settle(within: 10) {
+            self.splitManager.sessionStatus == .connected || self.splitManager.sessionStatus == .connecting
+        }
+        check(raised, "and the system raised the proxy session — status=\(splitManager.sessionStatus)")
 
-        // DNSProxy is registered-but-lazy by design (ADR-0003 item 3):
-        // the OS spawns it on the first port-53 flow, so its buffer may
-        // legitimately be silent here. Its receipt is proven by the
-        // edit step below, which pushes over XPC and wakes it.
-        let splitLog = await splitClient.fetchLogs()
-        check(splitLog?.isEmpty == false,
-              "PhantomSplitTunnel is alive and answering its own channel — \(splitLog?.count ?? 0) bytes of its buffer came back")
+        // No buffer claim here. `fetchLogs` returns the extension's RING
+        // BUFFER while the daemon's own lines go to `os_log`, so an
+        // assertion on it would be reading the wrong sink — which is
+        // what the first version of this step did. The receipt belongs
+        // to the edit step below, where the provider writes one.
+        log("session raised; the receipt is measured by the edit step, which is where the provider writes one")
     }
 
     /// The claim the whole corridor was built for: an edit made while
@@ -161,12 +162,21 @@ final class SplitControlPlaneWorkflow: TestWorkflow {
         check(dnsPush == .done, "DNSProxy accepted the push — \(dnsPush.label)")
         check(outcome.bothLanded, "so both landed, which is the only reading that counts as delivered")
 
-        // The receipt, from the extension's own mouth. `applyConfig`
-        // logs the apply on the daemon side, so a buffer that carries
-        // it is the extension saying it took the payload.
+        // The receipt, and it is stronger than the verdict above: the
+        // daemon answers `true` both when it APPLIES a payload and when
+        // it BUFFERS one for a provider that has not spawned, so `done`
+        // alone cannot tell delivery from storage. `logAppDiff` runs
+        // inside the PROVIDER's `applyConfiguration`, so a line carrying
+        // the entry is the provider itself saying it took the list.
+        //
+        // Which is why the payload carries one entry rather than none:
+        // `logAppDiff` writes only what CHANGED, so an empty list pushed
+        // over an empty list is a receipt that can never be written —
+        // the first version of this step asked for one and failed itself
+        // on a narrowing it had chosen two screens earlier.
         let splitLog = await splitClient.fetchLogs() ?? ""
-        check(splitLog.contains("applyConfig"),
-              "and PhantomSplitTunnel's own buffer records the RPC it answered")
+        check(splitLog.contains(Self.probeSigningID),
+              "and PhantomSplitTunnel's PROVIDER logged the entry it took, which is what tells applied apart from buffered")
     }
 
     /// `boot` adopting a live session used to push nothing, so an
@@ -196,22 +206,22 @@ final class SplitControlPlaneWorkflow: TestWorkflow {
         guard doorOpen else { return skip("the door found the feature in use") }
         guard split.state == .running else { return skip("no running session — the start step owns that") }
 
-        queuePeak = 0
-        let sampler = Task { @MainActor in
-            while !Task.isCancelled {
-                self.queuePeak = max(self.queuePeak, self.split.queuedLinks)
-                try? await Task.sleep(for: .milliseconds(20))
-            }
-        }
+        let depthBefore = split.maxChainDepth
         // Two pushes dispatched in one turn. Serialized, the second
         // waits; interleaved, both would be inside the coordinator at
         // once over the same two daemon channels.
         async let first = split.reconfigure(with: probeConfig)
         async let second = split.reconfigure(with: probeConfig)
         let results = await [first, second]
-        sampler.cancel()
 
-        check(queuePeak >= 1, "the chain queued rather than admitting both at once — queued peak=\(queuePeak)")
+        // Read from the chain's OWN high-water mark rather than sampled.
+        // The first version polled `queuedLinks` every 20ms and measured
+        // zero against a chain that WAS serializing — the run's own log
+        // shows the second reconfigure starting only after the first had
+        // finished — so the step failed on its sampling rate and
+        // reported that the product had not queued.
+        check(split.maxChainDepth > depthBefore,
+              "the chain held two links at once rather than admitting both — depth \(depthBefore) → \(split.maxChainDepth)")
         check(results.allSatisfy { $0.bothLanded },
               "and neither push was lost to the other — \(results.map { String(describing: $0) }.joined(separator: ", "))")
     }
@@ -234,20 +244,33 @@ final class SplitControlPlaneWorkflow: TestWorkflow {
 
     // MARK: - Shared
 
-    /// The payload this run drives with: enabled, automatic interface,
-    /// and NO apps.
+    /// A signing identifier no process on any machine carries.
     ///
-    /// The empty list is what makes raising a real session safe — it
-    /// bypasses nothing, so no traffic moves lanes while the control
-    /// plane is measured. It is also why every push here carries the
-    /// SAME bytes, and that costs one claim honestly: with the blob
-    /// unchanged, `persistConfiguration`'s differ-check skips its write,
-    /// so nothing below witnesses that write. What is measured is the
-    /// XPC delivery, which runs on every push regardless. Varying the
-    /// payload would mean listing an app or pinning an interface, and
-    /// both change what the running proxy does to real traffic.
+    /// It is what keeps a real session safe to raise AND leaves a
+    /// receipt to read. `FlowDecisionEngine` matches flows by signing
+    /// identifier, so nothing can ever match this one and no traffic
+    /// changes lanes; but it is still an ENTRY, so the provider's
+    /// `logAppDiff` writes a line for it and the run can prove the
+    /// PROVIDER took the list rather than the daemon merely buffering it.
+    private static let probeSigningID = "com.remrearas.phantom-wg.test-engine.no-such-process"
+
+    /// The payload this run drives with: one entry no process carries,
+    /// automatic interface.
+    ///
+    /// Every push carries the same bytes, and that costs one claim
+    /// honestly: with the blob unchanged, `persistConfiguration`'s
+    /// differ-check skips its write, so nothing here witnesses that
+    /// write. What is measured is delivery, which runs on every push.
     private var probeConfig: SplitTunnelingConfiguration {
-        SplitTunnelingConfiguration(isEnabled: true, interfaceSelection: .auto, apps: [])
+        SplitTunnelingConfiguration(
+            isEnabled: true,
+            interfaceSelection: .auto,
+            apps: [AppEntry(
+                signingIdentifier: Self.probeSigningID,
+                bundleIdentifier: Self.probeSigningID,
+                displayName: "PhantomTestEngine probe"
+            )]
+        )
     }
 
     private func clearBothBuffers() async {

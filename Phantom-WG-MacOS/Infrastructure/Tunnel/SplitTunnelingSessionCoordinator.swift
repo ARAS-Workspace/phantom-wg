@@ -56,6 +56,16 @@ final class SplitTunnelingSessionCoordinator {
     /// that ignored them.
     private(set) var queuedLinks = 0
 
+    /// The most links this chain has ever held at once, recorded WHERE
+    /// IT HAPPENS rather than sampled from outside.
+    ///
+    /// A step that polled `queuedLinks` on a timer measured zero against
+    /// a chain that was demonstrably serializing — the queued window was
+    /// narrower than the sampling interval, so the gauge was right and
+    /// the reading missed it. A high-water mark cannot be missed: the
+    /// link that queues is the one that writes it.
+    private(set) var maxChainDepth = 0
+
     /// Where a chained `performStart` leaves its error. It cannot be
     /// thrown out of the chain directly, and it lives one hop instead of
     /// being swallowed, because `start` is `throws` and its callers
@@ -125,6 +135,7 @@ final class SplitTunnelingSessionCoordinator {
         let task = Task { @MainActor in
             if let predecessor {
                 self.queuedLinks += 1
+                self.maxChainDepth = max(self.maxChainDepth, self.queuedLinks + 1)
                 defer { self.queuedLinks -= 1 }
                 let landed = await Self.waitForPredecessor(predecessor, upTo: ceiling)
                 if !landed {
