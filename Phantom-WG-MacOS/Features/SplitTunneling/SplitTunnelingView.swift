@@ -40,6 +40,16 @@ struct SplitTunnelingView: View {
             .onChange(of: store.configuration.isEnabled) { _, _ in
                 Task { await logStore?.clear() }
             }
+            // A push that did not land used to end in os_log and
+            // nowhere else, so the row appeared in the list and the
+            // screen was indistinguishable from a successful edit.
+            // `.notRunning` is deliberately silent here: with the
+            // feature stopped, an edit not reaching the extensions is
+            // the normal case, not a failure worth interrupting for.
+            .onChange(of: store.lastPush) { _, report in
+                guard let report, case .pushed = report.outcome, !report.outcome.bothLanded else { return }
+                toasts.error(loc.t("split_tunneling_push_failed"))
+            }
             .toastOverlay()
             .modifier(ValidationAlert(
                 showingValidationError: $showingValidationError,

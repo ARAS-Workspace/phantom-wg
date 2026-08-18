@@ -189,6 +189,7 @@
   "split_tunneling_toast_switched_to_interface": "Arayüz %@ olarak ayarlandı",
   "split_tunneling_remove_app": "Kaldır",
   "split_tunneling_reset": "Sıfırla",
+  "split_tunneling_push_failed": "Değişiklik uzantılara ulaştırılamadı. Ayar burada kayıtlı ancak çalışan oturum hâlâ önceki listeyi kullanıyor olabilir.",
   "split_tunneling_reset_confirm_title": "Split-Tunneling Sıfırlansın mı?",
   "split_tunneling_reset_confirm_message": "Seçili tüm uygulamalar temizlenecek ve özellik devre dışı bırakılacak. Yapılandırma geri alınamaz.",
   "split_tunneling_close": "Kapat",

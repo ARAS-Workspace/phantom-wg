@@ -49,37 +49,71 @@ class ProxyConfigDaemonClient {
 
     // MARK: - RPCs
 
+    /// Outcome of one push. The `Bool` this replaces collapsed six
+    /// different stories into a single `false`, and its only caller
+    /// spent them all on one log word: a payload that never left the
+    /// app read the same as one the daemon rejected, and both read the
+    /// same as an answer that never came back.
+    ///
+    /// `.refused` is the daemon ANSWERING no — today that is a decode
+    /// rejection, definitive, and the extension keeps the configuration
+    /// it already had. `.unreachable` is no answer at all, so the push
+    /// MAY have landed with only its reply lost; a caller must not
+    /// report the old configuration as still standing. `.notSent` is
+    /// the one story where the app knows nothing left it: the encode
+    /// failed here, before the wire.
+    ///
+    /// The daemon's `true` still carries two meanings this wire cannot
+    /// separate — applied now, or buffered for a provider that has not
+    /// spawned yet — and both are honest successes for this caller.
+    /// Telling them apart would change the protocol and both extensions.
+    enum Push: Equatable, Sendable {
+        case done
+        case refused
+        case unreachable
+        case notSent
+
+        var label: String {
+            switch self {
+            case .done: return "done"
+            case .refused: return "refused"
+            case .unreachable: return "unreachable"
+            case .notSent: return "not sent"
+            }
+        }
+    }
+
     /// Push a `SplitTunnelingConfiguration` to the proxy provider.
-    /// Returns `false` on encode / transport failure. 5s timeout.
-    @discardableResult
-    func applyConfig(_ configuration: SplitTunnelingConfiguration) async -> Bool {
-        await withRaceTimeout(seconds: 5, fallback: false) {
+    /// 5s timeout, and its expiry is `.unreachable` rather than a flat
+    /// failure, because the payload may still be in flight.
+    func applyConfig(_ configuration: SplitTunnelingConfiguration) async -> Push {
+        await withRaceTimeout(seconds: 5, fallback: Push.unreachable) {
             await self.applyConfigRPC(configuration)
         }
     }
 
-    private func applyConfigRPC(_ configuration: SplitTunnelingConfiguration) async -> Bool {
+    private func applyConfigRPC(_ configuration: SplitTunnelingConfiguration) async -> Push {
         if connection == nil { connect() }
-        guard let conn = connection else { return false }
+        guard let conn = connection else { return .unreachable }
         guard let data = try? JSONEncoder().encode(configuration) else {
-            os_log("applyConfig — encode FAILED", log: log, type: .error)
-            return false
+            os_log("applyConfig — encode FAILED, nothing left the app", log: log, type: .error)
+            return .notSent
         }
 
-        return await withCheckedContinuation { (continuation: CheckedContinuation<Bool, Never>) in
+        return await withCheckedContinuation { (continuation: CheckedContinuation<Push, Never>) in
             let resume = SingleResume(continuation)
             let proxy = conn.remoteObjectProxyWithErrorHandler { [weak self] error in
                 os_log("applyConfig error: %{public}@",
                        log: self?.log ?? OSLog.default, type: .error, error.localizedDescription)
-                resume.finish(false)
+                resume.finish(.unreachable)
             } as? ProxyConfigDaemonProtocol
 
             guard let proxy else {
-                resume.finish(false)
+                resume.finish(.unreachable)
                 return
             }
-            proxy.applyConfig(data) { success in
-                resume.finish(success)
+            proxy.applyConfig(data) { accepted in
+                resume.finish(accepted ? .done : .refused)
             }
         }
     }

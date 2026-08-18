@@ -18,6 +18,23 @@ final class SplitTunnelingStore {
     /// delegated through the coordinator. Weak to avoid cycle.
     @ObservationIgnored weak var sessionCoordinator: SplitTunnelingSessionCoordinator?
 
+    /// The last live push and the count of pushes before it. The
+    /// counter is what makes a REPEAT of the same verdict reach the
+    /// screen: without it an identical second failure would leave the
+    /// value unchanged, `onChange` would not fire, and the second
+    /// failure would be silent exactly like every failure was before.
+    struct PushReport: Equatable {
+        let outcome: SplitTunnelingSessionCoordinator.ReconfigureOutcome
+        let sequence: Int
+    }
+
+    /// Nil until the first live push. Only edits made while the session
+    /// is running produce one; `.notRunning` is recorded too, because
+    /// an edit that never reached the extensions is a fact the screen
+    /// may want, not an error to hide.
+    private(set) var lastPush: PushReport?
+    @ObservationIgnored private var pushSequence = 0
+
     // MARK: - Init
 
     /// Production: no argument — persists to the App Group container.
@@ -122,8 +139,11 @@ final class SplitTunnelingStore {
     /// stopped — edits stick in storage and apply on next start.
     private func scheduleReload() {
         let snapshot = configuration
-        Task { [weak sessionCoordinator] in
-            await sessionCoordinator?.reconfigure(with: snapshot)
+        Task { [weak self, weak sessionCoordinator] in
+            guard let outcome = await sessionCoordinator?.reconfigure(with: snapshot),
+                  let self else { return }
+            self.pushSequence += 1
+            self.lastPush = PushReport(outcome: outcome, sequence: self.pushSequence)
         }
     }
 

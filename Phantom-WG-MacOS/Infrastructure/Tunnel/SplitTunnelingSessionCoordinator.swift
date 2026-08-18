@@ -149,27 +149,54 @@ final class SplitTunnelingSessionCoordinator {
         log("purgeForUninstall: proxy preference entries removed")
     }
 
+    /// What a live config change actually did. The caller needs the two
+    /// verdicts separately because they fail into different worlds: a
+    /// SplitTunnel push that did not land leaves listed apps inside the
+    /// tunnel, while a DNSProxy push that did not land leaves their DNS
+    /// going to the tunnel's resolver — the asymmetric routing this
+    /// architecture exists to prevent.
+    ///
+    /// `.notRunning` is not a failure and not a success: the payload is
+    /// on disk and the next `start` carries it. It is reported rather
+    /// than swallowed because the window it names is reachable — a user
+    /// editing the list while the feature is still coming up lands here
+    /// and nothing tells them their edit did not reach the extensions.
+    enum ReconfigureOutcome: Equatable {
+        case notRunning
+        case pushed(split: ProxyConfigDaemonClient.Push, dns: ProxyConfigDaemonClient.Push)
+
+        /// True only when BOTH extensions answered yes. `.unreachable`
+        /// is deliberately not counted as landed even though the push
+        /// may have arrived, because a caller that reports state must
+        /// not claim what it cannot read.
+        var bothLanded: Bool {
+            if case .pushed(let split, let dns) = self { return split == .done && dns == .done }
+            return false
+        }
+    }
+
     /// Live config change. App pushes the new payload to both
     /// extensions independently via XPC `applyConfig` — SplitTunnel
     /// and DNSProxy each through their own daemon client.
     /// `dns.enable` is also called to persist the fresh
     /// `providerConfiguration` so future bootstraps read the latest
     /// blob. No-op when stopped.
-    func reconfigure(with config: SplitTunnelingConfiguration) async {
+    func reconfigure(with config: SplitTunnelingConfiguration) async -> ReconfigureOutcome {
         guard state == .running else {
-            log("reconfigure: state=\(state) → no-op (config persisted, applied on next start)")
-            return
+            log("reconfigure: state=\(state) → no push (config persisted, applied on next start)")
+            return .notRunning
         }
         log("reconfigure: XPC applyConfig → SplitTunnel")
-        let splitPushed = await splitDaemonClient.applyConfig(config)
-        log("reconfigure: SplitTunnel applyConfig \(splitPushed ? "OK" : "FAILED")")
+        let split = await splitDaemonClient.applyConfig(config)
+        log("reconfigure: SplitTunnel applyConfig \(split.label)")
 
         log("reconfigure: XPC applyConfig → DNSProxy")
-        let pushed = await dnsDaemonClient.applyConfig(config)
-        log("reconfigure: DNSProxy applyConfig \(pushed ? "OK" : "FAILED")")
+        let dnsPush = await dnsDaemonClient.applyConfig(config)
+        log("reconfigure: DNSProxy applyConfig \(dnsPush.label)")
 
         try? await dns.enable(with: config)
         log("reconfigure: DNSProxy providerConfiguration persisted")
+        return .pushed(split: split, dns: dnsPush)
     }
 
     // MARK: - Logging
