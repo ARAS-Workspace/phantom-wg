@@ -18,12 +18,22 @@ enum TestCatalog {
             RecoverySwitchWorkflow(),
             UnreachableWorkflow(),
             ExtensionGateWorkflow(),
-            // Fabricated end of the list: this one and the gate above
+            // Fabricated PAIR, no longer the end of the list: this one
+            // and the gate above
             // touch neither the real vault nor the system's
             // preferences, so their position cannot perturb a pass that
             // does — and nothing they leave can reach one, because they
             // leave nothing.
             TunnelEditWorkflow(),
+            // And the real end of the list, for the opposite reason to
+            // the two above: this one drives the system's PREFERENCES
+            // on purpose — it raises an actual proxy session to measure
+            // whether configuration reaches two independently spawned
+            // extensions. Nothing may run after it and still claim to
+            // have found the machine undisturbed. It gives the feature
+            // back in its teardown, and it refuses to run at all when
+            // the user already has split-tunneling in use.
+            SplitControlPlaneWorkflow(),
             // ← register new workflows here
         ]
     }
