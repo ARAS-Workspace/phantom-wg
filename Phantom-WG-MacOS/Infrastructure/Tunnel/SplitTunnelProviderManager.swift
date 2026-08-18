@@ -88,9 +88,10 @@ class SplitTunnelProviderManager {
     ///    configuration is stale`, which is why the DNS manager's own
     ///    doc states the same rule for every save it makes.
     /// 2. It writes only when the encoded blob actually DIFFERS from
-    ///    the one on disk. Most edits leave it identical, and a
-    ///    preference write under a live session is the one cost worth
-    ///    avoiding when it buys nothing.
+    ///    the one on disk. A real edit always differs; what this skips
+    ///    is the repeat of an identical payload — a boot realign over an
+    ///    unchanged list, or two pushes of the same bytes — where a
+    ///    preference write under a live session buys nothing.
     /// 3. It refuses to write to a disabled entry. `isEnabled` is read
     ///    back from disk, not assumed, so a persist racing a `disable`
     ///    cannot resurrect the entry the stop just switched off.

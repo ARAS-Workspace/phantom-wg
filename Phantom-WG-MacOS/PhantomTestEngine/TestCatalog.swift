@@ -33,8 +33,9 @@ enum TestCatalog {
             // have found the machine undisturbed. It gives the feature
             // back in its teardown, and it refuses to run at all when
             // the user already has split-tunneling in use.
+            // ← register new workflows here, ABOVE the one below: it
+            // has to stay last.
             SplitControlPlaneWorkflow(),
-            // ← register new workflows here
         ]
     }
 }

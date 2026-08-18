@@ -146,7 +146,16 @@ struct SplitTunnelingView: View {
                         onSwitchToAuto: { store.setInterfaceSelection(.auto) },
                         onDisable: { store.setEnabled(false) }
                     )
-                    .disabled(editorsDisabled || transitionInFlight)
+                    // Gated like the master toggle, not like an editor.
+                    // `editorsDisabled` was too strict here: it reads
+                    // `!= .running`, so with the intent ON and the
+                    // session down — exactly the state a failed start
+                    // leaves — the one control offering a way OUT of the
+                    // feature was dead, while the toggle beside it was
+                    // live. "Switch to Auto" is an edit and keeps the
+                    // editor rule; "Disable Feature" drives the
+                    // lifecycle and keeps the lifecycle rule.
+                    .disabled(transitionInFlight)
                     .listRowInsets(EdgeInsets())
                     .listRowBackground(Color.clear)
                 }

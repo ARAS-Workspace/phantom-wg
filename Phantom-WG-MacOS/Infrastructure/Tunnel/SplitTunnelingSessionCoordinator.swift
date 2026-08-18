@@ -46,6 +46,11 @@ final class SplitTunnelingSessionCoordinator {
     /// the feature would hang on its first press.
     @ObservationIgnored private var inFlight: Task<Void, Never>?
 
+    /// Which link registered the tail last. `Task` is a value type, so
+    /// there is no identity to compare — a generation is how a link
+    /// knows whether it is still the tail and may therefore clear it.
+    @ObservationIgnored private var chainGeneration = 0
+
     /// Links waiting for their turn, observed.
     ///
     /// `state` cannot answer this: a queued link has not run a line of
@@ -64,6 +69,11 @@ final class SplitTunnelingSessionCoordinator {
     /// narrower than the sampling interval, so the gauge was right and
     /// the reading missed it. A high-water mark cannot be missed: the
     /// link that queues is the one that writes it.
+    ///
+    /// What it counts is a link that had to WAIT for a predecessor still
+    /// in flight. It used to overcount, because the tail was never
+    /// released and a finished predecessor still made its successor
+    /// register as queued.
     private(set) var maxChainDepth = 0
 
     /// Where a chained `performStart` leaves its error. It cannot be
@@ -144,8 +154,18 @@ final class SplitTunnelingSessionCoordinator {
             }
             await operation()
         }
+        chainGeneration += 1
+        let generation = chainGeneration
         inFlight = task
         await task.value
+        // Released once it is done, and that is not housekeeping. Left
+        // set, a COMPLETED predecessor still made the next call count
+        // itself as queued — the depth this publishes was inflated by
+        // one for every link after the first, and the run reported
+        // "2 → 3" for two dispatched operations. It also means a lone
+        // call no longer starts a ceiling sleeper it has nothing to
+        // wait for.
+        if chainGeneration == generation { inFlight = nil }
     }
 
     @ObservationIgnored private let split: SplitTunnelProviderManager
@@ -294,10 +314,31 @@ final class SplitTunnelingSessionCoordinator {
         } catch {
             log("start: failed — \(error.localizedDescription); rolling back")
             state = .stopping
-            try? await split.disable()
-            try? await dns.disable()
+            // Both results are read. `dns.enable` runs FIRST, so a start
+            // that fails on the split half has already registered
+            // DNSProxy — and this run proved the rollback's own save can
+            // be refused by the same class that broke the start
+            // (`NEConfigurationErrorDomain Code=10`). Announcing
+            // `.stopped` over two swallowed refusals would leave DNSProxy
+            // enabled on its own: a listed app's DNS going to the
+            // physical resolver while its data stays in the tunnel,
+            // which is the asymmetry this architecture exists to
+            // prevent, and nothing anywhere would say so.
+            var rolled: [String] = []
+            do {
+                try await split.disable()
+                rolled.append("SplitTunnel down")
+            } catch {
+                rolled.append("SplitTunnel STILL UP (\(error.localizedDescription))")
+            }
+            do {
+                try await dns.disable()
+                rolled.append("DNSProxy down")
+            } catch {
+                rolled.append("DNSProxy STILL REGISTERED (\(error.localizedDescription))")
+            }
             state = .stopped
-            log("start: state = .stopped")
+            log("start: rollback → \(rolled.joined(separator: ", ")); state = .stopped")
             throw error
         }
     }
@@ -374,9 +415,10 @@ final class SplitTunnelingSessionCoordinator {
     /// Live config change. App pushes the new payload to both
     /// extensions independently via XPC `applyConfig` — SplitTunnel
     /// and DNSProxy each through their own daemon client.
-    /// `dns.enable` is also called to persist the fresh
-    /// `providerConfiguration` so future bootstraps read the latest
-    /// blob. No-op when stopped.
+    /// BOTH bootstrap blobs are refreshed behind the pushes — DNS
+    /// through `enable`, SplitTunnel through `persistConfiguration` —
+    /// so a respawn reads the latest list whichever extension it is.
+    /// No-op when stopped.
     func reconfigure(with config: SplitTunnelingConfiguration) async -> ReconfigureOutcome {
         var outcome = ReconfigureOutcome.notRunning
         await serialized { [weak self] in

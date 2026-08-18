@@ -230,6 +230,13 @@ extension TunnelsManager {
                     tunnel.lastActivationError = .stopDisarmRefused(systemError: disarmError)
                 }
             case .done:
+                // An earlier stop may have left its refused-disarm
+                // caption on this row; this pass got the rule down, so
+                // the sentence warning that the system may bring the
+                // tunnel back is no longer about anything. Same call the
+                // armed branch makes for the same reason, and its own
+                // ledger test keeps a rung's verdict safe.
+                tunnel.clearStopRefusalOnceDisarmed()
                 // The rule is gone; if it revived the session while the
                 // repair was in flight, the user's stop still stands —
                 // it was withdrawn before any of this and nothing since

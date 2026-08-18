@@ -15,12 +15,18 @@ import Foundation
 ///
 /// Two narrowings keep that safe.
 ///
-/// The configurations pushed here carry an EMPTY app list. The
-/// coordinator's API is config-in, so a run can drive it without
-/// touching `SplitTunnelingStore` — the user's own list and file are
-/// never read for a decision and never written. An empty list also
-/// means the sessions this run raises bypass nothing at all, so no
-/// traffic changes lanes while it runs.
+/// The configurations pushed here list only signing identifiers that no
+/// process on any machine carries, so `FlowDecisionEngine` can never
+/// match one and no application's traffic changes lanes. That claim is
+/// narrower than it first reads and the difference is stated rather than
+/// implied: raising a DNS proxy session puts the machine's DNS through
+/// the extension's relay whatever the list says, and unmatched queries
+/// go on to the system resolver unpinned. What the list buys is that no
+/// APP is bypassed — not that the extension sits idle.
+///
+/// The coordinator's API is config-in, so a run drives it without
+/// consulting `SplitTunnelingStore` for any decision; the user's own
+/// configuration is read once, to put it back.
 ///
 /// And it goes LAST in the catalog, after the two fabricated workflows
 /// that used to be the tail. Those touch neither the real vault nor the
