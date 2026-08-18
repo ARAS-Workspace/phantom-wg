@@ -97,12 +97,29 @@ struct SplitTunnelingView: View {
 
             // Toggle = mirror of coordinator state; flips delegate
             // through the store to the coordinator's lifecycle.
+            // Locked while a transition is in flight. The toggle reads
+            // `.starting` as ON, so the seconds `saveToPreferences`
+            // spends inside the system's proxy-permission dialog look
+            // exactly like a finished start — and a second tap there
+            // does not cancel anything, it dispatches a `stop` that
+            // interleaves with the `start` still running, over the same
+            // `NEDNSProxyManager.shared()` singleton. The documented
+            // ending of that race is SplitTunnel up with DNSProxy down:
+            // the port-53 carve-out open with nothing behind it, so a
+            // listed app's data leaves the physical interface while its
+            // DNS goes to the tunnel's resolver.
+            //
+            // This closes the reachable trigger, not the race. The
+            // coordinator still accepts `start` while `.stopping`; that
+            // guard belongs with the in-flight handle the tunnel side
+            // already carries.
             SplitTunnelingEnableSection(
                 isEnabled: Binding(
                     get: { sessionCoordinator.state.isUserVisiblyActive },
                     set: { store.setEnabled($0) }
                 )
             )
+            .disabled(sessionCoordinator.state == .starting || sessionCoordinator.state == .stopping)
 
             SplitTunnelingInterfaceSection(
                 selection: Binding(
