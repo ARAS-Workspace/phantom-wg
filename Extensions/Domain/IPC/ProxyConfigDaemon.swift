@@ -34,11 +34,26 @@ final class ProxyConfigDaemon: NSObject, NSXPCListenerDelegate, ProxyConfigDaemo
 
     /// Live provider attached at `startProxy`. Weak so `stopProxy`
     /// leaves no dangling pointer.
+    ///
+    /// Guarded by `pendingLock`, the SAME lock as `pendingConfig`, and
+    /// that pairing is the whole point. The two fields answer one
+    /// question — "is there someone to hand this payload to, or does it
+    /// wait?" — and reading one outside the lock that guards the other
+    /// let both answers be no: `applyConfig` read this as nil on the
+    /// XPC queue, `attach` set it and drained an empty buffer on the
+    /// provider's thread, and only then did `applyConfig` store its
+    /// payload, where nothing would ever look again. The app was told
+    /// `true`.
     private weak var provider: ProxyConfigReceiver?
 
     /// Payload buffered while no provider was attached (lazy-spawn
     /// window). Replayed at the next `attach()`.
     private var pendingConfig: Data?
+
+    /// Guards `provider` and `pendingConfig` together. `applyConfiguration`
+    /// is never called while it is held — a provider is free to call back
+    /// into this daemon, and holding the lock across that call is the one
+    /// way to turn this fix into a deadlock.
     private let pendingLock = NSLock()
 
     init(machServiceName: String, subsystem: String) {
@@ -53,13 +68,15 @@ final class ProxyConfigDaemon: NSObject, NSXPCListenerDelegate, ProxyConfigDaemo
     /// Drains any config buffered during the lazy-spawn window so the
     /// provider boots with the live App-pushed payload.
     func attach(provider: ProxyConfigReceiver) {
-        self.provider = provider
-        os_log("provider attached", log: log, type: .default)
-
+        // Publishing the provider and taking the buffer are ONE step.
+        // Split apart, a push landing between them is stored after the
+        // only reader has already looked.
         pendingLock.lock()
+        self.provider = provider
         let data = pendingConfig
         pendingConfig = nil
         pendingLock.unlock()
+        os_log("provider attached", log: log, type: .default)
 
         guard let data else { return }
         do {
@@ -76,8 +93,8 @@ final class ProxyConfigDaemon: NSObject, NSXPCListenerDelegate, ProxyConfigDaemo
     /// Drops the provider reference and clears the log buffer so the
     /// next session starts with a fresh log surface.
     func detach() {
-        self.provider = nil
         pendingLock.lock()
+        self.provider = nil
         pendingConfig = nil
         pendingLock.unlock()
         RingBufferLogger.shared.clear()
@@ -136,10 +153,16 @@ final class ProxyConfigDaemon: NSObject, NSXPCListenerDelegate, ProxyConfigDaemo
     func applyConfig(_ data: Data, reply: @escaping (Bool) -> Void) {
         os_log("RPC applyConfig (%{public}d bytes)", log: log, type: .default, data.count)
 
-        guard let provider = provider else {
-            pendingLock.lock()
-            pendingConfig = data
-            pendingLock.unlock()
+        // One decision under one lock: either a provider is published
+        // and this payload goes straight to it, or there is none and the
+        // payload becomes the buffer `attach` will drain. Deciding
+        // outside the lock is what let a push fall between the two.
+        pendingLock.lock()
+        let attached = provider
+        if attached == nil { pendingConfig = data }
+        pendingLock.unlock()
+
+        guard let attached else {
             os_log("applyConfig — no provider yet, buffered for attach", log: log, type: .default)
             reply(true)
             return
@@ -147,7 +170,8 @@ final class ProxyConfigDaemon: NSObject, NSXPCListenerDelegate, ProxyConfigDaemo
 
         do {
             let config = try JSONDecoder().decode(SplitTunnelingConfiguration.self, from: data)
-            provider.applyConfiguration(config)
+            // Outside the lock, deliberately: see `pendingLock`.
+            attached.applyConfiguration(config)
             os_log("applyConfig — applied apps=%{public}d", log: log, type: .default, config.apps.count)
             reply(true)
         } catch {
