@@ -29,6 +29,77 @@ final class SplitTunnelingSessionCoordinator {
 
     private(set) var state: State = .stopped
 
+    /// Tail of the lifecycle chain. Every public entry point links onto
+    /// it, so two transitions can never interleave — the guards alone
+    /// could not stop that: `start` accepted `.stopping` and `stop`
+    /// accepted `.starting`, and each one's first `await` handed the
+    /// actor over to the other, both of them writing the same
+    /// `NEDNSProxyManager.shared()`.
+    ///
+    /// Serialized rather than rejected, unlike the extension gate's
+    /// second-press rule, because these come from a toggle: the user's
+    /// LAST intent has to be the one that stands, and refusing it would
+    /// leave the screen describing a session nobody asked for.
+    ///
+    /// The link is captured BEFORE the new task is stored. Assigning
+    /// first and reading after would make every task await ITSELF and
+    /// the feature would hang on its first press.
+    @ObservationIgnored private var inFlight: Task<Void, Never>?
+
+    /// Where a chained `performStart` leaves its error. It cannot be
+    /// thrown out of the chain directly, and it lives one hop instead of
+    /// being swallowed, because `start` is `throws` and its callers
+    /// decide what to do with a failure.
+    @ObservationIgnored private var chainedStartError: Error?
+
+    /// How long a link may wait on the one before it.
+    ///
+    /// The chain needs a ceiling because neither `enable` nor `disable`
+    /// has one: `saveToPreferences` raises the system's proxy-permission
+    /// prompt and its completion arrives when the user answers, so an
+    /// unanswered dialog suspends a link indefinitely. Without a ceiling
+    /// the queue behind it includes `purgeForUninstall`, and an uninstall
+    /// held hostage by a dialog nobody answered is a worse ending than
+    /// the interleaving this chain exists to prevent.
+    ///
+    /// So the ceiling proceeds rather than fails: after it, the waiting
+    /// link runs anyway and says so. That is today's behaviour restored
+    /// for the one case where something has already been stuck for a
+    /// minute — not a new hazard, just the old one no longer able to
+    /// take the app with it.
+    ///
+    /// Sixty seconds is the gate's `deactivationBudget`, deliberately
+    /// the same number for the same reason: it is what this app is
+    /// willing to spend on an unanswered dialog. Per instance rather
+    /// than a type constant, so a step proving the ceiling ENDS a wait
+    /// can shorten it instead of sitting for a minute.
+    @ObservationIgnored private let chainCeiling: Duration
+
+    private func serialized(_ operation: @MainActor @escaping () async -> Void) async {
+        let predecessor = inFlight
+        let ceiling = chainCeiling
+        let task = Task { @MainActor in
+            if let predecessor {
+                let waited = await withTaskGroup(of: Bool.self, returning: Bool.self) { group in
+                    group.addTask { await predecessor.value; return true }
+                    group.addTask {
+                        try? await Task.sleep(for: ceiling)
+                        return false
+                    }
+                    let first = await group.next() ?? true
+                    group.cancelAll()
+                    return first
+                }
+                if !waited {
+                    self.log("chain: predecessor outlived its ceiling — proceeding anyway")
+                }
+            }
+            await operation()
+        }
+        inFlight = task
+        await task.value
+    }
+
     @ObservationIgnored private let split: SplitTunnelProviderManager
     @ObservationIgnored private let dns: DNSProxyProviderManager
     @ObservationIgnored private let dnsDaemonClient: DNSProxyDaemonClient
@@ -46,8 +117,10 @@ final class SplitTunnelingSessionCoordinator {
         dns: DNSProxyProviderManager,
         dnsDaemonClient: DNSProxyDaemonClient,
         splitDaemonClient: SplitTunnelDaemonClient,
-        state: State = .stopped
+        state: State = .stopped,
+        chainCeiling: Duration = .seconds(60)
     ) {
+        self.chainCeiling = chainCeiling
         self.split = split
         self.dns = dns
         self.dnsDaemonClient = dnsDaemonClient
@@ -68,8 +141,19 @@ final class SplitTunnelingSessionCoordinator {
     /// user just changed away from, and the realign would author the
     /// divergence it runs to repair.
     @discardableResult
-    func boot(freshConfig: @MainActor () -> SplitTunnelingConfiguration) async -> ReconfigureOutcome {
-        let booted = freshConfig()
+    func boot(freshConfig: @MainActor @escaping () -> SplitTunnelingConfiguration) async -> ReconfigureOutcome {
+        var outcome = ReconfigureOutcome.notRunning
+        let snapshot = freshConfig()
+        await serialized { [weak self] in
+            outcome = await self?.performBoot(booted: snapshot, freshConfig: freshConfig) ?? .notRunning
+        }
+        return outcome
+    }
+
+    private func performBoot(
+        booted: SplitTunnelingConfiguration,
+        freshConfig: @MainActor @escaping () -> SplitTunnelingConfiguration
+    ) async -> ReconfigureOutcome {
         log("boot: start (persisted intent isEnabled=\(booted.isEnabled))")
         await split.load()
         await dns.load()
@@ -111,7 +195,9 @@ final class SplitTunnelingSessionCoordinator {
         case .disconnected, .disconnecting, .invalid:
             if config.isEnabled {
                 log("boot: persisted intent ON, no live session → start()")
-                try? await start(with: config)
+                // `performStart`, not `start`: this already holds the
+                // chain link and re-entering it would deadlock.
+                try? await performStart(with: config)
             } else {
                 log("boot: persisted intent OFF → state = .stopped")
                 state = .stopped
@@ -129,6 +215,18 @@ final class SplitTunnelingSessionCoordinator {
     /// lazy" — the OS spawns it when SplitTunnel routes a port-53
     /// flow to it. Failure rolls back to `.stopped`.
     func start(with config: SplitTunnelingConfiguration) async throws {
+        chainedStartError = nil
+        await serialized { [weak self] in
+            guard let self else { return }
+            do { try await self.performStart(with: config) } catch { self.chainedStartError = error }
+        }
+        if let error = chainedStartError {
+            chainedStartError = nil
+            throw error
+        }
+    }
+
+    private func performStart(with config: SplitTunnelingConfiguration) async throws {
         switch state {
         case .running, .starting:
             log("start: already \(state) — no-op")
@@ -159,6 +257,10 @@ final class SplitTunnelingSessionCoordinator {
     /// Master toggle OFF. SplitTunnel stops first so the port-53
     /// carve-out is gone before DNSProxy unwinds.
     func stop() async {
+        await serialized { [weak self] in await self?.performStop() }
+    }
+
+    private func performStop() async {
         switch state {
         case .stopped, .stopping:
             log("stop: already \(state) — no-op")
@@ -183,10 +285,16 @@ final class SplitTunnelingSessionCoordinator {
     /// survivor is inert without its extension, and the next enable
     /// replaces it wholesale.
     func purgeForUninstall() async {
-        await stop()
-        await split.remove()
-        await dns.remove()
-        log("purgeForUninstall: proxy preference entries removed")
+        // One link for the whole teardown, and `performStop` rather
+        // than `stop`: a chained call that re-entered the chain would
+        // await the link it is already holding and never return.
+        await serialized { [weak self] in
+            guard let self else { return }
+            await self.performStop()
+            await self.split.remove()
+            await self.dns.remove()
+            self.log("purgeForUninstall: proxy preference entries removed")
+        }
     }
 
     /// What a live config change actually did. The caller needs the two
@@ -222,6 +330,21 @@ final class SplitTunnelingSessionCoordinator {
     /// `providerConfiguration` so future bootstraps read the latest
     /// blob. No-op when stopped.
     func reconfigure(with config: SplitTunnelingConfiguration) async -> ReconfigureOutcome {
+        var outcome = ReconfigureOutcome.notRunning
+        await serialized { [weak self] in
+            outcome = await self?.performReconfigure(with: config) ?? .notRunning
+        }
+        return outcome
+    }
+
+    /// Chained, and that is what closes a defect the guard could not:
+    /// the `state == .running` check was read ONCE and then the method
+    /// spent up to two five-second pushes plus a preference write
+    /// suspended, so a `stop()` could complete in the middle and the
+    /// tail's `dns.enable` would re-register DNSProxy behind it —
+    /// leaving the screen saying stopped, SplitTunnel down, and
+    /// DNSProxy enabled with its own bootstrap list.
+    private func performReconfigure(with config: SplitTunnelingConfiguration) async -> ReconfigureOutcome {
         guard state == .running else {
             log("reconfigure: state=\(state) → no push (config persisted, applied on next start)")
             return .notRunning
