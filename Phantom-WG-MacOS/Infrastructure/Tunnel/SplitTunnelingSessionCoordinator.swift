@@ -350,16 +350,39 @@ final class SplitTunnelingSessionCoordinator {
             return .notRunning
         }
         log("reconfigure: XPC applyConfig → SplitTunnel")
-        let split = await splitDaemonClient.applyConfig(config)
-        log("reconfigure: SplitTunnel applyConfig \(split.label)")
+        let splitPush = await splitDaemonClient.applyConfig(config)
+        log("reconfigure: SplitTunnel applyConfig \(splitPush.label)")
 
         log("reconfigure: XPC applyConfig → DNSProxy")
         let dnsPush = await dnsDaemonClient.applyConfig(config)
         log("reconfigure: DNSProxy applyConfig \(dnsPush.label)")
 
-        try? await dns.enable(with: config)
-        log("reconfigure: DNSProxy providerConfiguration persisted")
-        return .pushed(split: split, dns: dnsPush)
+        // Both bootstrap blobs, not just DNS's. This was the asymmetry:
+        // the DNS blob was refreshed on every edit while SplitTunnel's
+        // stayed frozen at the last `start`, so the two extensions
+        // disagreed the moment either respawned — and they respawn
+        // without the app in the loop. `persistConfiguration` rather
+        // than `enable` because `enable` ends in `startVPNTunnel()`.
+        //
+        // Logged by outcome. The old line announced the write
+        // unconditionally over a `try?` that swallowed it, so someone
+        // diagnosing a stale blob read the log and saw a write that
+        // never happened.
+        var persisted: [String] = []
+        do {
+            try await split.persistConfiguration(config)
+            persisted.append("SplitTunnel ok")
+        } catch {
+            persisted.append("SplitTunnel FAILED (\(error.localizedDescription))")
+        }
+        do {
+            try await dns.enable(with: config)
+            persisted.append("DNSProxy ok")
+        } catch {
+            persisted.append("DNSProxy FAILED (\(error.localizedDescription))")
+        }
+        log("reconfigure: bootstrap blobs → \(persisted.joined(separator: ", "))")
+        return .pushed(split: splitPush, dns: dnsPush)
     }
 
     // MARK: - Logging
