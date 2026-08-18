@@ -81,6 +81,7 @@ enum AXID {
         static let addAppButton      = "split-tunneling.add-app-button"
         static let emptyState        = "split-tunneling.empty-state"
         static let resetButton       = "split-tunneling.reset-button"
+        static let pushFailedNotice  = "split-tunneling.push-failed-notice"
         static let resetConfirm      = "split-tunneling.reset-confirm.confirm"
         static let resetCancel       = "split-tunneling.reset-confirm.cancel"
         static let errorAlertOK      = "split-tunneling.error-alert.ok"

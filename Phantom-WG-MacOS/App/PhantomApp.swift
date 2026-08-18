@@ -169,7 +169,7 @@ struct PhantomApp: App {
                 // extensions are actually doing, not a separate
                 // persisted bool.
                 guard coordinator.allReady else { return }
-                await sessionCoordinator.boot(with: splitTunnelingStore.configuration)
+                await sessionCoordinator.boot { splitTunnelingStore.configuration }
             }
         }
         .windowResizability(.contentSize)

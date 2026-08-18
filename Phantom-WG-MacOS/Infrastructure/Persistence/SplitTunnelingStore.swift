@@ -186,7 +186,10 @@ final class SplitTunnelingStore {
             configuration.apps = survivors
             persist()
             // The one mutation path that used to stop at disk. Every
-            // other writer here reloads, and skipping it meant a
+            // other writer that CHANGES the app list or the interface
+            // reloads — `reset` and `purgeForUninstall` do not, and
+            // deliberately: one drives `stop()` and the other is tearing
+            // the feature down. Skipping it here meant a
             // dropped entry left the screen and the file while both
             // extensions kept bypassing that signing identity — the
             // user reads "no longer routed outside the tunnel" and the

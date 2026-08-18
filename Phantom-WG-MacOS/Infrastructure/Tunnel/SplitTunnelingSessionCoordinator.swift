@@ -60,17 +60,26 @@ final class SplitTunnelingSessionCoordinator {
     /// Called once after the extension gate clears. Adopts the live
     /// session status; honors `config.isEnabled` only when nothing is
     /// running.
-    func boot(with config: SplitTunnelingConfiguration) async {
-        log("boot: start (persisted intent isEnabled=\(config.isEnabled))")
+    /// `freshConfig` is read AFTER the two loads rather than captured
+    /// before them. The loads are real awaits, and an edit accepted in
+    /// that window reaches disk while `reconfigure` refuses it — the
+    /// state is not `.running` yet — so pushing the snapshot this
+    /// method started with would hand both extensions the list the
+    /// user just changed away from, and the realign would author the
+    /// divergence it runs to repair.
+    @discardableResult
+    func boot(freshConfig: @MainActor () -> SplitTunnelingConfiguration) async -> ReconfigureOutcome {
+        let booted = freshConfig()
+        log("boot: start (persisted intent isEnabled=\(booted.isEnabled))")
         await split.load()
         await dns.load()
+        let config = freshConfig()
         let splitStatus = split.sessionStatus
         log("boot: split.sessionStatus=\(splitStatus)")
 
         switch splitStatus {
         case .connected, .connecting:
             log("boot: SplitTunnel session already live → adopting .running")
-            state = .running
             // The adopted session may be running a list this app never
             // sent it. SplitTunnel's bootstrap blob is written only by
             // `enable`, and `enable` is called only from `start`, so an
@@ -84,9 +93,21 @@ final class SplitTunnelingSessionCoordinator {
             // Deliberately NOT `reconfigure`: that also persists the
             // DNS `providerConfiguration`, and a boot has no business
             // writing to the preference layer just to read it back.
+            // Pushed BEFORE `state = .running` on purpose. Adopting
+            // first would open a window where `reconfigure` passes its
+            // `.running` guard and races these two writes over the same
+            // two daemons — a repair arm that produces the divergence
+            // it exists to close.
             let splitPush = await splitDaemonClient.applyConfig(config)
             let dnsRealign = await dnsDaemonClient.applyConfig(config)
             log("boot: realign push → SplitTunnel \(splitPush.label), DNSProxy \(dnsRealign.label)")
+            state = .running
+            // Reported, not just logged. A realign that did not land is
+            // the same class `Push` was introduced for: the extensions
+            // keep running the list from the last `start`, and ending
+            // in os_log would be exactly the silence this campaign
+            // removed everywhere else.
+            return .pushed(split: splitPush, dns: dnsRealign)
         case .disconnected, .disconnecting, .invalid:
             if config.isEnabled {
                 log("boot: persisted intent ON, no live session → start()")
@@ -95,6 +116,9 @@ final class SplitTunnelingSessionCoordinator {
                 log("boot: persisted intent OFF → state = .stopped")
                 state = .stopped
             }
+            // Neither arm pushed: `start` carries the payload through
+            // `enable`, and the OFF arm has nothing to deliver.
+            return .notRunning
         }
     }
 

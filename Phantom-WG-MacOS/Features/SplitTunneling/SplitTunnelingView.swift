@@ -61,6 +61,21 @@ struct SplitTunnelingView: View {
             ))
     }
 
+    /// A transition is in flight, so nothing that drives the lifecycle
+    /// may be pressed. There are THREE buttons behind `stop()` on this
+    /// screen, not one: the master toggle, the banner's "Disable
+    /// Feature", and the destructive Reset. Locking only the toggle
+    /// left the other two live, which is to say it left the race the
+    /// lock was written for fully reachable — a second press during
+    /// `.starting` dispatches a `stop` that interleaves with the
+    /// `start` still running, both writing the same
+    /// `NEDNSProxyManager.shared()`, and the documented ending is
+    /// SplitTunnel up with DNSProxy down: the port-53 carve-out open
+    /// with nothing behind it.
+    private var transitionInFlight: Bool {
+        sessionCoordinator.state == .starting || sessionCoordinator.state == .stopping
+    }
+
     /// Editors follow the SESSION, not the persisted intent — one
     /// source, the same one the toggle above reads.
     ///
@@ -77,19 +92,48 @@ struct SplitTunnelingView: View {
     /// extension, because `reconfigure` pushes only while `.running`.
     /// Nothing told the user, and the next start carries a payload the
     /// running session never saw.
+    ///
+    /// Every editor on this screen reads this, including the two that
+    /// escaped it on the first pass: the banner's "Switch to Auto",
+    /// which repins the session's interface, and the system DNS
+    /// resolver toggle, which writes the same app array the locked
+    /// list does. A lock one control wide is not a lock.
     private var editorsDisabled: Bool { sessionCoordinator.state != .running }
 
     // MARK: - Content
 
     private var activatedContent: some View {
         Form {
+            // The toast alone was not a surface. It fires once, and a
+            // user who edits and immediately closes the sheet never
+            // sees it — while `lastPush` never changes again, so it
+            // never fires later either. That is the very class the
+            // typed push was introduced to end, surviving in the most
+            // ordinary flow there is. This row persists the verdict
+            // until a later push lands, so reopening the sheet still
+            // states it.
+            if let report = store.lastPush, case .pushed = report.outcome, !report.outcome.bothLanded {
+                Section {
+                    Label(loc.t("split_tunneling_push_failed"), systemImage: "exclamationmark.triangle.fill")
+                        .foregroundStyle(.orange)
+                        .accessibilityIdentifier(AXID.SplitTunneling.pushFailedNotice)
+                }
+            }
+
             if interfaceUnavailable {
                 Section {
+                    // Both of its buttons drive things the rest of the
+                    // screen already gates: "Switch to Auto" repins the
+                    // running session's interface like the picker does,
+                    // and "Disable Feature" is the same `stop()` the
+                    // master toggle sends. Ungated, this one Section
+                    // was the way around both locks.
                     InterfaceUnavailableBanner(
                         selectionLabel: interfaceSelectionLabel,
                         onSwitchToAuto: { store.setInterfaceSelection(.auto) },
                         onDisable: { store.setEnabled(false) }
                     )
+                    .disabled(editorsDisabled || transitionInFlight)
                     .listRowInsets(EdgeInsets())
                     .listRowBackground(Color.clear)
                 }
@@ -109,17 +153,23 @@ struct SplitTunnelingView: View {
             // listed app's data leaves the physical interface while its
             // DNS goes to the tunnel's resolver.
             //
-            // This closes the reachable trigger, not the race. The
-            // coordinator still accepts `start` while `.stopping`; that
-            // guard belongs with the in-flight handle the tunnel side
-            // already carries.
+            // This closes the reachable triggers, not the race — and
+            // "triggers" is plural for a reason the first pass got
+            // wrong: locking this toggle alone left the banner's
+            // Disable and the destructive Reset sending the same
+            // `stop()` in the same window, so the sentence claimed a
+            // closure that had not happened. All three read
+            // `transitionInFlight` now. The race itself is still open
+            // inside the coordinator, which accepts `start` while
+            // `.stopping`; that guard belongs with the in-flight handle
+            // the tunnel side already carries.
             SplitTunnelingEnableSection(
                 isEnabled: Binding(
                     get: { sessionCoordinator.state.isUserVisiblyActive },
                     set: { store.setEnabled($0) }
                 )
             )
-            .disabled(sessionCoordinator.state == .starting || sessionCoordinator.state == .stopping)
+            .disabled(transitionInFlight)
 
             SplitTunnelingInterfaceSection(
                 selection: Binding(
@@ -138,24 +188,34 @@ struct SplitTunnelingView: View {
                 onRemoveApp: { store.removeApp(bundleIdentifier: $0) }
             )
 
+            // Stays live while the feature is OFF — a deliberate
+            // choice about this control, unchanged. What it no longer
+            // does is stay live mid-transition: list membership IS its
+            // state, so it writes the same app array the list above
+            // does, and that write lands on disk and reaches no
+            // extension exactly like any other edit in that window.
             SplitTunnelingMDNSSection(
                 isEnabled: Binding(
                     get: { store.isMDNSResponderEnabled },
                     set: { store.setMDNSResponderEnabled($0) }
                 )
             )
+            .disabled(transitionInFlight)
 
             if let logStore, let dnsLogStore {
                 LogTabsSection(splitLogStore: logStore, dnsLogStore: dnsLogStore)
             }
 
             Section {
+                // The third route to `stop()`: `reset()` empties the
+                // configuration and then calls it.
                 Button(role: .destructive) {
                     showingResetConfirm = true
                 } label: {
                     Label(loc.t("split_tunneling_reset"), systemImage: "arrow.counterclockwise")
                         .foregroundStyle(.red)
                 }
+                .disabled(transitionInFlight)
                 .accessibilityIdentifier(AXID.SplitTunneling.resetButton)
             }
         }
