@@ -120,7 +120,7 @@ final class SplitControlPlaneWorkflow: TestWorkflow {
 
         await clearBothBuffers()
         do {
-            try await split.start(with: probeConfig)
+            try await split.start(with: startConfig)
         } catch {
             fail("the start did not complete — \(error.localizedDescription)")
             return
@@ -175,7 +175,7 @@ final class SplitControlPlaneWorkflow: TestWorkflow {
         // the first version of this step asked for one and failed itself
         // on a narrowing it had chosen two screens earlier.
         let splitLog = await splitClient.fetchLogs() ?? ""
-        check(splitLog.contains(Self.probeSigningID),
+        check(splitLog.contains(Self.probeSigningIDB),
               "and PhantomSplitTunnel's PROVIDER logged the entry it took, which is what tells applied apart from buffered")
     }
 
@@ -244,32 +244,49 @@ final class SplitControlPlaneWorkflow: TestWorkflow {
 
     // MARK: - Shared
 
-    /// A signing identifier no process on any machine carries.
+    /// Two signing identifiers no process on any machine carries.
     ///
-    /// It is what keeps a real session safe to raise AND leaves a
-    /// receipt to read. `FlowDecisionEngine` matches flows by signing
-    /// identifier, so nothing can ever match this one and no traffic
-    /// changes lanes; but it is still an ENTRY, so the provider's
-    /// `logAppDiff` writes a line for it and the run can prove the
-    /// PROVIDER took the list rather than the daemon merely buffering it.
-    private static let probeSigningID = "com.remrearas.phantom-wg.test-engine.no-such-process"
+    /// They keep a real session safe to raise AND leave a receipt to
+    /// read. `FlowDecisionEngine` matches flows by signing identifier,
+    /// so neither can ever match one and no traffic changes lanes; but
+    /// they are still ENTRIES, so the provider's `logAppDiff` writes a
+    /// line when the list between two pushes CHANGES.
+    ///
+    /// Two of them rather than one, because that helper logs only the
+    /// difference and the first two versions of this step each handed it
+    /// none. The first pushed an empty list over an empty list. The
+    /// second pushed ONE entry, but `start` had already written that
+    /// same entry into the bootstrap blob, so the provider read it at
+    /// `startProxy` and the later push was identical to what it already
+    /// held — the same mistake one layer up, and the same green-looking
+    /// nothing in the buffer. The start carries A; the edit carries A
+    /// and B, so what the provider logs is the arrival of B.
+    private static let probeSigningIDA = "com.remrearas.phantom-wg.test-engine.no-such-process.a"
+    private static let probeSigningIDB = "com.remrearas.phantom-wg.test-engine.no-such-process.b"
 
-    /// The payload this run drives with: one entry no process carries,
-    /// automatic interface.
+    private func probeEntry(_ id: String) -> AppEntry {
+        AppEntry(signingIdentifier: id, bundleIdentifier: id, displayName: "PhantomTestEngine probe")
+    }
+
+    /// What `start` raises the session with.
+    private var startConfig: SplitTunnelingConfiguration {
+        SplitTunnelingConfiguration(
+            isEnabled: true, interfaceSelection: .auto,
+            apps: [probeEntry(Self.probeSigningIDA)]
+        )
+    }
+
+    /// What every push after the start carries: the start's entry plus
+    /// one more, so the provider has a diff to write.
     ///
-    /// Every push carries the same bytes, and that costs one claim
-    /// honestly: with the blob unchanged, `persistConfiguration`'s
-    /// differ-check skips its write, so nothing here witnesses that
-    /// write. What is measured is delivery, which runs on every push.
+    /// One claim is still not witnessed here and is named rather than
+    /// implied: pushes after the first carry the same bytes as each
+    /// other, so `persistConfiguration`'s differ-check skips its write
+    /// and nothing below measures that write.
     private var probeConfig: SplitTunnelingConfiguration {
         SplitTunnelingConfiguration(
-            isEnabled: true,
-            interfaceSelection: .auto,
-            apps: [AppEntry(
-                signingIdentifier: Self.probeSigningID,
-                bundleIdentifier: Self.probeSigningID,
-                displayName: "PhantomTestEngine probe"
-            )]
+            isEnabled: true, interfaceSelection: .auto,
+            apps: [probeEntry(Self.probeSigningIDA), probeEntry(Self.probeSigningIDB)]
         )
     }
 
