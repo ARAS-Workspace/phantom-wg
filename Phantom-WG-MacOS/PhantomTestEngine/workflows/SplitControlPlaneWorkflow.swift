@@ -91,6 +91,13 @@ final class SplitControlPlaneWorkflow: TestWorkflow {
                  + " would have to be taken over to measure it")
             return
         }
+        // A fourth reading the first version skipped, and the run
+        // itself proved why: a boot right after a redeploy failed with
+        // `NEConfigurationErrorDomain Code=10 permission denied`, the
+        // proxy configurations not yet approved for the fresh
+        // registration. Driving a start into that measures approval, not
+        // the control plane — and it would leave preference entries this
+        // run has no arm to delete.
         guard gate.allReady else {
             skip("environment: the extension gate is not ready, so a start would be measuring approval rather than the control plane")
             return
@@ -102,10 +109,11 @@ final class SplitControlPlaneWorkflow: TestWorkflow {
 
         onTeardown("split control plane") { [weak self] in
             guard let self, self.doorOpen else { return }
-            // The user's own list goes back into the bootstrap blob
-            // BEFORE the stop, not after: `persistConfiguration` reads
-            // `isEnabled` off disk and refuses a disabled entry, so
-            // once the stop lands there is no writing left to do.
+            // The net for an ABORTED run, not the normal path — the last
+            // step restores and stops on its own. This arm fires only
+            // when the run never reached it and the session is therefore
+            // still up, which is the one case where
+            // `persistConfiguration` can still write.
             if let userConfig, self.split.state == .running {
                 try? await self.splitManager.persistConfiguration(userConfig)
                 self.log("teardown: the user's own configuration is back in the bootstrap blob")
@@ -183,6 +191,21 @@ final class SplitControlPlaneWorkflow: TestWorkflow {
         let splitLog = await splitClient.fetchLogs() ?? ""
         check(splitLog.contains(Self.probeSigningIDB),
               "and PhantomSplitTunnel's PROVIDER logged the entry it took, which is what tells applied apart from buffered")
+
+        // The same reading for the DNS half, and it was missing: a
+        // `.done` from that daemon means applied OR buffered, so the
+        // step proved delivery on one side and ASSUMED it on the other.
+        // Skipped rather than failed when the buffer is empty, because
+        // DNSProxy is registered-but-lazy by design (ADR-0003 item 3) —
+        // with no port-53 flow yet no provider has spawned, so there is
+        // nothing that COULD have logged.
+        let dnsLog = await dnsClient.fetchLogs() ?? ""
+        if dnsLog.isEmpty {
+            skip("environment: DNSProxy has not been spawned yet (registered-but-lazy), so it has no provider to write a receipt")
+        } else {
+            check(dnsLog.contains(Self.probeSigningIDB),
+                  "and PhantomDNSProxy's PROVIDER logged it too, so both halves are proven rather than one assumed")
+        }
     }
 
     /// `boot` adopting a live session used to push nothing, so an
@@ -240,8 +263,31 @@ final class SplitControlPlaneWorkflow: TestWorkflow {
         guard doorOpen else { return skip("the door found the feature in use") }
         guard split.state == .running else { return skip("no running session — the start step owns that") }
 
+        // The blob goes back BEFORE the stop, and this is the only
+        // place it can: `persistConfiguration` reads `isEnabled` off
+        // disk and refuses a disabled entry, so once the stop lands
+        // there is no writing left to do. The first version left this to
+        // the teardown, which runs AFTER this step — so on the green
+        // path the restore arm was unreachable and the probe entries
+        // stayed in the user's preference store under a log line
+        // claiming they had been handed back.
+        if let userConfig {
+            do {
+                try await splitManager.persistConfiguration(userConfig)
+                log("the user's own configuration is back in the bootstrap blob")
+            } catch {
+                log("the user's configuration could NOT be put back: \(error.localizedDescription)", .warn)
+            }
+        }
+
         await split.stop()
-        check(split.state == .stopped, "the stop landed — state=\(split.state)")
+        check(split.state == .stopped, "the coordinator reports stopped — state=\(split.state)")
+        // Read from the SYSTEM, not from the enum the line above wrote.
+        // `performStop` assigns `.stopped` unconditionally past two
+        // `try?` disables, so the check above cannot go red on a refused
+        // stop; this one can.
+        let settled = await settle(within: 10) { self.splitManager.sessionStatus == .disconnected }
+        check(settled, "and the system took the session down — status=\(splitManager.sessionStatus)")
 
         let outcome = await split.reconfigure(with: probeConfig)
         check(outcome == .notRunning,
