@@ -185,6 +185,13 @@ final class SplitTunnelingStore {
         if survivors != configuration.apps {
             configuration.apps = survivors
             persist()
+            // The one mutation path that used to stop at disk. Every
+            // other writer here reloads, and skipping it meant a
+            // dropped entry left the screen and the file while both
+            // extensions kept bypassing that signing identity — the
+            // user reads "no longer routed outside the tunnel" and the
+            // traffic keeps leaving through the physical interface.
+            scheduleReload()
         }
     }
 

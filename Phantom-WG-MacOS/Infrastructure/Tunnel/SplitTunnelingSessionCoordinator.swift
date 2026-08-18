@@ -71,6 +71,22 @@ final class SplitTunnelingSessionCoordinator {
         case .connected, .connecting:
             log("boot: SplitTunnel session already live → adopting .running")
             state = .running
+            // The adopted session may be running a list this app never
+            // sent it. SplitTunnel's bootstrap blob is written only by
+            // `enable`, and `enable` is called only from `start`, so an
+            // extension that respawned after the last start came up
+            // with whatever was current at THAT moment. Nothing else
+            // repaired it: `reconfigure` pushes on a user edit and
+            // nowhere else, so the divergence lasted until the user
+            // happened to touch the list again — which is to say, on a
+            // machine nobody edits, forever.
+            //
+            // Deliberately NOT `reconfigure`: that also persists the
+            // DNS `providerConfiguration`, and a boot has no business
+            // writing to the preference layer just to read it back.
+            let splitPush = await splitDaemonClient.applyConfig(config)
+            let dnsRealign = await dnsDaemonClient.applyConfig(config)
+            log("boot: realign push → SplitTunnel \(splitPush.label), DNSProxy \(dnsRealign.label)")
         case .disconnected, .disconnecting, .invalid:
             if config.isEnabled {
                 log("boot: persisted intent ON, no live session → start()")

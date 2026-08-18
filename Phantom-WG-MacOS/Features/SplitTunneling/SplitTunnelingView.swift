@@ -61,6 +61,24 @@ struct SplitTunnelingView: View {
             ))
     }
 
+    /// Editors follow the SESSION, not the persisted intent — one
+    /// source, the same one the toggle above reads.
+    ///
+    /// The two used to diverge exactly where it mattered. A start the
+    /// user cancelled at the system's permission prompt leaves the
+    /// intent ON while the session is `.stopped`: the toggle read the
+    /// coordinator and went dark, the selector and the list read the
+    /// stored bool and stayed fully lit and editable, and the screen
+    /// said two things at once.
+    ///
+    /// `.starting` and `.stopping` are LOCKED rather than merely
+    /// mirrored, and that is the second half of the reason: an edit
+    /// made in that window reaches disk and never reaches either
+    /// extension, because `reconfigure` pushes only while `.running`.
+    /// Nothing told the user, and the next start carries a payload the
+    /// running session never saw.
+    private var editorsDisabled: Bool { sessionCoordinator.state != .running }
+
     // MARK: - Content
 
     private var activatedContent: some View {
@@ -92,12 +110,12 @@ struct SplitTunnelingView: View {
                     set: { store.setInterfaceSelection($0) }
                 ),
                 availableInterfaces: interfaceResolver.interfaces,
-                isDisabled: !store.configuration.isEnabled
+                isDisabled: editorsDisabled
             )
 
             SplitTunnelingAppListSection(
                 apps: store.configuration.apps.filter { !$0.isSyntheticMDNS },
-                isDisabled: !store.configuration.isEnabled,
+                isDisabled: editorsDisabled,
                 resolvedInterfaceLabel: resolvedInterfaceLabel,
                 onAddApp: handleAddApp,
                 onRemoveApp: { store.removeApp(bundleIdentifier: $0) }
