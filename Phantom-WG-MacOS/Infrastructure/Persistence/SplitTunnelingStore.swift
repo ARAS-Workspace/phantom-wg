@@ -35,6 +35,23 @@ final class SplitTunnelingStore {
     private(set) var lastPush: PushReport?
     @ObservationIgnored private var pushSequence = 0
 
+    /// True while the most recent push that actually REACHED for the
+    /// extensions failed to land on both. Separate from `lastPush`
+    /// because that value also carries `.notRunning`, and an edit made
+    /// while the feature is stopped would otherwise clear a warning
+    /// about extensions still running the wrong list — a report that
+    /// settles nothing is not a report that the trouble is over.
+    private(set) var lastPushFailed = false
+
+    /// Records a push made outside the store's own mutation path —
+    /// `boot`'s realign is one, and its verdict used to end in os_log
+    /// while its comment claimed otherwise.
+    func recordPush(_ outcome: SplitTunnelingSessionCoordinator.ReconfigureOutcome) {
+        pushSequence += 1
+        lastPush = PushReport(outcome: outcome, sequence: pushSequence)
+        if case .pushed = outcome { lastPushFailed = !outcome.bothLanded }
+    }
+
     // MARK: - Init
 
     /// Production: no argument — persists to the App Group container.
@@ -142,8 +159,7 @@ final class SplitTunnelingStore {
         Task { [weak self, weak sessionCoordinator] in
             guard let outcome = await sessionCoordinator?.reconfigure(with: snapshot),
                   let self else { return }
-            self.pushSequence += 1
-            self.lastPush = PushReport(outcome: outcome, sequence: self.pushSequence)
+            self.recordPush(outcome)
         }
     }
 

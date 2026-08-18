@@ -46,6 +46,16 @@ final class SplitTunnelingSessionCoordinator {
     /// the feature would hang on its first press.
     @ObservationIgnored private var inFlight: Task<Void, Never>?
 
+    /// Links waiting for their turn, observed.
+    ///
+    /// `state` cannot answer this: a queued link has not run a line of
+    /// its operation yet, so nothing has moved off `.running` or
+    /// `.stopped`. Without this the toggle sprang back the moment it was
+    /// pressed — the user's intent was accepted and queued while the
+    /// screen still showed the old position, which reads as a control
+    /// that ignored them.
+    private(set) var queuedLinks = 0
+
     /// Where a chained `performStart` leaves its error. It cannot be
     /// thrown out of the chain directly, and it lives one hop instead of
     /// being swallowed, because `start` is `throws` and its callers
@@ -66,7 +76,8 @@ final class SplitTunnelingSessionCoordinator {
     /// link runs anyway and says so. That is today's behaviour restored
     /// for the one case where something has already been stuck for a
     /// minute — not a new hazard, just the old one no longer able to
-    /// take the app with it.
+    /// take the app with it. How that is made to actually happen is in
+    /// `waitForPredecessor`, and the first version of it did not.
     ///
     /// Sixty seconds is the gate's `deactivationBudget`, deliberately
     /// the same number for the same reason: it is what this app is
@@ -75,22 +86,48 @@ final class SplitTunnelingSessionCoordinator {
     /// can shorten it instead of sitting for a minute.
     @ObservationIgnored private let chainCeiling: Duration
 
+    /// Waits for the previous link, but never longer than the ceiling.
+    ///
+    /// Shaped like the vault and proxy clients' `withRaceTimeout` for a
+    /// reason the first attempt at this got wrong: it used a task group,
+    /// and a task group AWAITS its remaining children before its body's
+    /// result comes back. The losing child was `await predecessor.value`
+    /// on a `Task<Void, Never>` — non-throwing, so it ignores
+    /// cancellation entirely and `cancelAll()` could not end it. The
+    /// group therefore returned only once the predecessor finished, and
+    /// the ceiling changed nothing but the log line, under a comment
+    /// claiming an unanswered dialog could no longer hold an uninstall.
+    ///
+    /// Two UNSTRUCTURED tasks race a one-shot resume instead. The loser
+    /// keeps running and its result is dropped, exactly as the sibling
+    /// helpers document for RPCs Swift cannot cancel — and because
+    /// nothing awaits the loser, the wait is bounded by construction.
+    private static func waitForPredecessor(
+        _ predecessor: Task<Void, Never>,
+        upTo ceiling: Duration
+    ) async -> Bool {
+        await withCheckedContinuation { (continuation: CheckedContinuation<Bool, Never>) in
+            let resume = SingleResume(continuation)
+            Task {
+                await predecessor.value
+                resume.finish(true)
+            }
+            Task {
+                try? await Task.sleep(for: ceiling)
+                resume.finish(false)
+            }
+        }
+    }
+
     private func serialized(_ operation: @MainActor @escaping () async -> Void) async {
         let predecessor = inFlight
         let ceiling = chainCeiling
         let task = Task { @MainActor in
             if let predecessor {
-                let waited = await withTaskGroup(of: Bool.self, returning: Bool.self) { group in
-                    group.addTask { await predecessor.value; return true }
-                    group.addTask {
-                        try? await Task.sleep(for: ceiling)
-                        return false
-                    }
-                    let first = await group.next() ?? true
-                    group.cancelAll()
-                    return first
-                }
-                if !waited {
+                self.queuedLinks += 1
+                defer { self.queuedLinks -= 1 }
+                let landed = await Self.waitForPredecessor(predecessor, upTo: ceiling)
+                if !landed {
                     self.log("chain: predecessor outlived its ceiling — proceeding anyway")
                 }
             }
@@ -109,7 +146,7 @@ final class SplitTunnelingSessionCoordinator {
         category: "session-coordinator"
     )
 
-    /// Production leaves `state` at `.stopped` and lets `boot(with:)`
+    /// Production leaves `state` at `.stopped` and lets `boot(freshConfig:)`
     /// reconcile against the live extensions; previews pass a fixed
     /// state to render the feature mid-session.
     init(

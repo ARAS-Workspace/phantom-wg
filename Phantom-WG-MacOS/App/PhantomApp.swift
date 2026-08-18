@@ -169,7 +169,12 @@ struct PhantomApp: App {
                 // extensions are actually doing, not a separate
                 // persisted bool.
                 guard coordinator.allReady else { return }
-                await sessionCoordinator.boot { splitTunnelingStore.configuration }
+                let realign = await sessionCoordinator.boot { splitTunnelingStore.configuration }
+                // The realign's verdict reaches the same surface a live
+                // edit's does. Dropping it here is what made the
+                // coordinator's "reported, not just logged" comment
+                // describe a value nobody read.
+                splitTunnelingStore.recordPush(realign)
             }
         }
         .windowResizability(.contentSize)

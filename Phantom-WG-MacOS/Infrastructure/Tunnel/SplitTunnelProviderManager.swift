@@ -29,7 +29,7 @@ class SplitTunnelProviderManager {
     /// Finds the existing preference entry, or falls back to a fresh
     /// in-memory manager — the entry itself is first persisted by
     /// `enable()`'s save. Production caller is the session
-    /// coordinator's `boot(with:)`.
+    /// coordinator's `boot(freshConfig:)`.
     func load() async {
         do {
             let managers = try await NETransparentProxyManager.loadAllFromPreferences()

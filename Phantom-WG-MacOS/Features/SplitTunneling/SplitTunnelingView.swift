@@ -72,8 +72,16 @@ struct SplitTunnelingView: View {
     /// `NEDNSProxyManager.shared()`, and the documented ending is
     /// SplitTunnel up with DNSProxy down: the port-53 carve-out open
     /// with nothing behind it.
+    ///
+    /// Queued links count too. Serializing the lifecycle meant a press
+    /// can now be accepted and made to WAIT, and during that wait
+    /// `state` still reads the old value — so a lock that watched only
+    /// `state` would let the toggle spring back under a user whose
+    /// intent had in fact been taken.
     private var transitionInFlight: Bool {
-        sessionCoordinator.state == .starting || sessionCoordinator.state == .stopping
+        sessionCoordinator.state == .starting
+            || sessionCoordinator.state == .stopping
+            || sessionCoordinator.queuedLinks > 0
     }
 
     /// Editors follow the SESSION, not the persisted intent — one
@@ -93,11 +101,14 @@ struct SplitTunnelingView: View {
     /// Nothing told the user, and the next start carries a payload the
     /// running session never saw.
     ///
-    /// Every editor on this screen reads this, including the two that
-    /// escaped it on the first pass: the banner's "Switch to Auto",
-    /// which repins the session's interface, and the system DNS
-    /// resolver toggle, which writes the same app array the locked
-    /// list does. A lock one control wide is not a lock.
+    /// The banner's "Switch to Auto" reads this too — it repins the
+    /// running session's interface exactly as the picker does, and it
+    /// escaped the lock on the first pass. The system DNS resolver
+    /// toggle does NOT read this: it writes the same app array the
+    /// locked list writes, but it stays usable while the feature is off
+    /// by deliberate choice, so `transitionInFlight` is all that gates
+    /// it. A lock one control wide is not a lock; a lock that ignores
+    /// a control's own rule is not one either.
     private var editorsDisabled: Bool { sessionCoordinator.state != .running }
 
     // MARK: - Content
@@ -110,9 +121,11 @@ struct SplitTunnelingView: View {
             // never fires later either. That is the very class the
             // typed push was introduced to end, surviving in the most
             // ordinary flow there is. This row persists the verdict
-            // until a later push lands, so reopening the sheet still
-            // states it.
-            if let report = store.lastPush, case .pushed = report.outcome, !report.outcome.bothLanded {
+            // until a push actually LANDS, so reopening the sheet still
+            // states it. Reading `lastPush` directly would have cleared
+            // it on the next `.notRunning` — an edit made while stopped,
+            // which reports nothing and settles nothing.
+            if store.lastPushFailed {
                 Section {
                     Label(loc.t("split_tunneling_push_failed"), systemImage: "exclamationmark.triangle.fill")
                         .foregroundStyle(.orange)
