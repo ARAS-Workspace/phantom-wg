@@ -283,9 +283,17 @@ final class SplitControlPlaneWorkflow: TestWorkflow {
         await split.stop()
         check(split.state == .stopped, "the coordinator reports stopped — state=\(split.state)")
         // Read from the SYSTEM, not from the enum the line above wrote.
-        // `performStop` assigns `.stopped` unconditionally past two
-        // `try?` disables, so the check above cannot go red on a refused
-        // stop; this one can.
+        // `performStop` reaches `.stopped` on every path it takes,
+        // including the one where a disable was refused, so the check
+        // above states the coordinator's intent; this one states the
+        // machine's.
+        //
+        // `stop()` also hands back a `StopOutcome` naming anything that
+        // stayed registered, and this step deliberately does not assert
+        // on it: nothing in this run can make a disable fail, so such a
+        // check could not go red and would only look like proof. The
+        // gap is real and recorded rather than papered over — a refused
+        // stop has no witness anywhere.
         let settled = await settle(within: 10) { self.splitManager.sessionStatus == .disconnected }
         check(settled, "and the system took the session down — status=\(splitManager.sessionStatus)")
 
