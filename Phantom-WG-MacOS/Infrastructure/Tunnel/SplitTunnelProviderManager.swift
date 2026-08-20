@@ -211,9 +211,13 @@ class SplitTunnelProviderManager {
     enum ManagerError: LocalizedError {
         case notLoaded
         /// The configuration would not encode, so there is no blob to
-        /// persist. Its own case rather than a silent return: the
-        /// caller reports whether the bootstrap blob is current, and a
-        /// failure to build one is not the same as nothing to do.
+        /// write. Its own case rather than a silent return, and now for
+        /// two callers with different stakes: `persistConfiguration`
+        /// reports whether the bootstrap blob is current, where a
+        /// failure to build one is not the same as nothing to do; and
+        /// `enable` would otherwise hand the system a protocol object
+        /// with no configuration at all, replacing the blob on disk with
+        /// nothing and bringing the extension up on an empty list.
         case blobNotEncodable
 
         var errorDescription: String? {
