@@ -133,6 +133,28 @@ struct SplitTunnelingView: View {
                 }
             }
 
+            // A different failure from the one above and it gets its own
+            // row rather than sharing that one: a push that did not land
+            // leaves the extensions running an older list, while this
+            // leaves an extension REGISTERED after the user turned the
+            // feature off. The screen would otherwise say "off" over a
+            // proxy still handling traffic, which is the asymmetry this
+            // architecture exists to prevent — and until this row existed
+            // the only trace of it was one line in os_log.
+            //
+            // Red rather than orange, and no retry button: nothing here
+            // re-attempts the stop, so the row is a statement about the
+            // system's current state, not a pending action.
+            if !store.stopResidue.isEmpty {
+                Section {
+                    Label(loc.t("split_tunneling_stop_residue",
+                                store.stopResidue.joined(separator: ", ")),
+                          systemImage: "exclamationmark.octagon.fill")
+                        .foregroundStyle(.red)
+                        .accessibilityIdentifier(AXID.SplitTunneling.stopResidueNotice)
+                }
+            }
+
             if interfaceUnavailable {
                 Section {
                     // Both of its buttons drive things the rest of the

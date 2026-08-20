@@ -190,6 +190,7 @@
   "split_tunneling_remove_app": "Remove",
   "split_tunneling_reset": "Reset",
   "split_tunneling_push_failed": "The change could not be delivered to the extensions. It is saved here, but the running session may still be using the previous list.",
+  "split_tunneling_stop_residue": "Split-tunneling was turned off, but %@ could not be unregistered. Until it is, that extension is still handling traffic even though this screen shows the feature as off.",
   "split_tunneling_reset_confirm_title": "Reset Split-Tunneling?",
   "split_tunneling_reset_confirm_message": "This will clear all selected applications and disable the feature. Your configuration cannot be recovered.",
   "split_tunneling_close": "Close",

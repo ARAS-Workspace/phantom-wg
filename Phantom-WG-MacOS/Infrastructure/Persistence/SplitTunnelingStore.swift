@@ -35,6 +35,19 @@ final class SplitTunnelingStore {
     private(set) var lastPush: PushReport?
     @ObservationIgnored private var pushSequence = 0
 
+    /// What the last stop could not take down, by display name. Empty
+    /// when it landed.
+    ///
+    /// Persistent by design, and deliberately NOT a retry trigger. The
+    /// user asked for a stop and the request went out; what failed is
+    /// the system accepting the write. A retry loop here would fight the
+    /// same refusal on a timer with nothing new to offer, so the row
+    /// says what is still registered and lets the user decide. It clears
+    /// when a start re-registers both extensions — until then the entry
+    /// really is still there, and a row that disappeared on its own
+    /// would be the lie this campaign spent itself removing.
+    private(set) var stopResidue: [String] = []
+
     /// True while the most recent push that actually REACHED for the
     /// extensions failed to land on both. Separate from `lastPush`
     /// because that value also carries `.notRunning`, and an edit made
@@ -46,6 +59,15 @@ final class SplitTunnelingStore {
     /// Records a push made outside the store's own mutation path —
     /// `boot`'s realign is one, and its verdict used to end in os_log
     /// while its comment claimed otherwise.
+    /// Records what a stop left behind. `.landed` clears the row.
+    func recordStop(_ outcome: SplitTunnelingSessionCoordinator.StopOutcome) {
+        if case .residue(let names) = outcome {
+            stopResidue = names
+        } else {
+            stopResidue = []
+        }
+    }
+
     func recordPush(_ outcome: SplitTunnelingSessionCoordinator.ReconfigureOutcome) {
         pushSequence += 1
         lastPush = PushReport(outcome: outcome, sequence: pushSequence)
@@ -77,11 +99,20 @@ final class SplitTunnelingStore {
         configuration.isEnabled = enabled
         persist()
         let snapshot = configuration
-        Task { [weak sessionCoordinator] in
+        Task { [weak self, weak sessionCoordinator] in
             if enabled {
-                try? await sessionCoordinator?.start(with: snapshot)
-            } else {
-                await sessionCoordinator?.stop()
+                do {
+                    try await sessionCoordinator?.start(with: snapshot)
+                    // Both extensions are registered again, so whatever an
+                    // earlier stop failed to take down is no longer there.
+                    self?.stopResidue = []
+                } catch {
+                    // The start rolls itself back and reports there. An
+                    // earlier stop's residue is left standing on purpose:
+                    // nothing re-registered, so the row is still true.
+                }
+            } else if let outcome = await sessionCoordinator?.stop() {
+                self?.recordStop(outcome)
             }
         }
     }
@@ -119,8 +150,10 @@ final class SplitTunnelingStore {
     func reset() {
         configuration = .default
         persist()
-        Task { [weak sessionCoordinator] in
-            await sessionCoordinator?.stop()
+        Task { [weak self, weak sessionCoordinator] in
+            if let outcome = await sessionCoordinator?.stop() {
+                self?.recordStop(outcome)
+            }
         }
     }
 

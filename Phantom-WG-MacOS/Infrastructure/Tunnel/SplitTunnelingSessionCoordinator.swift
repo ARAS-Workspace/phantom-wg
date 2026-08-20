@@ -233,14 +233,13 @@ final class SplitTunnelingSessionCoordinator {
         case .connected, .connecting:
             log("boot: SplitTunnel session already live → adopting .running")
             // The adopted session may be running a list this app never
-            // sent it. SplitTunnel's bootstrap blob is written only by
-            // `enable`, and `enable` is called only from `start`, so an
-            // extension that respawned after the last start came up
-            // with whatever was current at THAT moment. Nothing else
-            // repaired it: `reconfigure` pushes on a user edit and
-            // nowhere else, so the divergence lasted until the user
-            // happened to touch the list again — which is to say, on a
-            // machine nobody edits, forever.
+            // sent it. SplitTunnel's bootstrap blob is written in two
+            // places — `enable`, called only from `start`, and
+            // `persistConfiguration`, called only from `reconfigure` on
+            // a user edit — so an extension that respawned after the
+            // last of those came up with whatever was current at THAT
+            // moment, and nothing repaired it. On a machine nobody
+            // edits, the divergence lasted forever.
             //
             // Deliberately NOT `reconfigure`: that also persists the
             // DNS `providerConfiguration`, and a boot has no business
@@ -253,6 +252,25 @@ final class SplitTunnelingSessionCoordinator {
             let splitPush = await splitDaemonClient.applyConfig(config)
             let dnsRealign = await dnsDaemonClient.applyConfig(config)
             log("boot: realign push → SplitTunnel \(splitPush.label), DNSProxy \(dnsRealign.label)")
+
+            // The two pushes above repair the RUNNING processes; this
+            // repairs the DISK. Without it the arm fixed the divergence
+            // only until the next respawn, because a respawn reads the
+            // blob and nothing else — and every user upgrading from
+            // v2.1.1 arrives with a blob frozen at their last `start`,
+            // which is the exact defect `reconfigure` was taught to
+            // avoid for edits. `persistConfiguration` is the one-sided
+            // writer: it does not touch DNS, so the objection above
+            // does not reach it; it reads `isEnabled` off disk and
+            // refuses a disabled entry; and it skips the write entirely
+            // when the blob already matches, so a machine that is
+            // already aligned pays nothing.
+            do {
+                try await split.persistConfiguration(config)
+                log("boot: SplitTunnel bootstrap blob realigned")
+            } catch {
+                log("boot: SplitTunnel bootstrap blob NOT realigned — \(error.localizedDescription)")
+            }
             state = .running
             // Reported, not just logged. A realign that did not land is
             // the same class `Push` was introduced for: the extensions
@@ -345,26 +363,51 @@ final class SplitTunnelingSessionCoordinator {
 
     /// Master toggle OFF. SplitTunnel stops first so the port-53
     /// carve-out is gone before DNSProxy unwinds.
-    func stop() async {
-        await serialized { [weak self] in await self?.performStop() }
+    @discardableResult
+    func stop() async -> StopOutcome {
+        var outcome = StopOutcome.landed
+        await serialized { [weak self] in
+            outcome = await self?.performStop() ?? .landed
+        }
+        return outcome
     }
 
-    private func performStop() async {
+    private func performStop() async -> StopOutcome {
         switch state {
         case .stopped, .stopping:
             log("stop: already \(state) — no-op")
-            return
+            return .landed
         case .running, .starting:
             break
         }
         log("stop: disabling extensions")
         state = .stopping
-        try? await split.disable()
-        log("stop: SplitTunnel disabled")
-        try? await dns.disable()
-        log("stop: DNSProxy disabled")
+        // Both results are read, the same way the start rollback reads
+        // them. Announcing `.stopped` over two swallowed refusals is the
+        // asymmetry this architecture exists to prevent, in its worst
+        // direction: DNSProxy registered alone relays the machine's DNS
+        // while the screen says the feature is off, so a listed app's
+        // data leaves through the tunnel and its lookups do not. The old
+        // shape could not even see it — both calls were `try?` and both
+        // log lines were unconditional.
+        var residue: [String] = []
+        do {
+            try await split.disable()
+            log("stop: SplitTunnel disabled")
+        } catch {
+            residue.append("SplitTunnel")
+            log("stop: SplitTunnel STILL REGISTERED — \(error.localizedDescription)")
+        }
+        do {
+            try await dns.disable()
+            log("stop: DNSProxy disabled")
+        } catch {
+            residue.append("DNSProxy")
+            log("stop: DNSProxy STILL REGISTERED — \(error.localizedDescription)")
+        }
         state = .stopped
         log("stop: state = .stopped")
+        return residue.isEmpty ? .landed : .residue(residue)
     }
 
     // MARK: - Uninstall
@@ -379,7 +422,12 @@ final class SplitTunnelingSessionCoordinator {
         // await the link it is already holding and never return.
         await serialized { [weak self] in
             guard let self else { return }
-            await self.performStop()
+            // Discarded on purpose, and this is the one caller entitled
+            // to: the two `remove()` calls below delete the preference
+            // entries outright, so an entry that refused to go disabled
+            // is about to stop existing. Reporting a residue the next
+            // line erases would be noise.
+            _ = await self.performStop()
             await self.split.remove()
             await self.dns.remove()
             self.log("purgeForUninstall: proxy preference entries removed")
@@ -398,6 +446,27 @@ final class SplitTunnelingSessionCoordinator {
     /// than swallowed because the window it names is reachable — a user
     /// editing the list while the feature is still coming up lands here
     /// and nothing tells them their edit did not reach the extensions.
+    /// What a stop left behind, named.
+    ///
+    /// A `Bool` here would repeat the mistake `Push` was introduced to
+    /// end: "the stop did not fully land" and "DNSProxy is still
+    /// registered while the screen says the feature is off" are not the
+    /// same sentence, and only the second one tells the user what to
+    /// look at in System Settings.
+    ///
+    /// The feature still reports `.stopped` on a residue. The user asked
+    /// for a stop and both extensions were asked; what failed is the
+    /// system accepting the write. Refusing to move to `.stopped` would
+    /// leave the screen locked with no way out, and nothing here retries
+    /// — the residue is reported once and stays reported until a start
+    /// re-registers both extensions.
+    enum StopOutcome: Equatable {
+        /// Both extensions came down and the system took both writes.
+        case landed
+        /// These did not come down. Display names, ready for a sentence.
+        case residue([String])
+    }
+
     enum ReconfigureOutcome: Equatable {
         case notRunning
         case pushed(split: ProxyConfigDaemonClient.Push, dns: ProxyConfigDaemonClient.Push)
