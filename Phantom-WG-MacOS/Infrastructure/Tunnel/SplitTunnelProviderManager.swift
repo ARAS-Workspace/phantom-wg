@@ -54,9 +54,22 @@ class SplitTunnelProviderManager {
         proto.providerBundleIdentifier = Self.providerBundleID
         proto.serverAddress = "127.0.0.1"
 
-        if let data = try? JSONEncoder().encode(configuration) {
-            proto.providerConfiguration = ["split_config": data]
+        // Throws rather than falling through, and the difference is the
+        // user's list. A `proto` with no `providerConfiguration` REPLACES
+        // the one on disk, so the silent path did not leave a stale blob
+        // — it erased the blob and the extension came up on `.default`.
+        // That fails in the safe direction (an empty list bypasses
+        // nothing) but the user's configured bypasses stop working with
+        // nothing said anywhere. `persistConfiguration` below already
+        // throws for exactly this; the two writers now agree.
+        //
+        // `DNSProxyProviderManager.enable` keeps its log-and-continue
+        // shape on purpose: it is not silent, and turning it into a throw
+        // would fail a start on a path this Codable cannot reach.
+        guard let data = try? JSONEncoder().encode(configuration) else {
+            throw ManagerError.blobNotEncodable
         }
+        proto.providerConfiguration = ["split_config": data]
 
         manager.protocolConfiguration = proto
         manager.localizedDescription = Self.localizedDescription
@@ -120,11 +133,22 @@ class SplitTunnelProviderManager {
         try await manager.loadFromPreferences()
     }
 
+    /// Takes the entry down and reports whether the system accepted it.
+    ///
+    /// The save used to be a `try?`, which made the refusal structurally
+    /// invisible: the function is declared `throws` and its only throwing
+    /// call swallowed its own error, so every `catch` a caller wrote
+    /// around it was dead code — including the one in the start
+    /// rollback, whose log line then announced "SplitTunnel down" over an
+    /// entry still enabled on disk. `stopVPNTunnel()` and the flag are
+    /// left where they are on a refusal: the session really was asked to
+    /// stop, and the caller's job is to say what did not persist, not to
+    /// pretend the request was never made.
     func disable() async throws {
         guard let manager else { return }
         manager.connection.stopVPNTunnel()
         manager.isEnabled = false
-        try? await manager.saveToPreferences()
+        try await manager.saveToPreferences()
     }
 
     // MARK: - Remove
