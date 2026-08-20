@@ -43,7 +43,8 @@ final class SanityWorkflow: TestWorkflow {
     /// about code that is not running, and a report full of confident
     /// claims about the wrong binary is worse than a short report. A
     /// stale PROXY extension earns a red line and nothing more — it is
-    /// measured here and exercised nowhere below, so the run carries
+    /// measured here and exercised only by the control-plane workflow at the
+    /// end of this catalogue, so the run carries
     /// on; the asymmetry is argued at the branch itself. Silence is
     /// different again and does not stop anything — see below.
     ///
@@ -110,7 +111,8 @@ final class SanityWorkflow: TestWorkflow {
         // is the point: every workflow in this catalogue drives the
         // tunnel extension, so a stale one makes the whole report a
         // statement about code that is not running. The proxy
-        // extensions are measured here but exercised nowhere below, so
+        // extensions are measured here and driven only by the last workflow in
+        // this catalogue, so
         // a stale one is worth a red line and nothing more — aborting
         // on it would let an untouched neighbour cancel a run that was
         // never about it. A rebuild alone fixes neither: the stamp
@@ -120,7 +122,7 @@ final class SanityWorkflow: TestWorkflow {
         if !staleTunnel.isEmpty {
             abortRun("PhantomTunnel is from another build — \(staleTunnel.joined(separator: ", ")) vs expected \(expected); every step below drives it, so nothing here would mean anything. Bump the version or run the uninstall flow, then rerun")
         } else if !stale.isEmpty {
-            log("stale proxy extension(s): \(stale.joined(separator: ", ")) — measured, not exercised by this catalogue; the run continues", .error)
+            log("stale proxy extension(s): \(stale.joined(separator: ", ")) — measured; only the control-plane workflow at the end of this catalogue drives them, so the run continues", .error)
         }
 
         // One reason for all of them: `skip` holds a single slot, so

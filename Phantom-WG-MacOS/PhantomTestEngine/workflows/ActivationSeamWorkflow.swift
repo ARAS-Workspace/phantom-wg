@@ -73,8 +73,8 @@ final class ActivationSeamWorkflow: TestWorkflow {
         ]
     }
 
-    // Reachable from the sibling file that carries the
-    // rule-ownership steps.
+    // Reachable from the sibling files that carry the rule-ownership
+    // and reset steps — two of them now, not one.
     let runTag = String(UUID().uuidString.prefix(8))
 
     // MARK: - Shared rig

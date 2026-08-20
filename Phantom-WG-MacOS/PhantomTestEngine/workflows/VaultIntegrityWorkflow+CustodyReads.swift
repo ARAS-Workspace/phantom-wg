@@ -476,7 +476,8 @@ extension VaultIntegrityWorkflow {
     ///
     /// A second candidate follows the refused one, and it is what makes
     /// the refusal's SHAPE measurable. This is the loop's third refusal
-    /// site and the only one that judges the LIST rather than the
+    /// site on the list side, and the only one that judges the NAME
+    /// rather than the id or the
     /// payload, but it owes the pass what the probe's own refusals owe
     /// it: only a vault that did not answer may stop the minting. A
     /// guard that stopped here instead of continuing would abandon

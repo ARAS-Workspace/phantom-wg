@@ -80,8 +80,11 @@ final class VaultIntegrityWorkflow: TestWorkflow {
         ]
     }
 
-    /// Everything this run ever stored — Delete Proof sweeps it all,
-    /// even when an earlier step failed halfway.
+    /// Everything this run stored through the THROWAWAY path — Delete
+    /// Proof sweeps that, even when an earlier step failed halfway. The
+    /// corruption and visibility bases sit outside it on purpose and
+    /// carry their own nets; the line where the first of them is planted
+    /// says so.
     ///
     /// Readable from the teardown file and writable only here, which is
     /// the shape the ledger actually has: the steps are the only things

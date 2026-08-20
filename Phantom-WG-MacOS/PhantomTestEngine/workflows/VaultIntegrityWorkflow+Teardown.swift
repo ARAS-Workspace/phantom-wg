@@ -139,11 +139,11 @@ extension VaultIntegrityWorkflow {
         // longer holds also answers done, which is why the read
         // comes first and the count means "was there, now gone".
         // An `.unreachable` read is neither: it proves nothing
-        // about that id and it means the next fifteen will each
+        // about that id and it means the next sixteen will each
         // burn their own transport timeout. One is a symptom, a
         // whole run of them is a dark door, so the loop stops and
         // says what it could not check instead of spending
-        // minutes discovering the same thing sixteen times.
+        // minutes discovering the same thing seventeen times.
         var cleared = Set<UUID>()
         var swept = 0
         var stuck = 0

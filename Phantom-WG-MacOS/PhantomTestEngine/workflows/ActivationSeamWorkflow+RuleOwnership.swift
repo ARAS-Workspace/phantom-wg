@@ -612,9 +612,13 @@ extension ActivationSeamWorkflow {
 
     /// The latch is a SET, so it belongs to exactly one caller.
     ///
-    /// Two removals of the same tunnel can overlap — the detail sheet
-    /// stays up for the seconds a removal takes, and its button can be
-    /// pressed again — and while the second one ran, the first one's
+    /// Two removals of the same tunnel can overlap in the manager, though
+    /// not from the sheet any more: `ActionsSection` disables the row
+    /// while `deleting` is true and `deleteTunnel` guards on the same
+    /// flag, so the second press is not user-reachable today. The latch
+    /// is the manager's own guarantee and is driven here because every
+    /// deferred writer on these paths reads its bar. While the second
+    /// one ran, the first one's
     /// `defer` lowered the bar for both. Every deferred writer on these
     /// paths reads that bar to decide whether it may still write, so
     /// the second half of an overlapping pair ran with its own bar

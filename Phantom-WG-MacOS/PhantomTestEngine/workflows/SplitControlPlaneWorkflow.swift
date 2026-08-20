@@ -283,10 +283,11 @@ final class SplitControlPlaneWorkflow: TestWorkflow {
         await split.stop()
         check(split.state == .stopped, "the coordinator reports stopped — state=\(split.state)")
         // Read from the SYSTEM, not from the enum the line above wrote.
-        // `performStop` reaches `.stopped` on every path it takes,
-        // including the one where a disable was refused, so the check
-        // above states the coordinator's intent; this one states the
-        // machine's.
+        // `performStop` writes `.stopped` on the arm that actually asks
+        // — including when a disable was refused — so the check above
+        // states the coordinator's intent; this one states the machine's.
+        // (The already-stopped arm returns without touching `state` at
+        // all, which is why "every path" was the wrong word.)
         //
         // `stop()` also hands back a `StopOutcome` naming anything that
         // stayed registered, and this step deliberately does not assert
