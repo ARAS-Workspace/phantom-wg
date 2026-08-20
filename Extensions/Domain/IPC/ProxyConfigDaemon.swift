@@ -48,7 +48,12 @@ final class ProxyConfigDaemon: NSObject, NSXPCListenerDelegate, ProxyConfigDaemo
 
     /// Payload buffered while no provider was attached (lazy-spawn
     /// window). Replayed at the next `attach()`.
-    private var pendingConfig: Data?
+    ///
+    /// Decoded rather than raw: `applyConfig` decodes at the door, so a
+    /// payload that will not decode is refused there instead of being
+    /// buffered and failing later at an `attach` whose caller has
+    /// nowhere to report it.
+    private var pendingConfig: SplitTunnelingConfiguration?
 
     /// Guards `provider` and `pendingConfig` together. `applyConfiguration`
     /// is never called while it is held — a provider is free to call back
@@ -56,9 +61,30 @@ final class ProxyConfigDaemon: NSObject, NSXPCListenerDelegate, ProxyConfigDaemo
     /// way to turn this fix into a deadlock.
     private let pendingLock = NSLock()
 
+    /// Where deliveries actually run, one at a time.
+    ///
+    /// Pairing the two fields under one lock closed the window where a
+    /// push fell BETWEEN the decision and the buffer. It left a second
+    /// one open: both `attach` and `applyConfig` released the lock and
+    /// only then called `applyConfiguration`, so two deliveries could be
+    /// in flight with nothing deciding their order — the buffered
+    /// payload from `attach` and a fresh push racing, and the extension
+    /// keeping whichever landed last. A stale list winning that race is
+    /// the same divergence the bootstrap blob repair exists to close,
+    /// arriving by a different door.
+    ///
+    /// Enqueued while the lock is HELD and executed after it is
+    /// released: the order deliveries run in is the order the lock
+    /// admitted them, and `applyConfiguration` still never runs under
+    /// it. `async` rather than `sync` for that second half — a `sync`
+    /// here would hold the lock across the provider's call and rebuild
+    /// the deadlock the lock's own doc warns about.
+    private let deliveryQueue: DispatchQueue
+
     init(machServiceName: String, subsystem: String) {
         self.listener = NSXPCListener(machServiceName: machServiceName)
         self.log = OSLog(subsystem: subsystem, category: "proxy-daemon")
+        self.deliveryQueue = DispatchQueue(label: "\(subsystem).proxy-daemon.delivery")
         super.init()
         self.listener.delegate = self
     }
@@ -73,20 +99,21 @@ final class ProxyConfigDaemon: NSObject, NSXPCListenerDelegate, ProxyConfigDaemo
         // only reader has already looked.
         pendingLock.lock()
         self.provider = provider
-        let data = pendingConfig
+        let pending = pendingConfig
         pendingConfig = nil
+        // Enqueued here, under the lock, and not after it: a push that
+        // takes the lock next queues BEHIND this one and the extension
+        // ends on the newer list. Released first, the two orderings were
+        // decided by the scheduler.
+        if let pending {
+            deliveryQueue.async { provider.applyConfiguration(pending) }
+        }
         pendingLock.unlock()
-        os_log("provider attached", log: log, type: .default)
 
-        guard let data else { return }
-        do {
-            let config = try JSONDecoder().decode(SplitTunnelingConfiguration.self, from: data)
-            provider.applyConfiguration(config)
+        os_log("provider attached", log: log, type: .default)
+        if let pending {
             os_log("attach: drained pending config — apps=%{public}d",
-                   log: log, type: .default, config.apps.count)
-        } catch {
-            os_log("attach: pending config decode FAILED — %{public}@",
-                   log: log, type: .error, error.localizedDescription)
+                   log: log, type: .default, pending.apps.count)
         }
     }
 
@@ -153,32 +180,41 @@ final class ProxyConfigDaemon: NSObject, NSXPCListenerDelegate, ProxyConfigDaemo
     func applyConfig(_ data: Data, reply: @escaping (Bool) -> Void) {
         os_log("RPC applyConfig (%{public}d bytes)", log: log, type: .default, data.count)
 
-        // One decision under one lock: either a provider is published
-        // and this payload goes straight to it, or there is none and the
-        // payload becomes the buffer `attach` will drain. Deciding
-        // outside the lock is what let a push fall between the two.
-        pendingLock.lock()
-        let attached = provider
-        if attached == nil { pendingConfig = data }
-        pendingLock.unlock()
-
-        guard let attached else {
-            os_log("applyConfig — no provider yet, buffered for attach", log: log, type: .default)
-            reply(true)
-            return
-        }
-
+        // Decoded BEFORE the lock, which is also why the buffer holds a
+        // configuration rather than bytes: decoding needs neither field,
+        // and a payload that cannot be read must not take a delivery
+        // slot or sit in a buffer whose eventual reader has no caller to
+        // answer. This is the only place the wire is parsed.
+        let config: SplitTunnelingConfiguration
         do {
-            let config = try JSONDecoder().decode(SplitTunnelingConfiguration.self, from: data)
-            // Outside the lock, deliberately: see `pendingLock`.
-            attached.applyConfiguration(config)
-            os_log("applyConfig — applied apps=%{public}d", log: log, type: .default, config.apps.count)
-            reply(true)
+            config = try JSONDecoder().decode(SplitTunnelingConfiguration.self, from: data)
         } catch {
             os_log("applyConfig — decode FAILED: %{public}@",
                    log: log, type: .error, error.localizedDescription)
             reply(false)
+            return
         }
+
+        // One decision under one lock: either a provider is published
+        // and this payload is queued for it, or there is none and it
+        // becomes the buffer `attach` will drain. Deciding outside the
+        // lock is what let a push fall between the two; ENQUEUING
+        // outside it is what let two deliveries race.
+        pendingLock.lock()
+        let attached = provider
+        if let attached {
+            deliveryQueue.async { attached.applyConfiguration(config) }
+        } else {
+            pendingConfig = config
+        }
+        pendingLock.unlock()
+
+        if attached == nil {
+            os_log("applyConfig — no provider yet, buffered for attach", log: log, type: .default)
+        } else {
+            os_log("applyConfig — queued apps=%{public}d", log: log, type: .default, config.apps.count)
+        }
+        reply(true)
     }
 
     func fetchLogs(reply: @escaping (Data?) -> Void) {
