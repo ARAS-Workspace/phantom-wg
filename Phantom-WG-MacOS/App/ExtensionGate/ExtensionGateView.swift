@@ -5,7 +5,7 @@ import AppKit
 /// system extensions is not in `.activated`. Lists the three
 /// extensions, surfaces the per-row status with a contextual action
 /// button, and offers a single check-again entry (`gate_check_again`)
-/// that re-pulls ground-truth state for all three at once.
+/// that re-pulls ground-truth state for every controller that is not still inside its boot measurement.
 struct ExtensionGateView: View {
     @Environment(ExtensionGateCoordinator.self) private var coordinator
     @Environment(LocalizationManager.self) private var loc

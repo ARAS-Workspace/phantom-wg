@@ -21,9 +21,11 @@ class DNSProxyProviderManager {
 
     // MARK: - Load
 
-    /// Preference-layer warm-up for boot(): primes the shared
-    /// manager's cache with a first `loadFromPreferences` before the
-    /// session coordinator reads enable state.
+    /// Preference-layer warm-up: primes the shared manager's cache with a
+    /// first `loadFromPreferences` before the first enable/disable save
+    /// reaches it. Named for boot because that is where it is called,
+    /// not because the coordinator reads enable state from here — it
+    /// reads that from the store.
     func load() async {
         try? await NEDNSProxyManager.shared().loadFromPreferences()
     }

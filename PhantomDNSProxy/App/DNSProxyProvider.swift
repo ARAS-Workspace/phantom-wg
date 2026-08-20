@@ -9,7 +9,10 @@ import os.log
 /// - Listed app + physical interface present + resolver configured
 ///   → relay to that resolver, pinned to the interface
 /// - Listed app + missing interface or resolver → reject
-/// - Unmatched → relay to system default resolver (no pin)
+/// - Unmatched → relay to system default resolver (no pin); with NO system
+///    resolver at all, rejected too. That last path is a carve-out we
+///    accept knowingly: closing it would need a layer in front of both
+///    extensions, which is a separate architectural decision
 final class DNSProxyProvider: NEDNSProxyProvider, ProxyConfigReceiver {
 
     private let log = OSLog(

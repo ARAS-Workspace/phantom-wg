@@ -398,9 +398,10 @@ extension VaultIntegrityWorkflow {
         await manager.refresh()
 
         // The claim is the OUTCOME, and deliberately not a guard. Three
-        // checks stand between a raised latch and a minted entry here —
-        // the scheduler's, `reload`'s before the reconcile, and the mint
-        // loop's own — and this arrangement raises the latch BEFORE the
+        // checks stand between a raised latch and a minted entry on THIS
+        // path — the scheduler's, `reload`'s before the reconcile, and
+        // the mint loop's own; the scheduler's is the one this
+        // arrangement never routes through — and this arrangement raises the latch BEFORE the
         // pass, so the first one it meets answers and the others are
         // never consulted. Naming any single guard in this sentence
         // would be crediting a line the step cannot separate from its

@@ -549,8 +549,10 @@ class TunnelVaultClient {
         // value — the custody and isolation field signal — lives in
         // its TRANSITIONS. So the line fires when the count moves,
         // once for the initial baseline, and again on the first
-        // answer after a dark window (the reset above), while every
-        // failure path keeps its own line unconditionally.
+        // answer after a dark window (the reset above). The ANSWERED-but-
+        // failed paths keep their own line unconditionally; an
+        // unreachable answer is left to `withRaceTimeout`'s timeout
+        // line, and a call spared by the dark window prints nothing.
         if configs.count != lastLoggedUsableCount {
             os_log("fetchAll — %{public}d usable payload(s)", log: log, type: .default, configs.count)
             lastLoggedUsableCount = configs.count
@@ -704,5 +706,9 @@ private enum RawReadAll: VaultAnswerable {
 }
 
 // The one-shot continuation guard these races ride lives in
-// Infrastructure/Concurrency/SingleResume.swift — shared with the
-// tunnels manager's deadline helper and the DEBUG harness.
+// Infrastructure/Concurrency/SingleResume.swift — shared with every
+// surface that races an answer against a deadline. The roster is
+// `grep "SingleResume("`, not a sentence: this one named two callers
+// and never counted the five in `ProxyConfigDaemonClient`, nor the log
+// store, the split-tunnelling chain, or the activation seam. Its twin
+// in `SingleResume.swift` was cut down to the grep for this reason.

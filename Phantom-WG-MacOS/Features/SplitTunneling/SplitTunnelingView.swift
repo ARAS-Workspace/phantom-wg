@@ -216,10 +216,12 @@ struct SplitTunnelingView: View {
             // Disable and the destructive Reset sending the same
             // `stop()` in the same window, so the sentence claimed a
             // closure that had not happened. All three read
-            // `transitionInFlight` now. The race itself is still open
-            // inside the coordinator, which accepts `start` while
-            // `.stopping`; that guard belongs with the in-flight handle
-            // the tunnel side already carries.
+            // `transitionInFlight` now. The coordinator closed its own
+            // half 45 minutes after this sentence was written: `706c026`
+            // put every public entry behind one `inFlight` chain, so two
+            // transitions cannot interleave. What remains is narrower
+            // than the sentence used to claim — if the chain's 60s
+            // ceiling expires, the waiting link proceeds anyway.
             SplitTunnelingEnableSection(
                 isEnabled: Binding(
                     get: { sessionCoordinator.state.isUserVisiblyActive },

@@ -24,9 +24,11 @@ import Foundation
 /// go on to the system resolver unpinned. What the list buys is that no
 /// APP is bypassed — not that the extension sits idle.
 ///
-/// The coordinator's API is config-in, so a run drives it without
-/// consulting `SplitTunnelingStore` for any decision; the user's own
-/// configuration is read once, to put it back.
+/// The coordinator's API is config-in, so no lifecycle call here
+/// consults `SplitTunnelingStore` to decide what to push; the user's own
+/// configuration is read once, to put it back. The door is the exception
+/// and reads it twice — persisted intent is one of the three readings it
+/// takes before deciding the feature is at rest.
 ///
 /// And it goes LAST in the catalog, after the two fabricated workflows
 /// that used to be the tail. Those touch neither the real vault nor the
@@ -227,10 +229,11 @@ final class SplitControlPlaneWorkflow: TestWorkflow {
               "and the adopted state is still running, written after the pushes rather than before them")
     }
 
-    /// Serialization, observed rather than argued. `queuedLinks` is the
-    /// fact the chain publishes: a link that has not run a line of its
-    /// operation yet is waiting, and `state` cannot say so because
-    /// nothing has moved.
+    /// Serialization, observed rather than argued. The step reads
+    /// `maxChainDepth`, the chain's own high-water mark of
+    /// `queuedLinks + 1`, because the gauge itself is a momentary
+    /// reading a sampler can miss; `state` cannot say any of it, because
+    /// a link that has not run a line of its operation has moved nothing.
     private func transitionsQueue() async {
         guard doorOpen else { return skip("the door found the feature in use") }
         guard split.state == .running else { return skip("no running session — the start step owns that") }

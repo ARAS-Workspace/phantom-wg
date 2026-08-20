@@ -7,7 +7,9 @@ import Foundation
 /// (keys, addresses, endpoint, integers) is deferred to
 /// `TunnelDraft.validate()` — the parser only rejects input it cannot
 /// structurally decompose (missing sections, missing required keys,
-/// malformed `Tunnel = udp://h:p:h:p`).
+/// malformed `Tunnel = udp://h:p:h:p`), plus the two it refuses on policy
+/// rather than on shape: empty input, and a repeated section header
+/// (`duplicateSection`) whose ambiguity it declines to resolve.
 ///
 /// Ghost rule: when a `[Wstunnel]` section is present, the peer
 /// `Endpoint` is system-defined (the wstunnel listener), so the key

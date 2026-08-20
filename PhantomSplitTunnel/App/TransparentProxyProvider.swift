@@ -221,7 +221,7 @@ final class TransparentProxyProvider: NETransparentProxyProvider, ActiveFlowRela
 
     // MARK: - Interface Loss
 
-    /// Strict mode: when the resolved interface goes away we tear
+    /// Strict mode: when the resolved interface becomes NIL we tear
     /// down every active relay rather than letting them stall in
     /// `NWConnection`'s `.waiting`. New flows get rejected by
     /// `handleNewFlow`.

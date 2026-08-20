@@ -111,10 +111,11 @@ extension TunnelsManager {
             tunnel.pendingDisarmCount += 1
             let disarm = Task {
                 // Lowered by `defer` rather than at each exit. This
-                // branch has four — barred, a newer intent outranking
-                // this stop, a refused save, and the ordinary one —
-                // and two of them are bare `return`s written years
-                // apart. A count left standing at any one of them
+                // branch has three — barred, a newer intent outranking
+                // this stop, and the ordinary one, which a refused save
+                // also takes after writing its caption — and two of them
+                // are bare `return`s written years apart. A count left
+                // standing at any one of them
                 // would leave the row saying it is stopping forever,
                 // and `defer` is the only shape that also answers the
                 // fifth exit somebody adds later.
@@ -678,7 +679,7 @@ extension TunnelsManager {
     /// in-rung helper, because two copies of a line that must say the
     /// same thing is how they start saying different ones — the exact
     /// reason the watchdog stopped keeping its own. Two older lines
-    /// still say it their own way and still say it wrongly: the
+    /// still say it their own way: the
     /// uninstall sweep's line and `remove()`'s, which used to read
     /// "survived the sweep" and "recovery rule stayed armed" and now
     /// say what this one says. Neither refusal establishes what

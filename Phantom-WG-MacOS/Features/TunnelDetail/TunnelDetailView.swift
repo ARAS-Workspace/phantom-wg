@@ -1,8 +1,9 @@
 import SwiftUI
 
 /// Tunnel detail — read-only presentation of the saved configuration
-/// plus live status, stats, and logs. Status and stats come from the
-/// identity the system's preferences hold, so they render instantly;
+/// plus live status, stats, and logs. Status comes from the identity the
+/// system's preferences hold, so it renders instantly; stats are polled
+/// from the running extension and read as dashes until the first answer;
 /// the configuration itself is fetched from the extension's vault,
 /// which is the only place a tunnel's secrets exist. Editing happens
 /// as raw text in `TunnelEditView` (Actions → Edit Config), enabled
@@ -191,8 +192,13 @@ struct TunnelDetailView: View {
         }
     }
 
-    /// Reads the vault, retrying a few times before giving up. The
-    /// loop lives in the screen's task, so walking away cancels it.
+    /// Reads the vault, retrying a few times before giving up.
+    ///
+    /// Only the read started from the screen's own `.task` is cancelled
+    /// by walking away. The other two callers — the retry button and the
+    /// return from the editor — run in unstructured `Task {}`s that
+    /// outlive the screen, so their ladders keep sleeping after it is
+    /// gone.
     private func loadConfig() async {
         configLoaded = false
         readAttempt = 0

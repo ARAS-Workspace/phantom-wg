@@ -3,8 +3,9 @@ import NetworkExtension
 
 /// One UDP flow can send datagrams to many destinations from a single
 /// socket (DNS, QUIC, game servers, …), so we maintain a per-endpoint
-/// `NWConnection` cache. Connections live for the flow's lifetime;
-/// when the flow closes, every cached connection is cancelled.
+/// `NWConnection` cache. A cached connection lives until it fails or is
+/// cancelled — the next datagram to that endpoint rebuilds it — and when
+/// the flow closes, every cached connection is cancelled.
 ///
 /// Tangle with the NetworkExtension vs. Network `NWEndpoint` types:
 /// the flow callbacks vend the older `NetworkExtension.NWEndpoint`

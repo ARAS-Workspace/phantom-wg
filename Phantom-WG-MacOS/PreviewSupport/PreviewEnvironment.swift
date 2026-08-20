@@ -7,10 +7,13 @@ extension View {
     /// injects the full environment stack in one call, so every
     /// `#Preview` reads like `SomeView().previewEnvironment()`.
     ///
-    /// One deliberate difference from production: `TunnelsManager` is
+    /// Two deliberate differences from production. The first: `TunnelsManager` is
     /// injected here as well. The app injects it a level deeper
     /// (`TunnelContentView` → `TunnelListView`) only because it loads
-    /// asynchronously; previews start with it ready.
+    /// asynchronously; previews start with it ready. The second is a
+    /// subtraction: `ConnectionGateCoordinator` is NOT injected here even
+    /// though the app injects it, which is why `ConnectionGateView`'s own
+    /// previews build one by hand.
     @MainActor
     func previewEnvironment(
         tunnels: TunnelsManager? = nil,

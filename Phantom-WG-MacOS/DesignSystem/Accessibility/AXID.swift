@@ -10,6 +10,9 @@ import Foundation
 /// one breaks anything that queries by identifier.
 ///
 /// Convention: `<feature>.<sub-feature>.<element>[.<variant>]`
+/// Exception:  two `TunnelDetail` strings predate the convention and
+///             keep their spelling because these identifiers are a
+///             public contract — renaming them would break queries
 /// Style:      dot-separated, lower-kebab segments
 /// Dynamic:    row-level identifiers take the user-visible tunnel name
 enum AXID {

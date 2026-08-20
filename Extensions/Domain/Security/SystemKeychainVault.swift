@@ -26,7 +26,7 @@ import os.log
 /// there is a single place where a tunnel's secrets exist.
 ///
 /// The System keychain is machine-wide, not per-user, so every item
-/// records the uid that created it and every operation is scoped to a
+/// records the uid that created it and every XPC-facing operation is scoped to a
 /// caller. Without that, one account's app could read, overwrite or
 /// project another account's tunnels — the price of the one keychain
 /// domain a system extension can reach.

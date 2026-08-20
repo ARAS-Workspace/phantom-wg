@@ -222,7 +222,11 @@ final class SplitTunnelingSessionCoordinator {
         booted: SplitTunnelingConfiguration,
         freshConfig: @MainActor @escaping () -> SplitTunnelingConfiguration
     ) async -> ReconfigureOutcome {
-        log("boot: start (persisted intent isEnabled=\(booted.isEnabled))")
+        // Labelled "at entry" because that is what it is: `booted` is the
+        // snapshot taken before the chain, and the arm below decides on
+        // `config`, re-read after both `load()` awaits. An edit accepted in
+        // that window makes this line and the decision disagree.
+        log("boot: start (persisted intent at entry isEnabled=\(booted.isEnabled), may be superseded after loads)")
         await split.load()
         await dns.load()
         let config = freshConfig()
@@ -439,7 +443,12 @@ final class SplitTunnelingSessionCoordinator {
             _ = await self.performStop()
             await self.split.remove()
             await self.dns.remove()
-            self.log("purgeForUninstall: proxy preference entries removed")
+            // "requested", not "removed": both `remove()` calls above
+            // return Void and swallow their own save with `try?`, and both
+            // document themselves as best-effort. This line announced a
+            // deletion it cannot know happened — the same shape this
+            // campaign closed for "SplitTunnel down" in the rollback.
+            self.log("purgeForUninstall: proxy preference entry removal requested (best-effort)")
         }
     }
 

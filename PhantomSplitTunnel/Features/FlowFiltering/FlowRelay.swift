@@ -4,7 +4,10 @@ import os.log
 
 /// Protocol the relays use to register themselves with the provider so
 /// it can proactively tear them down when the selected physical
-/// interface goes away. Without registration we'd leave `.waiting`
+/// interface becomes UNRESOLVABLE. A change from one interface to
+/// another is not that case: `handleInterfaceChange` returns on any
+/// non-nil reading, so relays already running keep the interface they
+/// were pinned to. Without registration we'd leave `.waiting`
 /// NWConnections spinning until the app times out; strict mode
 /// requires immediate close so the app sees a connection failure and
 /// the user decides the next move.

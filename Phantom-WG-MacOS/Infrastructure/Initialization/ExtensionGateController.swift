@@ -241,7 +241,7 @@ final class ExtensionGateController: NSObject, OSSystemExtensionRequestDelegate 
     ///
     /// Silence alone never activates immediately. The one bounded
     /// exception: an extension that stays silent through every patient
-    /// round while properties call it enabled is a daemon that cannot
+    /// round while properties either call it enabled OR cannot be queried at all is a daemon that cannot
     /// speak identity — a binary from before the identity contract, or
     /// a wedged process. Both are exactly what a replacement repairs.
     func settle() async {
@@ -266,7 +266,8 @@ final class ExtensionGateController: NSObject, OSSystemExtensionRequestDelegate 
                 return
             }
 
-            switch await propertiesVerdict() {
+            let verdict = await propertiesVerdict()
+            switch verdict {
             case .noLive:
                 log("settle: probe silent + no live entry → activate()")
                 activate()
@@ -276,7 +277,11 @@ final class ExtensionGateController: NSObject, OSSystemExtensionRequestDelegate 
                 status = .needsApproval
                 return
             case .enabled, .inconclusive:
-                log("settle: probe silent though properties enabled — attempt \(attempt)/\(Self.settleAttempts)")
+                // Both arms land here and the sentence must say which: `.enabled`
+                // is field evidence, `.inconclusive` is the absence of any.
+                // Printed as one word for years, it sent diagnosis after a
+                // property the query never returned.
+                log("settle: probe silent, properties \(verdict) — attempt \(attempt)/\(Self.settleAttempts)")
                 if attempt < Self.settleAttempts {
                     try? await Task.sleep(for: .milliseconds(600 * attempt))
                 }

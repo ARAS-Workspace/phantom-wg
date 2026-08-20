@@ -240,7 +240,7 @@ final class DNSUDPFlowRelay {
 
 /// Pumps TCP DNS streams. Length-prefixed message framing is preserved
 /// end-to-end; we just copy bytes between the flow and the
-/// interface-bound connection.
+/// upstream connection — interface-bound only in the listed-app mode.
 final class DNSTCPFlowRelay {
 
     private let flow: NEAppProxyTCPFlow

@@ -13,9 +13,10 @@ import os.log
 /// uninstall, replacement upgrade) the root view falls back to the
 /// gate panel and the user is asked to bring it back.
 ///
-/// The coordinator re-issues `checkAll()` whenever the app comes to
-/// the foreground so a System Settings round-trip is reflected
-/// without a manual refresh.
+/// The coordinator re-issues `checkAll()` from two directions: the
+/// workspace observer pushes on every extension state transition, and
+/// the foreground notification re-checks as a belt, so a System Settings
+/// round-trip is reflected without a manual refresh either way.
 @Observable
 @MainActor
 final class ExtensionGateCoordinator {
@@ -176,8 +177,9 @@ final class ExtensionGateCoordinator {
     // MARK: - Actions
 
     /// Pull ground-truth state from the OS for every controller. The
-    /// top-level check-again button (`gate_check_again`) and the
-    /// foreground observer both bind to this; per-row buttons bind to the
+    /// top-level check-again button (`gate_check_again`), the foreground
+    /// observer, the workspace echo's two measurements and `start()`'s
+    /// post-boot path all bind to this; per-row buttons bind to the
     /// individual controller's `activate()`. Controllers still inside
     /// their boot measurement are skipped — the settle tree owns the
     /// verdict until it returns.

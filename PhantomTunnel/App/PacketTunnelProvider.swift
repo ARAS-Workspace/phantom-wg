@@ -22,7 +22,10 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
     /// The tunnel is treated as one layer — ghost mode is wstunnel +
     /// WireGuard; standalone is WireGuard alone. Reset tears each
     /// component down in reverse packet-flow order and rebuilds them
-    /// in forward order, never touching the provider's utun/routing
+    /// in forward order. It does not RE-CONFIGURE the provider's routing
+    /// surface, but the rebuild does write it again along the way — the
+    /// absolute in the older wording was wider than the call chain; see
+    /// the note further down for the shape that is accurate. utun/routing
     /// surface so packets never escape to the physical interface.
     private var currentTunnelConfig: TunnelConfig?
     private var currentWireGuardConfig: TunnelConfiguration?
@@ -212,7 +215,8 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
             TunnelLogger.clear()
             completionHandler(Data([2]))
         case 3:
-            // Reset the tunnel layer without touching utun / routing.
+            // Reset the tunnel layer; utun and routing are not reconfigured
+            // here, though the rebuild path writes the surface again.
             // Preserves the provider surface so no packet escapes to
             // the physical interface during the reset window.
             //

@@ -108,11 +108,12 @@ final class SanityWorkflow: TestWorkflow {
         }
 
         // Only a stale PhantomTunnel stops the suite, and the asymmetry
-        // is the point: every workflow in this catalogue drives the
-        // tunnel extension, so a stale one makes the whole report a
-        // statement about code that is not running. The proxy
-        // extensions are measured here and driven only by the last workflow in
-        // this catalogue, so
+        // is the point: every workflow that drives a real session or the
+        // real vault drives the tunnel extension — all but the fabricated
+        // pair TestCatalog names (ExtensionGate, TunnelEdit) — so a stale
+        // one makes most of the report a statement about code that is not
+        // running. The proxy extensions are measured here and driven only
+        // by the last workflow in this catalogue, so
         // a stale one is worth a red line and nothing more — aborting
         // on it would let an untouched neighbour cancel a run that was
         // never about it. A rebuild alone fixes neither: the stamp
