@@ -56,18 +56,23 @@ final class SplitTunnelingStore {
     /// settles nothing is not a report that the trouble is over.
     private(set) var lastPushFailed = false
 
-    /// Records a push made outside the store's own mutation path —
-    /// `boot`'s realign is one, and its verdict used to end in os_log
-    /// while its comment claimed otherwise.
-    /// Records what a stop left behind. `.landed` clears the row.
+    /// Records what a stop left behind.
+    ///
+    /// Only `.landed` clears the row, and `.alreadyStopped` deliberately
+    /// does not: a stop that found the feature already down asked
+    /// nothing of either extension, so it has no standing to say the
+    /// residue is gone. `reset()` sends exactly that stop.
     func recordStop(_ outcome: SplitTunnelingSessionCoordinator.StopOutcome) {
-        if case .residue(let names) = outcome {
-            stopResidue = names
-        } else {
-            stopResidue = []
+        switch outcome {
+        case .residue(let names): stopResidue = names
+        case .landed: stopResidue = []
+        case .alreadyStopped: break
         }
     }
 
+    /// Records a push made outside the store's own mutation path —
+    /// `boot`'s realign is one, and its verdict used to end in os_log
+    /// while its comment claimed otherwise.
     func recordPush(_ outcome: SplitTunnelingSessionCoordinator.ReconfigureOutcome) {
         pushSequence += 1
         lastPush = PushReport(outcome: outcome, sequence: pushSequence)

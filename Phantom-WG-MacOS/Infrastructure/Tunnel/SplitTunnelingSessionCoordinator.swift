@@ -233,13 +233,15 @@ final class SplitTunnelingSessionCoordinator {
         case .connected, .connecting:
             log("boot: SplitTunnel session already live → adopting .running")
             // The adopted session may be running a list this app never
-            // sent it. SplitTunnel's bootstrap blob is written in two
-            // places — `enable`, called only from `start`, and
+            // sent it. Until this arm existed the blob had two writers
+            // — `enable`, called only from `start`, and
             // `persistConfiguration`, called only from `reconfigure` on
             // a user edit — so an extension that respawned after the
             // last of those came up with whatever was current at THAT
             // moment, and nothing repaired it. On a machine nobody
-            // edits, the divergence lasted forever.
+            // edits, the divergence lasted forever. The call thirty
+            // lines below is the third writer, and it is here precisely
+            // so a respawn no longer has the last word.
             //
             // Deliberately NOT `reconfigure`: that also persists the
             // DNS `providerConfiguration`, and a boot has no business
@@ -376,7 +378,7 @@ final class SplitTunnelingSessionCoordinator {
         switch state {
         case .stopped, .stopping:
             log("stop: already \(state) — no-op")
-            return .landed
+            return .alreadyStopped
         case .running, .starting:
             break
         }
@@ -463,6 +465,17 @@ final class SplitTunnelingSessionCoordinator {
     enum StopOutcome: Equatable {
         /// Both extensions came down and the system took both writes.
         case landed
+        /// Nothing was asked: the feature was already down when the stop
+        /// arrived.
+        ///
+        /// Its own case rather than `.landed`, and the difference is not
+        /// cosmetic. Collapsing them let a stop that touched NOTHING
+        /// report the same verdict as one that took both extensions
+        /// down, so pressing Reset over an already-stopped feature
+        /// cleared a residue row while the entry it named was still
+        /// registered — the row disappearing on its own, which is the
+        /// exact lie the row exists to prevent.
+        case alreadyStopped
         /// These did not come down. Display names, ready for a sentence.
         case residue([String])
     }
