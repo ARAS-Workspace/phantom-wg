@@ -116,7 +116,7 @@ enum TunnelManagementError: Error, LocalizedError {
     /// error nobody can reach. Returning an optional lets every call
     /// site read the same way — ask for the failure, throw it if there
     /// is one — with the compiler still forcing a new `Write` case to be
-    /// answered here rather than collapsed at five sites.
+    /// answered here rather than collapsed at six sites.
     static func forVaultWrite(_ outcome: TunnelVaultClient.Write) -> TunnelManagementError? {
         switch outcome {
         case .done: return nil

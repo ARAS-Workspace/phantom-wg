@@ -101,9 +101,19 @@ struct SplitTunnelingView: View {
     /// Nothing told the user, and the next start carries a payload the
     /// running session never saw.
     ///
-    /// The banner's "Switch to Auto" reads this too — it repins the
-    /// running session's interface exactly as the picker does, and it
-    /// escaped the lock on the first pass. The system DNS resolver
+    /// The banner does NOT read this, and that is deliberate rather
+    /// than an oversight. It appears only when the selected interface
+    /// cannot be resolved — the moment the user is stuck — and both of
+    /// its buttons are escape hatches. This rule reads `state !=
+    /// .running`, which is exactly the state a failed start leaves
+    /// behind, so applying it there would grey out the only two ways
+    /// out at the one moment they are needed. Nothing shuts the feature
+    /// down on its own when an interface disappears: the session stays
+    /// up, the extension stays registered, and a listed app's flow is
+    /// rejected with `EHOSTUNREACH` rather than leaked — intervening is
+    /// the user's call, and these two buttons are how it is made. The
+    /// picker below is an ordinary editor and keeps the rule. The
+    /// system DNS resolver
     /// toggle does NOT read this: it writes the same app array the
     /// locked list writes, but it stays usable while the feature is off
     /// by deliberate choice, so `transitionInFlight` is all that gates
@@ -168,15 +178,18 @@ struct SplitTunnelingView: View {
                         onSwitchToAuto: { store.setInterfaceSelection(.auto) },
                         onDisable: { store.setEnabled(false) }
                     )
-                    // Gated like the master toggle, not like an editor.
-                    // `editorsDisabled` was too strict here: it reads
-                    // `!= .running`, so with the intent ON and the
-                    // session down — exactly the state a failed start
-                    // leaves — the one control offering a way OUT of the
-                    // feature was dead, while the toggle beside it was
-                    // live. "Switch to Auto" is an edit and keeps the
-                    // editor rule; "Disable Feature" drives the
-                    // lifecycle and keeps the lifecycle rule.
+                    // One rule for the whole banner, and both buttons
+                    // share it on purpose. `editorsDisabled` was too
+                    // strict here: it reads `!= .running`, so with the
+                    // intent ON and the session down — exactly the state
+                    // a failed start leaves — it killed BOTH ways out of
+                    // an interface that no longer resolves. "Switch to
+                    // Auto" is the one-press repair for that state and
+                    // "Disable Feature" is the exit; gating either on
+                    // the editor rule turns a stuck screen into a
+                    // trapped one. They are still gated on the lifecycle
+                    // rule, because a repin issued mid-transition would
+                    // race the transition's own writes.
                     .disabled(transitionInFlight)
                     .listRowInsets(EdgeInsets())
                     .listRowBackground(Color.clear)

@@ -18,7 +18,7 @@ final class SplitTunnelingStore {
     /// delegated through the coordinator. Weak to avoid cycle.
     @ObservationIgnored weak var sessionCoordinator: SplitTunnelingSessionCoordinator?
 
-    /// The last live push and the count of pushes before it. The
+    /// The last live push and its 1-based position in this run's pushes. The
     /// counter is what makes a REPEAT of the same verdict reach the
     /// screen: without it an identical second failure would leave the
     /// value unchanged, `onChange` would not fire, and the second
@@ -42,8 +42,11 @@ final class SplitTunnelingStore {
     /// user asked for a stop and the request went out; what failed is
     /// the system accepting the write. A retry loop here would fight the
     /// same refusal on a timer with nothing new to offer, so the row
-    /// says what is still registered and lets the user decide. It clears
-    /// when a start re-registers both extensions — until then the entry
+    /// says what is still registered and lets the user decide. Two
+    /// writers clear it and no third: a start that re-registers both
+    /// extensions, and a later stop that lands both. A stop that asked
+    /// nothing — `.alreadyStopped` — deliberately leaves it standing,
+    /// because until something re-registers or takes down that entry it
     /// really is still there, and a row that disappeared on its own
     /// would be the lie this campaign spent itself removing.
     private(set) var stopResidue: [String] = []
@@ -70,9 +73,10 @@ final class SplitTunnelingStore {
         }
     }
 
-    /// Records a push made outside the store's own mutation path —
-    /// `boot`'s realign is one, and its verdict used to end in os_log
-    /// while its comment claimed otherwise.
+    /// Records a push, wherever it came from: `scheduleReload` makes one
+    /// for every edit this store persists, and `boot`'s realign makes one
+    /// from outside it. The earlier sentence here named only the second
+    /// and called it the exception — it is the minority, not the rule.
     func recordPush(_ outcome: SplitTunnelingSessionCoordinator.ReconfigureOutcome) {
         pushSequence += 1
         lastPush = PushReport(outcome: outcome, sequence: pushSequence)

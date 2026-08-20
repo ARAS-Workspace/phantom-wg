@@ -78,7 +78,12 @@ class TunnelContainer: Identifiable {
     /// like the rung: a finished task answers instantly, a cleared
     /// handle costs the wait.
     @ObservationIgnored var pendingDisarmTask: Task<Void, Never>?
-    /// How many stop-path disarms are in flight on this row.
+    /// How many ARMED-stop disarms are in flight on this row.
+    ///
+    /// The armed branch is the only one that raises it.
+    /// `repairRuleAfterStop` also puts a stop-path disarm in flight and
+    /// is deliberately outside the count: it parks on the handle, not
+    /// on this gauge.
     ///
     /// OBSERVED, unlike the handle directly above it, and that is the
     /// whole point. The handle is what the removal waits on; this is

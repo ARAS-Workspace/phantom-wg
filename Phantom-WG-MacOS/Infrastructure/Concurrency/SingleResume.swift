@@ -5,10 +5,11 @@ import Synchronization
 /// deadline. The first finish wins, the rest are dropped; resuming a
 /// `CheckedContinuation` twice traps, so the one-shot flag lives
 /// inside a `Mutex` and the type is `Sendable` by compiler proof
-/// rather than by annotation. Shared by the vault client's transport
-/// races, the proxy daemon clients' RPCs and their race-timeout, the
-/// tunnels manager's `bounded` deadline, and the DEBUG harness — one
-/// implementation, no drifting mirrors.
+/// rather than by annotation. Shared by every surface that races an
+/// answer against a deadline — the roster is `grep "SingleResume("`,
+/// not a sentence here: the sentence named four callers, three more
+/// arrived after it was written, and it counted none of them. One
+/// implementation, and now no list to drift either.
 final class SingleResume<T: Sendable>: Sendable {
     private let continuation: CheckedContinuation<T, Never>
     private let done = Mutex(false)

@@ -182,8 +182,16 @@ final class ExtensionGateCoordinator {
     /// their boot measurement are skipped — the settle tree owns the
     /// verdict until it returns.
     func checkAll() {
-        log("checkAll() — refresh all controllers (allReady=\(allReady))")
-        for controller in controllers where !controller.isSettling {
+        // Counted rather than announced. The line used to say "refresh
+        // all controllers" over a loop that skips anything still inside
+        // its boot measurement — and at boot that is every one of them,
+        // so the log claimed three refreshes where none were issued.
+        // The filter arrived a commit after the sentence and the
+        // sentence never caught up.
+        let due = controllers.filter { !$0.isSettling }
+        log("checkAll() — refreshing \(due.count)/\(controllers.count), "
+            + "\(controllers.count - due.count) still settling (allReady=\(allReady))")
+        for controller in due {
             controller.refresh()
         }
     }

@@ -1014,10 +1014,12 @@ class TunnelsManager {
         //    on these paths reads exactly that latch to decide whether
         //    it may still write, so the second half of an overlapping
         //    pair would run with its own bar already down. Nothing is
-        //    thrown because nothing went wrong: the detail sheet stays
-        //    up for the seconds this takes and its button can be
-        //    pressed again, and an error banner over a deletion that IS
-        //    happening would be a lie the user has to act on.
+        //    thrown because nothing went wrong. The sheet's own button
+        //    is no longer the way in — `ActionsSection` disables the row
+        //    while `deleting` is true and `deleteTunnel` guards on the
+        //    same flag — so today this is defence for callers that do
+        //    not pass through that gate. An error banner over a deletion
+        //    that IS happening would be a lie the user has to act on.
         guard !removingIds.contains(tunnel.id) else { return }
         removingIds.insert(tunnel.id)
         defer { removingIds.remove(tunnel.id) }

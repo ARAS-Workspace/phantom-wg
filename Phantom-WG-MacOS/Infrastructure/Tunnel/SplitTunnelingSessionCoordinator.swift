@@ -367,9 +367,16 @@ final class SplitTunnelingSessionCoordinator {
     /// carve-out is gone before DNSProxy unwinds.
     @discardableResult
     func stop() async -> StopOutcome {
-        var outcome = StopOutcome.landed
+        // `.alreadyStopped` rather than `.landed` on both fallbacks, and
+        // for the reason the case exists: a coordinator that went away
+        // before the chain reached it asked NOTHING of either extension,
+        // and `.landed` is a claim that both came down. Defaulting to it
+        // reopened, through a second door, the class `.alreadyStopped`
+        // was introduced to close — `recordStop` would have cleared a
+        // residue row naming an entry still registered.
+        var outcome = StopOutcome.alreadyStopped
         await serialized { [weak self] in
-            outcome = await self?.performStop() ?? .landed
+            outcome = await self?.performStop() ?? .alreadyStopped
         }
         return outcome
     }
@@ -436,18 +443,6 @@ final class SplitTunnelingSessionCoordinator {
         }
     }
 
-    /// What a live config change actually did. The caller needs the two
-    /// verdicts separately because they fail into different worlds: a
-    /// SplitTunnel push that did not land leaves listed apps inside the
-    /// tunnel, while a DNSProxy push that did not land leaves their DNS
-    /// going to the tunnel's resolver — the asymmetric routing this
-    /// architecture exists to prevent.
-    ///
-    /// `.notRunning` is not a failure and not a success: the payload is
-    /// on disk and the next `start` carries it. It is reported rather
-    /// than swallowed because the window it names is reachable — a user
-    /// editing the list while the feature is still coming up lands here
-    /// and nothing tells them their edit did not reach the extensions.
     /// What a stop left behind, named.
     ///
     /// A `Bool` here would repeat the mistake `Push` was introduced to
@@ -480,6 +475,18 @@ final class SplitTunnelingSessionCoordinator {
         case residue([String])
     }
 
+    /// What a live config change actually did. The caller needs the two
+    /// verdicts separately because they fail into different worlds: a
+    /// SplitTunnel push that did not land leaves listed apps inside the
+    /// tunnel, while a DNSProxy push that did not land leaves their DNS
+    /// going to the tunnel's resolver — the asymmetric routing this
+    /// architecture exists to prevent.
+    ///
+    /// `.notRunning` is not a failure and not a success: the payload is
+    /// on disk and the next `start` carries it. It is reported rather
+    /// than swallowed because the window it names is reachable — a user
+    /// editing the list while the feature is still coming up lands here
+    /// and nothing tells them their edit did not reach the extensions.
     enum ReconfigureOutcome: Equatable {
         case notRunning
         case pushed(split: ProxyConfigDaemonClient.Push, dns: ProxyConfigDaemonClient.Push)

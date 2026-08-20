@@ -99,12 +99,21 @@ final class ConnectionGateCoordinator {
         scheduleCheck(immediate: true)
     }
 
+#if DEBUG
     /// One evaluation pass, run to completion — the deterministic
     /// entry the DEBUG harness drives directly (the notification path
     /// is debounced and unfit for a step's verdict).
+    ///
+    /// Compiled only in DEBUG, which its own sentence has always
+    /// claimed and the build did not enforce: production calls it from
+    /// nowhere, `IsolationWorkflow` calls it from four places, and every
+    /// sibling written for the same reason — `armProvenSilenceForTesting`,
+    /// `isStoreHeldForTeardown`, `prune` — already carries this gate. It
+    /// shipped in Release with no caller until this line.
     func evaluateNow() async {
         await evaluate()
     }
+#endif
 
     // MARK: - Private
 
