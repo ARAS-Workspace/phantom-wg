@@ -1,3 +1,52 @@
+// ██████╗ ██╗  ██╗ █████╗ ███╗   ██╗████████╗ ██████╗ ███╗   ███╗
+// ██╔══██╗██║  ██║██╔══██╗████╗  ██║╚══██╔══╝██╔═══██╗████╗ ████║
+// ██████╔╝███████║███████║██╔██╗ ██║   ██║   ██║   ██║██╔████╔██║
+// ██╔═══╝ ██╔══██║██╔══██║██║╚██╗██║   ██║   ██║   ██║██║╚██╔╝██║
+// ██║     ██║  ██║██║  ██║██║ ╚████║   ██║   ╚██████╔╝██║ ╚═╝ ██║
+// ╚═╝     ╚═╝  ╚═╝╚═╝  ╚═╝╚═╝  ╚═══╝   ╚═╝    ╚═════╝ ╚═╝     ╚═╝
+//
+// Copyright (c) 2025 Rıza Emre ARAS <r.emrearas@proton.me>
+// Licensed under AGPL-3.0 - see LICENSE file for details
+// WireGuard® is a registered trademark of Jason A. Donenfeld.
+//
+// Vault Integrity — Custody Writes
+//
+// Steps belonging to `VaultIntegrityWorkflow`; the registry lives in the
+// main file. They ask which store a removal empties first, and what a
+// removal that only half finishes leaves behind.
+//
+// The steps differ by what each one ARRANGES, and that is the taxonomy a
+// new step should be placed into. No count is kept here on purpose: the
+// count has been wrong twice, both times because a step was added without
+// re-reading the header, and a taxonomy that silently stops covering the
+// file is worse than none.
+//
+// The kinds:
+//
+//   - Fail one STORE and read which one the removal had already emptied.
+//     An order is only visible in what survives when the second half does
+//     not happen.
+//   - Hold a SUCCESSFUL removal's window open instead, because the bar it
+//     measures — the restore refusing to re-mint an entry being removed —
+//     exists only while the removal is still running.
+//   - Fail the ENTRY and then read the ROW rather than either store: drive
+//     the removal into a world where row and system already disagree, and
+//     ask what it hands back.
+//   - Fail a store and then KEEP GOING, because the claim is not what the
+//     failure left but what the process does about it afterwards.
+//   - Read neither store: fail a write twice, each way a vault can fail,
+//     and read what the USER is handed — the two failures give opposite
+//     instructions and must not arrive under one sentence.
+//   - Fail nothing and read WHICH ROW comes back: hold a creation open
+//     inside its own append window, drive a reload into it, and ask
+//     whether the list carries the id once or twice.
+//   - Fail nothing and take the STORE: raise the uninstall latch and read
+//     what a restore and a realign each do about it. Both arrange the
+//     latch DURING a suspension, because a latch raised beforehand is
+//     answered by an earlier guard and proves the wrong thing.
+//   - Hold a REMOVAL open and run a teardown method into it.
+//   - Drive the teardown's LAST step, the entry removal itself.
+
 #if DEBUG
 import Foundation
 import NetworkExtension

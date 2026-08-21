@@ -1,3 +1,67 @@
+// ██████╗ ██╗  ██╗ █████╗ ███╗   ██╗████████╗ ██████╗ ███╗   ███╗
+// ██╔══██╗██║  ██║██╔══██╗████╗  ██║╚══██╔══╝██╔═══██╗████╗ ████║
+// ██████╔╝███████║███████║██╔██╗ ██║   ██║   ██║   ██║██╔████╔██║
+// ██╔═══╝ ██╔══██║██╔══██║██║╚██╗██║   ██║   ██║   ██║██║╚██╔╝██║
+// ██║     ██║  ██║██║  ██║██║ ╚████║   ██║   ╚██████╔╝██║ ╚═╝ ██║
+// ╚═╝     ╚═╝  ╚═╝╚═╝  ╚═╝╚═╝  ╚═══╝   ╚═╝    ╚═════╝ ╚═╝     ╚═╝
+//
+// Copyright (c) 2025 Rıza Emre ARAS <r.emrearas@proton.me>
+// Licensed under AGPL-3.0 - see LICENSE file for details
+// WireGuard® is a registered trademark of Jason A. Donenfeld.
+//
+// Sanity Check
+//
+// Proves the harness is wired end to end against the LIVE services before
+// anything else is measured. No server, no session raised: three daemons
+// are asked who they are, the door's fuel is checked, and the vault is
+// read twice — once for a Ghost config, once for a standalone one.
+//
+// It runs first in the catalogue because every verdict printed after it is
+// a claim about the INSTALLED extensions, not about the source that was
+// just compiled.
+//
+// Scenarios:
+//
+//   A — Installed Build Matches This Source
+//       All three extensions answer `ExtensionIdentity.current` computed
+//       inside their own process; the app computes it the same way, so
+//       equality is the whole test.
+//
+//       The asymmetry is deliberate. A stale PhantomTunnel ABORTS the
+//       suite, because most of the catalogue drives it and every line
+//       after would describe a binary that is not running. A stale PROXY
+//       extension earns a red line and nothing more: only three entries
+//       drive the proxies rather than the tunnel — the fabricated pair
+//       (ExtensionGate, TunnelEdit) and the control-plane workflow, which
+//       raises a real session on the two proxy extensions and never a
+//       tunnel.
+//
+//       Silence is neither: no answer proves nothing about what is
+//       installed, so it skips. One skip carries all silent extensions,
+//       because `skip` holds a single slot and three calls would report
+//       only the last.
+//
+//   B — Live Services Connected
+//       One ping, so the wiring claim is earned rather than narrated.
+//
+//   C — Test Configs Present (Door)
+//       `Test-Ghost` and `Test-WireGuard` must both be in the list. They
+//       are the fuel every later workflow borrows.
+//
+//   D — Read Test-Ghost from vault (Ghost Expected)
+//   E — Read Test-WireGuard from vault (Standalone Expected)
+//       The vault answers as the app identity, and Ghost vs standalone is
+//       read off the payload rather than the row. Three attempts, then a
+//       skip: an unreachable vault says nothing about the config.
+//
+// Known blind spot, by construction: the build stamp is MARKETING_VERSION,
+// so this separates BUILDS, not sources. Edit an extension, rebuild
+// without moving the version, and both sides still read the same string
+// while the old binary keeps running. The cure is the one
+// `ExtensionIdentity` documents — move the version, or run the uninstall
+// flow — and the abort message says so in the same breath as the
+// diagnosis.
+
 #if DEBUG
 import Foundation
 

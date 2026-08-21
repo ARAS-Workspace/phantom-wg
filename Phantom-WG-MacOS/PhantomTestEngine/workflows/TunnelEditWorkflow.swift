@@ -1,3 +1,56 @@
+// ██████╗ ██╗  ██╗ █████╗ ███╗   ██╗████████╗ ██████╗ ███╗   ███╗
+// ██╔══██╗██║  ██║██╔══██╗████╗  ██║╚══██╔══╝██╔═══██╗████╗ ████║
+// ██████╔╝███████║███████║██╔██╗ ██║   ██║   ██║   ██║██╔████╔██║
+// ██╔═══╝ ██╔══██║██╔══██║██║╚██╗██║   ██║   ██║   ██║██║╚██╔╝██║
+// ██║     ██║  ██║██║  ██║██║ ╚████║   ██║   ╚██████╔╝██║ ╚═╝ ██║
+// ╚═╝     ╚═╝  ╚═╝╚═╝  ╚═╝╚═╝  ╚═══╝   ╚═╝    ╚═════╝ ╚═╝     ╚═╝
+//
+// Copyright (c) 2025 Rıza Emre ARAS <r.emrearas@proton.me>
+// Licensed under AGPL-3.0 - see LICENSE file for details
+// WireGuard® is a registered trademark of Jason A. Donenfeld.
+//
+// Tunnel Edit
+//
+// The EDIT path: what `modify()` refuses, and what it leaves behind when
+// it gets half-way.
+//
+// This is the user's third action on a tunnel, after creating one and
+// removing one, and until this file existed no step took it as its
+// subject — `modify` was reached exactly once in the whole engine, as the
+// ARRANGE half of a purge claim, which measures the deduplication it
+// triggers rather than the edit itself.
+//
+// Everything here runs over fabricated stores: a listed row whose provider
+// is handed BOTH as the manager's opening row and as the factory's canned
+// answer, so it stays the same object on every path — a reload that
+// rebuilds the list from the system finds this provider rather than a
+// fresh stand-in, and the counters a step reads are the ones the code
+// actually wrote. Nothing reaches the user's list or the real vault.
+//
+// The starting vault answers, and answers about NOTHING: `readAll` returns
+// an empty list on purpose, because `modify` runs deduplication before it
+// writes and a payload answering there would hand the purge a candidate —
+// a delete these claims are not about, arriving in the middle of the
+// window they are about.
+//
+// Scenarios:
+//
+//   A — An Edit The Vault Refuses Never Reaches The System
+//       The vault says no and the refusal is carried as a REFUSAL; then
+//       the same edit against a SILENT vault, which must reach the user as
+//       the other sentence.
+//   B — A Failed Save Puts The Projection Back
+//   C — A Rollback The System Refuses Leaves The Projection Agreeing With
+//       The Vault
+//       Named for the pair that AGREES rather than for "both stores": in
+//       this engine's vocabulary those are the vault and the system's
+//       preference store, and this step's whole point is that those two
+//       part company. What ends up agreeing is the vault and the
+//       in-process projection.
+//   D — An Edit Is Refused While The Row Is Being Removed
+//   E — A Name Another Row Holds Is Refused, Its Own Is Not
+//   F — A Blank Name Is Refused Before Either Store Is Touched
+
 #if DEBUG
 import Foundation
 import NetworkExtension

@@ -1,3 +1,50 @@
+// ██████╗ ██╗  ██╗ █████╗ ███╗   ██╗████████╗ ██████╗ ███╗   ███╗
+// ██╔══██╗██║  ██║██╔══██╗████╗  ██║╚══██╔══╝██╔═══██╗████╗ ████║
+// ██████╔╝███████║███████║██╔██╗ ██║   ██║   ██║   ██║██╔████╔██║
+// ██╔═══╝ ██╔══██║██╔══██║██║╚██╗██║   ██║   ██║   ██║██║╚██╔╝██║
+// ██║     ██║  ██║██║  ██║██║ ╚████║   ██║   ╚██████╔╝██║ ╚═╝ ██║
+// ╚═╝     ╚═╝  ╚═╝╚═╝  ╚═╝╚═╝  ╚═══╝   ╚═╝    ╚═════╝ ╚═╝     ╚═╝
+//
+// Copyright (c) 2025 Rıza Emre ARAS <r.emrearas@proton.me>
+// Licensed under AGPL-3.0 - see LICENSE file for details
+// WireGuard® is a registered trademark of Jason A. Donenfeld.
+//
+// Activation Seam
+//
+// The activation machinery's interleavings, DRIVEN rather than waited for.
+// Every step here measures a window a hand cannot aim at: a notification
+// arriving mid-rung, a save that never answers, a removal and a queue
+// hand-off racing for the same slot.
+//
+// The registered steps are the authority on coverage. Indicatively, the
+// file covers the drop belts and the one revive, a list refresh that must
+// disturb neither a running activation nor a queued turn, removals against
+// the queue, the ceiling watchdog's withdrawals, the sweep and the stop
+// reaching a rule the flag denies, give-up paths losing their rule, and
+// the armed rule's own shape. A new step need not fit a name in this
+// paragraph.
+//
+// The rig: one driven tunnel on a SIDE `TunnelsManager` over canned
+// providers, brought to the point every belt scenario starts from —
+// activation issued, `startTunnel` observed, session never connected.
+//
+// Reload triggers are OFF on that manager, and this is the case the flag's
+// own doc describes: a rig held open across a long window. Every
+// notification these steps care about is driven, and the status observer
+// that carries it is not governed by the flag — what the flag removes is a
+// real configuration change, anywhere in the system, sending this side
+// manager through `ingest`, a pass that asks the REAL vault who owns each
+// row.
+//
+// Waits are on OBSERVED events rather than guessed sleeps: rung 0 rides a
+// real vault verdict before it starts anything, so the observed start is
+// the gate.
+//
+// The family is split across three files at a type boundary rather than by
+// moving a threshold — `+RuleOwnership` and `+Reset` are the same
+// workflow, continued. The rigs and the run tag belong here; the polling
+// helper lives on `TestWorkflow`.
+
 #if DEBUG
 import Foundation
 import NetworkExtension

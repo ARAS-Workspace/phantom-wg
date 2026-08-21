@@ -1,3 +1,51 @@
+// ██████╗ ██╗  ██╗ █████╗ ███╗   ██╗████████╗ ██████╗ ███╗   ███╗
+// ██╔══██╗██║  ██║██╔══██╗████╗  ██║╚══██╔══╝██╔═══██╗████╗ ████║
+// ██████╔╝███████║███████║██╔██╗ ██║   ██║   ██║   ██║██╔████╔██║
+// ██╔═══╝ ██╔══██║██╔══██║██║╚██╗██║   ██║   ██║   ██║██║╚██╔╝██║
+// ██║     ██║  ██║██║  ██║██║ ╚████║   ██║   ╚██████╔╝██║ ╚═╝ ██║
+// ╚═╝     ╚═╝  ╚═╝╚═╝  ╚═╝╚═╝  ╚═══╝   ╚═╝    ╚═════╝ ╚═╝     ╚═╝
+//
+// Copyright (c) 2025 Rıza Emre ARAS <r.emrearas@proton.me>
+// Licensed under AGPL-3.0 - see LICENSE file for details
+// WireGuard® is a registered trademark of Jason A. Donenfeld.
+//
+// PhantomTunnel (XPC Surface)
+//
+// A live pass over the PhantomTunnel extension's XPC surface, driven as
+// the app identity against one of the user-validated door configs. One
+// class with TWO catalogue registrations — standalone and ghost — so every
+// claim is proven under both layer shapes.
+//
+// Claim discipline, and it is the reason this workflow can run against a
+// real server at all: MECHANICAL claims (our own code's promises) FAIL when
+// broken whatever the server does; ENVIRONMENT claims (something that needs
+// a server to answer) SKIP honestly when the answer never comes.
+//
+// Scenarios:
+//
+//   A — Activate
+//       Waits on the ladder's OWN budget rather than a round number: a
+//       rung that retries eight times at five seconds is still a correct
+//       activation, and a shorter ceiling would print red on a slow
+//       connect. Also checks that the identity projection agrees with the
+//       mode the door config was imported as, and that activation armed
+//       recovery on THIS tunnel alone.
+//
+//   B — XPC 0: Handshake Proven
+//   C — XPC 0 × Vault: Running Config Matches Vault
+//   D — XPC 1: Log Buffer Streams
+//   E — XPC 2: Flush Round-Trip
+//   F — XPC 3: Layer Reset In Place
+//   G — XPC 3: The Reply Names The Outcome
+//   H — XPC 3 ×2: Concurrent Reset Converges
+//   I — Negative: Empty and Unknown Opcode Rejected
+//   J — Deactivate + Disarm Sweep
+//
+// The tunnel driven here is the USER's own door config, so the teardown
+// grounds it and never removes it. Inactive is not the same as disarmed —
+// a rung that failed its save after arming leaves exactly that pair — so
+// the net asks the armed COUNT rather than the status.
+
 #if DEBUG
 import Foundation
 

@@ -1,3 +1,70 @@
+// ██████╗ ██╗  ██╗ █████╗ ███╗   ██╗████████╗ ██████╗ ███╗   ███╗
+// ██╔══██╗██║  ██║██╔══██╗████╗  ██║╚══██╔══╝██╔═══██╗████╗ ████║
+// ██████╔╝███████║███████║██╔██╗ ██║   ██║   ██║   ██║██╔████╔██║
+// ██╔═══╝ ██╔══██║██╔══██║██║╚██╗██║   ██║   ██║   ██║██║╚██╔╝██║
+// ██║     ██║  ██║██║  ██║██║ ╚████║   ██║   ╚██████╔╝██║ ╚═╝ ██║
+// ╚═╝     ╚═╝  ╚═╝╚═╝  ╚═╝╚═╝  ╚═══╝   ╚═╝    ╚═════╝ ╚═╝     ╚═╝
+//
+// Copyright (c) 2025 Rıza Emre ARAS <r.emrearas@proton.me>
+// Licensed under AGPL-3.0 - see LICENSE file for details
+// WireGuard® is a registered trademark of Jason A. Donenfeld.
+//
+// Split Control Plane (App ↔ Extensions)
+//
+// Drives a REAL split-tunnelling session and measures whether the app and
+// BOTH proxy extensions agree at every step. The witness is each
+// extension's OWN ring buffer, drained over its own XPC channel — the
+// app's log could only report what the app believes.
+//
+// Topology:
+//
+//     ┌─────────────┐   XPC    ┌────────────────────┐
+//     │     app     │─────────→│ PhantomSplitTunnel │
+//     │ coordinator │   XPC    ├────────────────────┤
+//     │             │─────────→│   PhantomDNSProxy  │
+//     └──────┬──────┘          └────────────────────┘
+//            │ NE preferences
+//     ┌──────┴──────┐
+//     │   system    │
+//     └─────────────┘
+//
+// It runs LAST in the catalogue because it raises a real proxy session.
+//
+// Scenarios:
+//
+//   A — Split-Tunneling Is Off (Door)
+//       The feature must be at rest on three readings — persisted intent,
+//       coordinator state, session status — plus the extension gate. The
+//       skip NAMES whichever one spoke: an unattributable skip is one this
+//       suite cannot act on. Skipped rather than driven anyway, because
+//       taking over a live session would stop the user's own
+//       split-tunnelling to measure it.
+//
+//   B — A Start Reaches Both Extensions
+//       Session raised. No buffer claim here: the receipt belongs to C,
+//       where the provider actually writes one.
+//
+//   C — A Live Edit Lands On Both
+//       The claim the corridor was built for. `reconfigure` answers a
+//       typed verdict per extension, and the PROVIDER's own log line is
+//       the stronger reading — the daemon answers `true` both when it
+//       APPLIES a payload and when it BUFFERS one, so a verdict alone
+//       cannot tell delivery from storage. DNSProxy is registered-but-lazy
+//       by design, so an empty buffer there skips rather than fails.
+//
+//   D — A Boot Realigns The Session It Adopts
+//   E — Two Transitions Queue Rather Than Interleave
+//       Read from the chain's own high-water mark, not sampled: a 20ms
+//       sampler measured zero against a chain that was demonstrably
+//       serializing.
+//   F — A Stop Lands And An Edit After It Says So
+//       The user's own bootstrap blob goes back BEFORE the stop, which is
+//       the only moment `persistConfiguration` can still write.
+//
+// The probe entries carry signing identifiers no process on any machine
+// holds, so nothing can match them and no traffic changes lanes — but they
+// are still ENTRIES, so the provider's diff logger has something to write.
+
 #if DEBUG
 import Foundation
 

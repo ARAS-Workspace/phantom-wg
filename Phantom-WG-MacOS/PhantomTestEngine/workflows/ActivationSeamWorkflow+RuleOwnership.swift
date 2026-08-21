@@ -1,3 +1,30 @@
+// ██████╗ ██╗  ██╗ █████╗ ███╗   ██╗████████╗ ██████╗ ███╗   ███╗
+// ██╔══██╗██║  ██║██╔══██╗████╗  ██║╚══██╔══╝██╔═══██╗████╗ ████║
+// ██████╔╝███████║███████║██╔██╗ ██║   ██║   ██║   ██║██╔████╔██║
+// ██╔═══╝ ██╔══██║██╔══██║██║╚██╗██║   ██║   ██║   ██║██║╚██╔╝██║
+// ██║     ██║  ██║██║  ██║██║ ╚████║   ██║   ╚██████╔╝██║ ╚═╝ ██║
+// ╚═╝     ╚═╝  ╚═╝╚═╝  ╚═╝╚═╝  ╚═══╝   ╚═╝    ╚═════╝ ╚═╝     ╚═╝
+//
+// Copyright (c) 2025 Rıza Emre ARAS <r.emrearas@proton.me>
+// Licensed under AGPL-3.0 - see LICENSE file for details
+// WireGuard® is a registered trademark of Jason A. Donenfeld.
+//
+// Activation Seam — Rule Ownership
+//
+// Steps belonging to `ActivationSeamWorkflow`; the registry lives in the
+// main file. They drive one question: WHO owns the recovery rule, and what
+// a row may wear while the system disagrees with this process about it.
+//
+// The hard case these steps exist for is a flag that LIES — a disarm save
+// that never answered leaves this process believing the rule is down while
+// the store still holds it. A row can therefore be grounded and armed at
+// the same time, and a sweep that filters on the flag skips precisely the
+// rows it was written to clear.
+//
+// Split off at a type boundary rather than by moving a threshold: the rigs
+// and the run tag belong to the main file, the polling helper lives on
+// `TestWorkflow`.
+
 #if DEBUG
 import Foundation
 import NetworkExtension

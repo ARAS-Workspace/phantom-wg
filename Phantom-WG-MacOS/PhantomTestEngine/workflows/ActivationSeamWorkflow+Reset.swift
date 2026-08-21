@@ -1,3 +1,35 @@
+// ██████╗ ██╗  ██╗ █████╗ ███╗   ██╗████████╗ ██████╗ ███╗   ███╗
+// ██╔══██╗██║  ██║██╔══██╗████╗  ██║╚══██╔══╝██╔═══██╗████╗ ████║
+// ██████╔╝███████║███████║██╔██╗ ██║   ██║   ██║   ██║██╔████╔██║
+// ██╔═══╝ ██╔══██║██╔══██║██║╚██╗██║   ██║   ██║   ██║██║╚██╔╝██║
+// ██║     ██║  ██║██║  ██║██║ ╚████║   ██║   ╚██████╔╝██║ ╚═╝ ██║
+// ╚═╝     ╚═╝  ╚═╝╚═╝  ╚═╝╚═╝  ╚═══╝   ╚═╝    ╚═════╝ ╚═╝     ╚═╝
+//
+// Copyright (c) 2025 Rıza Emre ARAS <r.emrearas@proton.me>
+// Licensed under AGPL-3.0 - see LICENSE file for details
+// WireGuard® is a registered trademark of Jason A. Donenfeld.
+//
+// Activation Seam — Stop Visibility and Opcode 3
+//
+// Steps belonging to `ActivationSeamWorkflow`; the registry lives in the
+// main file. Two subjects share this file:
+//
+//   The armed stop's own visibility while it waits. A stop on an ARMED row
+//   waits for the recovery rule's save before anything moves — the status
+//   stays `.active`, the toggle stays ON, and if the save hangs that is
+//   the user's whole experience. These steps drive that window and read
+//   what the interface can now see of it.
+//
+//   Opcode 3's reply, driven against a fake that can answer in shapes a
+//   deployed extension cannot: an older extension's bare byte, a newer
+//   one's unknown byte, and no answer at all.
+//
+// What this file cannot prove is the other side of the wire. The bytes the
+// extension really writes are witnessed against the DEPLOYED extension in
+// `PhantomTunnelWorkflow`, and only for the one ending a live session can
+// produce — the failure endings no run can arrange stay unwitnessed there
+// by construction.
+
 #if DEBUG
 import Foundation
 

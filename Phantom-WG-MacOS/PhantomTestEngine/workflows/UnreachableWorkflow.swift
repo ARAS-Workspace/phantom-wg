@@ -1,3 +1,51 @@
+// ██████╗ ██╗  ██╗ █████╗ ███╗   ██╗████████╗ ██████╗ ███╗   ███╗
+// ██╔══██╗██║  ██║██╔══██╗████╗  ██║╚══██╔══╝██╔═══██╗████╗ ████║
+// ██████╔╝███████║███████║██╔██╗ ██║   ██║   ██║   ██║██╔████╔██║
+// ██╔═══╝ ██╔══██║██╔══██║██║╚██╗██║   ██║   ██║   ██║██║╚██╔╝██║
+// ██║     ██║  ██║██║  ██║██║ ╚████║   ██║   ╚██████╔╝██║ ╚═╝ ██║
+// ╚═╝     ╚═╝  ╚═╝╚═╝  ╚═╝╚═╝  ╚═══╝   ╚═╝    ╚═════╝ ╚═╝     ╚═╝
+//
+// Copyright (c) 2025 Rıza Emre ARAS <r.emrearas@proton.me>
+// Licensed under AGPL-3.0 - see LICENSE file for details
+// WireGuard® is a registered trademark of Jason A. Donenfeld.
+//
+// Unreachable Endpoint
+//
+// The deterministic negative. A factory config whose endpoint lives in
+// TEST-NET-1 answers nobody, ever — so unlike the real door configs the
+// outcome is GUARANTEED, which turns the scariest user state into a
+// provable claim: the adapter comes up locally and the status shows
+// active while no handshake can exist.
+//
+// Three things must hold in that state: the stats surface tells the truth
+// rather than the status, the user's abort always lands, and nothing stays
+// armed or stored behind.
+//
+// Scenarios:
+//
+//   A — Vault Respawn Window Measured
+//       Custody goes dark after the previous workflow's deactivation: the
+//       tunnel extension hosts the vault listener and exits with the
+//       tunnel, so a mutation right after a deactivation faces a respawn
+//       window longer than the store retry can bridge. This step documents
+//       the real curve on every report and lets the rest of the workflow
+//       run on a vault that answers.
+//
+//   B — Import Via Full Path (Blackhole Endpoint)
+//   C — Activation Attempt Observed
+//   D — Green But Dead: Stats Stay Truthful
+//   E — User Abort Contract
+//   F — Truth After Abort
+//       The claim is about what the ABORT changed, so the step records
+//       what the row carried just before it rather than comparing against
+//       whatever an earlier drop may legitimately have recorded.
+//   G — Cleanup Proof
+//
+// Status reads here are observer-only: read what the manager publishes,
+// never refresh over it. The planted tunnel is activated, so a Stop can
+// strand it live with an armed rule — that path belongs to the teardown
+// net rather than to the steps' own cancel-returns.
+
 #if DEBUG
 import Foundation
 

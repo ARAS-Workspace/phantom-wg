@@ -1,3 +1,67 @@
+// ██████╗ ██╗  ██╗ █████╗ ███╗   ██╗████████╗ ██████╗ ███╗   ███╗
+// ██╔══██╗██║  ██║██╔══██╗████╗  ██║╚══██╔══╝██╔═══██╗████╗ ████║
+// ██████╔╝███████║███████║██╔██╗ ██║   ██║   ██║   ██║██╔████╔██║
+// ██╔═══╝ ██╔══██║██╔══██║██║╚██╗██║   ██║   ██║   ██║██║╚██╔╝██║
+// ██║     ██║  ██║██║  ██║██║ ╚████║   ██║   ╚██████╔╝██║ ╚═╝ ██║
+// ╚═╝     ╚═╝  ╚═╝╚═╝  ╚═╝╚═╝  ╚═══╝   ╚═╝    ╚═════╝ ╚═╝     ╚═╝
+//
+// Copyright (c) 2025 Rıza Emre ARAS <r.emrearas@proton.me>
+// Licensed under AGPL-3.0 - see LICENSE file for details
+// WireGuard® is a registered trademark of Jason A. Donenfeld.
+//
+// Vault Integrity
+//
+// A stressed data-integrity pass over the vault XPC surface, server-free
+// and deterministic. Throwaway configs from `TestConfigFactory`; every
+// payload stored through that path is swept before the run ends.
+//
+// The user's own tunnel list may legitimately NOTICE this run, and that is
+// not a defect on either side: these payloads live in the REAL vault, so a
+// reconcile firing mid-run restores them exactly as it would any payload
+// the system had lost. What the suite owes back is the ORDER — a row is
+// removed through `remove()` before any payload is deleted, so no entry is
+// ever left without its secret — and a step that proves the list is clean
+// when the pass is over.
+//
+// Three failure gates it watches throughout: duplicate entries, stale
+// reads after a rewrite, and `read(id)` disagreeing with `readAll`.
+//
+// Scenarios, in four groups. `steps` is the registry; these are the
+// questions each group asks:
+//
+//   1. The vault surface (this file)
+//      Ping, round-trip fidelity, rewrite, duty separation between two
+//      ids sharing a name, an interleaved stress round, undecodable
+//      payloads reported distinctly and not conflated between the two
+//      read paths, upsert and delete idempotence, and a proof that
+//      nothing this run stored is still materialised at the end.
+//
+//   2. Custody reads (`+CustodyReads.swift`)
+//      What the app believes about a payload at the MOMENT it acts on it,
+//      as opposed to what a bulk answer said earlier. Purge, and the
+//      reconcile family.
+//
+//   3. Custody writes (`+CustodyWrites.swift`)
+//      Which store a removal empties first, and what a removal that only
+//      half finishes leaves behind.
+//
+//   4. The two corruption steps, which run LAST
+//      They are the only steps whose reconcile reads the real vault, and
+//      the visibility gate drives a full reload besides. Kept after the
+//      delete proof so those passes cannot materialise the bulk
+//      throwaways this run had stored. The custody-read steps reconcile
+//      too, but every one of them over a FABRICATED vault, so no throwaway
+//      of this run is ever a candidate for them.
+//
+// Group 2 is registered BEFORE groups 3 and 4 so the "run last" contract
+// of the corruption pair keeps meaning what it says.
+//
+// The planted ledgers (`tracked`, `rawIds`) are writable only by the steps
+// and readable only by the sweep. That coupling is why `sweepThrowaways`
+// stayed in this workflow while the rest of the kit moved to the base: a
+// net that reads these two ledgers has no meaning on a workflow that
+// planted something else.
+
 #if DEBUG
 import Foundation
 

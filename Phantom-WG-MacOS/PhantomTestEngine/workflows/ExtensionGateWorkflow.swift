@@ -1,3 +1,48 @@
+// ██████╗ ██╗  ██╗ █████╗ ███╗   ██╗████████╗ ██████╗ ███╗   ███╗
+// ██╔══██╗██║  ██║██╔══██╗████╗  ██║╚══██╔══╝██╔═══██╗████╗ ████║
+// ██████╔╝███████║███████║██╔██╗ ██║   ██║   ██║   ██║██╔████╔██║
+// ██╔═══╝ ██╔══██║██╔══██║██║╚██╗██║   ██║   ██║   ██║██║╚██╔╝██║
+// ██║     ██║  ██║██║  ██║██║ ╚████║   ██║   ╚██████╔╝██║ ╚═╝ ██║
+// ╚═╝     ╚═╝  ╚═╝╚═╝  ╚═╝╚═╝  ╚═══╝   ╚═╝    ╚═════╝ ╚═╝     ╚═╝
+//
+// Copyright (c) 2025 Rıza Emre ARAS <r.emrearas@proton.me>
+// Licensed under AGPL-3.0 - see LICENSE file for details
+// WireGuard® is a registered trademark of Jason A. Donenfeld.
+//
+// Extension Gate (Removal Budget)
+//
+// The extension gate's removal path: what the budget does under an
+// approval prompt, and what happens to an answer that arrives after this
+// app has stopped waiting for it.
+//
+// Every step composes its OWN `ExtensionGateController` over a capturing
+// submitter, and that is the only way this surface can be measured at all
+// — the app's three real controllers drive real system extensions, so the
+// scenarios below would mean removing the user's. Nothing here is ever
+// submitted; the bundle identifier names an extension the system has never
+// heard of, so the safety of these steps does not rest on a real id
+// staying unresolved.
+//
+// Scenarios:
+//
+//   A — A Removal Nobody Approves Ends Its Own Wait
+//       The reason the budget exists. A deactivation raises a system
+//       approval prompt, and a user who walks away from it used to hold
+//       the uninstall flow open for the life of the process — with the
+//       refresh latch up behind it, so ingest, restore and realign all
+//       stayed dead until a relaunch.
+//
+//   B — An Approval Prompt For A Removal Does Not Paint The Gate
+//   C — An Answer Past The Budget Is Still Read As A Removal
+//   D — A Second Removal Is Refused While One Is In Flight
+//   E — A Retry's Wait Is Not Answered By The Removal It Replaced
+//
+// The default budget here is two seconds rather than the app's sixty,
+// because what is under test is that the wait ENDS and what it hands back
+// when it does — neither claim is about the size of the number, and the
+// path is the one production takes. Three steps override it; only one
+// needs to, and changing the default moves the other two.
+
 #if DEBUG
 import Foundation
 import SystemExtensions

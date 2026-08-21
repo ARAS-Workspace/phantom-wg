@@ -1,3 +1,54 @@
+// ██████╗ ██╗  ██╗ █████╗ ███╗   ██╗████████╗ ██████╗ ███╗   ███╗
+// ██╔══██╗██║  ██║██╔══██╗████╗  ██║╚══██╔══╝██╔═══██╗████╗ ████║
+// ██████╔╝███████║███████║██╔██╗ ██║   ██║   ██║   ██║██╔████╔██║
+// ██╔═══╝ ██╔══██║██╔══██║██║╚██╗██║   ██║   ██║   ██║██║╚██╔╝██║
+// ██║     ██║  ██║██║  ██║██║ ╚████║   ██║   ╚██████╔╝██║ ╚═╝ ██║
+// ╚═╝     ╚═╝  ╚═╝╚═╝  ╚═╝╚═╝  ╚═══╝   ╚═╝    ╚═════╝ ╚═╝     ╚═╝
+//
+// Copyright (c) 2025 Rıza Emre ARAS <r.emrearas@proton.me>
+// Licensed under AGPL-3.0 - see LICENSE file for details
+// WireGuard® is a registered trademark of Jason A. Donenfeld.
+//
+// Isolation (Slot Classifier + Foreign Holder)
+//
+// Cross-user isolation, stressed on a single identity. Synthetic foreign
+// providers against the REAL vault: the classifier's foreign verdict rests
+// on the daemon answering `.missing` for ids this user does not own —
+// exactly what a real second account's entries would answer — so the
+// semantics under test are the production ones and only the NE provider
+// objects are synthetic. The gate-routing steps are the exception and
+// fabricate the vault as well; each says so in its own place.
+//
+// The funnel is production verbatim: a side `TunnelsManager` over canned
+// providers, answering through the same `foreignSlotVerdict()` the
+// activation belts call — loadAll, owner-scoped `readAll`, per-id probe,
+// classifier, with no step re-implemented. The manager's factory is
+// canned, so nothing it does reaches real NE preferences.
+//
+// The synthetic provider is `FakeSlotProvider`, shared with the
+// activation-seam steps, which need the same object to answer slowly or
+// not at all.
+//
+// Scenarios, in three groups:
+//
+//   Classifier   A foreign ACTIVE session holds the slot; our own
+//                UNDECODABLE payload is ours-but-broken rather than a
+//                stranger to gate on; an idle foreign row frees the slot.
+//
+//   Gate         Engage disarms our armed rule and release follows; the
+//                stand-down writes through the MANAGER's row when a
+//                supplier is installed; a row being removed takes no
+//                stand-down. The no-manager fallback and the routed path
+//                are separate steps — neither covers the other.
+//
+//   Pre-flight   A proven foreign holder blocks activation cleanly, and a
+//   and Seam     driven status reaches the real handler.
+//
+// Residue warning, and it is the heaviest in the suite: one plant is
+// DECODABLE. Left behind, the next reconcile mints a real NE entry for it
+// and the user inherits a tunnel they never imported. A step's own cleanup
+// dies with a Stop; the teardown arm registered for it does not.
+
 #if DEBUG
 import Foundation
 import NetworkExtension

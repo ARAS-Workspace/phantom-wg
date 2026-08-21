@@ -1,3 +1,36 @@
+// ██████╗ ██╗  ██╗ █████╗ ███╗   ██╗████████╗ ██████╗ ███╗   ███╗
+// ██╔══██╗██║  ██║██╔══██╗████╗  ██║╚══██╔══╝██╔═══██╗████╗ ████║
+// ██████╔╝███████║███████║██╔██╗ ██║   ██║   ██║   ██║██╔████╔██║
+// ██╔═══╝ ██╔══██║██╔══██║██║╚██╗██║   ██║   ██║   ██║██║╚██╔╝██║
+// ██║     ██║  ██║██║  ██║██║ ╚████║   ██║   ╚██████╔╝██║ ╚═╝ ██║
+// ╚═╝     ╚═╝  ╚═╝╚═╝  ╚═╝╚═╝  ╚═══╝   ╚═╝    ╚═════╝ ╚═╝     ╚═╝
+//
+// Copyright (c) 2025 Rıza Emre ARAS <r.emrearas@proton.me>
+// Licensed under AGPL-3.0 - see LICENSE file for details
+// WireGuard® is a registered trademark of Jason A. Donenfeld.
+//
+// Vault Integrity — Custody Reads
+//
+// Steps belonging to `VaultIntegrityWorkflow`; the registry lives in the
+// main file. They ask what the app believes about a payload at the MOMENT
+// it acts on it, as opposed to what a bulk answer said earlier.
+//
+// They run over a `FaultVaultClient` and side managers rather than the
+// user's own list, because every claim here needs a vault whose answers
+// can be made to disagree — with themselves between the bulk answer and
+// the per-id one, with the list the app is holding, or with the clock, by
+// staying out long enough for a second caller to arrive. The real vault
+// cannot be asked to do any of that on purpose.
+//
+// Nothing they drive reaches the real vault or the system's preferences,
+// so they plant nothing and need no teardown net.
+//
+// One caution that is the reason this file is careful rather than lucky:
+// the fault client's default is to FORWARD. A surface left `.real` reaches
+// the user's own vault. Every step therefore sets EVERY surface, including
+// ones its own path should never touch, so a call the step did not
+// anticipate answers a fabrication instead of a keychain.
+
 #if DEBUG
 import Foundation
 import NetworkExtension

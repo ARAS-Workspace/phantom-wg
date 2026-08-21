@@ -1,3 +1,44 @@
+// ██████╗ ██╗  ██╗ █████╗ ███╗   ██╗████████╗ ██████╗ ███╗   ███╗
+// ██╔══██╗██║  ██║██╔══██╗████╗  ██║╚══██╔══╝██╔═══██╗████╗ ████║
+// ██████╔╝███████║███████║██╔██╗ ██║   ██║   ██║   ██║██╔████╔██║
+// ██╔═══╝ ██╔══██║██╔══██║██║╚██╗██║   ██║   ██║   ██║██║╚██╔╝██║
+// ██║     ██║  ██║██║  ██║██║ ╚████║   ██║   ╚██████╔╝██║ ╚═╝ ██║
+// ╚═╝     ╚═╝  ╚═╝╚═╝  ╚═╝╚═╝  ╚═══╝   ╚═╝    ╚═════╝ ╚═╝     ╚═╝
+//
+// Copyright (c) 2025 Rıza Emre ARAS <r.emrearas@proton.me>
+// Licensed under AGPL-3.0 - see LICENSE file for details
+// WireGuard® is a registered trademark of Jason A. Donenfeld.
+//
+// Config Contract
+//
+// Config-shape contracts, from the parser down to `validate()`. Each step
+// guards a shipped refusal at the layer that owns it, and fails only if
+// that refusal regresses.
+//
+// Scenarios:
+//
+//   A — Empty AllowedIPs Refused (No-Route Leak Guard)
+//       A peer that routes nothing must be refused. Reaching `.active`
+//       with no cryptokey route would put every packet outside the utun
+//       in the clear — a total leak behind a green status.
+//
+//       The step plants a REAL tunnel to prove it: vault payload, system
+//       entry, and in a moment an armed recovery rule. Any `.active`
+//       sighting IS the leak; the earned pass is `.inactive` carrying a
+//       recorded refusal. A failure inside `add()` is reported as
+//       environment rather than credited to the leak guard, because
+//       `add()` never inspects routes.
+//
+//   B — Multi-Peer Conf Not Silently Collapsed
+//   C — Comma-Only Lists Die In validate()
+//   D — Blank Wstunnel URL Dies In validate()
+//       Parser and validator refusals, no session raised.
+//
+// A Stop inside the terminal wait of A never reaches the step's own
+// cleanup, and reaching it under cancellation buys nothing because
+// `vault.delete(id:attempts:)` refuses to send once the task is
+// cancelled. Both paths belong to the teardown net.
+
 #if DEBUG
 import Foundation
 

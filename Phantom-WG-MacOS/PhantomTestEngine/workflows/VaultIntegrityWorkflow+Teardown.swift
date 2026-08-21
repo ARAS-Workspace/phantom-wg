@@ -1,3 +1,40 @@
+// ██████╗ ██╗  ██╗ █████╗ ███╗   ██╗████████╗ ██████╗ ███╗   ███╗
+// ██╔══██╗██║  ██║██╔══██╗████╗  ██║╚══██╔══╝██╔═══██╗████╗ ████║
+// ██████╔╝███████║███████║██╔██╗ ██║   ██║   ██║   ██║██╔████╔██║
+// ██╔═══╝ ██╔══██║██╔══██║██║╚██╗██║   ██║   ██║   ██║██║╚██╔╝██║
+// ██║     ██║  ██║██║  ██║██║ ╚████║   ██║   ╚██████╔╝██║ ╚═╝ ██║
+// ╚═╝     ╚═╝  ╚═╝╚═╝  ╚═╝╚═╝  ╚═══╝   ╚═╝    ╚═════╝ ╚═╝     ╚═╝
+//
+// Copyright (c) 2025 Rıza Emre ARAS <r.emrearas@proton.me>
+// Licensed under AGPL-3.0 - see LICENSE file for details
+// WireGuard® is a registered trademark of Jason A. Donenfeld.
+//
+// Vault Integrity — Teardown Arms
+//
+// The two cleanup arms that belong to THIS pass and could not be shared.
+// The rest of the kit — three-valued reads, re-read-verified deletes and
+// entry removals, the fresh-list probe and the repair arms — lives on the
+// base as `TestWorkflow+VerifiedSweep.swift`, because every workflow that
+// plants something owes the same honesty when it cleans up.
+//
+// These two stayed for reasons about the arms rather than about tidiness:
+//
+//   sweepThrowaways      reads this workflow's own planted ledgers
+//                        (`tracked`, `rawIds`), so it has no meaning on a
+//                        workflow that planted something else
+//
+//   sweepCorruptionBase  carries a doctrine that holds for exactly one
+//                        base: its payload is deliberately corrupt,
+//                        `readAll` never returns it, and therefore no
+//                        restore can ever repair it — which is what makes
+//                        taking the entry LAST correct here and wrong for
+//                        a decodable row. Promoted, it would hand other
+//                        workflows a reasoning that does not apply to them
+//
+// Both run on the promoted kit and obey the rule it carries: a cleanup
+// that cannot VERIFY what it did reports residue rather than success, and
+// no arm claims a state it did not observe.
+
 #if DEBUG
 import Foundation
 

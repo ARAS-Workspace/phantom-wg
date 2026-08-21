@@ -1,3 +1,46 @@
+// ██████╗ ██╗  ██╗ █████╗ ███╗   ██╗████████╗ ██████╗ ███╗   ███╗
+// ██╔══██╗██║  ██║██╔══██╗████╗  ██║╚══██╔══╝██╔═══██╗████╗ ████║
+// ██████╔╝███████║███████║██╔██╗ ██║   ██║   ██║   ██║██╔████╔██║
+// ██╔═══╝ ██╔══██║██╔══██║██║╚██╗██║   ██║   ██║   ██║██║╚██╔╝██║
+// ██║     ██║  ██║██║  ██║██║ ╚████║   ██║   ╚██████╔╝██║ ╚═╝ ██║
+// ╚═╝     ╚═╝  ╚═╝╚═╝  ╚═╝╚═╝  ╚═══╝   ╚═╝    ╚═════╝ ╚═╝     ╚═╝
+//
+// Copyright (c) 2025 Rıza Emre ARAS <r.emrearas@proton.me>
+// Licensed under AGPL-3.0 - see LICENSE file for details
+// WireGuard® is a registered trademark of Jason A. Donenfeld.
+//
+// Recovery Switch
+//
+// Proves the "at most one armed rule" invariant holds THROUGH a live
+// switch, not merely at rest.
+//
+// On the green path the invariant is held by the STOP rather than by the
+// sweep: switching parks the second tunnel `.waiting` and stops the first,
+// and `startDeactivation` stands the first tunnel's rule down before its
+// stop goes out — so by the time the hand-off climbs rung 0 there is
+// usually nothing left for rung 0's sweep to do.
+//
+// Scenarios:
+//
+//   A — Ground Both Tunnels
+//   B — Arm First (Standalone)
+//   C — Switch To Second (Ghost) — Invariant Sampled Throughout
+//       The second activation is fired and the armed count is sampled in
+//       parallel every 100ms across the whole handover. The peak must
+//       never exceed one.
+//   D — Ground + Final Sweep
+//
+// What the sampler reads is `isActivateOnDemandEnabled` — this process's
+// last-written flag. That is the right reading for this invariant (how
+// many tunnels the APP believes it has armed at once) and is NOT a reading
+// of the rule the OS would act on.
+//
+// This workflow's residue is not a planted config: it is the user's own
+// two door tunnels, activated and armed by the steps. Grounding is not
+// disarming, so the teardown asks the COUNT rather than the statuses — a
+// rung that failed its save after `armRecovery` leaves a tunnel
+// `.inactive` AND armed, which a status loop skips entirely.
+
 #if DEBUG
 import Foundation
 
