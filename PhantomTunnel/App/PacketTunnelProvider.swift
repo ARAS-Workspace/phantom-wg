@@ -21,6 +21,7 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
 
     private let resetSlotLock = NSLock()
     private var inFlightReset: Task<TunnelResetReply, Never>?
+    private static let resetStepBudget: TimeInterval = 4
 
     // MARK: - Tunnel Lifecycle
 
@@ -194,6 +195,46 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
         return outcome
     }
 
+    private enum AdapterAnswer: Sendable {
+        case landed
+        case refused(String)
+        case silent
+    }
+
+    private func bounded<T: Sendable>(
+        _ seconds: TimeInterval,
+        fallback: T,
+        _ issue: (@escaping @Sendable (T) -> Void) -> Void
+    ) async -> T {
+        await withCheckedContinuation { (continuation: CheckedContinuation<T, Never>) in
+            let resume = SingleResume(continuation)
+            let deadline = Task {
+                try? await Task.sleep(for: .seconds(seconds))
+                guard !Task.isCancelled else { return }
+                resume.finish(fallback)
+            }
+            issue { value in
+                if resume.finish(value) { deadline.cancel() }
+            }
+        }
+    }
+
+    private func stopAdapter() async -> AdapterAnswer {
+        await bounded(Self.resetStepBudget, fallback: AdapterAnswer.silent) { resume in
+            adapter.stop { error in
+                resume(error.map { .refused($0.localizedDescription) } ?? .landed)
+            }
+        }
+    }
+
+    private func startAdapter(_ configuration: TunnelConfiguration) async -> AdapterAnswer {
+        await bounded(Self.resetStepBudget, fallback: AdapterAnswer.silent) { resume in
+            adapter.start(tunnelConfiguration: configuration) { error in
+                resume(error.map { .refused($0.localizedDescription) } ?? .landed)
+            }
+        }
+    }
+
     private func resetConnection() async -> TunnelResetReply {
         guard let config = currentTunnelConfig,
               let wireguardConfig = currentWireGuardConfig else {
@@ -206,13 +247,16 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
 
         reasserting = true
 
-        let stopFailure: String? = await withCheckedContinuation { continuation in
-            adapter.stop { error in continuation.resume(returning: error?.localizedDescription) }
-        }
-        if let stopFailure {
-            TunnelLogger.log(.wireGuard, "Reset — adapter was not stopped: \(stopFailure)")
-        } else {
+        switch await stopAdapter() {
+        case .landed:
             TunnelLogger.log(.wireGuard, "Reset — adapter stopped")
+        case .refused(let stopFailure):
+            TunnelLogger.log(.wireGuard, "Reset — adapter was not stopped: \(stopFailure)")
+        case .silent:
+            TunnelLogger.log(.wireGuard, "Reset — the adapter did not answer the stop within "
+                             + "\(Int(Self.resetStepBudget))s, so nothing is restarted over it")
+            reasserting = false
+            return .adapterFailed
         }
 
         if isGhostMode {
@@ -231,25 +275,24 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
             }
         }
 
-        let adapterFailure: String? = await withCheckedContinuation { continuation in
-            adapter.start(tunnelConfiguration: wireguardConfig) { error in
-                if let error {
-                    TunnelLogger.log(.wireGuard, "Reset — adapter restart FAILED: \(error.localizedDescription)")
-                    continuation.resume(returning: error.localizedDescription)
-                } else {
-                    TunnelLogger.log(.wireGuard, "Reset — adapter restarted")
-                    continuation.resume(returning: nil)
-                }
-            }
-        }
+        let start = await startAdapter(wireguardConfig)
 
         reasserting = false
-        if adapterFailure != nil {
+        switch start {
+        case .landed:
+            TunnelLogger.log(.wireGuard, "Reset — adapter restarted")
+            TunnelLogger.log(.tunnel, "Reset complete")
+            return .rebuilt
+        case .refused(let failure):
+            TunnelLogger.log(.wireGuard, "Reset — adapter restart FAILED: \(failure)")
             TunnelLogger.log(.tunnel, "Reset ended with the layer down — the adapter did not restart")
             return .adapterFailed
+        case .silent:
+            TunnelLogger.log(.wireGuard, "Reset — the adapter did not answer the start within "
+                             + "\(Int(Self.resetStepBudget))s")
+            TunnelLogger.log(.tunnel, "Reset ended with the layer unproven — the adapter never answered")
+            return .adapterFailed
         }
-        TunnelLogger.log(.tunnel, "Reset complete")
-        return .rebuilt
     }
 
     // MARK: - Network Settings Override

@@ -155,6 +155,10 @@ targets:
       # the extension writes and the bytes the app reads are one
       # declaration rather than two that agree today.
       - path: Phantom-WG-MacOS/Domain/IPC/TunnelResetReply.swift
+      # The resume-once guard both sides put a deadline behind, compiled
+      # here rather than copied so the extension's bounded waits are the
+      # app's primitive and not a fourth hand-rolled one.
+      - path: Phantom-WG-MacOS/Infrastructure/Concurrency/SingleResume.swift
       - path: Phantom-WG-MacOS/Shared/WstunnelBridge.swift
       # Extension-only shared domain — the System-keychain vault
       # that holds every tunnel's secrets.
