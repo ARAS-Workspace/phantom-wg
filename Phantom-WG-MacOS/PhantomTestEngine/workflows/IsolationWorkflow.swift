@@ -53,17 +53,6 @@
 import Foundation
 import NetworkExtension
 
-// The synthetic provider these steps drive lives in
-// PhantomTestEngine/FakeSlotProvider.swift — shared with the
-// activation-seam steps, which need the same object to answer slowly
-// or not at all.
-
-/// Cross-user isolation, stressed on a single identity: synthetic
-/// foreign providers against the REAL vault. The classifier's foreign
-/// verdict rests on the daemon answering `.missing` for ids this user
-/// does not own — exactly what a real second account's entries would
-/// answer — so the semantics under test are the production ones, only
-/// the NE provider objects are synthetic.
 final class IsolationWorkflow: TestWorkflow {
     override var displayName: String { "Isolation (Slot Classifier + Foreign Holder)" }
 
@@ -86,12 +75,6 @@ final class IsolationWorkflow: TestWorkflow {
         TunnelIdentity(id: UUID(), name: name, createdAt: Date(), isGhost: false)
     }
 
-    /// The production funnel, verbatim: a side `TunnelsManager` over
-    /// the canned providers, answering through the same
-    /// `foreignSlotVerdict()` the activation belts call — loadAll →
-    /// owner-scoped readAll → per-id probe → classifier, no step
-    /// re-implemented. The manager's factory is canned, so nothing it
-    /// does can touch real NE preferences.
     private func verdict(over providers: [TunnelProviding]) async -> SlotVerdict {
         let manager = TunnelsManager(
             tunnelProviders: [],
@@ -119,27 +102,13 @@ final class IsolationWorkflow: TestWorkflow {
     }
 
     private func ownUndecodableIsOurs() async {
-        // A corrupt payload under OUR uid makes the id ours-but-broken:
-        // the verdict must read the occupying session as our own
-        // custody problem, never as a stranger to gate on.
         let corruptId = UUID()
         guard await vaultRaw.storeRaw(Data("corrupt".utf8), id: corruptId) else {
             fail("raw corrupt store refused")
             return
         }
-        // The step sweeps this on every path it reaches, but under a
-        // Stop it cannot: a cancelled task's `vault.delete` answers
-        // `.unreachable` without sending anything. This is the only
-        // sweep that still works on that path.
         onTeardown("corrupt plant") { [weak self] in
             guard let self else { return }
-            // Three-valued at both ends. The read told `.missing` apart
-            // from the rest already; what it did not do was tell a
-            // SILENT vault apart from a present payload — both fell
-            // into the delete below, whose answer was then read as a
-            // Bool. A delete that goes dark has still possibly landed,
-            // and reporting that as a failed sweep sends a reader
-            // looking for bytes that are not there.
             switch await self.readPayloadState(corruptId) {
             case .missing:
                 self.log("teardown: corrupt plant already swept by the step")
@@ -157,10 +126,6 @@ final class IsolationWorkflow: TestWorkflow {
                 }
             }
         }
-        // Precondition, proven not assumed: the probe channel is alive
-        // and answers .undecodable RIGHT NOW — without this, a vault
-        // blip would make the check below pass vacuously (unverifiable
-        // also classifies free) without touching the branch under test.
         guard case .undecodable = await vault.read(id: corruptId) else {
             fail("precondition broke — corrupt write did not read .undecodable")
             if case let outcome = await vault.delete(id: corruptId, attempts: 3), outcome != .done {
@@ -196,13 +161,6 @@ final class IsolationWorkflow: TestWorkflow {
     }
 
     private func gateEngageAndRelease() async {
-        // This step keeps a REAL decodable payload in the vault for a
-        // moment (the engage sweep only disarms providers the vault
-        // owns). The LIVE manager's debounced reload must not sample
-        // that window: its reconcile would mint a real NE entry for
-        // the throwaway. Drain any pending debounce first — the step
-        // itself fires no configuration changes, so the window that
-        // follows is trigger-free.
         try? await Task.sleep(for: .milliseconds(600))
         guard let cfg = TestConfigFactory.throwaway(name: "TE-GateOwn-\(runTag)") else {
             fail("factory produced no config")
@@ -213,11 +171,6 @@ final class IsolationWorkflow: TestWorkflow {
             fail("store \(stored.label): \(cfg.name)")
             return
         }
-        // This one is DECODABLE, which makes it the heaviest residue
-        // in the suite: left behind, the next reconcile mints a real
-        // NE entry for it and the user inherits a tunnel they never
-        // imported. The step's own cleanup dies with a Stop; this does
-        // not.
         onTeardown("gate-own plant") { [weak self] in
             guard let self else { return }
             await self.sweepGateOwnPlant(cfg)
@@ -227,17 +180,12 @@ final class IsolationWorkflow: TestWorkflow {
             identity: TunnelIdentity(id: cfg.id, name: cfg.name, createdAt: Date(), isGhost: false),
             status: .disconnected
         )
-        own.arrangeArmed() // the armed rule that would feed the fight
+        own.arrangeArmed()
         let foreign = FakeSlotProvider(
             name: "TE-GateForeign-\(runTag)",
             identity: foreignIdentity(name: "TE-GateForeign-\(runTag)"),
             status: .connected
         )
-        // No supplier is installed here, and that is now what this step
-        // measures: the gate's NO-MANAGER fallback, which writes through
-        // its own copy without the removal bars. The routed path — the
-        // one production takes once a list exists — is the two steps
-        // below. Neither covers the other.
         let gate = ConnectionGateCoordinator(
             vault: vault,
             providerFactory: FakeSlotFactory(canned: [own, foreign])
@@ -249,26 +197,14 @@ final class IsolationWorkflow: TestWorkflow {
         check(!own.isOnDemandEnabled && !own.storedOnDemand && own.saveCount >= 1,
               "engaging the gate disarmed our armed rule and PERSISTED it — the save count alone would also count a refusal (flag=\(own.isOnDemandEnabled), store=\(own.storedOnDemand), saves=\(own.saveCount))")
 
-        // Silently: this step drives the gate by hand below, and a
-        // published notification would hand the same transition to the
-        // manager's observer as well.
         foreign.setStatusSilently(.disconnected)
         await gate.evaluateNow()
         check(gate.state == .slotFree,
               "gate released once the foreign session went idle — state=\(String(describing: gate.state))")
 
-        // Checked cleanup: a leftover decodable payload is NOT inert —
-        // the live reconcile would materialize it as a real tunnel. If
-        // this delete fails, that row will surface in the list; say so.
         if case let outcome = await vault.delete(id: cfg.id, attempts: 3), outcome != .done {
             log("cleanup: vault delete \(outcome.label) — '\(cfg.name)' may appear in the tunnel list; delete it there", .warn)
         }
-        // Belt for the drain race: a live reload that straddled the
-        // 600ms drain can have reconciled the throwaway into a REAL
-        // system entry mid-window. Remove it through the production
-        // path (the vault delete above makes remove()'s own delete an
-        // idempotent no-op, proven by Upsert Semantics) and prove the
-        // list is clean either way.
         if let leaked = tunnel(named: cfg.name) {
             log("drain race minted a real entry for '\(cfg.name)' — removing it through the production path", .warn)
             try? await tunnels.remove(tunnel: leaked)
@@ -276,29 +212,6 @@ final class IsolationWorkflow: TestWorkflow {
         check(tunnel(named: cfg.name) == nil, "no residue row for '\(cfg.name)' in the live list")
     }
 
-    /// Where the gate's stand-down actually lands.
-    ///
-    /// The gate loads its OWN providers, so its objects are never the
-    /// ones this app's containers wrap: the same configurations, two
-    /// system reads apart. That is why it cannot reach the liveness bars
-    /// by itself — they are read off a container and object identity
-    /// will never match across two reads — and why a save issued on its
-    /// own copy would repair nothing the manager can see.
-    ///
-    /// Two rows are given to the gate and only one of them is in the
-    /// manager's list, so the pass proves both halves at once: the write
-    /// goes through the manager's provider for the row it holds, and the
-    /// row it does not hold is barred rather than written through the
-    /// gate's object. Each half is the other's control — a bar that
-    /// silently swallowed the whole sweep would take the first check
-    /// down with it.
-    ///
-    /// Every surface is fabricated, the vault included. The ownership
-    /// answer is what decides which rows the sweep considers at all, and
-    /// buying it with real payloads would put throwaways in the user's
-    /// own vault for a claim that is not about the vault. Nothing here
-    /// touches NE preferences, the real vault, or a real provider, so
-    /// there is no residue and no teardown net.
     private func gateRoutesThroughTheManager() async {
         guard let held = TestConfigFactory.throwaway(name: "TE-GateRouted-\(runTag)"),
               let absent = TestConfigFactory.throwaway(name: "TE-GateAbsent-\(runTag)") else {
@@ -307,9 +220,7 @@ final class IsolationWorkflow: TestWorkflow {
         }
         let foreignName = "TE-GateRoutedForeign-\(runTag)"
 
-        // The manager's side of the same configuration.
         let managerHeld = armedProvider(for: held)
-        // The gate's side: different objects, same identities.
         let gateHeld = armedProvider(for: held)
         let gateAbsent = armedProvider(for: absent)
         let foreign = FakeSlotProvider(
@@ -319,13 +230,7 @@ final class IsolationWorkflow: TestWorkflow {
         )
 
         let faultVault = FaultVaultClient()
-        // Both rows read as ours, which is what puts them in front of
-        // the sweep in the first place.
         faultVault.readAllAnswer = .answers(.configs([held, absent]))
-        // The only per-id probe on this path is the classifier's, for
-        // the id outside the owned set — and absence IS the foreign
-        // verdict. Fabricated rather than left real so a call this step
-        // did not anticipate cannot reach the user's own vault.
         faultVault.readAnswer = .answers(.missing)
         faultVault.storeAnswer = .answers(.done)
         faultVault.deleteAnswer = .answers(.done)
@@ -336,8 +241,6 @@ final class IsolationWorkflow: TestWorkflow {
             vault: faultVault,
             observesSystemChanges: false
         )
-        // The arrangement is measured, not assumed: the whole claim
-        // rests on the manager holding exactly one of the two rows.
         guard manager.tunnels.contains(where: { $0.id == held.id }),
               !manager.tunnels.contains(where: { $0.id == absent.id }) else {
             fail("the rig did not come up as this claim needs — manager rows=\(manager.tunnels.map(\.id))")
@@ -363,20 +266,6 @@ final class IsolationWorkflow: TestWorkflow {
               "the row the manager's list does not hold was barred rather than written through the gate's object (saves=\(gateAbsent.saveCount), flag=\(gateAbsent.isOnDemandEnabled))")
     }
 
-    /// The bar the routing exists to buy.
-    ///
-    /// This site runs while another user's session holds the slot, which
-    /// is exactly when somebody is likely to be deleting the tunnel that
-    /// will not connect. A stand-down landing on an entry a removal has
-    /// just taken puts that entry back — armed, behind a list that no
-    /// longer holds it — which is the hidden-entry class this campaign
-    /// exists to close.
-    ///
-    /// A second row carries the control, and it is what makes the
-    /// negative mean anything: it is owned, armed and untouched by any
-    /// removal, so it must come down in the same pass. Without it, "no
-    /// save on the removing row" would read the same whether the bar
-    /// held or the sweep never reached the loop.
     private func gateBarsARowBeingRemoved() async {
         guard let removing = TestConfigFactory.throwaway(name: "TE-GateRemoving-\(runTag)"),
               let control = TestConfigFactory.throwaway(name: "TE-GateControl-\(runTag)") else {
@@ -386,8 +275,6 @@ final class IsolationWorkflow: TestWorkflow {
         let foreignName = "TE-GateRemovingForeign-\(runTag)"
 
         let managerRemoving = armedProvider(for: removing)
-        // The removal is held open at the system entry, which is where
-        // the window this step needs actually is.
         managerRemoving.removeAnswer = .succeedsAfter(seconds: 6)
         let managerControl = armedProvider(for: control)
         let gateRemoving = armedProvider(for: removing)
@@ -400,9 +287,6 @@ final class IsolationWorkflow: TestWorkflow {
 
         let faultVault = FaultVaultClient()
         faultVault.readAllAnswer = .answers(.configs([removing, control]))
-        // Decodable, so the removal takes the entry FIRST — which is the
-        // order that opens the window at all: the entry is what a late
-        // save re-mints.
         faultVault.readAnswers = [
             removing.id: .answers(.config(removing)),
             control.id: .answers(.config(control)),
@@ -423,10 +307,6 @@ final class IsolationWorkflow: TestWorkflow {
         }
 
         let removal = Task { @MainActor in (try? await manager.remove(tunnel: container)) != nil }
-        // Waited out to the HELD entry removal rather than to the bar
-        // alone: the removal lowers the rule before it touches the
-        // entry, so a snapshot taken at the bar would be racing that
-        // save instead of measuring past it.
         guard await settle(within: 8, until: {
             manager.removingIds.contains(removing.id) && managerRemoving.removeCount == 1
         }) else {
@@ -435,13 +315,6 @@ final class IsolationWorkflow: TestWorkflow {
             return
         }
         let savesBefore = managerRemoving.saveCount
-        // WHICH bar answers is the claim. `standDownForSlotGate` also
-        // bars an id the list does not hold, and a row that had already
-        // left the list would take this step green for the wrong
-        // reason. It has not left while the entry removal is held — and
-        // if the hold has run out on a slow machine the arrangement is
-        // simply gone, which is an environment exit and not a broken
-        // contract: nothing was measured either way.
         guard manager.tunnels.contains(where: { $0.id == removing.id }) else {
             _ = await removal.value
             skip("environment: the held removal window closed before the sweep could run")
@@ -456,15 +329,6 @@ final class IsolationWorkflow: TestWorkflow {
         gate.currentTunnelsManager = { manager }
         await gate.evaluateNow()
 
-        // The counters below are read with no await between them and
-        // the sweep, and that is load-bearing rather than tidy: an
-        // engaged gate polls every three seconds, and in THIS rig its
-        // canned providers never see the manager's save, so each poll
-        // finds them armed and sweeps again. Production does not repeat
-        // that way — its gate re-reads the system list, where the
-        // manager's write is visible — so the repetition is a property
-        // of the rig, and termination itself is not something this rig
-        // can witness.
         check(gate.state == .slotHeld(holderName: foreignName),
               "the gate engaged while a removal was in flight — state=\(String(describing: gate.state))")
         check(managerControl.saveCount == 1 && !managerControl.storedOnDemand,
@@ -485,8 +349,6 @@ final class IsolationWorkflow: TestWorkflow {
               + " a leaked bar makes that id un-startable and un-deletable for the life of the process")
     }
 
-    /// A provider standing for a config the system already holds, armed
-    /// the way one loaded from the system comes in.
     private func armedProvider(for config: TunnelConfig) -> FakeSlotProvider {
         let provider = FakeSlotProvider(
             name: config.name,
@@ -498,11 +360,6 @@ final class IsolationWorkflow: TestWorkflow {
     }
 
     private func preflightBlocks() async {
-        // No vault write at all: the held verdict rests entirely on
-        // the FOREIGN id probing `.missing` — whether our own row is
-        // vault-backed is irrelevant to it. Skipping the store removes
-        // the only residue this step could leave (a decodable payload
-        // the live reconcile would materialize as a real tunnel).
         let ownName = "TE-PreflightOwn-\(runTag)"
         let own = FakeSlotProvider(
             name: ownName,
@@ -514,10 +371,6 @@ final class IsolationWorkflow: TestWorkflow {
             identity: foreignIdentity(name: "TE-PreForeign-\(runTag)"),
             status: .connected
         )
-        // A side manager over synthetic providers and the real vault —
-        // the production TunnelsManager type, isolated from the live
-        // one the app runs (its factory is canned, so its reloads and
-        // reconcile touch no real NE preferences).
         let manager = TunnelsManager(
             tunnelProviders: [own],
             providerFactory: FakeSlotFactory(canned: [own, foreign]),
@@ -528,14 +381,6 @@ final class IsolationWorkflow: TestWorkflow {
             return
         }
 
-        // The rung-0 pre-flight rides a 2s verdict deadline and costs
-        // at least TWO sequential vault round-trips (readAll + the
-        // per-id probe), so the gate must fit two RTTs plus slack
-        // inside 2s — one ping under 0.8s is the proxy. A vault
-        // slower than that legitimately reads .free (unverifiable)
-        // and the activation proceeds: product behavior, not a
-        // product bug. Non-ready answers are their own stories, not
-        // slowness.
         let pingStart = Date()
         let pingAnswer = await vault.ping()
         let pingRTT = Date().timeIntervalSince(pingStart)
@@ -554,8 +399,6 @@ final class IsolationWorkflow: TestWorkflow {
         }
 
         manager.startActivation(of: container)
-        // Poll budget covers the 2s verdict deadline plus scheduling
-        // slack; the belts settle the error well inside it.
         let start = Date()
         while Date().timeIntervalSince(start) < 12 {
             if container.lastActivationError != nil { break }
@@ -572,20 +415,6 @@ final class IsolationWorkflow: TestWorkflow {
         check(!own.isEnabled, "isEnabled was never set against an occupied slot")
         check(!own.isOnDemandEnabled && !own.storedOnDemand,
               "recovery was never armed against an occupied slot — in the flag or the store (flag=\(own.isOnDemandEnabled), store=\(own.storedOnDemand))")
-        // The contract as of this session, and the reason the number
-        // moved: the collision exit used to leave this slot alone, which
-        // read as "nothing was written" and was in fact "the one exit
-        // that proved a foreign holder and left our rule wherever it
-        // was". It now stands the rule down like every sibling belt, so
-        // exactly ONE save belongs to this path — and it is a
-        // stand-down, never an arm, which the flag and store above say
-        // in their own right. (The previous version asserted zero and
-        // went red on that change: the guard doing its job.)
-        // Waited for, then pinned: the stand-down is issued AFTER the
-        // verdict is written and on the far side of an executor hop, so
-        // reading the counter the instant the error appears would race
-        // it. The window closes on the first save; the equality then
-        // says no second one followed.
         let disarmStart = Date()
         while Date().timeIntervalSince(disarmStart) < 3 {
             if own.saveCount >= 1 { break }
@@ -597,17 +426,6 @@ final class IsolationWorkflow: TestWorkflow {
         check(own.startCount == 0, "startTunnel was never called (starts=\(own.startCount))")
     }
 
-    /// The seam itself, proven before anything is built on it.
-    ///
-    /// The activation belts hang off `handleStatusChange`, and the only
-    /// door into that method is an `.NEVPNStatusDidChange` the manager
-    /// matches to one of its tunnels. Until now the harness had no way
-    /// to knock on it: real sessions decide their own timing, and the
-    /// synthetic provider answered `matchesNotification` with a flat
-    /// `false`. This step proves the driven notification arrives, is
-    /// matched to the right tunnel, and runs the production handler —
-    /// and, just as importantly, that a fake's notification is invisible
-    /// to the app's real tunnels.
     private func drivenStatusReachesHandler() async {
         let identity = foreignIdentity(name: "TE-Seam-\(runTag)")
         let fake = FakeSlotProvider(name: identity.name, identity: identity, status: .disconnected)
@@ -627,8 +445,6 @@ final class IsolationWorkflow: TestWorkflow {
 
         fake.drive(.connected)
 
-        // The observer hops through a Task on the main queue, so the
-        // handler runs after this call returns rather than inside it.
         var reached = false
         let start = Date()
         while Date().timeIntervalSince(start) < 3 {
@@ -638,35 +454,18 @@ final class IsolationWorkflow: TestWorkflow {
         }
         check(reached, "driven .connected reached the real handler — status=\(container.status)")
 
-        // The other half of the isolation claim, asked directly rather
-        // than inferred: no real tunnel answers to this notification.
-        // Comparing the live tunnels' statuses before and after would
-        // have been the same sentence with a timing bug in it — a real
-        // session transitioning on its own during the wait would fail
-        // a claim that was never about it.
         let driven = Notification(name: .NEVPNStatusDidChange, object: fake, userInfo: nil)
         let claimedByReal = tunnels.tunnels.filter { $0.tunnelProvider.matchesNotification(driven) }
         check(claimedByReal.isEmpty,
               "no real tunnel matches a driven notification (\(claimedByReal.count) of \(tunnels.tunnels.count) claimed it)")
 
-        // And the deliberate negative: a notification carrying someone
-        // else's object must not match this provider.
         check(!fake.matchesNotification(Notification(name: .NEVPNStatusDidChange, object: NSObject(), userInfo: nil)),
               "a foreign object's notification does not match this provider")
     }
 
-    /// The gate-own plant's sweep, lifted out of its net when the
-    /// entry-probe gating pushed the closure past the length ruler.
-    /// The net stays the registration; this is what it does.
     private func sweepGateOwnPlant(_ cfg: TunnelConfig) async {
         var notes: [String] = []
         var stuck = false
-        // Row first, payload second, and the order is the whole
-        // point: deleting the payload while a materialized row is
-        // still listed makes the next ingest read `.missing` for
-        // it, file it under another user and hide it — leaving a
-        // system entry nothing in this app can reach again.
-        // `remove()` takes the payload down with the row anyway.
         if let materialized = tunnel(named: cfg.name) {
             do {
                 try await tunnels.remove(tunnel: materialized)
@@ -676,21 +475,11 @@ final class IsolationWorkflow: TestWorkflow {
                 stuck = true
             }
         }
-        // Through the kit at both ends. The `.unreachable` arm
-        // was already honest — that is not what changed. What did:
-        // the DELETE's answer was read as three values but never
-        // re-read, so a delete whose reply was lost counted as a
-        // refusal; and the entry side asked only the mirror above,
-        // which cannot see a payload-less entry at all, since the
-        // ownership boundary files one as another local user's and
-        // drops it from the list.
         var payloadGone = false
         switch await readPayloadState(cfg.id) {
         case .missing:
-            payloadGone = true // Gone, by the step or by the remove above.
+            payloadGone = true
         case .unreachable:
-            // A reading that verified nothing claims nothing —
-            // and loudly, per the cleanup doctrine.
             notes.append("vault unreachable — payload state unverified")
             stuck = true
         case .present:
@@ -706,10 +495,6 @@ final class IsolationWorkflow: TestWorkflow {
                 stuck = true
             }
         }
-        // Gated on the payload being PROVABLY gone. The probe does
-        // not merely look — it removes a surviving entry — so over a
-        // payload that is still there, or whose state the vault never
-        // answered for, it would take away the bytes' only anchor.
         if payloadGone {
             let (entryNotes, entryStuck) = await probeHiddenSurvivor(id: cfg.id)
             notes.append(contentsOf: entryNotes)
