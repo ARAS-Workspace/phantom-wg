@@ -89,7 +89,7 @@ class ProxyConfigDaemonClient {
     }
 
     /// @witness SplitControlPlane.liveEditLandsOnBoth
-    /// @adr 0003
+    /// @adr 0004
     func fetchLogs() async -> String? {
         await withRaceTimeout(seconds: 5, fallback: nil) {
             await self.fetchLogsRPC()
@@ -151,8 +151,7 @@ class ProxyConfigDaemonClient {
         }
     }
 
-    /// @witness SplitControlPlane.clearBothBuffers
-    /// @adr 0003
+    /// @adr 0004
     @discardableResult
     func clearLogs() async -> Bool {
         await withRaceTimeout(seconds: 2, fallback: false) {

@@ -13,9 +13,11 @@
 //
 // Two things live here.
 //
-// `TestContext` is the production object graph a workflow is handed —
-// the real tunnels manager, vault, extension gate, split-tunnelling
-// coordinator and both proxy daemon clients. A workflow fabricates a
+// `TestContext` is the production object graph a workflow is handed — the
+// real tunnels manager, the vault and its session, the extension gate, the
+// split-tunnelling coordinator with its store and provider manager, the
+// DNS proxy manager, both proxy daemon clients and the physical-interface
+// resolver. A workflow fabricates a
 // surface only where it says so; everything else is the shipping object.
 //
 // `PhantomTestEngine` is the runner: it drives the catalogue in order,

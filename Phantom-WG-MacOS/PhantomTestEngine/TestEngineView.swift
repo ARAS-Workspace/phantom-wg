@@ -18,9 +18,11 @@
 //
 // A configuration gate stands in front of the runner: two tunnels named
 // `Test-Ghost` and `Test-WireGuard` must be present, and the gate shows
-// which of the two is missing rather than a single refusal. Workflows
-// drive those two rather than minting their own, so a run measures a
-// tunnel that reached the vault the way the user's tunnels do.
+// which of the two is missing rather than a single refusal. The
+// activation paths drive those two rather than minting their own, so a
+// run measures a tunnel that reached the vault the way the user's tunnels
+// do; steps that need a disposable tunnel plant one and sweep it in
+// teardown.
 //
 // The transcript can be copied or written to a timestamped file; a failed
 // write reports itself rather than being swallowed.

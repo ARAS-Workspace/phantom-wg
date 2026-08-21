@@ -17,7 +17,8 @@
 //
 // What it can be told to do:
 //
-//   saveAnswer / removeAnswer / loadAnswer   succeed, refuse, or hold the
+//   saveAnswer / removeAnswer / loadAnswer   succeed now, succeed after a
+//                                            delay, refuse, or hold the
 //                                            completion and never answer
 //   startAnswer                              succeed or throw
 //   resetAnswer                              any opcode-3 reply shape,
@@ -29,15 +30,20 @@
 // which is how a step measures a caller that is waiting on a save the
 // system never answered.
 //
-// `drive(_:)` sets the status and posts `.NEVPNStatusDidChange` with itself
-// as the object, exactly as the system publishes it; `matchesNotification`
+// `drive(_:)` sets the status and posts `.NEVPNStatusDidChange` with
+// itself as the object — this fake stands in for both the manager and its
+// session, so the two roles the system keeps apart are one object here;
+// `matchesNotification`
 // answers only for notifications carrying THIS instance, so a driven
 // notification cannot be picked up by a real tunnel. `setStatusSilently`
 // moves the status without publishing, for arrangements that must not wake
-// an observer.
+// an observer. `arrangeArmed()` puts the slot in the on-demand armed shape
+// — enabled, stored as enabled, carrying a single connect-on-any rule — so
+// a step can start from a recovery arrangement instead of building one.
 //
-// It counts everything it is asked: saves, loads, starts, stops, removes,
-// provider messages, and when the last save was issued.
+// It counts saves, loads, starts, stops, removes and provider messages,
+// and records when the last save was issued; the last-error probe is
+// answered but not counted.
 //
 // What it deliberately does NOT fake: the vault (`FaultVaultClient` owns
 // that) and the extension gate (`FakeExtensionSubmitter` owns that).

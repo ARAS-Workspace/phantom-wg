@@ -120,7 +120,7 @@ final class TransparentProxyProvider: NETransparentProxyProvider, ActiveFlowRela
         }
     }
 
-    // MARK: - ActiveFlowRelayRegistry
+    // MARK: - Relay Registry & Flow Helpers
 
     func registerRelay(id: UUID, close: @escaping () -> Void) {
         relaysLock.lock()
@@ -180,7 +180,7 @@ final class TransparentProxyProvider: NETransparentProxyProvider, ActiveFlowRela
         return try? JSONDecoder().decode(SplitTunnelingConfiguration.self, from: data)
     }
 
-    // MARK: - Interface Loss
+    // MARK: - Interface Changes
 
     private func handleInterfaceChange(_ interface: NWInterface?) {
         if let interface {

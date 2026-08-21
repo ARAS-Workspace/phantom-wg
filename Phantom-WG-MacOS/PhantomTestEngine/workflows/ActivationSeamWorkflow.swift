@@ -28,21 +28,28 @@
 // providers, brought to the point every belt scenario starts from —
 // activation issued, `startTunnel` observed, session never connected.
 //
-// Reload triggers are OFF on that manager, and this is the case the flag's
-// own doc describes: a rig held open across a long window. Every
+// Reload triggers are OFF on that manager: a rig held open across a long
+// window has no business being sent through a reload it did not ask for.
+// The flag removes BOTH of this manager's reload triggers — a real
+// configuration change anywhere in the system, and the app coming to the
+// foreground — and either one would send it through `ingest`. The second
+// is the one that could hit a rig held open while the user looks away.
+// Every
 // notification these steps care about is driven, and the status observer
 // that carries it is not governed by the flag — what the flag removes is a
 // real configuration change, anywhere in the system, sending this side
 // manager through `ingest`, a pass that asks the REAL vault who owns each
 // row.
 //
-// Waits are on OBSERVED events rather than guessed sleeps: rung 0 rides a
+// A step waits on an OBSERVED event wherever one exists: rung 0 rides a
 // real vault verdict before it starts anything, so the observed start is
-// the gate.
+// the gate. Fixed sleeps appear only to spend a window an arrangement
+// itself opened, never to stand in for an event a step could have watched.
 //
 // The family is split across three files at a type boundary rather than by
 // moving a threshold — `+RuleOwnership` and `+Reset` are the same
-// workflow, continued. The rigs and the run tag belong here; the polling
+// workflow, continued. The run tag and the shared `activatedRig` belong
+// here; `+Reset` builds the driven variant on top of it, and the polling
 // helper lives on `TestWorkflow`.
 
 #if DEBUG

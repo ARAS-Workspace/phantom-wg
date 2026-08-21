@@ -31,7 +31,8 @@
 //
 //   1. The vault surface (this file)
 //      Ping, round-trip fidelity, rewrite, duty separation between two
-//      ids sharing a name, an interleaved stress round, undecodable
+//      ids sharing a name, an interleaved stress round, a ladder that
+//      will not answer itself from a proven silence, undecodable
 //      payloads reported distinctly and not conflated between the two
 //      read paths, upsert and delete idempotence, and a proof that
 //      nothing this run stored is still materialised at the end.
@@ -49,15 +50,17 @@
 //      They are the only steps whose reconcile reads the real vault, and
 //      the visibility gate drives a full reload besides. Kept after the
 //      delete proof so those passes cannot materialise the bulk
-//      throwaways this run had stored. The custody-read steps reconcile
-//      too, but every one of them over a FABRICATED vault, so no throwaway
+//      throwaways this run had stored. The custody-read AND custody-write
+//      steps reconcile too, but every one of them over a FABRICATED vault,
+//      so no throwaway
 //      of this run is ever a candidate for them.
 //
 // Group 2 is registered BEFORE groups 3 and 4 so the "run last" contract
 // of the corruption pair keeps meaning what it says.
 //
-// The planted ledgers (`tracked`, `rawIds`) are writable only by the steps
-// and readable only by the sweep. That coupling is why `sweepThrowaways`
+// The planted ledgers (`tracked`, `rawIds`) are written and read by the
+// steps of this workflow alone, and the sweep is the last reader of both.
+// That coupling is why `sweepThrowaways`
 // stayed in this workflow while the rest of the kit moved to the base: a
 // net that reads these two ledgers has no meaning on a workflow that
 // planted something else.

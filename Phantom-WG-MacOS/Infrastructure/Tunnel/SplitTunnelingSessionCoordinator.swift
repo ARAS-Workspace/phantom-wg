@@ -252,6 +252,8 @@ final class SplitTunnelingSessionCoordinator {
         }
     }
 
+    // MARK: - Outcomes
+
     enum StopOutcome: Equatable {
         case landed
         case alreadyStopped
@@ -268,8 +270,10 @@ final class SplitTunnelingSessionCoordinator {
         }
     }
 
+    // MARK: - Reconfigure
+
     /// @witness SplitControlPlane
-    /// @adr 0003
+    /// @adr 0004
     func reconfigure(with config: SplitTunnelingConfiguration) async -> ReconfigureOutcome {
         var outcome = ReconfigureOutcome.notRunning
         await serialized { [weak self] in

@@ -138,7 +138,7 @@ final class ExtensionGateCoordinator {
         try await dns.deactivate()
     }
 
-    // MARK: - Logging
+    // MARK: - Logging & Echo Re-check
 
     private func log(_ message: String) {
         os_log("%{public}@", log: oslog, type: .default, message)

@@ -42,7 +42,7 @@ protocol TunnelProviding: AnyObject {
     func fetchLastDisconnectError(completion: @escaping @Sendable (Error?) -> Void)
 }
 
-// MARK: - Async Persistence (default implementations wrapping callback-based methods)
+// MARK: - Async Wrappers (default implementations wrapping the callback-based methods)
 
 extension TunnelProviding {
 

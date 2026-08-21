@@ -30,11 +30,10 @@
 //       The asymmetry is deliberate. A stale PhantomTunnel ABORTS the
 //       suite, because most of the catalogue drives it and every line
 //       after would describe a binary that is not running. A stale PROXY
-//       extension earns a red line and nothing more: only three entries
-//       drive the proxies rather than the tunnel — the fabricated pair
-//       (ExtensionGate, TunnelEdit) and the control-plane workflow, which
-//       raises a real session on the two proxy extensions and never a
-//       tunnel.
+//       extension earns a red line and nothing more: exactly ONE entry
+//       raises a real session on the proxy extensions, the control-plane
+//       workflow at the end of this catalogue. The gate and edit entries
+//       never reach an installed extension at all.
 //
 //       Silence is neither: no answer proves nothing about what is
 //       installed, so it skips. One skip carries all silent extensions,
@@ -57,10 +56,9 @@
 // Known blind spot, by construction: the build stamp is MARKETING_VERSION,
 // so this separates BUILDS, not sources. Edit an extension, rebuild
 // without moving the version, and both sides still read the same string
-// while the old binary keeps running. The cure is the one
-// `ExtensionIdentity` documents — move the version, or run the uninstall
-// flow — and the abort message says so in the same breath as the
-// diagnosis.
+// while the old binary keeps running. The cure is either half of what the
+// abort message names — move the version, or run the uninstall flow —
+// said in the same breath as the diagnosis.
 
 #if DEBUG
 import Foundation

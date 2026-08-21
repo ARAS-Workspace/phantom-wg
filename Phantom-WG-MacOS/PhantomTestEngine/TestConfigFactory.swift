@@ -12,21 +12,27 @@
 // Test Engine: Throwaway Configurations
 //
 // Builds configurations that are structurally real and operationally
-// inert: keys are generated fresh per call, and every address sits in a
-// documentation or private range (TEST-NET-1 `192.0.2.0/24`, `10.99.99.0/24`)
-// so nothing a run raises can reach a real peer.
+// inert: keys are generated fresh per call, every ROUTABLE address sits in
+// a documentation or private range (TEST-NET-1 `192.0.2.0/24`,
+// `10.99.99.0/24`), and the Ghost listener binds loopback — so nothing a
+// run raises can reach a real peer.
 //
-// Three products, each for a different question:
+// Four products, each for a different question:
 //
-//   throwaway(name:ghost:)   a valid standalone or Ghost config, built
-//                            through `ConfParser` so it carries whatever
-//                            the parser produces rather than a hand-made
-//                            struct
-//   emptyAllowedIPs(name:)   a peer that allows nothing, built through the
-//                            memberwise initializers because the parser
-//                            cannot yield one
-//   multiPeerConfText(_:)    raw `.conf` text with a second peer section,
-//                            for the parser's own refusals
+//   throwaway(name:ghost:)        a valid standalone or Ghost config, built
+//                                 through `ConfParser` so it carries
+//                                 whatever the parser produces rather than
+//                                 a hand-made struct
+//   throwawayDraft(name:ghost:)   the same, stopped one step earlier at the
+//                                 draft, for steps that need to edit or
+//                                 validate before a config exists
+//   emptyAllowedIPs(name:)        a `throwaway` config with its AllowedIPs
+//                                 emptied by hand, because validation
+//                                 refuses an empty list and the parser can
+//                                 therefore never yield one
+//   multiPeerConfText(secondHeader:)
+//                                 raw `.conf` text with a second peer
+//                                 section, for the parser's own refusals
 
 #if DEBUG
 import Foundation

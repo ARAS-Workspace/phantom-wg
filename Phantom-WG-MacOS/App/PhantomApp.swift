@@ -18,16 +18,19 @@
 // own behaviour. What a comment may carry is a POINTER to where a claim
 // is proven or where a decision is recorded.
 //
-// Three markers, and nothing else:
+// Three markers, plus the directives the linter itself reads:
 //
 //   /// @witness <Workflow>
 //   /// @witness <Workflow>.<step>
 //       The PhantomTestEngine harness drives this symbol and asserts on
-//       it. `<Workflow>` names a file in
-//       `Phantom-WG-MacOS/PhantomTestEngine/workflows/`, whose header
-//       lists every scenario it runs; `<step>` names one method there.
-//       Grep the name to read the actual assertions. A method carrying
-//       several workflow markers is exercised from several angles.
+//       it. `<Workflow>` names a workflow FAMILY under
+//       `Phantom-WG-MacOS/PhantomTestEngine/workflows/` — one type,
+//       sometimes continued across `+`-suffixed files — whose header says
+//       what the family measures; some headers list the scenarios one by
+//       one, others say why they do not. `<step>` names one method in that
+//       family, which may live in any of its files. Grep the name to read
+//       the actual assertions. A method carrying several workflow markers
+//       is exercised from several angles.
 //
 //   /// @adr <NNNN>
 //       The decision behind this shape is recorded in
@@ -36,18 +39,29 @@
 //       not repeat it.
 //
 //   // MARK: -
-//       Navigation only. Carries no claim.
+//       Navigation. It may name what a group of symbols is for, and a few
+//       do carry a parenthetical about the group's shape — but a MARK is
+//       never where a behavioural guarantee is recorded. That is a marker
+//       or the ADR.
 //
-// The absence of a marker means the symbol has no harness witness. It
-// does NOT mean the symbol is wrong, untested by hand, or unimportant —
-// only that nothing in this repository proves it automatically yet.
-// Unwitnessed symbols are being collected deliberately rather than
-// annotated, so the gap stays visible instead of being explained away.
+//   SwiftLint directives
+//       Read by the linter, never by a reader. Carries no claim about
+//       behaviour. (Not spelled out here: writing one would make this
+//       legend a directive rather than a description of one.)
+//
+// The markers are NOT exhaustive. An unmarked symbol usually has no
+// harness witness — but not always: the harness asserts on some symbols
+// that carry no marker yet (`ConfParser.parse` and `TunnelResetReply.read`
+// among them). So absence means "not annotated", never "not tested", and
+// it never means the symbol is wrong or unimportant. Unwitnessed symbols
+// are being collected deliberately rather than annotated, so the gap
+// stays visible instead of being explained away.
 //
 // The test engine itself is documented differently: every file under
-// `PhantomTestEngine/` opens with a header naming what it is, what it
-// drives and what it cannot prove. Read that header before reading its
-// body — the bodies are bare on purpose.
+// `PhantomTestEngine/` opens with a header naming what it is and, where
+// it drives something, what it drives; some also name what the file
+// cannot prove. Read that header before reading its body — the bodies are
+// bare on purpose.
 //
 // ──────────────────────────────────────────────────────────────────────
 

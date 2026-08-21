@@ -12,8 +12,10 @@
 // Config Contract
 //
 // Config-shape contracts, from the parser down to `validate()`. Each step
-// guards a shipped refusal at the layer that owns it, and fails only if
-// that refusal regresses.
+// guards a shipped refusal at the layer that owns it. An environment that
+// cannot be arranged skips rather than reddens; a step's own plant is
+// answered for on the way out, so a red line here is either the refusal
+// regressing or the step failing to set itself up.
 //
 // Scenarios:
 //

@@ -95,7 +95,6 @@ class TunnelsManager {
 
     // MARK: - CRUD
 
-    /// @witness ConfigContract
     /// @witness Unreachable
     /// @witness VaultIntegrity
     func add(config: TunnelConfig) async throws -> TunnelContainer {
@@ -336,6 +335,8 @@ class TunnelsManager {
         return tunnel
     }
 
+    // MARK: - Modify & Remove
+
     /// @witness TunnelEdit
     /// @witness VaultIntegrity
     func modify(tunnel: TunnelContainer, with config: TunnelConfig) async throws {
@@ -441,6 +442,8 @@ class TunnelsManager {
         }
         activateWaitingTunnelIfNeeded()
     }
+
+    // MARK: - Uninstall
 
     /// @witness VaultIntegrity.aTeardownThatTookTheStoreStopsTheRestore
     /// @witness VaultIntegrity.realignStandsDownWhenATeardownTakesTheStore
@@ -637,7 +640,7 @@ class TunnelsManager {
         }
     }
 
-    // MARK: - Configuration Observation
+    // MARK: - Configuration Observation, Reload & Ingest
 
     private func startObservingTunnelConfigurations() {
         configObservationToken = NotificationCenter.default.addObserver(

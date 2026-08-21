@@ -30,8 +30,10 @@
 // Members:
 //
 //   readPayloadState        three-valued read
-//   verifiedDelete          delete, then re-read before believing it
-//   verifiedEntryRemoval    remove the system entry, then re-read the list
+//   verifiedDelete          delete; on a refusal or a silence, re-read
+//                           before deciding whether it landed
+//   verifiedEntryRemoval    remove the system entry; if the removal threw,
+//                           re-read the list before believing it
 //   probeHiddenSurvivor     ask a FRESH system list whether an entry the
 //                           mirror lost is still there
 //   sweepOrphanedPayload    repair arm: payload without its entry

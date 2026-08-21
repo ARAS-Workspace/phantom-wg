@@ -29,7 +29,7 @@ final class RingBufferLogger {
         lock.unlock()
     }
 
-    // MARK: - Drain
+    // MARK: - Read & Reset
 
     func snapshot() -> String {
         lock.lock()

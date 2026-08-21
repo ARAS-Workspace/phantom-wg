@@ -42,7 +42,6 @@ extension TunnelsManager {
     }
 
     /// @witness ActivationSeam
-    /// @witness ConfigContract
     /// @witness PhantomTunnel
     /// @witness RecoverySwitch
     /// @witness Unreachable
@@ -115,7 +114,6 @@ extension TunnelsManager {
         }
     }
 
-    /// @witness PhantomTunnel
     /// @witness RecoverySwitch
     /// @witness Unreachable
     /// @witness VaultIntegrity
@@ -149,7 +147,7 @@ extension TunnelsManager {
         }
     }
 
-    // MARK: - Private
+    // MARK: - Recovery Rule & Activation Machinery
 
     private static func armRecovery(on provider: TunnelProviding) {
         let rule = NEOnDemandRuleConnect()

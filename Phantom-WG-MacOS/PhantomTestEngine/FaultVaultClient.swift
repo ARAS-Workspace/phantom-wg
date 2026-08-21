@@ -16,7 +16,9 @@
 // injects a fault only where it is measuring one, and everything it does
 // not name stays production.
 //
-// Each RPC takes an answer:
+// Read, readAll, store and delete each take an answer. `ping` is
+// deliberately NOT faked — it is not overridden, so every call reaches the
+// real daemon whatever the other surfaces are set to:
 //
 //   .real                     call through to the real client
 //   .answers(verdict)         return that verdict without a round trip

@@ -41,11 +41,13 @@
 //     inside its own append window, drive a reload into it, and ask
 //     whether the list carries the id once or twice.
 //   - Fail nothing and take the STORE: raise the uninstall latch and read
-//     what a restore and a realign each do about it. Both arrange the
-//     latch DURING a suspension, because a latch raised beforehand is
-//     answered by an earlier guard and proves the wrong thing.
+//     what a restore and a realign each do about it. Both take the store
+//     MID-PASS, because a latch raised before the pass starts is answered
+//     by the pass's own opening guard and proves the wrong thing.
 //   - Hold a REMOVAL open and run a teardown method into it.
 //   - Drive the teardown's LAST step, the entry removal itself.
+//   - Fail neither store but take the removal's own custody READ away, and
+//     read that it refused before touching either.
 
 #if DEBUG
 import Foundation

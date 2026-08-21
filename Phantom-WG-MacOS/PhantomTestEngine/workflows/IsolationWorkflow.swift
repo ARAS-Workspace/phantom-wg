@@ -16,8 +16,10 @@
 // on the daemon answering `.missing` for ids this user does not own —
 // exactly what a real second account's entries would answer — so the
 // semantics under test are the production ones and only the NE provider
-// objects are synthetic. The gate-routing steps are the exception and
-// fabricate the vault as well; each says so in its own place.
+// objects are synthetic. The gate-routing steps are the exception: they
+// fabricate the vault as well, standing a `FaultVaultClient` up in place
+// of the daemon so the manager's row and the gate's own reading can be
+// made to disagree.
 //
 // The funnel is production verbatim: a side `TunnelsManager` over canned
 // providers, answering through the same `foreignSlotVerdict()` the
