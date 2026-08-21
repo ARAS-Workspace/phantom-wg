@@ -8,6 +8,8 @@ enum StatsFormatter {
         var lastHandshakeTimestamp: Int64 = 0
     }
 
+    /// @witness PhantomTunnel
+    /// @witness Unreachable
     static func parse(_ config: String) -> RuntimeStats {
         var stats = RuntimeStats()
 

@@ -311,6 +311,8 @@ final class ExtensionGateController: NSObject, OSSystemExtensionRequestDelegate 
         return live.first
     }
 
+    /// @witness ExtensionGate.approvalForARemovalDoesNotPaint
+    /// @witness ExtensionGate.lateAnswerIsStillARemoval
     nonisolated func requestNeedsUserApproval(_ request: OSSystemExtensionRequest) {
         Task { @MainActor in
             guard !isOurDeactivation(request) else {
@@ -322,6 +324,8 @@ final class ExtensionGateController: NSObject, OSSystemExtensionRequestDelegate 
         }
     }
 
+    /// @witness ExtensionGate.aRetryIsNotAnsweredByTheRemovalItReplaced
+    /// @witness ExtensionGate.lateAnswerIsStillARemoval
     nonisolated func request(
         _ request: OSSystemExtensionRequest,
         didFinishWithResult result: OSSystemExtensionRequest.Result

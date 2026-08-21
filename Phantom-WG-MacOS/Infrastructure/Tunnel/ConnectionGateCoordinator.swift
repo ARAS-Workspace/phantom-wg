@@ -53,6 +53,7 @@ final class ConnectionGateCoordinator {
     }
 
 #if DEBUG
+    /// @witness Isolation
     func evaluateNow() async {
         await evaluate()
     }

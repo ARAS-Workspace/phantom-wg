@@ -23,6 +23,7 @@ class SplitTunnelProviderManager {
 
     // MARK: - Load
 
+    /// @witness SplitControlPlane.door
     func load() async {
         do {
             let managers = try await NETransparentProxyManager.loadAllFromPreferences()
@@ -58,6 +59,8 @@ class SplitTunnelProviderManager {
         try manager.connection.startVPNTunnel()
     }
 
+    /// @witness SplitControlPlane.door
+    /// @witness SplitControlPlane.stopThenEdit
     func persistConfiguration(_ configuration: SplitTunnelingConfiguration) async throws {
         guard let manager else {
             throw ManagerError.notLoaded

@@ -268,6 +268,8 @@ final class SplitTunnelingSessionCoordinator {
         }
     }
 
+    /// @witness SplitControlPlane
+    /// @adr 0003
     func reconfigure(with config: SplitTunnelingConfiguration) async -> ReconfigureOutcome {
         var outcome = ReconfigureOutcome.notRunning
         await serialized { [weak self] in

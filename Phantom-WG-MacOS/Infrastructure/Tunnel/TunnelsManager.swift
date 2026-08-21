@@ -95,6 +95,9 @@ class TunnelsManager {
 
     // MARK: - CRUD
 
+    /// @witness ConfigContract
+    /// @witness Unreachable
+    /// @witness VaultIntegrity
     func add(config: TunnelConfig) async throws -> TunnelContainer {
         let name = config.name.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !name.isEmpty else {
@@ -126,6 +129,7 @@ class TunnelsManager {
 
     // MARK: - Reconcile
 
+    /// @witness VaultIntegrity
     @discardableResult
     func reconcileFromVault() async -> Int {
         guard !isReconciling else { return 0 }
@@ -332,6 +336,8 @@ class TunnelsManager {
         return tunnel
     }
 
+    /// @witness TunnelEdit
+    /// @witness VaultIntegrity
     func modify(tunnel: TunnelContainer, with config: TunnelConfig) async throws {
         guard !removingIds.contains(tunnel.id) else {
             throw TunnelManagementError.vpnSystemErrorOnModifyTunnel(
@@ -369,6 +375,13 @@ class TunnelsManager {
         tunnel.name = name
     }
 
+    /// @witness ActivationSeam
+    /// @witness ConfigContract
+    /// @witness Isolation
+    /// @witness TunnelEdit
+    /// @witness Unreachable
+    /// @witness VaultIntegrity
+    /// @adr 0009
     func remove(tunnel: TunnelContainer) async throws {
         guard !removingIds.contains(tunnel.id) else { return }
         removingIds.insert(tunnel.id)
@@ -429,6 +442,8 @@ class TunnelsManager {
         activateWaitingTunnelIfNeeded()
     }
 
+    /// @witness VaultIntegrity.aTeardownThatTookTheStoreStopsTheRestore
+    /// @witness VaultIntegrity.realignStandsDownWhenATeardownTakesTheStore
     func suspendRefreshForUninstall() {
         refreshSuspended = true
         pendingRefresh?.cancel()
@@ -439,6 +454,7 @@ class TunnelsManager {
     var isStoreHeldForTeardown: Bool { refreshSuspended }
     #endif
 
+    /// @witness VaultIntegrity.aTeardownThatTookTheStoreStopsTheRestore
     func releaseStoreAfterUninstall() {
         refreshSuspended = false
     }
@@ -472,6 +488,7 @@ class TunnelsManager {
         return ids
     }
 
+    /// @witness VaultIntegrity.theUninstallRemovalTakesOnlyTheClassifiedEntries
     func removeEntriesForUninstall(_ removableIds: Set<UUID>) async {
         guard let providers = try? await providerFactory.loadAllFromPreferences() else {
             NSLog("[uninstall] entry removal skipped — the system list did not load")
@@ -666,10 +683,13 @@ class TunnelsManager {
     }
 
     #if DEBUG
+    /// @witness ActivationSeam
+    /// @witness VaultIntegrity
     func refresh() async {
         await reload()
     }
 
+    /// @witness VaultIntegrity
     func prune() async {
         guard let providers = try? await providerFactory.loadAllFromPreferences() else { return }
         await ingest(providers)

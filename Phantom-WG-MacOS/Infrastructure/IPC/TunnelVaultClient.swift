@@ -48,6 +48,7 @@ class TunnelVaultClient {
     }
 
     #if DEBUG
+    /// @witness VaultIntegrity.retryDoesNotAnswerFromAProvenSilence
     func armProvenSilenceForTesting() {
         darkUntil = Date().addingTimeInterval(Self.darkWindow)
     }
@@ -241,6 +242,11 @@ class TunnelVaultClient {
         var isAnswer: Bool { if case .unreachable = self { false } else { true } }
     }
 
+    /// @witness ActivationSeam
+    /// @witness Isolation
+    /// @witness Sanity
+    /// @witness Unreachable
+    /// @witness VaultIntegrity
     func ping() async -> Ping {
         await withRaceTimeout("ping", seconds: 5, fallback: .unreachable, honouringDarkWindow: false) { [log] in
             await withCheckedContinuation { (continuation: CheckedContinuation<Ping, Never>) in

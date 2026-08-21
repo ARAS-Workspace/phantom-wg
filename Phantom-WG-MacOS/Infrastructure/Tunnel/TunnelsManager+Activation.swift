@@ -5,6 +5,12 @@ import NetworkExtension
 
 extension TunnelsManager {
 
+    /// @witness ActivationSeam
+    /// @witness ConfigContract
+    /// @witness Isolation
+    /// @witness PhantomTunnel
+    /// @witness RecoverySwitch
+    /// @witness Unreachable
     func startActivation(of tunnel: TunnelContainer) {
         guard !removingIds.contains(tunnel.id) else { return }
         guard tunnel.status == .inactive else { return }
@@ -35,6 +41,11 @@ extension TunnelsManager {
         startActivation(of: tunnel, at: 0)
     }
 
+    /// @witness ActivationSeam
+    /// @witness ConfigContract
+    /// @witness PhantomTunnel
+    /// @witness RecoverySwitch
+    /// @witness Unreachable
     func startDeactivation(of tunnel: TunnelContainer) {
         tunnel.respawnReviveConsumed = true
         tunnel.respawnReviveTask?.cancel()
@@ -104,6 +115,10 @@ extension TunnelsManager {
         }
     }
 
+    /// @witness PhantomTunnel
+    /// @witness RecoverySwitch
+    /// @witness Unreachable
+    /// @witness VaultIntegrity
     func disarmAllRecovery() async {
         waitingTunnel = nil
         for tunnel in tunnels {
@@ -424,6 +439,8 @@ extension TunnelsManager {
 
     // MARK: - Reset (Layer-Level)
 
+    /// @witness ActivationSeam
+    /// @witness PhantomTunnel
     func resetConnection(of tunnel: TunnelContainer) async throws {
         guard tunnel.status == .active || tunnel.status == .reasserting else { return }
 

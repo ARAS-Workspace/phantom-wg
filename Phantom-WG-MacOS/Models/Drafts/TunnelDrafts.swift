@@ -64,6 +64,8 @@ struct TunnelDraft: Equatable {
 
     // MARK: Validate
 
+    /// @witness ConfigContract.blankWstunnelUrl
+    /// @witness ConfigContract.commaOnlyLists
     func validate() -> ValidationResult {
         var errors: [Field: FieldValidationError] = [:]
 

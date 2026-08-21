@@ -52,6 +52,7 @@ class TunnelContainer: Identifiable {
         }
     }
 
+    /// @witness ActivationSeam
     func refreshStatus() {
         let derived = TunnelStatus(from: tunnelProvider.connectionStatus)
         if isManagerDriven, derived == .inactive || derived == .deactivating { return }
