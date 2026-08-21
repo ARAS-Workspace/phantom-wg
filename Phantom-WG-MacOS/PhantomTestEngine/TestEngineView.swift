@@ -3,12 +3,6 @@ import SwiftUI
 import AppKit
 import UniformTypeIdentifiers
 
-/// DEBUG-only in-app test surface, reached from the gear menu beside
-/// Uninstall. Mounted inside the TunnelListView subtree, so it reads
-/// every live service the app exposes via @Environment. Play runs the
-/// catalog's workflows in order; the output is one flat, readable,
-/// saveable text stream. UI follows the user's language; workflow output
-/// is English. Never in Release.
 struct TestEngineView: View {
     @Environment(TunnelsManager.self) private var tunnels
     @Environment(TunnelVaultClient.self) private var vault
@@ -24,8 +18,6 @@ struct TestEngineView: View {
     @Environment(LocalizationManager.self) private var loc
     @Environment(\.dismiss) private var dismiss
 
-    /// Not `@State`: the runner outlives this sheet on purpose, so the
-    /// single-run latch and the Stop handle survive a close/reopen.
     private let engine = PhantomTestEngine.shared
     @State private var savingError: String?
     @State private var showingSaveError = false
@@ -43,10 +35,6 @@ struct TestEngineView: View {
     var body: some View {
         NavigationStack {
             Group {
-                // `engine.isRunning` keeps an in-flight run's controls
-                // and stream even if the named configs blink out of
-                // the live list mid-run (a reconcile rebuild) — the
-                // gate returns once the run ends.
                 if ctx.hasTestConfigs || engine.isRunning {
                     runner
                 } else {
@@ -66,13 +54,6 @@ struct TestEngineView: View {
             }
         }
         .frame(minWidth: 560, minHeight: 600)
-        // A dismissed sheet must not keep driving live tunnels: the run
-        // is cancelled with the view, the runner reports "stopped", and
-        // each workflow's teardown net sweeps what its steps planted.
-        // Exactly the Stop button's path — same call, same latch, same
-        // teardown — because the runner is process-wide. Reopening the
-        // sheet while that teardown is still finishing finds Run
-        // disabled rather than a second run over the same services.
         .onDisappear { engine.stop() }
     }
 
@@ -211,8 +192,6 @@ struct TestEngineView: View {
 
     private func timestamp() -> String {
         let formatter = DateFormatter()
-        // Fixed-format output must not drift with the user's calendar
-        // or numbering system.
         formatter.locale = Locale(identifier: "en_US_POSIX")
         formatter.dateFormat = "yyyy-MM-dd-HHmmss"
         return formatter.string(from: Date())

@@ -1,14 +1,6 @@
 #if DEBUG
 import Foundation
 
-/// Self-contained TR/EN strings for the DEBUG harness CHROME only — the
-/// shell that wraps the experience (menu entry, panel title, buttons, the
-/// config gate). Kept out of the app's translations catalog on purpose,
-/// resolved from `LocalizationManager.current`.
-///
-/// Workflows are NOT localized: their names, step titles and log lines
-/// are authored in English inside the workflow. Localization wraps only
-/// the interface.
 struct TestEngineStrings {
     let menuEntry: String
     let navTitle: String

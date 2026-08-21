@@ -1,24 +1,12 @@
 #if DEBUG
 import Foundation
 
-/// Raw XPC path to the vault daemon, below the app's `TunnelVaultClient`.
-/// The production client only ever encodes a valid `TunnelConfig`, so
-/// the undecodable-payload paths (read reporting, reconcile survival)
-/// can be reached no other way. This writes ARBITRARY bytes under an id.
-///
-/// It reuses the exact contract the app uses — `TunnelVaultDaemonProtocol`
-/// over `TunnelVaultService.machServiceName` — so the daemon pins it to
-/// our own team/identifier just like the real client; it works only
-/// because the test engine runs as the host app. Used solely by
-/// injection steps; every id it writes is deleted on the way out.
 @MainActor
 final class TestVaultRawClient {
 
     private var connection: NSXPCConnection?
 
     deinit {
-        // Explicit teardown rather than dealloc-implied cleanup —
-        // invalidate() is thread-safe, so no actor hop is needed.
         connection?.invalidate()
     }
 
@@ -33,8 +21,6 @@ final class TestVaultRawClient {
         return connection?.remoteObjectProxyWithErrorHandler(onError) as? TunnelVaultDaemonProtocol
     }
 
-    /// Writes raw bytes under `id`, bypassing `TunnelConfig` encoding.
-    /// Returns the daemon's ack, or false if the vault could not be reached.
     func storeRaw(_ bytes: Data, id: UUID) async -> Bool {
         await withCheckedContinuation { continuation in
             let resume = SingleResume(continuation)
