@@ -11,9 +11,10 @@
 //
 // Extension Gate (Removal Budget)
 //
-// The extension gate's removal path: what the budget does under an
+// The extension gate's removal path — what the budget does under an
 // approval prompt, and what happens to an answer that arrives after this
-// app has stopped waiting for it.
+// app has stopped waiting for it — and the ledger that decides when an
+// activation is over.
 //
 // Every step composes its OWN `ExtensionGateController` over a capturing
 // submitter, and that is the only way this surface can be measured at all
@@ -37,6 +38,13 @@
 //   D — A Second Removal Is Refused While One Is In Flight
 //   E — A Retry's Wait Is Not Answered By The Removal It Replaced
 //
+//   F — A Failed Refresh Spends No Part Of An Activation
+//       The gate holds its promotion while an activation is in flight,
+//       and the count of what is in flight is what holds it. This drives
+//       a properties query — the request a refresh issues, which no
+//       activation ever counted — to both of its terminal callbacks
+//       while an activation is still open.
+//
 // The default budget here is two seconds rather than the app's sixty,
 // because what is under test is that the wait ENDS and what it hands back
 // when it does — neither claim is about the size of the number, and the
@@ -58,6 +66,8 @@ final class ExtensionGateWorkflow: TestWorkflow {
             WorkflowStep("A Second Removal Is Refused While One Is In Flight", secondRemovalIsRefused),
             WorkflowStep("A Retry's Wait Is Not Answered By The Removal It Replaced",
                          aRetryIsNotAnsweredByTheRemovalItReplaced),
+            WorkflowStep("A Failed Refresh Spends No Part Of An Activation",
+                         aFailedRefreshSpendsNoPartOfAnActivation)
         ]
     }
 
@@ -166,6 +176,54 @@ final class ExtensionGateWorkflow: TestWorkflow {
               "while the same callback for an INSTALL paints it, so the half above is a guard holding rather than a callback that went nowhere (status=\(controller.status))")
 
         _ = await answer(of: removal)
+    }
+
+    private func aFailedRefreshSpendsNoPartOfAnActivation() async {
+        let (controller, submitter) = rig()
+
+        controller.activate()
+        guard await settle(within: 2, until: { submitter.submitted.count == 1 }),
+              let activationRequest = submitter.last else {
+            fail("the activation never reached the submitter — submitted=\(submitter.submitted.count)")
+            return
+        }
+        guard check(controller.activationsInFlightForTesting == 1,
+                    "the activation is counted while it is in flight, which is the only thing holding the promotion"
+                    + " — inFlight=\(controller.activationsInFlightForTesting), expected 1") else { return }
+        check(controller.status == .activating,
+              "and the gate is mid-activation — status=\(controller.status)")
+
+        controller.refresh()
+        guard await settle(within: 2, until: { submitter.submitted.count == 2 }),
+              let refreshRequest = submitter.last, refreshRequest !== activationRequest else {
+            fail("the refresh never reached the submitter as its OWN request — submitted=\(submitter.submitted.count)")
+            return
+        }
+
+        let failure = NSError(domain: "TE.Gate", code: 71,
+                              userInfo: [NSLocalizedDescriptionKey: "driven properties failure"])
+        controller.request(refreshRequest, didFailWithError: failure)
+
+        let spent = await settle(within: 2) { controller.activationsInFlightForTesting != 1 }
+        check(!spent,
+              "a properties query that failed spent no part of the activation still in flight —"
+              + " inFlight=\(controller.activationsInFlightForTesting), expected 1")
+        check(controller.status == .activating,
+              "and it wrote no verdict over the gate, since a query that failed says nothing about the extension"
+              + " — status=\(controller.status)")
+
+        controller.refresh()
+        guard await settle(within: 2, until: { submitter.submitted.count == 3 }),
+              let secondRefresh = submitter.last, secondRefresh !== refreshRequest else {
+            fail("the second refresh never reached the submitter — submitted=\(submitter.submitted.count)")
+            return
+        }
+        controller.request(secondRefresh, didFinishWithResult: .completed)
+
+        let spentOnCompletion = await settle(within: 2) { controller.activationsInFlightForTesting != 1 }
+        check(!spentOnCompletion,
+              "and a properties query that SUCCEEDED spent no part of it either, which is the same door on the other"
+              + " callback — inFlight=\(controller.activationsInFlightForTesting), expected 1")
     }
 
     private func lateAnswerIsStillARemoval() async {

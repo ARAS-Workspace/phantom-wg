@@ -57,6 +57,8 @@ final class ExtensionGateController: NSObject, OSSystemExtensionRequestDelegate 
 
     @ObservationIgnored private var activationsInFlight = 0
 
+    @ObservationIgnored private var activationRequests: Set<ObjectIdentifier> = []
+
     @ObservationIgnored private let oslog: OSLog
 
     init(
@@ -145,6 +147,7 @@ final class ExtensionGateController: NSObject, OSSystemExtensionRequestDelegate 
         }
     }
 
+    /// @witness ExtensionGate.aFailedRefreshSpendsNoPartOfAnActivation
     func activate() {
         log("activate() submitted (bundleID=\(bundleID), status=\(status))")
         pendingActivationCompleted = false
@@ -157,9 +160,15 @@ final class ExtensionGateController: NSObject, OSSystemExtensionRequestDelegate 
             queue: .main
         )
         request.delegate = self
+        activationRequests.insert(ObjectIdentifier(request))
         submitter.submit(request)
     }
 
+    #if DEBUG
+    var activationsInFlightForTesting: Int { activationsInFlight }
+    #endif
+
+    /// @witness ExtensionGate.aFailedRefreshSpendsNoPartOfAnActivation
     func refresh() {
         log("refresh() submitted (status=\(status))")
         let request = OSSystemExtensionRequest.propertiesRequest(
@@ -341,6 +350,10 @@ final class ExtensionGateController: NSObject, OSSystemExtensionRequestDelegate 
                 resumeDeactivation(request, with: .success(()))
                 return
             }
+            guard activationRequests.remove(ObjectIdentifier(request)) != nil else {
+                log("didFinishWithResult for a request this gate did not count — the activation ledger is left alone")
+                return
+            }
             activationsInFlight = max(0, activationsInFlight - 1)
             switch result {
             case .completed:
@@ -354,6 +367,7 @@ final class ExtensionGateController: NSObject, OSSystemExtensionRequestDelegate 
         }
     }
 
+    /// @witness ExtensionGate.aFailedRefreshSpendsNoPartOfAnActivation
     nonisolated func request(
         _ request: OSSystemExtensionRequest,
         didFailWithError error: Error
@@ -372,6 +386,11 @@ final class ExtensionGateController: NSObject, OSSystemExtensionRequestDelegate 
             if isOurDeactivation(request) {
                 abandonedDeactivations.remove(ObjectIdentifier(request))
                 resumeDeactivation(request, with: .failure(error))
+                return
+            }
+            guard activationRequests.remove(ObjectIdentifier(request)) != nil else {
+                log("didFailWithError for a request this gate did not count"
+                    + " — no activation is credited with it and the gate keeps the state it had")
                 return
             }
             activationsInFlight = max(0, activationsInFlight - 1)
