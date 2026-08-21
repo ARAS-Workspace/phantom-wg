@@ -23,6 +23,7 @@ extension TunnelsManager {
         beginActivation(of: tunnel)
     }
 
+    /// @witness ActivationSeam.aGroundedInvalidOccupantDoesNotHandOnTheQueue
     func beginActivation(of tunnel: TunnelContainer) {
         guard !removingIds.contains(tunnel.id) else { return }
         guard tunnel.status == .inactive else { return }
@@ -34,7 +35,6 @@ extension TunnelsManager {
             tunnel.status = .waiting
             waitingTunnel = tunnel
             startDeactivation(of: activeTunnel)
-            activateWaitingTunnelIfNeeded()
             return
         }
 
@@ -406,6 +406,7 @@ extension TunnelsManager {
         }
     }
 
+    /// @witness ActivationSeam.aGroundedInvalidOccupantDoesNotHandOnTheQueue
     func performDeactivation(of tunnel: TunnelContainer) {
 
         tunnel.tunnelProvider.stopTunnel()
@@ -416,6 +417,9 @@ extension TunnelsManager {
             activateWaitingTunnelIfNeeded()
         case .invalid:
             tunnel.status = .inactive
+            if waitingTunnel != nil {
+                NSLog("[activation] \(tunnel.name) was grounded from .invalid with a tunnel queued behind it — the queue waits for the system's own answer, since .invalid does not tell a finished session from a live one")
+            }
         default:
             tunnel.status = .deactivating
         }
