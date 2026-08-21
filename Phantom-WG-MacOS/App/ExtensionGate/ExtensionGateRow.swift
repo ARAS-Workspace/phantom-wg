@@ -1,9 +1,5 @@
 import SwiftUI
 
-/// Single extension row inside `ExtensionGateView`. Renders the
-/// extension name, its current status (icon + text), an inline error
-/// message when applicable, and the per-row action button whose
-/// label and target depend on the controller's `Status`.
 struct ExtensionGateRow: View {
     let controller: ExtensionGateController
     let onActivate: () -> Void
@@ -119,8 +115,6 @@ struct ExtensionGateRow: View {
 
 // MARK: - Previews
 
-/// One row per status, so both prominent buttons and the plain retry
-/// are on the canvas at once.
 private struct ExtensionGateRowGallery: View {
     private let statuses: [ExtensionGateController.Status] = [
         .unknown,

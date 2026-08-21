@@ -1,11 +1,5 @@
 import SwiftUI
 
-/// Lock screen between the extension gate and the tunnel content.
-/// **PhantomTunnel** and **TunnelVault** exist together or not at
-/// all — until the session probe proves that chain, the tunnel list
-/// is not shown: without the vault it would be residue, not a working
-/// app. Mirrors the extension gate's idiom: the state names what is
-/// wrong, one button re-checks.
 struct TunnelVaultGateView: View {
     @Environment(TunnelVaultSession.self) private var session
     @Environment(LocalizationManager.self) private var loc
@@ -19,9 +13,6 @@ struct TunnelVaultGateView: View {
 
             switch session.state {
             case .connecting, .ready:
-                // The spinner stays untinted: layering a translucent
-                // secondary over its already-translucent segments made
-                // it vanish on light backgrounds.
                 ProgressView {
                     Text(loc.t("vault_gate_connecting"))
                         .foregroundStyle(.secondary)
@@ -46,7 +37,6 @@ struct TunnelVaultGateView: View {
         .task { await session.establish() }
     }
 
-    /// One failure story: what broke, then the single way forward.
     private func failure(title: String, message: String, axid: String) -> some View {
         VStack(spacing: 16) {
             VStack(spacing: 8) {

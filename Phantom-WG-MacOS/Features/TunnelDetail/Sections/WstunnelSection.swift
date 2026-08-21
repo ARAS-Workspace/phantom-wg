@@ -1,9 +1,5 @@
 import SwiftUI
 
-/// Ghost-mode section, read-only — only present when
-/// `TunnelConfig.wstunnel` is non-nil. Adding or removing the
-/// `[Wstunnel]` block happens in `TunnelEditView`'s raw-text editor,
-/// which is also how a tunnel converts between ghost and standalone.
 struct WstunnelSection: View {
     let config: WstunnelConfig
     @Environment(LocalizationManager.self) private var loc

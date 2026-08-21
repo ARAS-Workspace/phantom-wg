@@ -1,10 +1,6 @@
 import Foundation
 import Observation
 
-/// Polls a proxy daemon's log ring buffer over XPC on a 1-second
-/// cadence and exposes the lines as `LogEntry` rows. One instance per
-/// proxy — the daemon client fixes which extension is polled, `tag`
-/// labels the rows (SPL / DNS).
 @Observable
 @MainActor
 final class ProxyLogStore: LogEntryProvider {
@@ -39,7 +35,6 @@ final class ProxyLogStore: LogEntryProvider {
         pollingTask = nil
     }
 
-    /// Flushes the daemon's ring buffer and drops local entries.
     func clear() async {
         await daemonClient?.clearLogs()
         entries.removeAll()

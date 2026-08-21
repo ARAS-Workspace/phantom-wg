@@ -50,24 +50,6 @@ struct TunnelListView: View {
             EmptyStateView(showingImport: $showingImport)
         } else {
             VStack(spacing: 0) {
-                // No "active tunnel" summary here, unlike iOS. Under
-                // the ingest ownership boundary every row is already
-                // this user's, so a summary could only repeat what
-                // each row's status shows — while the machine-wide
-                // question ("is a VPN up on this Mac?") can truthfully
-                // be about another local user's session. That story
-                // belongs to the connection gate, which names a
-                // foreign holder only on the classifier's positive
-                // proof and at the moment it matters — when the slot
-                // blocks this user's activation — not to a passive
-                // banner guessing about someone else's session. iOS
-                // is single-user, so it keeps the summary.
-                //
-                // A grouped form on purpose — List's NSTableView
-                // bridge intermittently left a phantom band around
-                // the header after a navigation pop when content
-                // changed while the screen was covered. Forms never
-                // showed it anywhere in the app. Keep it a Form.
                 Form {
                     Section {
                         ForEach(tunnelsManager.tunnels) { tunnel in
@@ -130,9 +112,6 @@ struct TunnelListView: View {
         }
     }
 
-    /// Fixed footer — the form above scrolls as it grows inside the
-    /// app's fixed window, the links stay put. Mirrors the empty
-    /// state's bottom-link styling.
     private var bottomLinks: some View {
         HStack(spacing: 24) {
             Link(destination: URL(string: "https://www.phantom.tc")!) {
@@ -155,128 +134,21 @@ struct TunnelListView: View {
         uninstalling = true
         Task {
             do {
-                // Uninstall removes what the SYSTEM holds, never what
-                // the USER made: extensions deactivate and this user's
-                // VPN entries leave System Settings, while tunnel
-                // configurations and keys stay in the vault (and the
-                // split-tunneling list in its App Group file) — a
-                // reinstall brings everything back. Destroying
-                // configurations is the user's own act, in the app,
-                // before this flow.
 
-                // The teardown owns the store from HERE, before anything
-                // is read or written — the latch is raised first
-                // because the classification below is a snapshot, and a
-                // snapshot is only safe if nothing can add to the world
-                // it describes afterwards.
-                //
-                // Raising it later was a real hole rather than a
-                // tidiness point: a reconcile mints entries for
-                // payloads the system LACKS, so every entry it creates
-                // carries an id that was not in the list when the
-                // classification ran and therefore not in the set
-                // below. The removal step skips exactly those, and the
-                // flow reports a clean uninstall over an entry left in
-                // System Settings. The stand-down below is enough on
-                // its own to arm that pass: its saves broadcast
-                // configuration changes.
                 tunnelsManager.suspendRefreshForUninstall()
-                // And it gives the store back on EVERY exit, which is
-                // why this is a `defer` and not a line at the end.
-                //
-                // The flow owns the latch, so nothing else may lower it
-                // — that ownership is what keeps a gate readiness
-                // re-report from re-opening the restore mid-teardown.
-                // The cost of owning it is that forgetting to release
-                // it is now permanent: `scheduleRefresh` would refuse
-                // for the life of the process, and this manager is
-                // REUSED when the extensions come back rather than
-                // rebuilt, so the user would return from the gate to a
-                // list that can never ingest, reconcile or realign
-                // again. That is worse than the race the ownership
-                // closes, and the success path is the one that would
-                // have hit it: the teardown finishes and simply
-                // returns.
-                //
-                // The release schedules NOTHING, and that is deliberate
-                // rather than a detail. A pass started on the way out
-                // would run against the world this flow has just
-                // emptied and mint every removable entry back — the app
-                // undoing its own uninstall, about 400ms after telling
-                // the user it was done. The vault is no wall there: it
-                // answers over its own launchd service while the
-                // extension is resident, which is exactly the state the
-                // note further down describes when a deactivation
-                // resolves "will complete after reboot". Those two
-                // sentences used to disagree in this same function.
-                //
-                // Lowering the latch is all that is needed: the list's
-                // self-heal is live again from that moment, and the
-                // ordinary triggers reach it when there is something to
-                // heal.
                 defer { tunnelsManager.releaseStoreAfterUninstall() }
 
-                // Classify while the vault still answers: only the
-                // entries whose payloads provably DECODE today are
-                // removable — that is exactly the set reinstall's
-                // reconcile restores. A custody row (payload present
-                // but undecodable) keeps its entry on purpose: the
-                // entry is the sole anchor that makes the broken
-                // payload visible again after a reinstall.
-                //
-                // This is also the LAST moment the question can be
-                // asked. The removal step runs with the extensions
-                // down, so the vault answers nothing there and a
-                // re-classification at that point would read
-                // `.unreachable` for every row — which must never count
-                // as removable, or uninstall would take the custody
-                // entries it exists to preserve.
                 let removableIds = await tunnelsManager.removableEntryIds()
 
-                // Recovery rules stand down: an armed rule on an entry
-                // would keep asking the system to revive a tunnel whose
-                // extension is about to be gone.
                 await tunnelsManager.disarmAllRecovery()
 
-                // Split-tunneling: the running session stops and both
-                // proxy preference entries go — NE-side holdings. The
-                // App Group configuration file stays: it is the user's
-                // list, and a reinstall picks it back up.
                 await sessionCoordinator.purgeForUninstall()
 
-                // Sequential deactivation of all three system
-                // extensions (Tunnel + Split-Tunnel + DNSProxy). On
-                // success every controller settles to `.notInstalled`,
-                // `coordinator.allReady` flips false and `PhantomApp`
-                // falls back to `ExtensionGateView` while this task
-                // finishes the cleanup below.
                 try await gateCoordinator.uninstallAll()
 
-                // LAST, with the extensions down: this user's
-                // removable entries leave the system store, matched
-                // against a FRESH system list so no stale provider
-                // object is replayed.
-                //
-                // The fresh list catches an entry that MOVED, not one
-                // that was born: a mid-teardown mint carries an id the
-                // classification above never saw, so the removal skips
-                // it by design. Which is why the latch is the
-                // load-bearing guarantee rather than a tidiness measure
-                // — it is raised before the classification and re-read
-                // at every point the restore would write, so there is
-                // no such mint to catch. The vault daemon's death is
-                // the second wall (a reboot-pending deactivation can
-                // leave the daemon answering until restart), and an
-                // identified entry outside the removable set is logged
-                // rather than passed over in silence.
                 await tunnelsManager.removeEntriesForUninstall(removableIds)
                 uninstalling = false
             } catch {
-                // A failed teardown leaves this process in list-world
-                // with its entries intact; the latch must not outlive
-                // the flow it was raised for, or every self-heal
-                // stays dead until relaunch. The `defer` above covers
-                // this arm too, so nothing is released twice here.
                 uninstalling = false
                 errorMessage = error.localizedDescription
                 showingError = true

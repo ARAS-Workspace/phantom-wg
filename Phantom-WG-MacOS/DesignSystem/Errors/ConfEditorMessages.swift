@@ -1,14 +1,7 @@
 import Foundation
 
-/// Shared banner formatting for the two raw-text config surfaces —
-/// `TunnelImportView` and `TunnelEditView`. Maps structural
-/// `ConfParser` failures and the per-field validation map to ordered,
-/// localized banner lines so both flows report identically.
 enum ConfEditorMessages {
 
-    /// Stable ordering used when listing validation errors in the
-    /// banner — matches the visual order of the source `.conf` so the
-    /// operator reads errors top-down.
     private static let fieldOrder: [TunnelDraft.Field] = [
         .name,
         .wstunnelUrl, .wstunnelSecret,
@@ -51,11 +44,6 @@ enum ConfEditorMessages {
         }
     }
 
-    /// One exhaustive switch, no default arms: a new `TunnelDraft.Field`
-    /// case must claim its banner label here at compile time. The
-    /// earlier grouped sub-switches carried `default: return ""` arms
-    /// that would have rendered a mis-routed field as a nameless
-    /// error line instead of failing the build.
     private static func fieldLabel(_ field: TunnelDraft.Field, loc: LocalizationManager) -> String {
         switch field {
         case .name:                     return loc.t("detail_name")

@@ -1,30 +1,12 @@
 import SwiftUI
 
-/// Footer actions — copy-to-clipboard, edit, reset connection, and
-/// delete.
-///
-/// - Copy owns its own "Copied!" feedback timer locally.
-/// - Edit opens `TunnelEditView` (raw-text editing, the WireGuard app
-///   pattern) and is enabled only while the tunnel is inactive.
-/// - Reset is enabled only while the tunnel is active/reasserting;
-///   tapping it asks the extension to restart the tunnel layer in
-///   place (wstunnel + WireGuard in ghost mode, WireGuard alone in
-///   standalone) without touching utun — so no packet escapes to the
-///   physical interface during the reset window.
-/// - Delete is routed back to the parent's confirmation dialog via a
-///   binding so the destructive action lives at the view root.
 struct ActionsSection: View {
     var tunnel: TunnelContainer
     let canCopy: Bool
     let copyAction: () -> Void
     let editAction: () -> Void
     let resetAction: () -> Void
-    /// A reset already in flight from this sheet — see the detail
-    /// view's `resetting`.
     let resetting: Bool
-    /// A removal already in flight from this sheet — see the detail
-    /// view's `deleting`. The button closes rather than answering a
-    /// second press with a dismissal the first removal still needs.
     let deleting: Bool
     @Binding var showingDeleteConfirmation: Bool
     @State private var copiedItem: String?
@@ -64,18 +46,10 @@ struct ActionsSection: View {
         }
     }
 
-    /// Reset only applies when the extension is holding the tunnel
-    /// surface. Inactive / deactivating states have no utun to
-    /// preserve; the button collapses to disabled. `reasserting` is
-    /// deliberately included — it is the state a reset itself puts
-    /// the session into — so the in-flight gate is `resetting`, not
-    /// the status.
     private var canReset: Bool {
         tunnel.status == .active || tunnel.status == .reasserting
     }
 
-    /// Config edits require a fully stopped tunnel — mirrors the
-    /// delete gate.
     private var canEdit: Bool {
         tunnel.status == .inactive
     }

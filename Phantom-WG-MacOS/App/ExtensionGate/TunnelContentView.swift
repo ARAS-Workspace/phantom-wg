@@ -1,10 +1,5 @@
 import SwiftUI
 
-/// Loading gate between successful system extension activation and
-/// the actual tunnel list. Waits for the async preference load on
-/// `TunnelsManagerLoader`, surfaces a dedicated error view if the
-/// load fails, and otherwise hands control to `TunnelListView` with
-/// the live manager in environment.
 struct TunnelContentView: View {
     var loader: TunnelsManagerLoader
     @Environment(LocalizationManager.self) private var loc
@@ -29,9 +24,6 @@ struct TunnelContentView: View {
                         .resizable()
                         .scaledToFit()
                         .frame(width: 160, height: 160)
-                    // Untinted spinner — a translucent secondary tint
-                    // over its translucent segments disappears on
-                    // light backgrounds.
                     ProgressView {
                         Text(loc.t("app_loading"))
                             .foregroundStyle(.secondary)

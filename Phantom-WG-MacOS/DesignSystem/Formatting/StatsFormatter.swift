@@ -8,7 +8,6 @@ enum StatsFormatter {
         var lastHandshakeTimestamp: Int64 = 0
     }
 
-    /// Parses WireGuard UAPI runtime configuration into structured stats.
     static func parse(_ config: String) -> RuntimeStats {
         var stats = RuntimeStats()
 
@@ -33,7 +32,6 @@ enum StatsFormatter {
         return stats
     }
 
-    /// Formats byte count into human-readable string (B, KB, MB, GB).
     static func formatBytes(_ bytes: Int64) -> String {
         if bytes < 1024 {
             return "\(bytes) B"
@@ -46,7 +44,6 @@ enum StatsFormatter {
         }
     }
 
-    /// Formats elapsed seconds into localized "time ago" string.
     static func formatTimeAgo(_ seconds: TimeInterval, loc: LocalizationManager) -> String {
         if seconds < 5 { return loc.t("time_just_now") }
         if seconds < 60 { return loc.t("time_seconds_ago", Int(seconds)) }

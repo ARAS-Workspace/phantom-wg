@@ -4,17 +4,6 @@ import WireGuardKit
 
 enum WireGuardConfigBuilder {
 
-    /// Converts `WireguardConfig` + optional `WstunnelConfig` into
-    /// WireGuardKit's `TunnelConfiguration`. Inputs normally come out
-    /// of the validated model, but the extension decodes them straight
-    /// from the vault payload — so this builder re-checks what
-    /// WireGuardKit cannot represent and throws instead of trusting
-    /// the payload.
-    ///
-    /// - Ghost mode: endpoint is system-defined as the wstunnel
-    ///   listener (`localHost:localPort`); a user endpoint is never
-    ///   consulted
-    /// - Standalone: endpoint used verbatim from peer config
     static func build(wireguard: WireguardConfig, wstunnel: WstunnelConfig?) throws -> TunnelConfiguration {
         let interfaceConfig = try buildInterface(from: wireguard)
         let peerConfig = try buildPeer(from: wireguard, wstunnel: wstunnel)
@@ -75,13 +64,6 @@ enum WireGuardConfigBuilder {
             IPAddressRange(from: $0.textual)
         }
 
-        // A peer with no allowed IPs installs no cryptokey route, so the
-        // utun captures nothing and every packet egresses on the
-        // physical NIC in the clear while the tunnel shows Active — a
-        // silent full leak. The import path already rejects an empty
-        // AllowedIPs, but a hand-edited or malformed vault payload can
-        // still arrive here with none; refuse to start rather than run
-        // a tunnel that routes nothing.
         guard !peer.allowedIPs.isEmpty else {
             TunnelLogger.log(.wireGuard, "ERROR: Peer has no usable AllowedIPs — refusing to start (no-route leak guard)")
             throw PacketTunnelProviderError.savedProtocolConfigurationIsInvalid
@@ -89,9 +71,6 @@ enum WireGuardConfigBuilder {
 
         TunnelLogger.log(.wireGuard, "AllowedIPs: \(peer.allowedIPs.count) entries")
 
-        // Endpoint: Ghost mode -> wstunnel listener (system-defined),
-        // standalone -> the peer's own endpoint. A standalone config
-        // without one can only be a hand-damaged payload — refuse to start.
         let endpointString: String
         if let ws = wstunnel {
             endpointString = "\(ws.localHost):\(ws.localPort)"

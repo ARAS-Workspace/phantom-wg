@@ -1,9 +1,5 @@
 import SwiftUI
 
-/// Pair of alerts attached to the tunnel list — one confirms the
-/// destructive uninstall flow, the other surfaces any error raised
-/// during its asynchronous steps. Bundled as a `ViewModifier` so the
-/// list view body stays focused on layout.
 struct UninstallAlerts: ViewModifier {
     @Binding var errorMessage: String?
     @Binding var showingError: Bool
@@ -34,8 +30,6 @@ struct UninstallAlerts: ViewModifier {
 
 // MARK: - Previews
 
-/// Interactive host: alerts have no static rendering, so the canvas
-/// offers a trigger button for each one.
 #Preview {
     PreviewBindingHost(String?.none) { errorMessage in
         PreviewBindingHost(false) { showingError in

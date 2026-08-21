@@ -1,9 +1,5 @@
 import SwiftUI
 
-/// Gear-icon toolbar menu. Hosts the language picker sub-menu and the
-/// uninstall action. Uninstall is surfaced here (rather than in the
-/// main navigation) because it's destructive and operators should not
-/// hit it by accident from a primary surface.
 struct SettingsMenu: View {
     @Binding var showingUninstallConfirm: Bool
     @Binding var showingSplitTunneling: Bool

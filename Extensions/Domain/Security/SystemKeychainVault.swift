@@ -2,41 +2,6 @@ import Foundation
 import Security
 import os.log
 
-/// Custody of tunnel secrets in the **file-based System keychain**.
-///
-/// This is the extension's own store: a system extension runs as root
-/// with no user session, so the login and data-protection keychains
-/// are unreachable to it (`errSecNotAvailable` / `errSecItemNotFound`)
-/// — the System keychain is the one domain that answers. Apple DTS
-/// recommends exactly this shape (host app → XPC → extension →
-/// keychain, with `providerConfiguration` carrying no secrets), and it
-/// is what Tailscale's standalone system extension ships.
-///
-/// No keychain is ever named explicitly. A system extension runs in
-/// the system context, and there — per Apple's TN3137 — "the search
-/// list includes just the System keychain, which is also the default
-/// keychain": every `SecItem` call lands on the right store by
-/// contract. Pinning the domain by hand would take the `SecKeychain*`
-/// functions, all deprecated since macOS 10.10 — this file
-/// deliberately depends on none of them.
-///
-/// One item per tunnel: `service` is fixed, `account` is the tunnel's
-/// `configId`, and the payload is the whole `TunnelConfig` JSON —
-/// WireGuard keys and the wstunnel secret live in the same vault, so
-/// there is a single place where a tunnel's secrets exist.
-///
-/// The System keychain is machine-wide, not per-user, so every item
-/// records the uid that created it and every XPC-facing operation is scoped to a
-/// caller. Without that, one account's app could read, overwrite or
-/// project another account's tunnels — the price of the one keychain
-/// domain a system extension can reach.
-///
-/// Lookup is by attributes rather than a persistent reference: the
-/// account already identifies the item, and on the file-based keychain
-/// a persistent reference goes stale the moment an item's attributes
-/// are updated — an attribute query cannot dangle. Only the extension
-/// calls this type; the app reaches it through `TunnelVaultDaemon`
-/// over XPC.
 enum SystemKeychainVault {
 
     static let service = "com.remrearas.Phantom-WG-MacOS.tunnelvault"
@@ -46,15 +11,8 @@ enum SystemKeychainVault {
         category: "vault"
     )
 
-    /// Serializes keychain access — RPCs arrive on XPC queues while
-    /// `startTunnel` reads in-process on its own thread.
     private static let lock = NSLock()
 
-    /// Outcome of a single payload read. Absence and failure are kept
-    /// apart on purpose: the app's ownership probe reads "the vault
-    /// holds nothing here" as a verdict — not this user's tunnel, so
-    /// the entry is hidden from the list — and a keychain that could
-    /// not answer must never sound like that.
     enum FetchResult {
         case payload(Data)
         case missing
@@ -63,33 +21,16 @@ enum SystemKeychainVault {
 
     // MARK: - CRUD
 
-    /// Writes (or replaces) the vault item for `id`, stamped with the
-    /// owning uid. Upsert — `SecItemUpdate` first, `SecItemAdd` only
-    /// when there is nothing to update: a failed update leaves the old
-    /// item fully intact, so no moment exists in which the only copy
-    /// of a tunnel's keys lives outside the keychain. (The former
-    /// delete-then-add carried that moment, and its rollback could
-    /// itself fail — a double failure lost the secret outright.)
-    /// Attribute lookup keeps this safe from the file-based keychain's
-    /// quirk of invalidating persistent references on attribute
-    /// updates — nothing here ever holds one.
     @discardableResult
     static func store(_ payload: Data, id: String, owner: uid_t) -> Bool {
         lock.lock()
         defer { lock.unlock() }
 
-        // Replacing someone else's item is not a write, it is a theft
-        // of their slot. Ids are random so this should never happen;
-        // refusing costs nothing and closes the case where it does.
-        // An owner that cannot be read is refused the same way —
-        // never overwrite a slot that could not be identified.
         switch ownerOf(id: id) {
         case .stamped(let existing) where existing != owner:
             report("store(denied — owned by \(existing))", id: id, status: errSecAuthFailed)
             return false
         case .unstamped:
-            // Exists but is nobody's — claiming it would let the
-            // first writer steal a slot no one can vouch for.
             report("store(denied — unowned slot)", id: id, status: errSecAuthFailed)
             return false
         case .failed:
@@ -98,9 +39,6 @@ enum SystemKeychainVault {
             break
         }
 
-        // Both paths write the same three fields, so a slot this call
-        // is allowed to touch is always left stamped — an unstamped
-        // slot never gets this far, refused above rather than claimed.
         let fields: [String: Any] = [
             kSecAttrDescription as String: String(owner),
             kSecAttrLabel as String: "Phantom-WG Tunnel (\(id))",
@@ -123,13 +61,9 @@ enum SystemKeychainVault {
 
         switch ownerOf(id: id) {
         case .stamped(let existing) where existing != owner:
-            // Scoping reads as absence — another account's item is not
-            // this caller's to know about.
             report("fetch(denied — not the owner)", id: id, status: errSecItemNotFound)
             return .missing
         case .unstamped:
-            // Exists but cannot be attributed — served to no one, the
-            // same absence another account's item reads as.
             report("fetch(denied — unowned slot)", id: id, status: errSecItemNotFound)
             return .missing
         case .failed:
@@ -139,15 +73,6 @@ enum SystemKeychainVault {
         }
     }
 
-    /// Unscoped read for the provider's own use at `startTunnel`.
-    ///
-    /// Ownership is a boundary policy, not a storage lock: it exists so
-    /// one login account's app cannot reach another's tunnels over XPC.
-    /// The provider is not a peer — it runs as root inside this
-    /// extension and is starting whichever configuration macOS handed
-    /// it, which the system already scoped to the session that owns it.
-    /// Checking the uid here would only lock the extension out of the
-    /// payloads it exists to use.
     static func fetchForProvider(id: String) -> Data? {
         lock.lock()
         defer { lock.unlock() }
@@ -163,18 +88,14 @@ enum SystemKeychainVault {
 
         switch ownerOf(id: id) {
         case .absent:
-            // Already gone is success for the caller's purposes.
             return true
         case .unstamped:
-            // Exists but is nobody's — not this caller's to delete,
-            // and not gone either.
             report("delete(denied — unowned slot)", id: id, status: errSecAuthFailed)
             return false
         case .stamped(let existing) where existing != owner:
             report("delete(denied — owned by \(existing))", id: id, status: errSecAuthFailed)
             return false
         case .failed:
-            // Could not tell whose it is — do not claim it is gone.
             return false
         case .stamped:
             break
@@ -185,22 +106,10 @@ enum SystemKeychainVault {
         return status == errSecSuccess || status == errSecItemNotFound
     }
 
-    /// Every payload belonging to `owner`, or `nil` when the
-    /// enumeration itself failed. The answer is the app's inventory
-    /// of this user's payloads — the ingest ownership boundary scopes
-    /// the tunnel list by it and reconcile restores from it — so a
-    /// failed enumeration must never read as an empty vault, and an
-    /// item that enumerates but fails to read poisons the whole
-    /// answer rather than shrinking it (see the loop below).
     static func fetchAll(owner: uid_t) -> [Data]? {
         lock.lock()
         defer { lock.unlock() }
 
-        // Two passes on purpose: the file-based keychain rejects a
-        // bulk query that asks for item *data* (`kSecMatchLimitAll`
-        // with `kSecReturnData` answers errSecParam), so enumerate the
-        // accounts first and then read each payload with the
-        // single-item query that is known to work.
         guard let accounts = accounts(of: owner) else { return nil }
         var payloads: [Data] = []
         for account in accounts {
@@ -208,28 +117,14 @@ enum SystemKeychainVault {
             case .payload(let data):
                 payloads.append(data)
             case .missing:
-                // Raced a delete between enumerate and read — skipping
-                // it is honest, the item is genuinely gone.
                 continue
             case .failed:
-                // A real read failure must never shrink the vault into
-                // a shorter-but-valid list the callers would trust as
-                // this user's complete inventory: the whole enumeration
-                // is unusable.
                 return nil
             }
         }
         return payloads
     }
 
-    /// Deletes every payload belonging to `owner` — the vault's
-    /// complete per-user erasure primitive. No shipping caller
-    /// remains (the uninstall flow preserves user data by contract;
-    /// the `purgeVault` XPC endpoint layered above in
-    /// `TunnelVaultDaemon` stays for wire-stability), but the
-    /// semantics hold for whoever invokes it: `false` means the vault
-    /// must not be treated as clean — the enumeration failed, or at
-    /// least one item refused to go.
     static func purge(owner: uid_t) -> Bool {
         lock.lock()
         defer { lock.unlock() }
@@ -247,10 +142,6 @@ enum SystemKeychainVault {
         return clean
     }
 
-    /// Door check for the session probe: proves the keychain domain
-    /// opens and enumeration answers, and counts the caller's payloads
-    /// without moving one. `nil` mirrors `fetchAll` — the door did not
-    /// open.
     static func count(owner: uid_t) -> Int? {
         lock.lock()
         defer { lock.unlock() }
@@ -260,15 +151,6 @@ enum SystemKeychainVault {
 
     // MARK: - Private
 
-    /// Owner lookup, four-way for the same reason as `FetchResult`:
-    /// "no such item" clears the way, "could not ask" must not — and
-    /// "exists without a readable stamp" is its own verdict, refused
-    /// outright by every scoped operation. Deliberately: guessing
-    /// whose an unattributable item is would be worse than ignoring
-    /// it. The consumers carry no `default` arms, so a future fifth
-    /// case is forced through each of them by the compiler — the one
-    /// mechanical guard available while an unstamped item cannot be
-    /// planted through the wire. Callers hold `lock`.
     private enum OwnerLookup {
         case stamped(uid_t)
         case absent
@@ -290,22 +172,12 @@ enum SystemKeychainVault {
         guard let attributes = out as? [String: Any],
               let raw = attributes[kSecAttrDescription as String] as? String,
               let owner = uid_t(raw),
-              // Canonical-form check: `uid_t(raw)` also parses "+501"
-              // and other non-canonical decimals that `accounts(of:)`'s
-              // string comparison would never match, so the two scoped
-              // views of "stamped as this owner" could diverge on such
-              // an item. Our own store() only ever writes String(uid);
-              // anything else is an unattributable stamp — refused.
               String(owner) == raw else {
             return .unstamped
         }
         return .stamped(owner)
     }
 
-    /// Accounts (config ids) of every item stamped with `owner`, or
-    /// `nil` when the enumeration itself failed. An empty vault is
-    /// `[]` — `errSecItemNotFound` is a quiet normal here, not an
-    /// error. Callers hold `lock`.
     private static func accounts(of owner: uid_t) -> [String]? {
         let request: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
@@ -326,16 +198,11 @@ enum SystemKeychainVault {
             ($0[kSecAttrDescription as String] as? String) == String(owner)
         }
 
-        // The merged search list can present the System keychain more
-        // than once, and a bulk match then answers the same physical
-        // item once per list entry — field-measured as every item
-        // enumerated exactly twice. One account, one answer.
         var seen = Set<String>()
         return mine.compactMap { $0[kSecAttrAccount as String] as? String }
             .filter { seen.insert($0).inserted }
     }
 
-    /// Single-item data read. Callers hold `lock`.
     private static func payload(for id: String) -> FetchResult {
         var request = query(id: id)
         request[kSecReturnData as String] = true

@@ -2,15 +2,6 @@ import Foundation
 import Observation
 import os.log
 
-/// Host-app XPC client for a `ProxyConfigDaemon` inside a proxy system
-/// extension. Pushes live `SplitTunnelingConfiguration` (`applyConfig`)
-/// and polls / clears the daemon's log ring buffer. One instance per
-/// proxy, distinguished by its Mach service name. The connection is
-/// established lazily on the first RPC.
-///
-/// Concrete per-proxy subclasses (`DNSProxyDaemonClient`,
-/// `SplitTunnelDaemonClient`) fix the Mach service name; the app injects
-/// them into the SwiftUI environment as distinct types.
 @Observable
 @MainActor
 class ProxyConfigDaemonClient {
@@ -49,24 +40,6 @@ class ProxyConfigDaemonClient {
 
     // MARK: - RPCs
 
-    /// Outcome of one push. The `Bool` this replaces collapsed six
-    /// different stories into a single `false`, and its only caller
-    /// spent them all on one log word: a payload that never left the
-    /// app read the same as one the daemon rejected, and both read the
-    /// same as an answer that never came back.
-    ///
-    /// `.refused` is the daemon ANSWERING no — today that is a decode
-    /// rejection, definitive, and the extension keeps the configuration
-    /// it already had. `.unreachable` is no answer at all, so the push
-    /// MAY have landed with only its reply lost; a caller must not
-    /// report the old configuration as still standing. `.notSent` is
-    /// the one story where the app knows nothing left it: the encode
-    /// failed here, before the wire.
-    ///
-    /// The daemon's `true` still carries two meanings this wire cannot
-    /// separate — applied now, or buffered for a provider that has not
-    /// spawned yet — and both are honest successes for this caller.
-    /// Telling them apart would change the protocol and both extensions.
     enum Push: Equatable, Sendable {
         case done
         case refused
@@ -83,9 +56,6 @@ class ProxyConfigDaemonClient {
         }
     }
 
-    /// Push a `SplitTunnelingConfiguration` to the proxy provider.
-    /// 5s timeout, and its expiry is `.unreachable` rather than a flat
-    /// failure, because the payload may still be in flight.
     func applyConfig(_ configuration: SplitTunnelingConfiguration) async -> Push {
         await withRaceTimeout(seconds: 5, fallback: Push.unreachable) {
             await self.applyConfigRPC(configuration)
@@ -118,8 +88,6 @@ class ProxyConfigDaemonClient {
         }
     }
 
-    /// Newline-joined UTF-8 dump of the daemon's log ring buffer, or
-    /// `nil` if empty / unavailable. 5s timeout.
     func fetchLogs() async -> String? {
         await withRaceTimeout(seconds: 5, fallback: nil) {
             await self.fetchLogsRPC()
@@ -152,10 +120,6 @@ class ProxyConfigDaemonClient {
         }
     }
 
-    /// The extension's build identity, or `nil` when the daemon does
-    /// not answer — an old extension that predates the RPC, a missing
-    /// extension, or a transport failure all land there; the gate's
-    /// fallback tree tells them apart via properties. 5s timeout.
     func identity() async -> String? {
         await withRaceTimeout(seconds: 5, fallback: nil) {
             await self.identityRPC()
@@ -184,7 +148,6 @@ class ProxyConfigDaemonClient {
         }
     }
 
-    /// Flush the daemon's ring buffer. 2s timeout.
     @discardableResult
     func clearLogs() async -> Bool {
         await withRaceTimeout(seconds: 2, fallback: false) {
@@ -216,20 +179,12 @@ class ProxyConfigDaemonClient {
 
     // MARK: - Race-Timeout Helper
 
-    /// Race an async operation against a sleep; first to finish wins.
-    /// The losing side keeps running — `NSXPCConnection` RPCs aren't
-    /// cancellable from Swift — but its eventual result is dropped.
     private func withRaceTimeout<T: Sendable>(
         seconds: Double,
         fallback: T,
         operation: @escaping () async -> T
     ) async -> T {
         await withCheckedContinuation { (continuation: CheckedContinuation<T, Never>) in
-            // The hand-rolled lock-and-flag this used to carry is the
-            // shared `SingleResume` now: same one-shot guarantee, but
-            // the flag lives inside a `Mutex`, so the type is Sendable
-            // by compiler proof instead of by inspection. Its twin in
-            // the vault client retired for the same reason.
             let resume = SingleResume(continuation)
             Task { resume.finish(await operation()) }
             Task {

@@ -12,43 +12,13 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
         }
     }()
 
-    /// Resolved wstunnel server addresses (for excluded routes)
     private var wstunnelServerIPv4: [String] = []
     private var wstunnelServerIPv6: [String] = []
     private var isGhostMode = false
 
-    /// Captured at `startTunnel` so `resetConnection` can replay the
-    /// exact same layer setup without re-reading the protocol config.
-    /// The tunnel is treated as one layer — ghost mode is wstunnel +
-    /// WireGuard; standalone is WireGuard alone. Reset tears each
-    /// component down in reverse packet-flow order and rebuilds them
-    /// in forward order. It does not RE-CONFIGURE the provider's routing
-    /// surface, but the rebuild does write it again along the way — the
-    /// absolute in the older wording was wider than the call chain; see
-    /// the note further down for the shape that is accurate. utun/routing
-    /// surface so packets never escape to the physical interface.
     private var currentTunnelConfig: TunnelConfig?
     private var currentWireGuardConfig: TunnelConfiguration?
 
-    /// The reset currently rebuilding the layer, if one is.
-    ///
-    /// Opcode 3 used to open a fresh `Task` per message with nothing
-    /// between them, and two overlapping resets then drove ONE
-    /// adapter: `WireGuardAdapter` serializes its own bodies on a
-    /// single work queue, and the first statement of a queued `start`
-    /// is `guard case .stopped = self.state`. So whichever start
-    /// reached that queue second found the other's `.started` and was
-    /// refused with `.invalidState` — an "already running" refusal
-    /// that this file then reported as `.adapterFailed`, over a layer
-    /// that was demonstrably up. In ghost mode the same pair also
-    /// raced `WstunnelLifecycle`'s process-global start/stop, and
-    /// both wrote `reasserting`.
-    ///
-    /// Guarded by a lock rather than an actor because this target
-    /// builds in Swift 5 language mode: nothing here is checked for
-    /// isolation, `handleAppMessage` carries no queue guarantee, and
-    /// the task bodies run on the global executor. The compiler would
-    /// not have caught the race, so the lock is written explicitly.
     private let resetSlotLock = NSLock()
     private var inFlightReset: Task<TunnelResetReply, Never>?
 
@@ -61,7 +31,6 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
         os_log("startTunnel called", log: extLog, type: .default)
         TunnelLogger.log(.tunnel, "PacketTunnelProvider starting...")
 
-        // 1. Identity from providerConfiguration, secrets from the vault.
         guard let config = loadConfig() else {
             completionHandler(PacketTunnelProviderError.savedProtocolConfigurationIsInvalid)
             return
@@ -70,7 +39,6 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
         os_log("Config loaded: %{public}@", log: extLog, type: .default, config.name)
         TunnelLogger.log(.tunnel, "Config loaded: \(config.name)")
 
-        // 2-3. Wstunnel (Ghost mode only)
         do {
             try startWstunnelIfNeeded(config: config)
         } catch {
@@ -78,9 +46,6 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
             return
         }
 
-        // 4. Build WireGuard config (ghost: endpoint = the wstunnel
-        //    listener at localHost:localPort; standalone: the peer
-        //    endpoint carried verbatim)
         let tunnelConfiguration: TunnelConfiguration
         do {
             tunnelConfiguration = try WireGuardConfigBuilder.build(
@@ -93,7 +58,6 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
             return
         }
 
-        // 5. Start WireGuard adapter
         TunnelLogger.log(.wireGuard, "Starting WireGuard adapter...")
         adapter.start(tunnelConfiguration: tunnelConfiguration) { [weak self] adapterError in
             if let adapterError {
@@ -101,10 +65,6 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
                 TunnelLogger.log(.wireGuard, "ERROR: \(adapterError.localizedDescription)")
                 completionHandler(PacketTunnelProviderError.couldNotStartWireGuard)
             } else {
-                // Capture the resolved layer setup so a later
-                // `resetConnection()` can replay it without hitting
-                // `startTunnel` (which would tear down utun and
-                // create a leak window).
                 self?.currentTunnelConfig = config
                 self?.currentWireGuardConfig = tunnelConfiguration
                 TunnelLogger.log(.tunnel, "Tunnel active")
@@ -113,10 +73,6 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
         }
     }
 
-    /// The system's preferences carry identity only; the secrets come
-    /// from this extension's own System keychain vault, read here
-    /// in-process — no XPC hop, and nothing sensitive ever lands in a
-    /// world-readable plist.
     private func loadConfig() -> TunnelConfig? {
         guard let proto = protocolConfiguration as? NETunnelProviderProtocol else {
             os_log("ERROR: protocolConfiguration is not NETunnelProviderProtocol", log: extLog, type: .error)
@@ -153,12 +109,6 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
             TunnelLogger.log(.tunnel, "Tunnel disconnected")
             completionHandler()
 
-            // Exiting does not stand recovery down — the on-demand
-            // rule lives in the system's preferences, not in this
-            // process. The app's stop path disarms before it stops;
-            // a stop from outside the app (System Settings) leaves
-            // the rule armed, so the system may start this tunnel
-            // again.
             #if os(macOS)
             exit(0)
             #endif
@@ -202,32 +152,15 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
 
         switch messageData[0] {
         case 0:
-            // WireGuard runtime stats
             adapter.getRuntimeConfiguration { config in
                 completionHandler(config?.data(using: .utf8))
             }
         case 1:
-            // Log entries (in-memory buffer)
             completionHandler(TunnelLogger.allEntriesAsData())
         case 2:
-            // Flush the in-extension log buffer. Auto-purge at
-            // maxEntries still applies; this is a manual flush.
             TunnelLogger.clear()
             completionHandler(Data([2]))
         case 3:
-            // Reset the tunnel layer; utun and routing are not reconfigured
-            // here, though the rebuild path writes the surface again.
-            // Preserves the provider surface so no packet escapes to
-            // the physical interface during the reset window.
-            //
-            // The reply carries the outcome as its second byte. A
-            // `self` that has gone away cannot have rebuilt anything,
-            // so it answers `skipped` rather than the success value a
-            // `??` on the optional would have handed back.
-            //
-            // Through the slot, never straight to `resetConnection()`:
-            // a second message arriving mid-rebuild JOINS the one in
-            // flight instead of driving the adapter a second time.
             Task { [weak self] in
                 guard let self else {
                     completionHandler(Data([3, TunnelResetReply.skipped.rawValue]))
@@ -243,26 +176,6 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
 
     // MARK: - Layer Reset
 
-    /// One rebuild at a time. A caller that arrives while a reset is
-    /// in flight waits for THAT reset and answers with its outcome.
-    ///
-    /// Joining rather than queueing, and the reason is what the byte
-    /// means: it describes the state of the layer the caller asked
-    /// about, not a receipt for work this particular message caused.
-    /// A rebuild is already under way; running a second one behind it
-    /// would buy the user a second outage window and tell them
-    /// nothing new. It stays truthful in the failing direction too —
-    /// if the in-flight reset ends `.adapterFailed`, the joiner is
-    /// told the layer is down, because it is.
-    ///
-    /// The slot is cleared only by the reset that owns it, and only
-    /// if it is still the one parked there, so a joiner can never
-    /// clear a newer owner's slot.
-    /// Scoped locking rather than bare `lock()`/`unlock()`: the latter
-    /// is unavailable from an async context and is an error outright
-    /// in Swift 6, because a suspension between the two would hold the
-    /// lock across it. Nothing suspends inside these bodies — the
-    /// `Task` is only enqueued — and every `await` is outside them.
     private func serializedReset() async -> TunnelResetReply {
         let (reset, isOwner): (Task<TunnelResetReply, Never>, Bool) = resetSlotLock.withLock {
             if let existing = inFlightReset { return (existing, false) }
@@ -281,27 +194,6 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
         return outcome
     }
 
-    /// Restart the tunnel layer (wstunnel + WireGuard in ghost mode,
-    /// WireGuard alone in standalone mode) without tearing the
-    /// `utun` interface or its routes down. Packets that arrive on
-    /// `utun` during the reset window are dropped inside the layer —
-    /// they never reach the physical interface — so there is no leak.
-    ///
-    /// Sequence matches the established start/stop ordering:
-    ///   STOP  (top-down):  WireGuard → wstunnel
-    ///   START (bottom-up): wstunnel → WireGuard
-    ///
-    /// Failure semantics: if any restart step fails, the layer is
-    /// left in a "no traffic flowing" state with `utun` still up. No
-    /// fallback to the physical route. The user retries via the UI
-    /// or disables the tunnel — the provider surface keeps traffic
-    /// contained until the user decides the next move.
-    ///
-    /// Which of those four endings happened is the RETURN VALUE, and
-    /// it becomes the second byte of opcode 3's reply. Before it
-    /// existed, all four left the caller the same single byte, and
-    /// three of them were failures — including one that logged
-    /// "Reset complete" on its way out (see the adapter branch).
     private func resetConnection() async -> TunnelResetReply {
         guard let config = currentTunnelConfig,
               let wireguardConfig = currentWireGuardConfig else {
@@ -312,21 +204,8 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
         let modeLabel = isGhostMode ? "Ghost (wstunnel + WireGuard)" : "Standalone (WireGuard)"
         TunnelLogger.log(.tunnel, "Reset — restarting layer (\(modeLabel))")
 
-        // Signal the OS that the tunnel is transitioning but still
-        // intended to be up. Keeps `utun` anchored and keeps the
-        // session status in `.reasserting` throughout the cycle.
         reasserting = true
 
-        // STOP PHASE — top-down
-        //
-        // The stop's own error is read rather than discarded. It used
-        // to be `{ _ in }` under a log line that said "adapter
-        // stopped" whatever came back — and the adapter answers
-        // `.invalidState` when there was nothing to stop, so that line
-        // could report work that had not happened. Control is
-        // unchanged: an adapter that is already down is exactly the
-        // state the start phase below wants, so this reports rather
-        // than returns.
         let stopFailure: String? = await withCheckedContinuation { continuation in
             adapter.stop { error in continuation.resume(returning: error?.localizedDescription) }
         }
@@ -341,7 +220,6 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
             TunnelLogger.log(.wstunnel, "Reset — wstunnel stopped")
         }
 
-        // START PHASE — bottom-up
         if isGhostMode, let wstunnelConfig = config.wstunnel {
             do {
                 try WstunnelLifecycle.start(config: wstunnelConfig)
@@ -353,13 +231,6 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
             }
         }
 
-        // The adapter's own failure is carried out of the closure
-        // rather than only logged inside it. It used to be logged and
-        // dropped, and control fell straight through to the line
-        // below — so a reset whose adapter never came back announced
-        // "Reset complete" to the log and answered the app with the
-        // same byte a working reset did. A description rather than
-        // the error itself, because only the text crosses back.
         let adapterFailure: String? = await withCheckedContinuation { continuation in
             adapter.start(tunnelConfiguration: wireguardConfig) { error in
                 if let error {
@@ -374,8 +245,6 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
 
         reasserting = false
         if adapterFailure != nil {
-            // Deliberately not "Reset complete". The layer is down
-            // under a utun that is still up: contained, not working.
             TunnelLogger.log(.tunnel, "Reset ended with the layer down — the adapter did not restart")
             return .adapterFailed
         }

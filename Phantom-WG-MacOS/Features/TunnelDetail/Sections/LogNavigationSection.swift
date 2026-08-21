@@ -1,8 +1,5 @@
 import SwiftUI
 
-/// Entry point into the full-screen log view. Shows a live entry count
-/// badge so the operator knows the extension is emitting telemetry
-/// without having to open the log view.
 struct LogNavigationSection: View {
     var logStore: LogStore
     @Environment(LocalizationManager.self) private var loc

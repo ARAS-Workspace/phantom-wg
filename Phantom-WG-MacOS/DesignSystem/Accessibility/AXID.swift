@@ -2,19 +2,6 @@ import Foundation
 
 // swiftlint:disable nesting
 
-/// Canonical accessibility identifiers attached to interactive UI
-/// elements via `.accessibilityIdentifier(...)`. They give every
-/// control a stable, human-independent address for automation and
-/// accessibility tooling — think of them as Playwright's
-/// `data-testid`. Treat the strings as a public contract: renaming
-/// one breaks anything that queries by identifier.
-///
-/// Convention: `<feature>.<sub-feature>.<element>[.<variant>]`
-/// Exception:  two `TunnelDetail` strings predate the convention and
-///             keep their spelling because these identifiers are a
-///             public contract — renaming them would break queries
-/// Style:      dot-separated, lower-kebab segments
-/// Dynamic:    row-level identifiers take the user-visible tunnel name
 enum AXID {
 
     // MARK: Extension Gate

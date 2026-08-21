@@ -2,18 +2,6 @@ import SwiftUI
 
 extension View {
 
-    /// Preview-grade mirror of `PhantomApp`'s composition root: builds
-    /// the same object graph with `PreviewFixtures` instances and
-    /// injects the full environment stack in one call, so every
-    /// `#Preview` reads like `SomeView().previewEnvironment()`.
-    ///
-    /// Two deliberate differences from production. The first: `TunnelsManager` is
-    /// injected here as well. The app injects it a level deeper
-    /// (`TunnelContentView` → `TunnelListView`) only because it loads
-    /// asynchronously; previews start with it ready. The second is a
-    /// subtraction: `ConnectionGateCoordinator` is NOT injected here even
-    /// though the app injects it, which is why `ConnectionGateView`'s own
-    /// previews build one by hand.
     @MainActor
     func previewEnvironment(
         tunnels: TunnelsManager? = nil,
@@ -45,14 +33,10 @@ extension View {
             .environment(PhysicalInterfaceResolver())
             .environment(ToastCenter())
             .tint(Color.accentColor)
-            // `nil` follows the system appearance — pass a scheme only
-            // in the paired Light/Dark preview variants.
             .preferredColorScheme(scheme)
     }
 }
 
-/// Generic `@State` host so previews can hand a real, interactive
-/// `Binding` to views that require one — no per-preview host structs.
 struct PreviewBindingHost<Value, Content: View>: View {
 
     @State private var value: Value

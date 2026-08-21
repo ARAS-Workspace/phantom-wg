@@ -1,16 +1,6 @@
 import Network
 import NetworkExtension
 
-/// One UDP flow can send datagrams to many destinations from a single
-/// socket (DNS, QUIC, game servers, …), so we maintain a per-endpoint
-/// `NWConnection` cache. A cached connection lives until it fails or is
-/// cancelled — the next datagram to that endpoint rebuilds it — and when
-/// the flow closes, every cached connection is cancelled.
-///
-/// Tangle with the NetworkExtension vs. Network `NWEndpoint` types:
-/// the flow callbacks vend the older `NetworkExtension.NWEndpoint`
-/// (a.k.a. `NWHostEndpoint`), while `NWConnection` consumes the
-/// `Network.NWEndpoint` struct. We bridge at the boundary.
 final class UDPFlowRelay {
 
     private let flow: NEAppProxyUDPFlow
@@ -23,9 +13,6 @@ final class UDPFlowRelay {
     private let lock = NSLock()
     private let queue = DispatchQueue(label: "phantom-split.udp-relay", qos: .utility)
 
-    /// See TCPFlowRelay.selfRef — same rationale: nothing else retains
-    /// the relay after `FlowRelay.relay` returns, so we anchor ourselves
-    /// until `close()` fires.
     private var selfRef: UDPFlowRelay?
 
     init(
@@ -67,7 +54,6 @@ final class UDPFlowRelay {
                 return
             }
             guard let datagrams, let endpoints, !datagrams.isEmpty else {
-                // EOF.
                 self.close(error: nil)
                 return
             }
@@ -92,9 +78,6 @@ final class UDPFlowRelay {
             lock.unlock()
             return existing
         }
-        // Pin to the user-selected physical interface — without this
-        // the bypass datagrams would travel through whatever default
-        // route the OS has (utun when a packet tunnel is up).
         let params = NWParameters.udp
         params.requiredInterface = interface
 
@@ -102,10 +85,6 @@ final class UDPFlowRelay {
         connections[endpoint] = conn
         lock.unlock()
 
-        // First datagram to this destination — surface host:port so
-        // per-endpoint diagnostics (DNS leaks, QUIC targets) are
-        // observable. TCP gets this for free at flow open; UDP only
-        // learns endpoints datagram-by-datagram.
         RingBufferLogger.shared.log(
             "\(appName) → \(interface.name)  UDP  \(Self.describe(endpoint))"
         )
@@ -135,7 +114,7 @@ final class UDPFlowRelay {
         guard !isClosed() else { return }
         connection.receiveMessage { [weak self] data, _, _, error in
             guard let self else { return }
-            if error != nil { return }   // ends this endpoint's loop; flow stays open
+            if error != nil { return }
             guard let data, !data.isEmpty else { return }
 
             guard let neEndpoint = Self.convertBack(endpoint) else { return }

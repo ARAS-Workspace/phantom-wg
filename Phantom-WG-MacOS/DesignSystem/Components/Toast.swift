@@ -40,11 +40,6 @@ struct Toast: Identifiable, Equatable {
 
 // MARK: - Center
 
-/// Lightweight, single-slot toast dispatcher. The latest `show` replaces
-/// any currently visible toast so rapid-fire events don't pile up in a
-/// queue — the user always sees the freshest state change. Attach it
-/// to the app environment and call `info/success/warning/error` from
-/// any view below.
 @Observable
 @MainActor
 final class ToastCenter {
@@ -136,9 +131,6 @@ private struct ToastOverlayModifier: ViewModifier {
 }
 
 extension View {
-    /// Attach the environment's `ToastCenter` overlay to the top edge of
-    /// this view. Inject `ToastCenter` via `.environment` at an ancestor
-    /// before using this.
     func toastOverlay() -> some View {
         modifier(ToastOverlayModifier())
     }
@@ -170,8 +162,6 @@ extension View {
     .preferredColorScheme(.dark)
 }
 
-/// Interactive: each button routes through the environment's
-/// `ToastCenter`, exercising the single-slot replacement behaviour.
 #Preview("Live center") {
     ToastDemoHost()
         .previewEnvironment()

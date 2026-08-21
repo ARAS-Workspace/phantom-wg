@@ -1,12 +1,5 @@
 import SwiftUI
 
-/// Scrollable list of picked applications plus the "Add Application…"
-/// entry point. The empty state frames the feature as *interface
-/// routing* — "apps routed through en0" — rather than "apps that
-/// escape the tunnel", because that's the accurate mental model: every
-/// app already picks some interface via the kernel's routing decision,
-/// and this list is how the user overrides that decision for specific
-/// apps.
 struct SplitTunnelingAppListSection: View {
     let apps: [AppEntry]
     let isDisabled: Bool

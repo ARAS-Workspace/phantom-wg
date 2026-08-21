@@ -2,11 +2,6 @@ import NetworkExtension
 import Network
 import os.log
 
-/// Independent split-tunnelling provider. Bypass flows for listed
-/// apps are pinned to a specific physical interface via
-/// `NWConnection.requiredInterface`. Strict mode: no interface →
-/// reject the flow rather than letting it leak through the OS
-/// default route.
 final class TransparentProxyProvider: NETransparentProxyProvider, ActiveFlowRelayRegistry, ProxyConfigReceiver {
 
     private let log = OSLog(
@@ -16,16 +11,9 @@ final class TransparentProxyProvider: NETransparentProxyProvider, ActiveFlowRela
     private let logger = RingBufferLogger.shared
     private let interfaceMonitor = InterfaceMonitor()
 
-    /// Written from the daemon's XPC config push, read from NE
-    /// flow-dispatch threads — every access goes through `stateLock`,
-    /// mirroring `DNSProxyProvider`.
     private var excludedApps: [AppEntry] = []
     private let stateLock = NSLock()
 
-    /// Live relay registry. Each `TCPFlowRelay` / `UDPFlowRelay`
-    /// registers a close-closure on start and unregisters on close,
-    /// so we can tear down every active flow in one pass when the
-    /// bound interface goes away.
     private var activeRelays: [UUID: () -> Void] = [:]
     private let relaysLock = NSLock()
 
@@ -44,18 +32,11 @@ final class TransparentProxyProvider: NETransparentProxyProvider, ActiveFlowRela
         let initialConfig = loadConfigurationFromProviderProtocol() ?? .default
         applyConfiguration(initialConfig)
 
-        // Attach LAST: the daemon replays any config pushed while no
-        // provider was attached, so the drained payload must land
-        // after the (possibly stale) preference bootstrap above —
-        // the fresher writer always wins.
         ProxyConfigDaemon.shared?.attach(provider: self)
 
         os_log("startProxy — ready", log: log, type: .default)
     }
 
-    /// Includes every outbound flow via dual-stack wildcard, then
-    /// carves out port 53 (UDP/TCP × IPv4/IPv6) so DNS flows reach
-    /// PhantomDNSProxy instead.
     private func buildNetworkSettings() -> NETransparentProxyNetworkSettings {
         let settings = NETransparentProxyNetworkSettings(tunnelRemoteAddress: "127.0.0.1")
         settings.includedNetworkRules = [
@@ -109,8 +90,6 @@ final class TransparentProxyProvider: NETransparentProxyProvider, ActiveFlowRela
         }
 
         guard let targetInterface = interfaceMonitor.current else {
-            // Strict: claim the flow and reject so it never falls
-            // through to the tunnel via the OS default route.
             logger.log(
                 "\(matched.displayName) — bypass unavailable, flow rejected (strict)  \(describeFlow(flow))"
             )
@@ -127,10 +106,6 @@ final class TransparentProxyProvider: NETransparentProxyProvider, ActiveFlowRela
         )
     }
 
-    /// Open the flow then immediately close both halves with the
-    /// error. `closeReadWithError` / `closeWriteWithError` deliver
-    /// the error to the app's socket only after the flow leaves
-    /// pending-open state.
     private func rejectFlow(_ flow: NEAppProxyFlow, error: Error) {
         if let tcp = flow as? NEAppProxyTCPFlow {
             tcp.open(withLocalEndpoint: nil) { _ in
@@ -159,9 +134,6 @@ final class TransparentProxyProvider: NETransparentProxyProvider, ActiveFlowRela
         relaysLock.unlock()
     }
 
-    /// Drain the registry and fire every close-closure. Snapshot is
-    /// taken under the lock so concurrent unregister inside each
-    /// close flow is safe.
     private func forceCloseActiveRelays() {
         relaysLock.lock()
         let closures = Array(activeRelays.values)
@@ -171,9 +143,6 @@ final class TransparentProxyProvider: NETransparentProxyProvider, ActiveFlowRela
         }
     }
 
-    /// Per-flow LogView summary. TCP carries a single endpoint; UDP
-    /// dispatches to many destinations over the session, so at flow
-    /// open we can only report the protocol tag.
     private func describeFlow(_ flow: NEAppProxyFlow) -> String {
         if let tcp = flow as? NEAppProxyTCPFlow,
            let endpoint = tcp.remoteEndpoint as? NWHostEndpoint {
@@ -194,11 +163,6 @@ final class TransparentProxyProvider: NETransparentProxyProvider, ActiveFlowRela
 
     // MARK: - Configuration
 
-    /// Apply the decoded configuration to in-memory state. Called from
-    /// `startProxy` (bootstrap from providerConfiguration) and from
-    /// `ProxyConfigDaemon.applyConfig` (live XPC push from the host app).
-    /// Logs the app-list diff against the previous state so the user can
-    /// see additions/removals.
     func applyConfiguration(_ configuration: SplitTunnelingConfiguration) {
         stateLock.lock()
         let previous = excludedApps
@@ -208,9 +172,6 @@ final class TransparentProxyProvider: NETransparentProxyProvider, ActiveFlowRela
         logger.logAppDiff(previous: previous, current: configuration.apps)
     }
 
-    /// Initial config from
-    /// `NETunnelProviderProtocol.providerConfiguration` (packed by
-    /// the main app at `saveToPreferences`).
     private func loadConfigurationFromProviderProtocol() -> SplitTunnelingConfiguration? {
         guard let proto = self.protocolConfiguration as? NETunnelProviderProtocol,
               let data = proto.providerConfiguration?["split_config"] as? Data else {
@@ -221,10 +182,6 @@ final class TransparentProxyProvider: NETransparentProxyProvider, ActiveFlowRela
 
     // MARK: - Interface Loss
 
-    /// Strict mode: when the resolved interface becomes NIL we tear
-    /// down every active relay rather than letting them stall in
-    /// `NWConnection`'s `.waiting`. New flows get rejected by
-    /// `handleNewFlow`.
     private func handleInterfaceChange(_ interface: NWInterface?) {
         if let interface {
             logger.log("interface resolved: \(interface.name) (\(interface.type))")

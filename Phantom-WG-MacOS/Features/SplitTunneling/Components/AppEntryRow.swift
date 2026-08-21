@@ -1,11 +1,6 @@
 import SwiftUI
 import AppKit
 
-/// One row in the split-tunneling app list. Shows the icon (loaded
-/// lazily from `lastKnownPath` with a generic fallback), display name,
-/// bundle identifier and signing team — plus an inline remove button
-/// on trailing. Identity in the tunnel-side matching pipeline is
-/// `<teamID>.<bundleID>`, so both values are surfaced to the operator.
 struct AppEntryRow: View {
     let entry: AppEntry
     let onRemove: () -> Void
@@ -61,10 +56,6 @@ struct AppEntryRow: View {
 
 // MARK: - Icon View
 
-/// Small helper that renders the `.app`'s icon via LaunchServices.
-/// Falls back to a generic app glyph when the path is missing or the
-/// bundle no longer resolves (reconcile should normally prevent this,
-/// but the view stays forgiving).
 private struct AppIconView: View {
     let path: String?
 

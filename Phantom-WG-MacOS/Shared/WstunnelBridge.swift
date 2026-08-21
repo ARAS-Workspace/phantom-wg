@@ -1,8 +1,5 @@
 import Foundation
 
-/// Swift bridge for the wstunnel C FFI (`libwstunnel_mac`).
-/// Wraps wstunnel identically to wstunnel-cli — same Client config, same run_client().
-/// Only the interface differs: C FFI → Swift instead of CLI args.
 enum WstunnelBridge {
 
     // MARK: - Error Codes
@@ -55,8 +52,6 @@ enum WstunnelBridge {
 
     private static var _logHandler: ((LogLevel, String) -> Void)?
 
-    /// Set a Swift closure to receive all wstunnel tracing log messages.
-    /// Call BEFORE `initLogging()`.
     static func setLogCallback(_ handler: @escaping (LogLevel, String) -> Void) {
         _logHandler = handler
         wstunnel_set_log_callback({ level, messageCStr, _ in
@@ -75,8 +70,6 @@ enum WstunnelBridge {
 
     // MARK: - Config Builder
 
-    /// Mirrors wstunnel-cli's Client config.
-    /// Build with chained calls, then call start().
     final class Config {
         private let handle: OpaquePointer
 
@@ -88,7 +81,6 @@ enum WstunnelBridge {
             wstunnel_config_free(handle)
         }
 
-        /// Remote wstunnel server URL (e.g. "wss://example.com:443")
         @discardableResult
         func setRemoteURL(_ url: String) throws -> Config {
             let result = wstunnel_config_set_remote_url(handle, url)
@@ -96,7 +88,6 @@ enum WstunnelBridge {
             return self
         }
 
-        /// HTTP upgrade path prefix. Default "v1". Used as secret in Ghost Mode.
         @discardableResult
         func setHTTPUpgradePathPrefix(_ prefix: String) throws -> Config {
             let result = wstunnel_config_set_http_upgrade_path_prefix(handle, prefix)
@@ -104,10 +95,6 @@ enum WstunnelBridge {
             return self
         }
 
-        /// Add UDP tunnel: -L udp://localHost:localPort:remoteHost:remotePort
-        /// No listener default on purpose: the WireGuard endpoint is
-        /// built from the same host/port pair, so the caller must pass
-        /// the pair explicitly to keep the two sides identical.
         @discardableResult
         func addTunnelUDP(
             localHost: String,
@@ -123,8 +110,6 @@ enum WstunnelBridge {
             return self
         }
 
-        /// Start the wstunnel client with this config.
-        /// Internally calls wstunnel::run_client() exactly like wstunnel-cli.
         func start() throws {
             let result = wstunnel_client_start(handle)
             if result != 0 { throw WstunnelError(code: result) }

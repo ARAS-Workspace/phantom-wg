@@ -2,12 +2,10 @@ import Foundation
 
 enum DNSResolver {
 
-    /// Resolves a hostname to its IPv4 addresses using getaddrinfo.
     static func resolveIPv4(_ hostname: String, timeout: TimeInterval = 5.0) -> [String] {
         resolve(hostname, family: AF_INET, timeout: timeout)
     }
 
-    /// Resolves a hostname to its IPv6 addresses using getaddrinfo.
     static func resolveIPv6(_ hostname: String, timeout: TimeInterval = 5.0) -> [String] {
         resolve(hostname, family: AF_INET6, timeout: timeout)
     }

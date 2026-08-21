@@ -2,9 +2,6 @@ import Foundation
 
 // MARK: - Localized Message for FieldValidationError
 
-/// Maps typed validation errors to localized, user-facing messages.
-/// Kept separate from the model layer so that error cases stay pure
-/// data while the mapping lives next to the UI that consumes it.
 extension FieldValidationError {
 
     func localizedMessage(_ loc: LocalizationManager) -> String {

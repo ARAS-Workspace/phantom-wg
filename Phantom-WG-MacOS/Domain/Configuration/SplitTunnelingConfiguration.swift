@@ -2,18 +2,11 @@ import Foundation
 
 // MARK: - Split Tunneling Configuration
 
-/// App-wide split tunneling configuration. Exclude semantics: apps
-/// in `apps` bypass the tunnel through the physical interface; every
-/// other flow stays on the OS default route. Persisted as JSON in
-/// the App Group container; delivered to extensions at startup via
-/// `providerConfiguration["split_config"]` and live-updated over
-/// each proxy's `ProxyConfigDaemon` XPC channel (`applyConfig`).
 struct SplitTunnelingConfiguration: Codable, Equatable {
     var isEnabled: Bool
     var interfaceSelection: InterfaceSelection
     var apps: [AppEntry]
 
-    /// Empty, disabled baseline. Used for first-run state and Reset.
     static let `default` = SplitTunnelingConfiguration(
         isEnabled: false,
         interfaceSelection: .auto,
@@ -32,8 +25,6 @@ struct SplitTunnelingConfiguration: Codable, Equatable {
         self.apps = apps
     }
 
-    /// Forward-compatible decoder — missing `interface_selection`
-    /// defaults to `.auto`.
     init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         self.isEnabled = try container.decode(Bool.self, forKey: .isEnabled)
@@ -47,9 +38,6 @@ struct SplitTunnelingConfiguration: Codable, Equatable {
 
 // MARK: - Interface Selection
 
-/// `auto` lets the extension pick the primary non-tunnel path;
-/// `explicit` pins to a specific BSD name. Serialized as `"auto"`
-/// or `"explicit:en0"`.
 enum InterfaceSelection: Codable, Equatable, Hashable {
     case auto
     case explicit(name: String)
@@ -79,11 +67,6 @@ enum InterfaceSelection: Codable, Equatable, Hashable {
 
 // MARK: - App Entry
 
-/// Identity is the **code signing identifier** as reported by
-/// Security framework — `<teamID>.<bundleID>` for Developer ID,
-/// `<bundleID>` for Apple-signed apps. Matched at runtime against
-/// each flow's `sourceAppSigningIdentifier` via
-/// `FlowDecisionEngine.matches`.
 struct AppEntry: Codable, Equatable, Identifiable {
     var signingIdentifier: String
     var bundleIdentifier: String
@@ -99,7 +82,6 @@ struct AppEntry: Codable, Equatable, Identifiable {
         case displayName = "display_name"
         case teamName = "team_name"
         case lastKnownPath = "last_known_path"
-        // Legacy — still decoded so older configs migrate.
         case teamIdentifier = "team_identifier"
     }
 
@@ -152,12 +134,6 @@ struct AppEntry: Codable, Equatable, Identifiable {
 
 // MARK: - Synthetic mDNSResponder Pair
 
-/// Adds the system DNS resolver process pair to the matched-app
-/// list so apps using `Network.framework` / libresolv (which reach
-/// DNSProxy as `com.apple.mDNSResponder`, not as the originating
-/// app) get pinned to the physical interface. Membership is
-/// user-controlled via the "System DNS Resolver" toggle — list
-/// membership IS the toggle state.
 extension AppEntry {
 
     static let mDNSResponder = AppEntry(
@@ -172,8 +148,6 @@ extension AppEntry {
         displayName: "System DNS (mDNSResponderHelper)"
     )
 
-    /// True for the synthetic mDNSResponder pair. The app list UI
-    /// filters these out so users manage them via the toggle.
     var isSyntheticMDNS: Bool {
         signingIdentifier == AppEntry.mDNSResponder.signingIdentifier ||
         signingIdentifier == AppEntry.mDNSResponderHelper.signingIdentifier

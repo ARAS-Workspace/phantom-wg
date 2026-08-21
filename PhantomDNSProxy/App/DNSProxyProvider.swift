@@ -4,15 +4,6 @@ import NetworkExtension
 import SystemConfiguration
 import os.log
 
-/// PhantomDNSProxy provider. Per-flow decision:
-/// - Own process → declined back to OS default route
-/// - Listed app + physical interface present + resolver configured
-///   → relay to that resolver, pinned to the interface
-/// - Listed app + missing interface or resolver → reject
-/// - Unmatched → relay to system default resolver (no pin); with NO system
-///    resolver at all, rejected too. That last path is a carve-out we
-///    accept knowingly: closing it would need a layer in front of both
-///    extensions, which is a separate architectural decision
 final class DNSProxyProvider: NEDNSProxyProvider, ProxyConfigReceiver {
 
     private let log = OSLog(
@@ -25,8 +16,6 @@ final class DNSProxyProvider: NEDNSProxyProvider, ProxyConfigReceiver {
     private var listedApps: [AppEntry] = []
     private let stateLock = NSLock()
 
-    /// One log line per signing identifier on first sight; cleared
-    /// on every `applyConfiguration`.
     private var seenSigningIDs: Set<String> = []
 
     // MARK: - Lifecycle
@@ -50,10 +39,6 @@ final class DNSProxyProvider: NEDNSProxyProvider, ProxyConfigReceiver {
         logger.log("config loaded: apps=\(initial.apps.count)")
         applyConfiguration(initial)
 
-        // Attach LAST: the daemon replays any config pushed while no
-        // provider was attached, so the drained payload must land
-        // after the (possibly stale) options bootstrap above — the
-        // fresher writer always wins.
         ProxyConfigDaemon.shared?.attach(provider: self)
 
         completionHandler(nil)
@@ -96,9 +81,6 @@ final class DNSProxyProvider: NEDNSProxyProvider, ProxyConfigReceiver {
         return handleUnmatchedFlow(flow)
     }
 
-    /// Listed app branch. Rejects with EHOSTUNREACH when no
-    /// physical interface is available or the chosen interface has
-    /// no configured resolver.
     private func handleMatchedFlow(_ flow: NEAppProxyFlow, matched: AppEntry) -> Bool {
         let flowKind = (flow is NEAppProxyTCPFlow) ? "TCP" : "UDP"
 
@@ -122,8 +104,6 @@ final class DNSProxyProvider: NEDNSProxyProvider, ProxyConfigReceiver {
         )
     }
 
-    /// Unmatched apps relay to the system default resolver without
-    /// a pin. No per-flow log emitted.
     private func handleUnmatchedFlow(_ flow: NEAppProxyFlow) -> Bool {
         guard let resolver = systemDefaultResolver() else {
             rejectFlow(flow, error: POSIXError(.EHOSTUNREACH))
@@ -137,9 +117,6 @@ final class DNSProxyProvider: NEDNSProxyProvider, ProxyConfigReceiver {
         )
     }
 
-    /// First scoped entry from `systemDNSSettings`, with
-    /// `InterfaceDNSResolver.globalResolverServers()` as fallback —
-    /// `systemDNSSettings` returns nil for DoH/DoT-capable resolvers.
     private func systemDefaultResolver() -> String? {
         if let settings = systemDNSSettings {
             for entry in settings where !entry.servers.isEmpty {
@@ -172,11 +149,6 @@ final class DNSProxyProvider: NEDNSProxyProvider, ProxyConfigReceiver {
 
     // MARK: - Configuration
 
-    /// Apply a decoded configuration to in-memory state. Called
-    /// from `startProxy` (initial bootstrap from
-    /// `providerConfiguration`) and from `ProxyConfigDaemon.applyConfig`
-    /// (live XPC push from the host app). The list is honored
-    /// verbatim. Logs the app-list diff against the previous state.
     func applyConfiguration(_ configuration: SplitTunnelingConfiguration) {
         stateLock.lock()
         let previous = listedApps
@@ -189,13 +161,6 @@ final class DNSProxyProvider: NEDNSProxyProvider, ProxyConfigReceiver {
         interfaceMonitor.setSelection(configuration.interfaceSelection)
     }
 
-    /// Decodes `SplitTunnelingConfiguration` from `startProxy` options.
-    /// Lookup order:
-    /// 1. `options["split_config"]` (Data) — top-level direct
-    /// 2. `options["VendorData"]` as `[String: Any]` containing
-    ///    `split_config` Data
-    /// 3. `options["VendorData"]` as plist-encoded `Data` decoding
-    ///    into the same dict
     private func loadConfiguration(options: [String: Any]?) -> SplitTunnelingConfiguration? {
         guard let options else {
             os_log("loadConfiguration: options is nil",

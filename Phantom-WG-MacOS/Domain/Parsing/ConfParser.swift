@@ -1,22 +1,5 @@
 import Foundation
 
-/// Structural parser for WireGuard `.conf` text.
-///
-/// Produces a `TunnelDraft` populated from `[Wstunnel]` (optional),
-/// `[Interface]`, and `[Peer]` sections. Field-level value validation
-/// (keys, addresses, endpoint, integers) is deferred to
-/// `TunnelDraft.validate()` — the parser only rejects input it cannot
-/// structurally decompose (missing sections, missing required keys,
-/// malformed `Tunnel = udp://h:p:h:p`), plus the two it refuses on policy
-/// rather than on shape: empty input, and a repeated section header
-/// (`duplicateSection`) whose ambiguity it declines to resolve.
-///
-/// Ghost rule: when a `[Wstunnel]` section is present, the peer
-/// `Endpoint` is system-defined (the wstunnel listener), so the key
-/// becomes optional and is ignored even when written.
-///
-/// The draft's `name` is left empty; the caller sets it before
-/// validation.
 enum ConfParser {
 
     enum ParseError: Error, LocalizedError, Equatable {
@@ -79,8 +62,6 @@ enum ConfParser {
 
     // MARK: - Section Splitting
 
-    /// Collects key/value pairs per `[Section]`. Multi-entry keys
-    /// (Address, AllowedIPs, DNS) are merged with comma separators.
     private static func splitSections(_ input: String) throws -> [String: [String: String]] {
         let lines = input.components(separatedBy: .newlines)
         var result: [String: [String: String]] = [:]
@@ -91,27 +72,9 @@ enum ConfParser {
             let stripped = line.trimmingCharacters(in: .whitespaces)
             if stripped.isEmpty || stripped.hasPrefix("#") { continue }
 
-            // Section header
             if stripped.hasPrefix("["), stripped.hasSuffix("]") {
-                // Trimmed like every key below, and for the same
-                // reason: a stray space inside the brackets —
-                // "[Peer ]" — must not mint a DISTINCT section that
-                // dodges the duplicate guard while parse() reads only
-                // the exact-spelled name, silently dropping the whole
-                // peer the variant carried. The trim covers Zs+tab
-                // (`.whitespaces`); invisible Cf characters (U+200B,
-                // U+FEFF) and the exotic members of `.newlines` the
-                // splitter above honours (VT/FF/NEL) stay a named
-                // cross-repo unicode-hygiene decision, queued with
-                // the scalar-key question below.
                 let name = String(stripped.dropFirst().dropLast())
                     .trimmingCharacters(in: .whitespaces).lowercased()
-                // Each section is a singleton here. A repeated header —
-                // most often a second [Peer] — used to merge into the
-                // first (last value wins per key), silently collapsing
-                // multiple peers into one carrying the wrong key, so
-                // traffic for the dropped peer would encrypt to it.
-                // Reject the ambiguity instead of resolving it blindly.
                 guard result[name] == nil else {
                     throw ParseError.duplicateSection(name.capitalized)
                 }
@@ -120,7 +83,6 @@ enum ConfParser {
                 continue
             }
 
-            // Key = Value
             guard let section = currentSection,
                   let equalsIndex = stripped.firstIndex(of: "=") else { continue }
 
@@ -131,12 +93,6 @@ enum ConfParser {
             if multiEntryKeys.contains(key), let existing = result[section]?[key] {
                 result[section]?[key] = existing + ", " + value
             } else {
-                // Scalar keys are deliberately last-wins within a
-                // section (a repeated Endpoint/PrivateKey line simply
-                // overwrites) — the duplicate guard above rejects
-                // section-level ambiguity only. Escalating repeated
-                // scalar keys to a ParseError is a cross-repo decision
-                // (iOS parser parity plus new error copy).
                 result[section]?[key] = value
             }
         }
@@ -157,7 +113,6 @@ enum ConfParser {
             throw ParseError.missingKey(section: "Wstunnel", key: "Tunnel")
         }
 
-        // udp://127.0.0.1:51820:127.0.0.1:51820
         var raw = tunnel
         if raw.lowercased().hasPrefix("udp://") { raw = String(raw.dropFirst(6)) }
 
@@ -201,8 +156,6 @@ enum ConfParser {
             throw ParseError.missingKey(section: "Peer", key: "PublicKey")
         }
 
-        // Ghost configs never carry the user's Endpoint into the
-        // draft — the system defines it from the wstunnel listener.
         let endpoint: String
         if endpointRequired {
             guard let value = attrs["endpoint"], !value.isEmpty else {

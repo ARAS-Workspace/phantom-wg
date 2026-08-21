@@ -1,8 +1,5 @@
 import SwiftUI
 
-/// "System DNS Resolver" toggle section. Binds to the synthetic
-/// `mDNSResponder` pair's presence in `configuration.apps` — list
-/// membership IS the toggle state.
 struct SplitTunnelingMDNSSection: View {
     @Binding var isEnabled: Bool
     @Environment(LocalizationManager.self) private var loc

@@ -1,12 +1,5 @@
 import SwiftUI
 
-/// Lock screen between the vault gate and the tunnel content. When
-/// another local user's VPN holds the system's one exclusive slot,
-/// activating against it only feeds the cross-user on-demand fight —
-/// so the app names the situation and waits, and the moment the slot
-/// is freed in System Settings > VPN the user's own list appears.
-/// Mirrors the vault gate's idiom: the state names what is standing
-/// in the way, the buttons are the two honest ways forward.
 struct ConnectionGateView: View {
     @Environment(ConnectionGateCoordinator.self) private var gate
     @Environment(LocalizationManager.self) private var loc
@@ -66,10 +59,6 @@ struct ConnectionGateView: View {
         }
     }
 
-    /// System Settings > VPN. The pane identifier was read off the
-    /// system's own VPN.appex (`CFBundleIdentifier`); if the deep link
-    /// is refused on some OS, fall back to System Settings itself —
-    /// the button's promise stays truthful either way.
     private func openVPNSettings() {
         let pane = URL(string: "x-apple.systempreferences:com.apple.NetworkExtensionSettingsUI.NESettingsUIExtension")!
         if !NSWorkspace.shared.open(pane) {

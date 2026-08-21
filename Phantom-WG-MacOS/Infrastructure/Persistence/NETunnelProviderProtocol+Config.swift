@@ -2,11 +2,6 @@ import NetworkExtension
 
 extension NETunnelProviderProtocol {
 
-    /// Reads the tunnel's identity out of `providerConfiguration`.
-    /// This store is world-readable (`/Library/Preferences/
-    /// com.apple.networkextension.plist` is mode 644), which is why it
-    /// holds identity only — the secrets live in the vault the tunnel
-    /// extension keeps in the System keychain, keyed by `configId`.
     var tunnelIdentity: TunnelIdentity? {
         guard let configId = providerConfiguration?["configId"] as? String,
               let id = UUID(uuidString: configId),
@@ -22,11 +17,6 @@ extension NETunnelProviderProtocol {
         )
     }
 
-    /// Creates the protocol object for a tunnel. Nothing sensitive is
-    /// written: `serverAddress` is a fixed label rather than the real
-    /// endpoint (it is displayed in System Settings and stored in the
-    /// same world-readable plist), and the endpoint itself is part of
-    /// the vault payload.
     convenience init(identity: TunnelIdentity) {
         self.init()
 

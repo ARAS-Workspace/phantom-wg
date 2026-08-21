@@ -1,21 +1,8 @@
 import Foundation
 import NetworkExtension
 
-/// In-memory `TunnelProviding` used by SwiftUI previews. Holds its
-/// `TunnelConfig` directly, resolves every persistence call
-/// synchronously, and walks `connectionStatus` through realistic
-/// transitions (`.connecting` → `.connected` …) when the canvas
-/// flips a toggle — posting `NEVPNStatusDidChange` with itself as the
-/// notification object so `TunnelsManager`'s production observer
-/// drives `TunnelContainer` exactly as it does for the real system.
-///
-/// Provider messages mirror PhantomTunnel's opcode surface:
-/// `0` → WireGuard UAPI stats dump, `1` → JSON log entries,
-/// `2` → clear log ring, `3` → reset ACK.
 final class PreviewTunnelProvider: TunnelProviding {
 
-    /// One extension-side log line, encoded for opcode `1` in the
-    /// same shape `LogStore` decodes (`timestamp` / `tag` / `message`).
     struct LogLine: Encodable {
         let timestamp: String
         let tag: String
@@ -34,9 +21,6 @@ final class PreviewTunnelProvider: TunnelProviding {
 
     private(set) var connectionStatus: NEVPNStatus
 
-    /// When set, `startTunnel` drops the session instead of
-    /// connecting and `fetchLastDisconnectError` reports this —
-    /// the canvas twin of the system's disconnect record.
     var disconnectError: Error?
 
     // MARK: - Canned Telemetry
@@ -45,8 +29,6 @@ final class PreviewTunnelProvider: TunnelProviding {
     private var rxBytes: Int64 = 47_316_992
     private var txBytes: Int64 = 9_218_048
 
-    /// Invalidates in-flight status transitions when the canvas
-    /// toggles faster than the simulated connect/disconnect delay.
     private var transitionID = UUID()
 
     init(
@@ -62,9 +44,6 @@ final class PreviewTunnelProvider: TunnelProviding {
 
     // MARK: - Configuration
 
-    /// Production writes identity only — the payload lives in the
-    /// vault. The preview provider keeps the whole config so
-    /// `PreviewVaultClient` can serve it back.
     func configure(with identity: TunnelIdentity) {
         guard var updated = config else { return }
         updated.name = identity.name
@@ -94,12 +73,6 @@ final class PreviewTunnelProvider: TunnelProviding {
             logLines.removeAll()
             responseHandler(Data())
         case 3:
-            // The reply's second byte is the reset's outcome, and a
-            // preview's layer always "comes back" — there is none to
-            // fail. Answering the real shape keeps the preview from
-            // exercising the app's older-extension branch, which is
-            // the one path a preview should never be the reason to
-            // walk.
             responseHandler(Data([3, TunnelResetReply.rebuilt.rawValue]))
         default:
             responseHandler(nil)
@@ -149,9 +122,6 @@ final class PreviewTunnelProvider: TunnelProviding {
         }
     }
 
-    /// WireGuard UAPI-style dump consumed by `StatsFormatter.parse`.
-    /// Counters advance a little on every poll so the canvas shows
-    /// live-moving transfer numbers; the handshake stays ~12s old.
     private func statsDump() -> String {
         rxBytes += 18_432
         txBytes += 6_144
@@ -162,10 +132,6 @@ final class PreviewTunnelProvider: TunnelProviding {
 
 // MARK: - Vault
 
-/// Stands in for the extension's custody service. Previews have no
-/// XPC peer, so this serves the fixture providers' configurations
-/// straight from memory — the canvas exercises the same async read
-/// path the app uses in production.
 @Observable
 @MainActor
 final class PreviewVaultClient: TunnelVaultClient {
@@ -182,8 +148,6 @@ final class PreviewVaultClient: TunnelVaultClient {
         return .done
     }
 
-    /// When set, every `read(id:)` answers with this instead of the
-    /// payload map — lets previews stage the unreachable banner.
     var readOverride: Read?
 
     override func read(id: UUID) async -> Read {
@@ -196,8 +160,6 @@ final class PreviewVaultClient: TunnelVaultClient {
         return .done
     }
 
-    /// What `ping()` answers; `nil` never resolves, so the canvas can
-    /// hold the gate's connecting state indefinitely.
     var pingAnswer: Ping? = .ready(payloads: 0, identity: ExtensionIdentity.current)
 
     override func ping() async -> Ping {
@@ -218,9 +180,6 @@ final class PreviewVaultClient: TunnelVaultClient {
 
 // MARK: - Factory
 
-/// `TunnelProviderFactory` counterpart for previews: hands
-/// `TunnelsManager` a canned provider list and mints fresh in-memory
-/// providers for the add-tunnel flow, so import works in the canvas.
 struct PreviewTunnelProviderFactory: TunnelProviderFactory {
 
     var providers: [PreviewTunnelProvider]

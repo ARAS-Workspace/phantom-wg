@@ -2,13 +2,6 @@ import Foundation
 
 // MARK: - Tunnel Config
 
-/// Top-level tunnel configuration. All nested fields are pre-validated:
-/// once a `TunnelConfig` exists it is guaranteed well-formed.
-/// Drafts (`TunnelDraft`) hold raw user-edited strings and are converted
-/// into this type via `validate()` before storage.
-///
-/// `Codable` because the whole value is what gets sealed into the
-/// System keychain vault — one payload per tunnel, secrets included.
 struct TunnelConfig: Identifiable, Equatable, Codable {
     var id: UUID
     var name: String
@@ -16,10 +9,8 @@ struct TunnelConfig: Identifiable, Equatable, Codable {
     var wireguard: WireguardConfig
     var wstunnel: WstunnelConfig?
 
-    /// Ghost mode when wstunnel is present, standalone WireGuard otherwise.
     var isGhostMode: Bool { wstunnel != nil }
 
-    /// The secret-free projection stored in `providerConfiguration`.
     var identity: TunnelIdentity {
         TunnelIdentity(id: id, name: name, createdAt: createdAt, isGhost: isGhostMode)
     }
@@ -40,8 +31,6 @@ struct TunnelConfig: Identifiable, Equatable, Codable {
 
     // MARK: - Serialization
 
-    /// Serializes the config into the `.conf` textual format accepted by
-    /// `ConfParser.parse(...)`. Matches what the Copy Config action produces.
     func asConfString() -> String {
         var lines: [String] = []
 
@@ -66,9 +55,6 @@ struct TunnelConfig: Identifiable, Equatable, Codable {
             lines.append("PresharedKey = \(psk.textual)")
         }
         lines.append("AllowedIPs = \(wireguard.peer.allowedIPs.map(\.textual).joined(separator: ", "))")
-        // Ghost rule: the endpoint is system-defined from the wstunnel
-        // listener, so it is never serialized next to a [Wstunnel]
-        // section — not even when a legacy config still carries one.
         if wstunnel == nil, let endpoint = wireguard.peer.endpoint {
             lines.append("Endpoint = \(endpoint.textual)")
         }
@@ -80,10 +66,6 @@ struct TunnelConfig: Identifiable, Equatable, Codable {
 
 // MARK: - Tunnel Identity
 
-/// What the system's NetworkExtension preferences are allowed to know
-/// about a tunnel: enough to list it, sort it, name it and badge it —
-/// and nothing that would be worth stealing. The secrets live in the
-/// vault the tunnel extension owns, keyed by this `id`.
 struct TunnelIdentity: Equatable {
     let id: UUID
     let name: String
@@ -116,11 +98,6 @@ struct PeerConfig: Codable, Equatable {
     var publicKey: WireGuardKey
     var presharedKey: WireGuardKey?
     var allowedIPs: [AddressWithPrefix]
-    /// Absent in Ghost mode: with a wstunnel bridge in front, the
-    /// WireGuard endpoint is system-defined as the bridge's local
-    /// listener (`localHost:localPort`) and is never user data.
-    /// Legacy payloads that still carry one decode fine; the value is
-    /// simply not consulted while a `[Wstunnel]` section exists.
     var endpoint: IPEndpoint?
     var persistentKeepalive: Int
 

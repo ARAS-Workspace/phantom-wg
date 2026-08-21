@@ -1,8 +1,5 @@
 import SwiftUI
 
-/// WireGuard interface configuration, read-only — private key, local
-/// addresses, DNS servers, and MTU. Values change only through
-/// `TunnelEditView`'s raw-text editor.
 struct InterfaceSection: View {
     let config: InterfaceConfig
     @Environment(LocalizationManager.self) private var loc

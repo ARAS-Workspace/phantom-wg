@@ -1,15 +1,5 @@
 import SwiftUI
 
-/// Raw-text editor for an existing tunnel — the WireGuard app
-/// pattern: tunnel name on top, the full `.conf` below, validation on
-/// save. Prefilled from the saved config's canonical serialization
-/// (`asConfString()`), which `ConfParser` round-trips. The parsed
-/// draft is rebuilt with the tunnel's original `id`/`createdAt` so an
-/// edit never changes identity or list order. Ghost mode is just text
-/// here: adding or deleting the `[Wstunnel]` section converts the
-/// tunnel between ghost and standalone WireGuard, through exactly the
-/// same validation steps as import. Reachable only while the tunnel
-/// is inactive.
 struct TunnelEditView: View {
     var tunnel: TunnelContainer
     @Environment(TunnelsManager.self) private var tunnelsManager
@@ -21,9 +11,6 @@ struct TunnelEditView: View {
     @State private var rawInput: String = ""
     @State private var errorMessages: [String] = []
 
-    /// The vault copy this edit started from. Until it arrives there
-    /// is nothing to edit against — saving stays disabled so an empty
-    /// editor can never overwrite a good configuration.
     @State private var original: TunnelConfig?
     @State private var loaded = false
 
@@ -56,14 +43,9 @@ struct TunnelEditView: View {
         .task { await loadOriginal() }
     }
 
-    /// Pulls the configuration out of the vault and seeds both fields
-    /// from it. A miss leaves the editor empty and surfaces the same
-    /// banner the detail screen uses.
     private func loadOriginal() async {
         guard !loaded else { return }
 
-        // Same retry as the detail screen: a first read that cannot
-        // reach the extension says nothing about the configuration.
         let result = await vault.read(id: tunnel.id, attempts: 3)
         loaded = true
 
@@ -139,8 +121,6 @@ struct TunnelEditView: View {
     private func submit() {
         errorMessages = []
 
-        // Identity anchor: the vault copy this edit started from.
-        // `canSubmit` already requires it, so this is defensive.
         guard let original else { return }
 
         let trimmedName = name.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -155,7 +135,6 @@ struct TunnelEditView: View {
             return
         }
 
-        // Structural parse — produces a draft or throws a banner error.
         let parsed: TunnelDraft
         do {
             parsed = try ConfParser.parse(trimmedInput)
@@ -167,9 +146,6 @@ struct TunnelEditView: View {
             return
         }
 
-        // Re-anchor the parsed sections onto the tunnel's original
-        // identity — `ConfParser` mints a fresh id/createdAt, but an
-        // edit must not change either.
         let draft = TunnelDraft(
             id: original.id,
             name: trimmedName,
@@ -178,8 +154,6 @@ struct TunnelEditView: View {
             wstunnel: parsed.wstunnel
         )
 
-        // Field-level validation — identical steps and messages as
-        // import, surfaced as a list in the banner.
         let result = draft.validate()
         guard let config = result.config else {
             errorMessages = ConfEditorMessages.fieldMessages(result.errors, loc: loc)
@@ -199,9 +173,6 @@ struct TunnelEditView: View {
 
 // MARK: - Previews
 
-/// Fully interactive against the in-memory manager: reshape the
-/// prefilled `.conf` (drop the `[Wstunnel]` block, break a key…) and
-/// Save exercises the real parse → validate → modify chain.
 #Preview("Light") {
     let manager = PreviewFixtures.tunnelsManager(providers: [
         PreviewFixtures.provider(config: PreviewFixtures.ghostConfig())

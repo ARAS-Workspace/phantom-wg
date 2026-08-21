@@ -2,16 +2,11 @@ import SwiftUI
 import AppKit
 import UniformTypeIdentifiers
 
-/// Active log channel. The Save flow derives its filename stem from
-/// the selected case directly.
 enum LogChannel {
     case split
     case dns
 }
 
-/// Tabbed log panel hosting SplitTunnel relay logs and DNSProxy
-/// daemon logs. Single toolbar retargets count / save / clear to
-/// the active channel.
 struct LogTabsSection: View {
     let splitLogStore: ProxyLogStore
     let dnsLogStore: ProxyLogStore
@@ -196,10 +191,6 @@ struct LogTabsSection: View {
 
 // MARK: - Previews
 
-/// Preview-only host that owns the daemon clients strongly: the log
-/// store keeps its client `weak` on purpose (the app owns the clients'
-/// lifetime), so a client built inline in the preview closure would be
-/// gone before the canvas renders — and the compiler says so.
 private struct LogTabsPreviewHost: View {
     private let splitClient = SplitTunnelDaemonClient()
     private let dnsClient = DNSProxyDaemonClient()

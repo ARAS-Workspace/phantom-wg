@@ -1,9 +1,5 @@
 import Foundation
 
-/// Thread-safe in-memory ring buffer (capacity 500). Each system
-/// extension binary owns its own `shared` instance — the host app
-/// drains both over XPC `fetchLogs`, each through its own
-/// `ProxyConfigDaemon` channel.
 final class RingBufferLogger {
 
     static let shared = RingBufferLogger()
@@ -35,14 +31,12 @@ final class RingBufferLogger {
 
     // MARK: - Drain
 
-    /// Newline-joined snapshot. Does not clear the buffer.
     func snapshot() -> String {
         lock.lock()
         defer { lock.unlock() }
         return buffer.joined(separator: "\n")
     }
 
-    /// Manual flush on top of the ring's auto-purge.
     func clear() {
         lock.lock()
         buffer.removeAll(keepingCapacity: true)
@@ -53,8 +47,6 @@ final class RingBufferLogger {
 // MARK: - App-list Diff
 
 extension RingBufferLogger {
-    /// Surface added / removed `AppEntry` items as `[config]` lines.
-    /// Silent when nothing changed.
     func logAppDiff(previous: [AppEntry], current: [AppEntry]) {
         let prevIDs = Set(previous.map(\.signingIdentifier))
         let nextIDs = Set(current.map(\.signingIdentifier))

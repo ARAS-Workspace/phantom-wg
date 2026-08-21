@@ -1,8 +1,5 @@
 import Foundation
 
-/// In-memory ring buffer logger for the tunnel extension.
-/// Logs are disposable: visible during the session, gone on exit(0).
-/// App retrieves logs via handleAppMessage.
 enum TunnelLogger {
 
     enum Tag: String {
@@ -41,7 +38,6 @@ enum TunnelLogger {
         lock.unlock()
     }
 
-    /// Returns all buffered entries as JSON Data (for handleAppMessage).
     static func allEntriesAsData() -> Data? {
         lock.lock()
         let snapshot = buffer
@@ -49,9 +45,6 @@ enum TunnelLogger {
         return try? JSONEncoder().encode(snapshot)
     }
 
-    /// Wipes the buffer without tearing down the tunnel. Auto-purge at
-    /// `maxEntries` still applies — this is a manual flush on top of
-    /// the existing ring semantics.
     static func clear() {
         lock.lock()
         buffer.removeAll(keepingCapacity: true)

@@ -3,8 +3,6 @@ import Network
 
 // MARK: - WireGuard Key
 
-/// 32-byte Curve25519 key encoded as base64 (44 characters including padding).
-/// Used for private, public, and preshared keys across interface and peer sections.
 struct WireGuardKey: Equatable, Hashable, Codable {
 
     let base64: String
@@ -43,8 +41,6 @@ struct WireGuardKey: Equatable, Hashable, Codable {
 
 // MARK: - Address With Prefix
 
-/// IPv4 or IPv6 address paired with a CIDR prefix length.
-/// Used for Interface `Address` entries and Peer `AllowedIPs` entries.
 struct AddressWithPrefix: Equatable, Hashable, Codable {
 
     enum Family: Equatable, Hashable {
@@ -114,7 +110,6 @@ struct AddressWithPrefix: Equatable, Hashable, Codable {
 
 // MARK: - IP Address Entry
 
-/// Single IPv4 or IPv6 address without a prefix — used for DNS server entries.
 struct IPAddressEntry: Equatable, Hashable, Codable {
 
     enum Family: Equatable, Hashable {
@@ -160,9 +155,6 @@ struct IPAddressEntry: Equatable, Hashable, Codable {
 
 // MARK: - IP Endpoint
 
-/// Host + port pair for WireGuard peer endpoints.
-/// Host may be an IPv4 address, IPv6 address (bracketed in textual form),
-/// or a DNS hostname — hostname resolution is deferred to connect time.
 struct IPEndpoint: Equatable, Hashable, Codable {
 
     enum Host: Equatable, Hashable {
@@ -184,7 +176,6 @@ struct IPEndpoint: Equatable, Hashable, Codable {
     init(parsing text: String) throws {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
 
-        // Bracketed IPv6 literal: [addr]:port
         if trimmed.hasPrefix("[") {
             guard let closingBracket = trimmed.firstIndex(of: "]") else {
                 throw ParseError.invalidHost(trimmed)
@@ -203,7 +194,6 @@ struct IPEndpoint: Equatable, Hashable, Codable {
             return
         }
 
-        // Non-bracketed: rightmost ":" separates host from port
         guard let colonIndex = trimmed.lastIndex(of: ":") else {
             throw ParseError.missingPort
         }
@@ -231,13 +221,6 @@ struct IPEndpoint: Equatable, Hashable, Codable {
         return UInt16(value)
     }
 
-    /// RFC 1123 hostname SHAPE: labels 1–63 chars, total <= 253,
-    /// hyphens never at label boundaries, dot-separated. The character
-    /// classes are deliberately Unicode-wide (`isLetter`/`isNumber`)
-    /// and the lengths count Characters, not octets — a non-ASCII
-    /// hostname passes here and surfaces its failure at connect-time
-    /// resolution instead of as a field error. Tightening to ASCII is
-    /// a cross-repo decision (iOS parser parity).
     private static func isValidHostname(_ text: String) -> Bool {
         guard !text.isEmpty, text.count <= 253 else { return false }
         let labels = text.split(separator: ".", omittingEmptySubsequences: false)
@@ -274,7 +257,6 @@ struct IPEndpoint: Equatable, Hashable, Codable {
 
 // MARK: - Wstunnel URL
 
-/// `wss://` or `ws://` URL pointing at the wstunnel server.
 struct WstunnelURL: Equatable, Hashable, Codable {
 
     let url: URL

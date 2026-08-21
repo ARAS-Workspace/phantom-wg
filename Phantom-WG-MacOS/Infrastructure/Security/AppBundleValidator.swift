@@ -1,12 +1,6 @@
 import Foundation
 import Security
 
-/// Validates an application bundle picked from `NSOpenPanel` before it
-/// can be added to the split tunneling list. Only apps that expose a
-/// bundle identifier and a code-signing identity are accepted — the
-/// team prefix is optional (Apple platform-signed apps have none) —
-/// so the system extension can later match flows by
-/// `sourceAppSigningIdentifier` without ambiguity.
 enum AppBundleValidator {
 
     // MARK: - Error
@@ -19,9 +13,6 @@ enum AppBundleValidator {
 
     // MARK: - Entry Point
 
-    /// Inspects the `.app` at `url` and, on success, returns a fully
-    /// populated `AppEntry`. The caller is responsible for dedup against
-    /// the existing configuration before persisting.
     static func validate(url: URL) -> Result<AppEntry, ValidationError> {
         guard let bundle = Bundle(url: url) else {
             return .failure(.notABundle)
@@ -51,11 +42,6 @@ enum AppBundleValidator {
             return .failure(.notSigned)
         }
 
-        // Compose the full signing identifier exactly as
-        // `NEAppProxyFlow.metaData.sourceAppSigningIdentifier` reports
-        // it at runtime: Developer-ID apps get `<teamID>.<csIdentifier>`,
-        // Apple platform-signed apps get just `<csIdentifier>` (no team
-        // prefix).
         let signingIdentifier: String
         if let teamID = info["teamid"] as? String, !teamID.isEmpty {
             signingIdentifier = "\(teamID).\(csIdentifier)"
@@ -77,12 +63,6 @@ enum AppBundleValidator {
 
     // MARK: - Helpers
 
-    /// Best-effort team name extraction from the leaf certificate's
-    /// common name. Apple's Developer ID certs look like
-    /// "Developer ID Application: Apple Inc. (APPLECOMPUTER)" — we
-    /// strip the prefix and the parenthesised team ID so the user sees
-    /// just "Apple Inc.". Nil when parsing fails; the app-list row
-    /// then simply omits its team line.
     private static func extractTeamName(from info: [String: Any]) -> String? {
         guard let certs = info["certificates"] as? [SecCertificate],
               let leaf = certs.first else {

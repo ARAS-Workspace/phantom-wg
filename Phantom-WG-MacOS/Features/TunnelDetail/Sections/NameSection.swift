@@ -1,7 +1,5 @@
 import SwiftUI
 
-/// Tunnel display name, read-only. The name is edited together with
-/// the raw configuration in `TunnelEditView`.
 struct NameSection: View {
     let name: String
     @Environment(LocalizationManager.self) private var loc

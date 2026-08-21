@@ -32,14 +32,9 @@ final class LocalizationManager {
         }
     }
 
-    /// Observed so that views calling `t(_:)` re-render when the dictionary
-    /// is reloaded after a language switch. Without this, `@Observable` would
-    /// only track `current`, and callers would see stale translations because
-    /// `t(_:)` reads `strings` internally (not `current`).
     private var strings: [String: String] = [:]
 
     init() {
-        // Resolve initial language: saved preference → device locale → English.
         if let saved = UserDefaults.standard.string(forKey: "app_language"),
            let lang = Language(rawValue: saved) {
             self.current = lang
@@ -51,12 +46,10 @@ final class LocalizationManager {
         loadStrings()
     }
 
-    /// Simple key lookup.
     func t(_ key: String) -> String {
         strings[key] ?? key
     }
 
-    /// Key lookup with format arguments (%d, %@, etc.).
     func t(_ key: String, _ args: CVarArg...) -> String {
         let template = strings[key] ?? key
         return String(format: template, arguments: args)

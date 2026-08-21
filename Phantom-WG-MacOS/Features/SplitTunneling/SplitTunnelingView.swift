@@ -1,9 +1,6 @@
 import SwiftUI
 import Network
 
-/// Sheet-hosted editor for the split-tunneling configuration. Opens
-/// only after the extension gate has cleared. Eager persistence —
-/// every mutation hits `SplitTunnelingStore` immediately.
 struct SplitTunnelingView: View {
     @Environment(SplitTunnelingStore.self) private var store
     @Environment(SplitTunnelingSessionCoordinator.self) private var sessionCoordinator
@@ -40,12 +37,6 @@ struct SplitTunnelingView: View {
             .onChange(of: store.configuration.isEnabled) { _, _ in
                 Task { await logStore?.clear() }
             }
-            // A push that did not land used to end in os_log and
-            // nowhere else, so the row appeared in the list and the
-            // screen was indistinguishable from a successful edit.
-            // `.notRunning` is deliberately silent here: with the
-            // feature stopped, an edit not reaching the extensions is
-            // the normal case, not a failure worth interrupting for.
             .onChange(of: store.lastPush) { _, report in
                 guard let report, case .pushed = report.outcome, !report.outcome.bothLanded else { return }
                 toasts.error(loc.t("split_tunneling_push_failed"))
@@ -61,80 +52,18 @@ struct SplitTunnelingView: View {
             ))
     }
 
-    /// A transition is in flight, so nothing that drives the lifecycle
-    /// may be pressed. There are THREE buttons behind `stop()` on this
-    /// screen, not one: the master toggle, the banner's "Disable
-    /// Feature", and the destructive Reset. Locking only the toggle
-    /// left the other two live, which is to say it left the race the
-    /// lock was written for fully reachable — a second press during
-    /// `.starting` dispatches a `stop` that interleaves with the
-    /// `start` still running, both writing the same
-    /// `NEDNSProxyManager.shared()`, and the documented ending is
-    /// SplitTunnel up with DNSProxy down: the port-53 carve-out open
-    /// with nothing behind it.
-    ///
-    /// Queued links count too. Serializing the lifecycle meant a press
-    /// can now be accepted and made to WAIT, and during that wait
-    /// `state` still reads the old value — so a lock that watched only
-    /// `state` would let the toggle spring back under a user whose
-    /// intent had in fact been taken.
     private var transitionInFlight: Bool {
         sessionCoordinator.state == .starting
             || sessionCoordinator.state == .stopping
             || sessionCoordinator.queuedLinks > 0
     }
 
-    /// Editors follow the SESSION, not the persisted intent — one
-    /// source, the same one the toggle above reads.
-    ///
-    /// The two used to diverge exactly where it mattered. A start the
-    /// user cancelled at the system's permission prompt leaves the
-    /// intent ON while the session is `.stopped`: the toggle read the
-    /// coordinator and went dark, the selector and the list read the
-    /// stored bool and stayed fully lit and editable, and the screen
-    /// said two things at once.
-    ///
-    /// `.starting` and `.stopping` are LOCKED rather than merely
-    /// mirrored, and that is the second half of the reason: an edit
-    /// made in that window reaches disk and never reaches either
-    /// extension, because `reconfigure` pushes only while `.running`.
-    /// Nothing told the user, and the next start carries a payload the
-    /// running session never saw.
-    ///
-    /// The banner does NOT read this, and that is deliberate rather
-    /// than an oversight. It appears only when the selected interface
-    /// cannot be resolved — the moment the user is stuck — and both of
-    /// its buttons are escape hatches. This rule reads `state !=
-    /// .running`, which is exactly the state a failed start leaves
-    /// behind, so applying it there would grey out the only two ways
-    /// out at the one moment they are needed. Nothing shuts the feature
-    /// down on its own when an interface disappears: the session stays
-    /// up, the extension stays registered, and a listed app's flow is
-    /// rejected with `EHOSTUNREACH` rather than leaked — intervening is
-    /// the user's call, and these two buttons are how it is made. The
-    /// picker below is an ordinary editor and keeps the rule. The
-    /// system DNS resolver
-    /// toggle does NOT read this: it writes the same app array the
-    /// locked list writes, but it stays usable while the feature is off
-    /// by deliberate choice, so `transitionInFlight` is all that gates
-    /// it. A lock one control wide is not a lock; a lock that ignores
-    /// a control's own rule is not one either.
     private var editorsDisabled: Bool { sessionCoordinator.state != .running }
 
     // MARK: - Content
 
     private var activatedContent: some View {
         Form {
-            // The toast alone was not a surface. It fires once, and a
-            // user who edits and immediately closes the sheet never
-            // sees it — while `lastPush` never changes again, so it
-            // never fires later either. That is the very class the
-            // typed push was introduced to end, surviving in the most
-            // ordinary flow there is. This row persists the verdict
-            // until a push actually LANDS, so reopening the sheet still
-            // states it. Reading `lastPush` directly would have cleared
-            // it on the next `.notRunning` — an edit made while stopped,
-            // which reports nothing and settles nothing.
             if store.lastPushFailed {
                 Section {
                     Label(loc.t("split_tunneling_push_failed"), systemImage: "exclamationmark.triangle.fill")
@@ -143,18 +72,6 @@ struct SplitTunnelingView: View {
                 }
             }
 
-            // A different failure from the one above and it gets its own
-            // row rather than sharing that one: a push that did not land
-            // leaves the extensions running an older list, while this
-            // leaves an extension REGISTERED after the user turned the
-            // feature off. The screen would otherwise say "off" over a
-            // proxy still handling traffic, which is the asymmetry this
-            // architecture exists to prevent — and until this row existed
-            // the only trace of it was one line in os_log.
-            //
-            // Red rather than orange, and no retry button: nothing here
-            // re-attempts the stop, so the row is a statement about the
-            // system's current state, not a pending action.
             if !store.stopResidue.isEmpty {
                 Section {
                     Label(loc.t("split_tunneling_stop_residue",
@@ -167,61 +84,17 @@ struct SplitTunnelingView: View {
 
             if interfaceUnavailable {
                 Section {
-                    // Both of its buttons drive things the rest of the
-                    // screen already gates: "Switch to Auto" repins the
-                    // running session's interface like the picker does,
-                    // and "Disable Feature" is the same `stop()` the
-                    // master toggle sends. Ungated, this one Section
-                    // was the way around both locks.
                     InterfaceUnavailableBanner(
                         selectionLabel: interfaceSelectionLabel,
                         onSwitchToAuto: { store.setInterfaceSelection(.auto) },
                         onDisable: { store.setEnabled(false) }
                     )
-                    // One rule for the whole banner, and both buttons
-                    // share it on purpose. `editorsDisabled` was too
-                    // strict here: it reads `!= .running`, so with the
-                    // intent ON and the session down — exactly the state
-                    // a failed start leaves — it killed BOTH ways out of
-                    // an interface that no longer resolves. "Switch to
-                    // Auto" is the one-press repair for that state and
-                    // "Disable Feature" is the exit; gating either on
-                    // the editor rule turns a stuck screen into a
-                    // trapped one. They are still gated on the lifecycle
-                    // rule, because a repin issued mid-transition would
-                    // race the transition's own writes.
                     .disabled(transitionInFlight)
                     .listRowInsets(EdgeInsets())
                     .listRowBackground(Color.clear)
                 }
             }
 
-            // Toggle = mirror of coordinator state; flips delegate
-            // through the store to the coordinator's lifecycle.
-            // Locked while a transition is in flight. The toggle reads
-            // `.starting` as ON, so the seconds `saveToPreferences`
-            // spends inside the system's proxy-permission dialog look
-            // exactly like a finished start — and a second tap there
-            // does not cancel anything, it dispatches a `stop` that
-            // interleaves with the `start` still running, over the same
-            // `NEDNSProxyManager.shared()` singleton. The documented
-            // ending of that race is SplitTunnel up with DNSProxy down:
-            // the port-53 carve-out open with nothing behind it, so a
-            // listed app's data leaves the physical interface while its
-            // DNS goes to the tunnel's resolver.
-            //
-            // This closes the reachable triggers, not the race — and
-            // "triggers" is plural for a reason the first pass got
-            // wrong: locking this toggle alone left the banner's
-            // Disable and the destructive Reset sending the same
-            // `stop()` in the same window, so the sentence claimed a
-            // closure that had not happened. All three read
-            // `transitionInFlight` now. The coordinator closed its own
-            // half 45 minutes after this sentence was written: `706c026`
-            // put every public entry behind one `inFlight` chain, so two
-            // transitions cannot interleave. What remains is narrower
-            // than the sentence used to claim — if the chain's 60s
-            // ceiling expires, the waiting link proceeds anyway.
             SplitTunnelingEnableSection(
                 isEnabled: Binding(
                     get: { sessionCoordinator.state.isUserVisiblyActive },
@@ -247,12 +120,6 @@ struct SplitTunnelingView: View {
                 onRemoveApp: { store.removeApp(bundleIdentifier: $0) }
             )
 
-            // Stays live while the feature is OFF — a deliberate
-            // choice about this control, unchanged. What it no longer
-            // does is stay live mid-transition: list membership IS its
-            // state, so it writes the same app array the list above
-            // does, and that write lands on disk and reaches no
-            // extension exactly like any other edit in that window.
             SplitTunnelingMDNSSection(
                 isEnabled: Binding(
                     get: { store.isMDNSResponderEnabled },
@@ -266,8 +133,6 @@ struct SplitTunnelingView: View {
             }
 
             Section {
-                // The third route to `stop()`: `reset()` empties the
-                // configuration and then calls it.
                 Button(role: .destructive) {
                     showingResetConfirm = true
                 } label: {
@@ -298,8 +163,6 @@ struct SplitTunnelingView: View {
         resolvedInterface?.displayLabel
     }
 
-    /// True when the feature is enabled and the chosen interface
-    /// can't be satisfied. Surfaces the banner.
     private var interfaceUnavailable: Bool {
         guard store.configuration.isEnabled else { return false }
         return resolvedInterface == nil
@@ -427,10 +290,6 @@ private struct ResetAlert: ViewModifier {
 
 // MARK: - Previews
 
-/// The preview host has no physical interfaces (`NWInterface` cannot
-/// be fabricated), so the enabled variant also demonstrates the
-/// interface-unavailable banner — that pairing is inherent to the
-/// canvas, not a bug in the view.
 #Preview("Enabled") {
     NavigationStack {
         SplitTunnelingView()

@@ -1,8 +1,5 @@
 import SwiftUI
 
-/// Single row in the tunnel list. Left-side status indicator, stacked
-/// name/status text, and a trailing master toggle that dispatches
-/// activation/deactivation through `TunnelsManager`.
 struct TunnelRow: View {
     var tunnel: TunnelContainer
     @Environment(TunnelsManager.self) private var tunnelsManager

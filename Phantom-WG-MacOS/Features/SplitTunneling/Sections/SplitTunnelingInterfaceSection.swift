@@ -1,11 +1,6 @@
 import SwiftUI
 import Network
 
-/// Physical-interface picker. The user either lets the extension pick
-/// the primary path automatically or pins a specific BSD interface
-/// (Wi-Fi, Ethernet, …) for bypass relays. Disabling split-tunnelling
-/// also disables this row — the selection stays persisted so re-enabling
-/// restores intent.
 struct SplitTunnelingInterfaceSection: View {
     @Binding var selection: InterfaceSelection
     let availableInterfaces: [NWInterface]
@@ -20,9 +15,6 @@ struct SplitTunnelingInterfaceSection: View {
                     .accessibilityIdentifier(AXID.SplitTunneling.interfaceAuto)
 
                 if availableInterfaces.isEmpty {
-                    // Always show the saved explicit entry even if the
-                    // resolver hasn't yet populated the list, so the
-                    // user's current selection doesn't flicker to Auto.
                     if case .explicit(let name) = selection {
                         Text(name)
                             .tag(InterfaceSelection.explicit(name: name))
@@ -53,9 +45,6 @@ struct SplitTunnelingInterfaceSection: View {
 
 // MARK: - Previews
 
-/// `NWInterface` cannot be fabricated, so the picker list itself stays
-/// empty in the canvas; the explicit variant shows the saved-entry
-/// fallback path (selection preserved with no resolver data).
 #Preview("Auto") {
     PreviewBindingHost(InterfaceSelection.auto) { selection in
         Form {

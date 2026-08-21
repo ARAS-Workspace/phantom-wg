@@ -1,11 +1,5 @@
 import SwiftUI
 
-/// Read-only field row — label on top, selectable monospaced value
-/// below. The tunnel detail sections are built from these now that
-/// configuration editing happens exclusively in `TunnelEditView`'s
-/// raw-text editor. `axIdentifier` attaches a stable accessibility
-/// identifier so automation and accessibility tooling can address
-/// the value by string.
 struct PhantomStaticField: View {
     let label: String
     let value: String

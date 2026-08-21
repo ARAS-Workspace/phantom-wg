@@ -1,15 +1,5 @@
 import SwiftUI
 
-/// Persistent warning shown at the top of `SplitTunnelingView` while the
-/// user's selected physical interface isn't resolvable (picker chose an
-/// explicit BSD name that disappeared, or `.auto` but no non-tunnel
-/// interfaces available at all).
-///
-/// Deliberately **not** auto-dismissing: the feature genuinely can't
-/// serve traffic in this state, so the banner stays until the condition
-/// resolves itself or the user takes a destructive action (switch to
-/// auto, pick another interface, disable the feature). Users must make
-/// the call — we don't silently rewrite their selection.
 struct InterfaceUnavailableBanner: View {
     let selectionLabel: String
     let onSwitchToAuto: () -> Void

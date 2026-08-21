@@ -2,9 +2,6 @@ import Foundation
 
 // MARK: - Field-Level Validation Error
 
-/// Typed description of a single-field validation failure. The UI layer
-/// maps each case to a localized message; keeping the error as typed data
-/// here keeps localization concerns in one place (the view).
 enum FieldValidationError: Equatable {
     case empty
     case wireGuardKey(WireGuardKey.ParseError)
@@ -18,10 +15,6 @@ enum FieldValidationError: Equatable {
 
 // MARK: - Draft Types
 
-/// Mutable, string-backed intermediate between raw `.conf` text and a
-/// typed `TunnelConfig`. `ConfParser` produces drafts for the two
-/// raw-text surfaces (import + edit); `validate()` yields the typed
-/// config plus a per-field error map the banners render in order.
 struct TunnelDraft: Equatable {
     let id: UUID
     var name: String
@@ -74,20 +67,15 @@ struct TunnelDraft: Equatable {
     func validate() -> ValidationResult {
         var errors: [Field: FieldValidationError] = [:]
 
-        // Name
         let trimmedName = name.trimmingCharacters(in: .whitespacesAndNewlines)
         if trimmedName.isEmpty { errors[.name] = .empty }
 
-        // Interface + peer
         let (interfaceConfig, interfaceErrors) = wireguard.interface.validate()
         interfaceErrors.forEach { errors[$0.key] = $0.value }
 
-        // The endpoint is user data only for standalone configs; in
-        // Ghost mode the system defines it from the wstunnel listener.
         let (peerConfig, peerErrors) = wireguard.peer.validate(endpointRequired: wstunnel == nil)
         peerErrors.forEach { errors[$0.key] = $0.value }
 
-        // Wstunnel (optional)
         let wstunnelConfig: WstunnelConfig?
         if let draft = wstunnel {
             let (cfg, wsErrors) = draft.validate()
@@ -97,42 +85,15 @@ struct TunnelDraft: Equatable {
             wstunnelConfig = nil
         }
 
-        // The wstunnel half is guarded too, and deliberately by its
-        // own clause rather than by trusting `errors.isEmpty` to cover
-        // it. Every path that can fail to build a `WstunnelConfig`
-        // does record an error today, so this is unreachable — but the
-        // day one of them forgets, the slip would save an
-        // endpoint-less STANDALONE config (Ghost mode never parses the
-        // user's endpoint field) that validates clean here and only
-        // fails at activation, as an unexplained invalid-config error
-        // far from the edit that caused it. This line moves that
-        // failure to the editor, onto a field the user is looking at.
         if wstunnel != nil, wstunnelConfig == nil, errors.isEmpty {
             errors[.wstunnelUrl] = .empty
         }
-        // The same belt for the other two arms — it was cut for
-        // wstunnel alone, and the skipped pair fails CLOSED-and-silent
-        // instead of open: a nil interface or peer with an empty error
-        // map would fall through the guard below as config:nil +
-        // errors:[:], which both editors render as a Save that does
-        // nothing behind an empty banner. Unreachable today for the
-        // same reason the wstunnel arm was; the day a nil-returning
-        // path forgets its error, the slip lands on the arm's defining
-        // field instead of on a dead button.
         if interfaceConfig == nil, errors.isEmpty {
             errors[.interfacePrivateKey] = .empty
         }
         if peerConfig == nil, errors.isEmpty {
             errors[.peerPublicKey] = .empty
         }
-        // And the one arm that fails OPEN rather than closed:
-        // `PeerConfig.endpoint` is Optional, so a parseEndpoint slip
-        // that returns nil without recording an error BUILDS a
-        // standalone config with no endpoint and an empty error map —
-        // Save succeeds silently and the config fails only at
-        // activation, far from the field. Unreachable today (every
-        // parse arm records); the day one forgets, it dies here, on
-        // the field the user is looking at.
         if wstunnel == nil, let peer = peerConfig, peer.endpoint == nil, errors.isEmpty {
             errors[.peerEndpoint] = .empty
         }
@@ -166,11 +127,10 @@ struct WireguardDraft: Equatable {
 
 struct InterfaceDraft: Equatable {
     var privateKey: String
-    var addresses: String      // comma-separated, user-editable
-    var dnsServers: String     // comma-separated, user-editable
-    var mtu: String            // string-backed, validated as int
+    var addresses: String
+    var dnsServers: String
+    var mtu: String
 
-    /// Returns (parsed config or nil) + per-field errors.
     func validate() -> (InterfaceConfig?, [TunnelDraft.Field: FieldValidationError]) {
         var errors: [TunnelDraft.Field: FieldValidationError] = [:]
 
@@ -186,9 +146,6 @@ struct InterfaceDraft: Equatable {
                 if let err = error as? WireGuardKey.ParseError {
                     errors[.interfacePrivateKey] = .wireGuardKey(err)
                 }
-                // The cast can't fail today: WireGuardKey(parsing:)
-                // throws only its own ParseError, so a nil result
-                // always carries a recorded field error.
                 privKey = nil
             }
         }
@@ -221,8 +178,8 @@ struct InterfaceDraft: Equatable {
 
 struct PeerDraft: Equatable {
     var publicKey: String
-    var presharedKey: String     // empty → nil
-    var allowedIPs: String       // comma-separated
+    var presharedKey: String
+    var allowedIPs: String
     var endpoint: String
     var persistentKeepalive: String
 
@@ -232,8 +189,6 @@ struct PeerDraft: Equatable {
         let pubKey = parseRequiredKey(publicKey, field: .peerPublicKey, into: &errors)
         let psk = parseOptionalKey(presharedKey, field: .peerPresharedKey, into: &errors)
         let parsedAllowed = parseAddresses(allowedIPs, into: &errors, field: .peerAllowedIPs)
-        // Ghost rule: whatever the user typed as Endpoint is not
-        // carried — the system builds it from the wstunnel listener.
         let parsedEndpoint = endpointRequired ? parseEndpoint(endpoint, into: &errors) : nil
         let parsedKeepalive = parseInt(
             persistentKeepalive, range: 0...65535, default: 25,
@@ -275,8 +230,6 @@ struct PeerDraft: Equatable {
             errors[field] = .wireGuardKey(err)
             return nil
         } catch {
-            // Unreachable today: WireGuardKey(parsing:) throws only
-            // its own ParseError; the untyped `throws` forces this arm.
             return nil
         }
     }
@@ -294,8 +247,6 @@ struct PeerDraft: Equatable {
             errors[field] = .wireGuardKey(err)
             return nil
         } catch {
-            // Unreachable today: WireGuardKey(parsing:) throws only
-            // its own ParseError; the untyped `throws` forces this arm.
             return nil
         }
     }
@@ -315,8 +266,6 @@ struct PeerDraft: Equatable {
             errors[.peerEndpoint] = .endpoint(err)
             return nil
         } catch {
-            // Unreachable today: IPEndpoint(parsing:) throws only its
-            // own ParseError; the untyped `throws` forces this arm.
             return nil
         }
     }
@@ -335,7 +284,6 @@ struct WstunnelDraft: Equatable {
     func validate() -> (WstunnelConfig?, [TunnelDraft.Field: FieldValidationError]) {
         var errors: [TunnelDraft.Field: FieldValidationError] = [:]
 
-        // URL
         let parsedURL: WstunnelURL?
         let trimmedURL = url.trimmingCharacters(in: .whitespacesAndNewlines)
         if trimmedURL.isEmpty {
@@ -348,21 +296,15 @@ struct WstunnelDraft: Equatable {
                 if let err = error as? WstunnelURL.ParseError {
                     errors[.wstunnelUrl] = .wstunnelURL(err)
                 }
-                // The cast can't fail today: WstunnelURL(parsing:)
-                // throws only its own ParseError, so a nil result
-                // always carries a recorded field error.
                 parsedURL = nil
             }
         }
 
-        // Secret
         let trimmedSecret = secret.trimmingCharacters(in: .whitespacesAndNewlines)
         if trimmedSecret.isEmpty {
             errors[.wstunnelSecret] = .empty
         }
 
-        // Hosts (simple non-empty checks — IP parsing is flexible here
-        // because wstunnel accepts both IPs and hostnames for forwarding).
         let trimmedLocalHost = localHost.trimmingCharacters(in: .whitespacesAndNewlines)
         if trimmedLocalHost.isEmpty {
             errors[.wstunnelLocalHost] = .empty
@@ -372,7 +314,6 @@ struct WstunnelDraft: Equatable {
             errors[.wstunnelRemoteHost] = .empty
         }
 
-        // Ports
         let parsedLocalPort = parsePort(localPort, into: &errors, field: .wstunnelLocalPort)
         let parsedRemotePort = parsePort(remotePort, into: &errors, field: .wstunnelRemotePort)
 
@@ -409,10 +350,6 @@ private func parseAddresses(
         errors[field] = .empty
         return nil
     }
-    // splitList drops empty fragments, so a comma/whitespace-only
-    // value ("," or ", ,") splits to nothing — refuse it exactly like
-    // empty input instead of answering a valid-looking empty list
-    // that only fails later, at activation.
     let entries = splitList(trimmed)
     if entries.isEmpty {
         errors[field] = .empty
@@ -427,9 +364,6 @@ private func parseAddresses(
             if let err = error as? AddressWithPrefix.ParseError {
                 errors[field] = .address(err, atIndex: index)
             }
-            // The cast can't fail today: AddressWithPrefix(parsing:)
-            // throws only its own ParseError, so a nil result always
-            // carries a recorded field error.
             return nil
         }
     }
@@ -446,8 +380,6 @@ private func parseIPList(
         errors[field] = .empty
         return nil
     }
-    // Same comma-only refusal as parseAddresses: an all-separator
-    // value must fail as empty here, not pass as an empty list.
     let entries = splitList(trimmed)
     if entries.isEmpty {
         errors[field] = .empty
@@ -462,9 +394,6 @@ private func parseIPList(
             if let err = error as? IPAddressEntry.ParseError {
                 errors[field] = .ipAddress(err, atIndex: index)
             }
-            // The cast can't fail today: IPAddressEntry(parsing:)
-            // throws only its own ParseError, so a nil result always
-            // carries a recorded field error.
             return nil
         }
     }

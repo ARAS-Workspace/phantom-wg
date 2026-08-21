@@ -1,11 +1,5 @@
 import SwiftUI
 
-/// WireGuard peer configuration, read-only — public/preshared keys,
-/// allowed IPs, endpoint, and keepalive. The preshared row only
-/// appears when the config carries one; the endpoint row only for
-/// standalone configs — in Ghost mode the endpoint is system-defined
-/// from the wstunnel listener and is not part of the peer data.
-/// Values change only through `TunnelEditView`'s raw-text editor.
 struct PeerSection: View {
     let config: PeerConfig
     @Environment(LocalizationManager.self) private var loc

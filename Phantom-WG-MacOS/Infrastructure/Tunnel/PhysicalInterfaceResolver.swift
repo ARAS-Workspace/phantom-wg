@@ -3,15 +3,6 @@ import Network
 
 // MARK: - Physical Interface Resolver
 
-/// Discovers the physical interfaces that the split-tunnel picker can
-/// offer. Intentionally ignores `.other` (tunnels, utun*) and
-/// `.loopback` — only real egress paths qualify. The list is
-/// `@Observable` so the picker refreshes when the user plugs in an
-/// Ethernet cable or toggles Wi-Fi.
-///
-/// This resolver lives in the main app process only. The extension
-/// runs its own monitor because it needs to react to interface loss
-/// mid-session and can't reach back into the app.
 @Observable
 @MainActor
 final class PhysicalInterfaceResolver {
@@ -44,8 +35,6 @@ final class PhysicalInterfaceResolver {
     // MARK: - Private
 
     private func apply(interfaces: [NWInterface]) {
-        // Dedupe on BSD name — a single physical NIC can appear multiple
-        // times under different address families.
         var seen = Set<String>()
         self.interfaces = interfaces.filter { seen.insert($0.name).inserted }
     }
@@ -54,7 +43,6 @@ final class PhysicalInterfaceResolver {
 // MARK: - Display Helpers
 
 extension NWInterface {
-    /// Human-readable label for the picker, e.g. "Wi-Fi (en0)".
     var displayLabel: String {
         let prefix: String
         switch type {

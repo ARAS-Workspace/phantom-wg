@@ -1,15 +1,5 @@
 import Synchronization
 
-/// Guards a continuation that several finishers may reach — an XPC
-/// error handler racing its reply block, or a producer racing a
-/// deadline. The first finish wins, the rest are dropped; resuming a
-/// `CheckedContinuation` twice traps, so the one-shot flag lives
-/// inside a `Mutex` and the type is `Sendable` by compiler proof
-/// rather than by annotation. Shared by every surface that races an
-/// answer against a deadline — the roster is `grep "SingleResume("`,
-/// not a sentence here: the sentence named four callers, three more
-/// arrived after it was written, and it counted none of them. One
-/// implementation, and now no list to drift either.
 final class SingleResume<T: Sendable>: Sendable {
     private let continuation: CheckedContinuation<T, Never>
     private let done = Mutex(false)
@@ -18,8 +8,6 @@ final class SingleResume<T: Sendable>: Sendable {
         self.continuation = continuation
     }
 
-    /// `true` when this call is the one that resumed — lets a
-    /// timeout branch tell "I won" from "I was already beaten".
     @discardableResult
     func finish(_ value: T) -> Bool {
         let first = done.withLock { done -> Bool in

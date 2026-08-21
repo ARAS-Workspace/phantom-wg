@@ -1,13 +1,5 @@
 import SwiftUI
 
-/// Tunnel detail — read-only presentation of the saved configuration
-/// plus live status, stats, and logs. Status comes from the identity the
-/// system's preferences hold, so it renders instantly; stats are polled
-/// from the running extension and read as dashes until the first answer;
-/// the configuration itself is fetched from the extension's vault,
-/// which is the only place a tunnel's secrets exist. Editing happens
-/// as raw text in `TunnelEditView` (Actions → Edit Config), enabled
-/// only while the tunnel is inactive.
 struct TunnelDetailView: View {
     var tunnel: TunnelContainer
     @State private var logStore: LogStore
@@ -16,49 +8,22 @@ struct TunnelDetailView: View {
     @Environment(LocalizationManager.self) var loc
     @Environment(\.dismiss) var dismiss
 
-    /// Vault payload, once it arrives. Reads are retried while the
-    /// screen is open — the extension is spawned on demand and the
-    /// first attempt after it has been idle can lose the race, which
-    /// is not something to report as a broken configuration.
     @State var config: TunnelConfig?
     @State var configLoaded = false
     @State var readAttempt = 0
 
-    /// Which way the last read failed. The vault's definitive
-    /// "missing" and a vault that could not be reached tell different
-    /// stories, and only the first may blame the configuration.
     enum ConfigLoadFailure { case missing, unreachable }
     @State var loadFailure: ConfigLoadFailure?
 
-    /// How many times a read is tried before the screen calls the
-    /// configuration unreadable.
     static let vaultReadAttempts = 3
 
     @State var showingEdit = false
     @State var showingDeleteConfirmation = false
-    /// A removal is in flight from this sheet.
-    ///
-    /// The manager answers a second removal of the same tunnel with
-    /// silence — nothing is wrong, the deletion the user asked for is
-    /// already happening — but silence reads as SUCCESS here, and this
-    /// sheet's success is `dismiss()`. Pressed twice, the second press
-    /// would pop the view while the first removal was still running,
-    /// and the failure it might report (a dark vault, a refused
-    /// `removePreferences` that leaves an entry in System Settings)
-    /// would be written into the state of a screen that no longer
-    /// exists. The user's only notice would be gone. So the button
-    /// closes for the duration instead.
     @State var deleting = false
-    /// A reset already in flight from this sheet. The extension
-    /// now serializes overlapping resets, so a second press is no
-    /// longer harmful — this closes the button anyway, for the same
-    /// reason `deleting` does: a control that answers nothing while
-    /// work is under way invites the second press in the first place.
     @State var resetting = false
     @State var errorMessage: String?
     @State var showingError = false
 
-    // Stats
     @State var lastHandshake: String = "—"
     @State var rxBytes: String = "—"
     @State var txBytes: String = "—"
@@ -70,11 +35,6 @@ struct TunnelDetailView: View {
     }
 
     var body: some View {
-        // A form rather than a list: the List container was the one
-        // that kept leaving a band of empty space above its first
-        // row after a navigation push. Form never showed it — which
-        // is why every screen in the app, the tunnel list included,
-        // renders in one.
         Form {
             StatusSection(tunnel: tunnel, isGhost: tunnel.isGhost)
 
@@ -102,8 +62,6 @@ struct TunnelDetailView: View {
         }
         .task { await loadConfig() }
         .onChange(of: showingEdit) { _, isEditing in
-            // Returning from the editor: re-read the vault so the
-            // sections show what was just saved.
             if !isEditing {
                 Task { await loadConfig() }
             }
@@ -192,13 +150,6 @@ struct TunnelDetailView: View {
         }
     }
 
-    /// Reads the vault, retrying a few times before giving up.
-    ///
-    /// Only the read started from the screen's own `.task` is cancelled
-    /// by walking away. The other two callers — the retry button and the
-    /// return from the editor — run in unstructured `Task {}`s that
-    /// outlive the screen, so their ladders keep sleeping after it is
-    /// gone.
     private func loadConfig() async {
         configLoaded = false
         readAttempt = 0
@@ -217,12 +168,6 @@ struct TunnelDetailView: View {
             config = nil
             loadFailure = .missing
         case .undecodable:
-            // The payload is present but unreadable. The vault layer
-            // keeps this distinct from truly-missing so the ingest
-            // boundary keeps the row listed (custody, not a stranger)
-            // and uninstall keeps its entry; for the detail screen,
-            // "no config to show" is a single state, so it renders like
-            // a miss.
             config = nil
             loadFailure = .missing
         case .unreachable:

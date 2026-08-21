@@ -3,33 +3,6 @@ import Network
 import NetworkExtension
 import os.log
 
-/// Pumps DNS bytes between an `NEAppProxyFlow` and an `NWConnection`
-/// targeting a chosen resolver. Two routing modes share the same
-/// pump path:
-///
-/// - **Listed apps** — relay to the resolver of a specific physical
-///   interface, with `NWConnection.requiredInterface` pinned so the
-///   query exits through that NIC and never the tunnel.
-/// - **Pass-through** — relay to the system-default resolver
-///   (whatever `NEDNSProxyProvider.systemDNSSettings` reports — for
-///   most users that's the tunnel-pushed DNS) **without** an
-///   interface pin, so the OS picks the same route it would have
-///   used had no proxy been in the chain.
-///
-/// macOS's `NEDNSProxyProvider` claims every DNS flow when the
-/// helper is enabled and does **not** transparently pass `false`
-/// returns through to the next handler the way Apple's docs imply —
-/// so we can't decline unmatched flows. We have to take ownership
-/// and route them to the same place the OS would have anyway.
-///
-/// Logging policy: only unexpected error paths emit. Routing
-/// decisions (`MATCHED` / `REJECT`) are logged once per flow at the
-/// provider level. Per-datagram chatter and graceful peer closes
-/// are silent.
-///
-/// Resolver strings flow into `NWEndpoint.Host` which accepts IPv4
-/// and IPv6 literals; flow source endpoints echoed back via
-/// `writeDatagrams(sentBy:)` are family-agnostic.
 enum DNSFlowRelay {
 
     static let log = OSLog(
@@ -37,20 +10,12 @@ enum DNSFlowRelay {
         category: "relay"
     )
 
-    /// Detects normal flow-end errors that don't deserve a log line
-    /// (the peer — the originating app — closed its end first).
-    /// Chrome and similar fast-recycling DNS clients trip this path
-    /// constantly and would otherwise drown the log with spurious
-    /// `.error` entries.
     static func isPeerClose(_ error: Error) -> Bool {
         let message = error.localizedDescription
         return message.contains("peer closed")
             || message.contains("peer reset")
     }
 
-    /// `interface == nil` → no `requiredInterface` set, OS routes via
-    /// its default path (utun under an active tunnel). Used for the
-    /// pass-through branch.
     static func relay(
         _ flow: NEAppProxyFlow,
         appName: String,
@@ -82,10 +47,6 @@ enum DNSFlowRelay {
 
 // MARK: - UDP
 
-/// Pumps UDP DNS datagrams. Each datagram's original destination is
-/// stashed in a FIFO so we can spoof the response source back to what
-/// the app expected; clients correlate by transaction ID inside the
-/// payload so a small skew on the response IP is harmless.
 final class DNSUDPFlowRelay {
 
     private let flow: NEAppProxyUDPFlow
@@ -188,9 +149,6 @@ final class DNSUDPFlowRelay {
             }
             self.lock.unlock()
 
-            // Drop responses that arrive without a stashed source —
-            // a foreign datagram on this connection, or a state we
-            // can't recover from. Continue draining the connection.
             guard let source else {
                 self.readConnection()
                 return
@@ -238,9 +196,6 @@ final class DNSUDPFlowRelay {
 
 // MARK: - TCP
 
-/// Pumps TCP DNS streams. Length-prefixed message framing is preserved
-/// end-to-end; we just copy bytes between the flow and the
-/// upstream connection — interface-bound only in the listed-app mode.
 final class DNSTCPFlowRelay {
 
     private let flow: NEAppProxyTCPFlow

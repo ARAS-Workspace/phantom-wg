@@ -2,11 +2,6 @@ import Foundation
 import NetworkExtension
 import os.log
 
-/// Wraps `NEDNSProxyManager`. Owns preference-layer lifecycle only —
-/// runtime config updates to the running provider go through the
-/// App's `DNSProxyDaemonClient` XPC channel. Every save is preceded
-/// by `loadFromPreferences` to avoid `NEConfigurationManager Code 5:
-/// configuration is stale`.
 @Observable
 @MainActor
 class DNSProxyProviderManager {
@@ -21,11 +16,6 @@ class DNSProxyProviderManager {
 
     // MARK: - Load
 
-    /// Preference-layer warm-up: primes the shared manager's cache with a
-    /// first `loadFromPreferences` before the first enable/disable save
-    /// reaches it. Named for boot because that is where it is called,
-    /// not because the coordinator reads enable state from here — it
-    /// reads that from the store.
     func load() async {
         try? await NEDNSProxyManager.shared().loadFromPreferences()
     }
@@ -79,10 +69,6 @@ class DNSProxyProviderManager {
 
     // MARK: - Remove
 
-    /// Deletes the preference entry entirely — the uninstall path's
-    /// counterpart to `enable()`'s save. Load-first per the stale-config
-    /// rule above. Best-effort: a failure leaves an inert entry the
-    /// next enable replaces wholesale.
     func remove() async {
         let mgr = NEDNSProxyManager.shared()
         try? await mgr.loadFromPreferences()

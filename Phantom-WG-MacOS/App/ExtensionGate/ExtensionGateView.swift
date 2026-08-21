@@ -1,11 +1,6 @@
 import SwiftUI
 import AppKit
 
-/// Root-level gate panel rendered whenever any of the three required
-/// system extensions is not in `.activated`. Lists the three
-/// extensions, surfaces the per-row status with a contextual action
-/// button, and offers a single check-again entry (`gate_check_again`)
-/// that re-pulls ground-truth state for every controller that is not still inside its boot measurement.
 struct ExtensionGateView: View {
     @Environment(ExtensionGateCoordinator.self) private var coordinator
     @Environment(LocalizationManager.self) private var loc
@@ -20,14 +15,6 @@ struct ExtensionGateView: View {
                         controller: controller,
                         onActivate: { controller.activate() },
                         onOpenSettings: {
-                            // Only (re)submit an activation when the
-                            // extension is actually missing or awaiting
-                            // approval. Activation is NOT a free no-op
-                            // for a live extension: ADR-0006 measured
-                            // that even a byte-identical bundle stages a
-                            // full replacement and tears down the running
-                            // session. For an already-active (or still
-                            // settling) extension, just open Settings.
                             if controller.status == .notInstalled
                                 || controller.status == .needsApproval {
                                 controller.activate()
@@ -68,9 +55,6 @@ struct ExtensionGateView: View {
         }
     }
 
-    /// Opens the System Settings pane that hosts Network Extensions —
-    /// Login Items & Extensions on every macOS this app runs on (the
-    /// 15.1 floor retired the Sonoma-era Privacy & Security fallback).
     private func openSystemSettings() {
         NSWorkspace.shared.open(URL(string: "x-apple.systempreferences:com.apple.LoginItems-Settings.extension")!)
     }

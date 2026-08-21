@@ -1,8 +1,5 @@
 import SwiftUI
 
-/// Live traffic stats polled from the extension — last handshake time,
-/// bytes received, bytes sent. Values are formatted strings owned by
-/// the parent view so polling state stays in one place.
 struct StatsSection: View {
     let handshake: String
     let rxBytes: String

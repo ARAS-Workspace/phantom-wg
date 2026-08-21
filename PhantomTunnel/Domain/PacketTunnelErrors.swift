@@ -6,9 +6,6 @@ enum PacketTunnelProviderError: String, Error, LocalizedError {
     case couldNotStartWstunnel
     case couldNotStartWireGuard
 
-    /// Read back by the app through the system's disconnect record
-    /// when `startTunnel` throws — keep these human-readable, or the
-    /// user sees "(PacketTunnelProviderError error N.)" instead.
     var errorDescription: String? {
         switch self {
         case .savedProtocolConfigurationIsInvalid:
@@ -23,8 +20,6 @@ enum PacketTunnelProviderError: String, Error, LocalizedError {
     }
 }
 
-/// WireGuard adapter log sink. Severity is deliberately flattened —
-/// the ring buffer stores plain tagged lines only.
 func wg_log(message: String) {
     TunnelLogger.log(.wireGuard, message)
 }

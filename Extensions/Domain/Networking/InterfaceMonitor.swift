@@ -1,25 +1,10 @@
 import Foundation
 import Network
 
-/// Shared `NWPathMonitor` watcher of physical interfaces. Both system
-/// extensions instantiate their own copy; each binary embeds this
-/// source via the project source-list. Filters `.other` and
-/// `.loopback` so utun and synthetic interfaces never become
-/// candidates; resolves the user's `InterfaceSelection`; fires
-/// `onChange` whenever the resolved interface (including `nil`)
-/// changes.
 final class InterfaceMonitor {
 
-    /// `nil` means no valid interface is available — the caller's
-    /// strict reject path kicks in.
     var onChange: ((NWInterface?) -> Void)?
 
-    /// Read from NE flow-dispatch threads while `resolve()` writes on
-    /// `syncQueue`, so the public read hops through the same queue —
-    /// a bare cross-thread read of the stored value is a data race.
-    /// `onChange` handlers must use their delivered value instead of
-    /// this accessor: they fire on `syncQueue` itself, where a
-    /// `sync` hop would deadlock.
     var current: NWInterface? {
         syncQueue.sync { _current }
     }
@@ -65,7 +50,6 @@ final class InterfaceMonitor {
     // MARK: - Private
 
     private func apply(availableInterfaces: [NWInterface]) {
-        // Dedupe — a NIC can appear across address families.
         var seen = Set<String>()
         available = availableInterfaces.filter { seen.insert($0.name).inserted }
         resolve()

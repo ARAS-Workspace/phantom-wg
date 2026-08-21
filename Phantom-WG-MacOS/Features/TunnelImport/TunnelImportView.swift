@@ -1,10 +1,5 @@
 import SwiftUI
 
-/// Raw-paste import surface. The user pastes a WireGuard `.conf`,
-/// enters a tunnel name, and imports. Structural and field-level
-/// errors are surfaced in a single inline banner above the inputs.
-/// Later edits go through `TunnelEditView` — the same raw-text
-/// shape as this screen.
 struct TunnelImportView: View {
     @Environment(TunnelsManager.self) private var tunnelsManager
     @Environment(LocalizationManager.self) private var loc
@@ -119,7 +114,6 @@ struct TunnelImportView: View {
             return
         }
 
-        // Structural parse — produces a draft or throws a banner error.
         var draft: TunnelDraft
         do {
             draft = try ConfParser.parse(trimmedInput)
@@ -132,8 +126,6 @@ struct TunnelImportView: View {
         }
         draft.name = trimmedName
 
-        // Field-level validation — all failures are surfaced as a list
-        // in the banner; the form itself never appears during import.
         let result = draft.validate()
         guard let config = result.config else {
             errorMessages = ConfEditorMessages.fieldMessages(result.errors, loc: loc)
@@ -154,9 +146,6 @@ struct TunnelImportView: View {
 
 // MARK: - Previews
 
-/// Fully interactive against the in-memory manager: paste a `.conf`
-/// (`PreviewFixtures.ghostConfig().asConfString()` shape) and the
-/// import round-trips through parse → validate → add.
 #Preview("Light") {
     NavigationStack {
         TunnelImportView()

@@ -1,8 +1,5 @@
 import SwiftUI
 
-/// Placeholder shown when no tunnels have been imported yet. Presents
-/// the brand logo faded, a short explanation, the primary import call
-/// to action, and secondary links to the website and documentation.
 struct EmptyStateView: View {
     @Binding var showingImport: Bool
     @Environment(LocalizationManager.self) private var loc

@@ -1,18 +1,11 @@
 import Foundation
 import NetworkExtension
 
-/// Deterministic sample data for SwiftUI previews. Everything here is
-/// display-plausible but operationally inert: keys are pattern bytes,
-/// endpoints sit in the TEST-NET documentation ranges, and stores
-/// persist into per-instance temp files so canvas interactions never
-/// touch real preferences or the App Group container.
 @MainActor
 enum PreviewFixtures {
 
     // MARK: - Typed Value Helpers
 
-    /// Fixture values are compile-time constants; a parse failure is a
-    /// programming error, so it traps loudly instead of propagating.
     private static func parsed<T>(_ make: @autoclosure () throws -> T) -> T {
         do {
             return try make()
@@ -21,8 +14,6 @@ enum PreviewFixtures {
         }
     }
 
-    /// 32 deterministic pattern bytes → valid base64 WireGuard key.
-    /// Distinct `seed`s yield visually distinct keys.
     static func key(seed: UInt8) -> WireGuardKey {
         let bytes = (0..<32).map { UInt8(truncatingIfNeeded: Int(seed) &+ $0 &* 7) }
         return parsed(try WireGuardKey(parsing: Data(bytes).base64EncodedString()))
@@ -30,9 +21,6 @@ enum PreviewFixtures {
 
     // MARK: - Tunnel Configs
 
-    /// Ghost-mode config: WireGuard riding a wstunnel bridge. Carries
-    /// no peer endpoint — in Ghost mode the endpoint is system-defined
-    /// from the wstunnel listener.
     static func ghostConfig(name: String = "Istanbul Edge") -> TunnelConfig {
         TunnelConfig(
             name: name,
@@ -49,7 +37,6 @@ enum PreviewFixtures {
         )
     }
 
-    /// Standalone WireGuard config — no wstunnel section.
     static func wireguardConfig(name: String = "Frankfurt Relay") -> TunnelConfig {
         TunnelConfig(
             name: name,
@@ -98,11 +85,6 @@ enum PreviewFixtures {
         PreviewTunnelProvider(config: config, status: status, logLines: logLines)
     }
 
-    /// `TunnelsManager` wired entirely to in-memory providers. The
-    /// default set mirrors a realistic operator machine: one live
-    /// ghost tunnel, one standalone relay, one parked config. The
-    /// vault is seeded from the same providers so the detail and edit
-    /// screens can read their configurations back.
     static func tunnelsManager(providers: [PreviewTunnelProvider]? = nil) -> TunnelsManager {
         let list = providers ?? [
             provider(config: ghostConfig(), status: .connected, logLines: logLines),
@@ -116,13 +98,10 @@ enum PreviewFixtures {
         )
     }
 
-    /// Vault preloaded with whatever the given providers carry.
     static func vaultClient(for providers: [PreviewTunnelProvider]) -> TunnelVaultClient {
         PreviewVaultClient(configs: providers.compactMap(\.config))
     }
 
-    /// Activation failure for error-state previews; the wrapped
-    /// error's `localizedDescription` is what the UI renders.
     static var activationError: TunnelActivationError {
         .retryLimitReached(lastSystemError: NSError(
             domain: "PreviewFixtures",
@@ -133,8 +112,6 @@ enum PreviewFixtures {
 
     // MARK: - Logs
 
-    /// Extension-side log feed served through opcode `1`, tagged the
-    /// way the tunnel extension tags its subsystems (WS/WG/TUN).
     static var logLines: [PreviewTunnelProvider.LogLine] {
         [
             .init(timestamp: "12:04:07", tag: "WS", message: "wstunnel connecting to wss://edge.phantom.tc"),
@@ -147,8 +124,6 @@ enum PreviewFixtures {
         ]
     }
 
-    /// Ready-made rows for previews that feed a `LogEntryProvider`
-    /// directly instead of polling a provider.
     static var logEntries: [LogEntry] {
         logLines.enumerated().map { index, line in
             LogEntry(
@@ -186,8 +161,6 @@ enum PreviewFixtures {
         ]
     }
 
-    /// Store persisting into a unique temp file — canvas mutations
-    /// stay fully isolated from the real App Group container.
     static func splitStore(
         enabled: Bool = true,
         apps: [AppEntry]? = nil,
@@ -220,9 +193,6 @@ enum PreviewFixtures {
 
     // MARK: - Vault Session
 
-    /// Vault session pinned to a gate state. The backing client's
-    /// `ping` answers consistently with that state, so the canvas
-    /// survives the gate view's entry probe without drifting.
     static func vaultSession(state: TunnelVaultSession.State = .ready) -> TunnelVaultSession {
         let client = PreviewVaultClient(configs: [])
         switch state {

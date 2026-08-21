@@ -1,15 +1,5 @@
 import SwiftUI
 
-/// Shared status row — indicator, localized status text, and the
-/// master activation toggle. Rendered by the detail's status section;
-/// the tunnel list deliberately carries no active-tunnel mirror (see
-/// the ownership note in `TunnelListView`). A non-nil `title` puts
-/// the tunnel name above the status line and hides the mode badge —
-/// the compact shape for a surface that carries the name as meta
-/// instead of a navigation title; no shipping surface passes one
-/// today. Ghost tunnels show the brand ghost glyph instead of the
-/// shield status icon. Accessibility identifiers are caller-supplied
-/// so the row never hard-codes which surface it is in.
 struct TunnelStatusRow: View {
     var tunnel: TunnelContainer
     let isGhost: Bool
@@ -53,18 +43,6 @@ struct TunnelStatusRow: View {
                         modeBadge
                     }
                 }
-                // The one window where the row's own status says
-                // nothing: a stop asked for on an armed tunnel is
-                // waiting on the recovery rule's save, and until that
-                // answers the status is still Active and the toggle is
-                // still ON. Not red and not an error, because nothing
-                // has failed — this is work in progress that the row
-                // had no way to show.
-                //
-                // The predicate lives on the container, and the status
-                // half of it is not decoration: this line used to read
-                // the count alone, and a count outlives its own stop
-                // whenever the save hangs. See `stopIsWaitingOnItsRule`.
                 if tunnel.stopIsWaitingOnItsRule {
                     Text(loc.t("detail_stopping_disarm"))
                         .font(.caption)
@@ -101,14 +79,6 @@ struct TunnelStatusRow: View {
     }
 }
 
-/// Top block of the tunnel detail view — the shared status row.
-///
-/// Headerless on purpose: it is the status summary, sitting directly
-/// under the navigation title, and needs no caption. (Historically
-/// the omission was forced — a section header in a `List`'s first
-/// slot left intermittent phantom spacing after navigation pushes,
-/// here and on the tunnel list's active block. Both screens render
-/// in `Form` now, which never showed the band.)
 struct StatusSection: View {
     var tunnel: TunnelContainer
     let isGhost: Bool
@@ -125,15 +95,6 @@ struct StatusSection: View {
                 badgeAXID: AXID.TunnelDetail.modeBadge
             )
         } footer: {
-            // The doctrine the app had never told anyone. Written from
-            // BOTH sides on purpose: the earlier one-line version of
-            // this note ("a tunnel started from System Settings is not
-            // armed") would have shipped a falsehood, because a start
-            // from there neither arms NOR disarms — it leaves the rule
-            // exactly as this app's last action left it, and three named
-            // paths deliberately leave an idle tunnel armed (an
-            // exhausted ladder, a refused arm-save, an anonymous drop).
-            // The half that was missing entirely is the stop.
             Text(loc.t("detail_settings_toggle_note"))
                 .font(.caption)
                 .foregroundStyle(.secondary)
@@ -156,12 +117,6 @@ struct StatusSection: View {
     .frame(width: 560)
 }
 
-/// Live twin of the real-disconnect flow: flip the toggle and the
-/// session drops after a beat, surfacing the provider's own record
-/// through the same fetch path production uses. The sample mirrors
-/// `PacketTunnelProviderError.couldNotStartWstunnel` — a listener
-/// that fails to open is a real start-time throw; an unreachable
-/// server is not (wstunnel connects lazily and never fails start).
 #Preview("Failing activation — live") {
     let provider = PreviewFixtures.provider(config: PreviewFixtures.ghostConfig(name: "Broken Edge"))
     provider.disconnectError = NSError(
