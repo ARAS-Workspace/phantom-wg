@@ -27,6 +27,8 @@ class TunnelsManager {
 
     @ObservationIgnored private var refreshSuspended = false
 
+    @ObservationIgnored private var restoreBarredByTeardown = false
+
     @ObservationIgnored var waitingTunnel: TunnelContainer?
 
     let retryInterval: TimeInterval
@@ -129,6 +131,7 @@ class TunnelsManager {
     // MARK: - Reconcile
 
     /// @witness VaultIntegrity
+    /// @witness VaultIntegrity.theUninstallsRemovalIsNotUndoneByTheRestore
     @discardableResult
     func reconcileFromVault() async -> Int {
         guard !isReconciling else { return 0 }
@@ -141,13 +144,21 @@ class TunnelsManager {
         }
 
         let known = Set(tunnels.map(\.id))
-        let missing = payloads
-            .filter {
-                !known.contains($0.id)
-                    && !creatingIds.contains($0.id)
-                    && !removingIds.contains($0.id)
+        let candidates = payloads.filter {
+            !known.contains($0.id)
+                && !creatingIds.contains($0.id)
+                && !removingIds.contains($0.id)
+        }
+
+        if restoreBarredByTeardown {
+            if !candidates.isEmpty {
+                NSLog("[vault] reconcile minted nothing for \(candidates.count) payload(s): this process took their entries in a teardown and kept the secrets")
             }
-            .sorted { $0.createdAt < $1.createdAt }
+            await realignDriftedProjections(with: payloads, skipping: [])
+            return 0
+        }
+
+        let missing = candidates.sorted { $0.createdAt < $1.createdAt }
 
         let candidateIds = Set(missing.map(\.id))
         creatingIds.formUnion(candidateIds)
@@ -492,7 +503,9 @@ class TunnelsManager {
     }
 
     /// @witness VaultIntegrity.theUninstallRemovalTakesOnlyTheClassifiedEntries
+    /// @witness VaultIntegrity.theUninstallsRemovalIsNotUndoneByTheRestore
     func removeEntriesForUninstall(_ removableIds: Set<UUID>) async {
+        restoreBarredByTeardown = true
         guard let providers = try? await providerFactory.loadAllFromPreferences() else {
             NSLog("[uninstall] entry removal skipped — the system list did not load")
             return

@@ -43,8 +43,9 @@
 //      reconcile family.
 //
 //   3. Custody writes (`+CustodyWrites.swift`)
-//      Which store a removal empties first, and what a removal that only
-//      half finishes leaves behind.
+//      Which store a removal empties first, what a removal that only
+//      half finishes leaves behind, and what an uninstall's teardown may
+//      not have undone behind its back.
 //
 //   4. The two corruption steps, which run LAST
 //      They are the only steps whose reconcile reads the real vault, and
@@ -112,6 +113,8 @@ final class VaultIntegrityWorkflow: TestWorkflow {
                          theUninstallSweepDoesNotWriteToARowBeingRemoved),
             WorkflowStep("The Uninstall Removal Takes Only The Classified Entries",
                          theUninstallRemovalTakesOnlyTheClassifiedEntries),
+            WorkflowStep("The Uninstall's Removal Is Not Undone By The Restore",
+                         theUninstallsRemovalIsNotUndoneByTheRestore),
             WorkflowStep("Entry Survives Corruption (Reconcile)", corruptionSurvival),
             WorkflowStep("Undecodable Payload Stays Listed (Reload)", custodyVisibility),
         ]

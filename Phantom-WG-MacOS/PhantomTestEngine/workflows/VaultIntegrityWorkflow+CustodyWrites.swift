@@ -332,6 +332,80 @@ extension VaultIntegrityWorkflow {
               "with no payload deleted by this step at all — the flow removes entries and never secrets (deletes=\(faultVault.deletedIds.count))")
     }
 
+    func theUninstallsRemovalIsNotUndoneByTheRestore() async {
+        let name = "TE-Uninstall-Undone-\(runTag)"
+        guard let payload = TestConfigFactory.throwaway(name: name) else {
+            fail("could not build the uninstall config")
+            return
+        }
+        let identity = TunnelIdentity(id: payload.id, name: name, createdAt: payload.createdAt, isGhost: false)
+        let fake = FakeSlotProvider(name: name, identity: identity, status: .disconnected)
+
+        func arrangedVault() -> FaultVaultClient {
+            let vault = FaultVaultClient()
+            vault.readAnswer = .answers(.config(payload))
+            vault.readAnswers = [payload.id: .answers(.config(payload))]
+            vault.readAllAnswer = .answers(.configs([payload]))
+            vault.storeAnswer = .answers(.done)
+            vault.deleteAnswer = .answers(.done)
+            return vault
+        }
+
+        let controlVault = arrangedVault()
+        let faultVault = arrangedVault()
+
+        let control = TunnelsManager(
+            tunnelProviders: [],
+            providerFactory: FakeSlotFactory(canned: []),
+            vault: controlVault,
+            observesSystemChanges: false
+        )
+        await control.refresh()
+        guard control.tunnels.contains(where: { $0.id == payload.id }) else {
+            fail("the arrangement never produced a mintable candidate — a manager that never tore anything down"
+                 + " minted nothing from this payload, so the bar below would prove nothing")
+            return
+        }
+        check(control.tunnels.count == 1,
+              "a manager with no teardown behind it mints this payload back — rows=\(control.tunnels.count), expected 1,"
+              + " which is what the removal below has to survive")
+
+        let factory = FakeSlotFactory(canned: [fake])
+        let manager = TunnelsManager(
+            tunnelProviders: [fake],
+            providerFactory: factory,
+            vault: faultVault,
+            observesSystemChanges: false
+        )
+        guard manager.tunnels.contains(where: { $0.id == payload.id }) else {
+            fail("side manager did not materialize the tunnel")
+            return
+        }
+
+        manager.suspendRefreshForUninstall()
+        let removable = await manager.removableEntryIds()
+        guard removable.contains(payload.id) else {
+            fail("the classification did not call this entry removable — the removal below would take nothing")
+            return
+        }
+        await manager.removeEntriesForUninstall(removable)
+        manager.releaseStoreAfterUninstall()
+
+        check(fake.removeCount == 1 && !fake.entryExists,
+              "the uninstall took the entry — removes=\(fake.removeCount), entryExists=\(fake.entryExists)")
+        check(faultVault.deletedIds.isEmpty,
+              "and left the secret behind, which is the whole reason a restore could put the entry back"
+              + " (deletes=\(faultVault.deletedIds.count))")
+
+        await manager.refresh()
+
+        check(factory.minted.providers.isEmpty,
+              "the restore minted no entry from the payload the uninstall left behind —"
+              + " minted=\(factory.minted.providers.count), expected 0")
+        check(manager.tunnels.isEmpty,
+              "so the list the user is left with stays empty — rows=\(manager.tunnels.count), expected 0")
+    }
+
     func theUninstallSweepDoesNotWriteToARowBeingRemoved() async {
         let name = "TE-Sweep-Removing-\(runTag)"
         guard let payload = TestConfigFactory.throwaway(name: name) else {
