@@ -1,3 +1,33 @@
+// ██████╗ ██╗  ██╗ █████╗ ███╗   ██╗████████╗ ██████╗ ███╗   ███╗
+// ██╔══██╗██║  ██║██╔══██╗████╗  ██║╚══██╔══╝██╔═══██╗████╗ ████║
+// ██████╔╝███████║███████║██╔██╗ ██║   ██║   ██║   ██║██╔████╔██║
+// ██╔═══╝ ██╔══██║██╔══██║██║╚██╗██║   ██║   ██║   ██║██║╚██╔╝██║
+// ██║     ██║  ██║██║  ██║██║ ╚████║   ██║   ╚██████╔╝██║ ╚═╝ ██║
+// ╚═╝     ╚═╝  ╚═╝╚═╝  ╚═╝╚═╝  ╚═══╝   ╚═╝    ╚═════╝ ╚═╝     ╚═╝
+//
+// Copyright (c) 2025 Rıza Emre ARAS <r.emrearas@proton.me>
+// Licensed under AGPL-3.0 - see LICENSE file for details
+// WireGuard® is a registered trademark of Jason A. Donenfeld.
+//
+// Test Engine: Throwaway Configurations
+//
+// Builds configurations that are structurally real and operationally
+// inert: keys are generated fresh per call, and every address sits in a
+// documentation or private range (TEST-NET-1 `192.0.2.0/24`, `10.99.99.0/24`)
+// so nothing a run raises can reach a real peer.
+//
+// Three products, each for a different question:
+//
+//   throwaway(name:ghost:)   a valid standalone or Ghost config, built
+//                            through `ConfParser` so it carries whatever
+//                            the parser produces rather than a hand-made
+//                            struct
+//   emptyAllowedIPs(name:)   a peer that allows nothing, built through the
+//                            memberwise initializers because the parser
+//                            cannot yield one
+//   multiPeerConfText(_:)    raw `.conf` text with a second peer section,
+//                            for the parser's own refusals
+
 #if DEBUG
 import Foundation
 import CryptoKit

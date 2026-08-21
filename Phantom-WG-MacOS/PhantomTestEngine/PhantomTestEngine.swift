@@ -1,3 +1,29 @@
+// ██████╗ ██╗  ██╗ █████╗ ███╗   ██╗████████╗ ██████╗ ███╗   ███╗
+// ██╔══██╗██║  ██║██╔══██╗████╗  ██║╚══██╔══╝██╔═══██╗████╗ ████║
+// ██████╔╝███████║███████║██╔██╗ ██║   ██║   ██║   ██║██╔████╔██║
+// ██╔═══╝ ██╔══██║██╔══██║██║╚██╗██║   ██║   ██║   ██║██║╚██╔╝██║
+// ██║     ██║  ██║██║  ██║██║ ╚████║   ██║   ╚██████╔╝██║ ╚═╝ ██║
+// ╚═╝     ╚═╝  ╚═╝╚═╝  ╚═╝╚═╝  ╚═══╝   ╚═╝    ╚═════╝ ╚═╝     ╚═╝
+//
+// Copyright (c) 2025 Rıza Emre ARAS <r.emrearas@proton.me>
+// Licensed under AGPL-3.0 - see LICENSE file for details
+// WireGuard® is a registered trademark of Jason A. Donenfeld.
+//
+// Test Engine: Runner and Context
+//
+// Two things live here.
+//
+// `TestContext` is the production object graph a workflow is handed —
+// the real tunnels manager, vault, extension gate, split-tunnelling
+// coordinator and both proxy daemon clients. A workflow fabricates a
+// surface only where it says so; everything else is the shipping object.
+//
+// `PhantomTestEngine` is the runner: it drives the catalogue in order,
+// emits the transcript as typed lines, and answers two ways of ending
+// early — `stop()` cancels the task, `requestAbort(_:)` lets a workflow
+// declare the environment unfit so the rest of the catalogue is not run
+// against it.
+
 #if DEBUG
 import Foundation
 

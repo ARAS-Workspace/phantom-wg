@@ -1,3 +1,43 @@
+// ██████╗ ██╗  ██╗ █████╗ ███╗   ██╗████████╗ ██████╗ ███╗   ███╗
+// ██╔══██╗██║  ██║██╔══██╗████╗  ██║╚══██╔══╝██╔═══██╗████╗ ████║
+// ██████╔╝███████║███████║██╔██╗ ██║   ██║   ██║   ██║██╔████╔██║
+// ██╔═══╝ ██╔══██║██╔══██║██║╚██╗██║   ██║   ██║   ██║██║╚██╔╝██║
+// ██║     ██║  ██║██║  ██║██║ ╚████║   ██║   ╚██████╔╝██║ ╚═╝ ██║
+// ╚═╝     ╚═╝  ╚═╝╚═╝  ╚═╝╚═╝  ╚═══╝   ╚═╝    ╚═════╝ ╚═╝     ╚═╝
+//
+// Copyright (c) 2025 Rıza Emre ARAS <r.emrearas@proton.me>
+// Licensed under AGPL-3.0 - see LICENSE file for details
+// WireGuard® is a registered trademark of Jason A. Donenfeld.
+//
+// Test Engine: Verified Sweep Kit
+//
+// Cleanup that reports what it could not verify, rather than what it
+// attempted. On the base class because every workflow that plants
+// something owes the same honesty when it takes it back — and because a
+// cleanup that answers `true` on silence is how a suite leaves residue on
+// a user's machine and calls the run green.
+//
+// The kit is three-valued everywhere it can be:
+//
+//   PayloadReading   present · missing · unreachable
+//   SweepVerdict     swept · sweptOnReread · stillPresent · unverified
+//   EntryRemoval     removed · alreadyGone · failed · unverified
+//
+// `unreachable` and `unverified` are the cases that make it worth having:
+// a vault that stopped answering is not an empty vault, and a delete that
+// went unanswered is not a delete that landed.
+//
+// Members:
+//
+//   readPayloadState        three-valued read
+//   verifiedDelete          delete, then re-read before believing it
+//   verifiedEntryRemoval    remove the system entry, then re-read the list
+//   probeHiddenSurvivor     ask a FRESH system list whether an entry the
+//                           mirror lost is still there
+//   sweepOrphanedPayload    repair arm: payload without its entry
+//   resolveFailedRemove     repair arm: entry whose removal was refused
+//   sweepPlantedTunnel      the full path, spent on one planted tunnel
+
 #if DEBUG
 import Foundation
 

@@ -1,3 +1,35 @@
+// ██████╗ ██╗  ██╗ █████╗ ███╗   ██╗████████╗ ██████╗ ███╗   ███╗
+// ██╔══██╗██║  ██║██╔══██╗████╗  ██║╚══██╔══╝██╔═══██╗████╗ ████║
+// ██████╔╝███████║███████║██╔██╗ ██║   ██║   ██║   ██║██╔████╔██║
+// ██╔═══╝ ██╔══██║██╔══██║██║╚██╗██║   ██║   ██║   ██║██║╚██╔╝██║
+// ██║     ██║  ██║██║  ██║██║ ╚████║   ██║   ╚██████╔╝██║ ╚═╝ ██║
+// ╚═╝     ╚═╝  ╚═╝╚═╝  ╚═╝╚═╝  ╚═══╝   ╚═╝    ╚═════╝ ╚═╝     ╚═╝
+//
+// Copyright (c) 2025 Rıza Emre ARAS <r.emrearas@proton.me>
+// Licensed under AGPL-3.0 - see LICENSE file for details
+// WireGuard® is a registered trademark of Jason A. Donenfeld.
+//
+// Test Engine: Vault Client That Can Be Made To Fail
+//
+// A `TunnelVaultClient` SUBCLASS, which is the whole point: `.real` reaches
+// the shipping implementation and therefore the actual daemon. A workflow
+// injects a fault only where it is measuring one, and everything it does
+// not name stays production.
+//
+// Each RPC takes an answer:
+//
+//   .real                     call through to the real client
+//   .answers(verdict)         return that verdict without a round trip
+//   .answersAfter(s, verdict) return it after sleeping, so a caller's own
+//                             deadline is the thing under test
+//
+// `readAnswers` overrides per id, so one payload can be made unreadable
+// while its neighbours answer normally.
+//
+// It also RECORDS: which ids were read, stored and deleted, and the
+// configurations handed to `store`. Several steps assert on what was asked
+// for rather than on what came back.
+
 #if DEBUG
 import Foundation
 

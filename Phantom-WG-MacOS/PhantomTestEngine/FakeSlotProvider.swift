@@ -1,3 +1,51 @@
+// ██████╗ ██╗  ██╗ █████╗ ███╗   ██╗████████╗ ██████╗ ███╗   ███╗
+// ██╔══██╗██║  ██║██╔══██╗████╗  ██║╚══██╔══╝██╔═══██╗████╗ ████║
+// ██████╔╝███████║███████║██╔██╗ ██║   ██║   ██║   ██║██╔████╔██║
+// ██╔═══╝ ██╔══██║██╔══██║██║╚██╗██║   ██║   ██║   ██║██║╚██╔╝██║
+// ██║     ██║  ██║██║  ██║██║ ╚████║   ██║   ╚██████╔╝██║ ╚═╝ ██║
+// ╚═╝     ╚═╝  ╚═╝╚═╝  ╚═╝╚═╝  ╚═══╝   ╚═╝    ╚═════╝ ╚═╝     ╚═╝
+//
+// Copyright (c) 2025 Rıza Emre ARAS <r.emrearas@proton.me>
+// Licensed under AGPL-3.0 - see LICENSE file for details
+// WireGuard® is a registered trademark of Jason A. Donenfeld.
+//
+// Test Engine: Fake Slot Provider
+//
+// A `TunnelProviding` that answers like the system without touching it.
+// Every workflow that needs a tunnel row without a real NE session builds
+// one from this.
+//
+// What it can be told to do:
+//
+//   saveAnswer / removeAnswer / loadAnswer   succeed, refuse, or hold the
+//                                            completion and never answer
+//   startAnswer                              succeed or throw
+//   resetAnswer                              any opcode-3 reply shape,
+//                                            including ones a deployed
+//                                            extension cannot produce
+//   disconnectAnswer                         what the last-error probe says
+//
+// A held completion is released on demand by `releaseHeldCompletions()`,
+// which is how a step measures a caller that is waiting on a save the
+// system never answered.
+//
+// `drive(_:)` sets the status and posts `.NEVPNStatusDidChange` with itself
+// as the object, exactly as the system publishes it; `matchesNotification`
+// answers only for notifications carrying THIS instance, so a driven
+// notification cannot be picked up by a real tunnel. `setStatusSilently`
+// moves the status without publishing, for arrangements that must not wake
+// an observer.
+//
+// It counts everything it is asked: saves, loads, starts, stops, removes,
+// provider messages, and when the last save was issued.
+//
+// What it deliberately does NOT fake: the vault (`FaultVaultClient` owns
+// that) and the extension gate (`FakeExtensionSubmitter` owns that).
+//
+// `MintedProviderLedger` at the bottom records the providers a factory
+// minted during a run, so a step can assert on rows the app created rather
+// than on rows the step handed it.
+
 #if DEBUG
 import Foundation
 import NetworkExtension

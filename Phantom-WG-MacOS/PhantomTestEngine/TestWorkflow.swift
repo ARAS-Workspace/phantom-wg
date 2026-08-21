@@ -1,3 +1,40 @@
+// ██████╗ ██╗  ██╗ █████╗ ███╗   ██╗████████╗ ██████╗ ███╗   ███╗
+// ██╔══██╗██║  ██║██╔══██╗████╗  ██║╚══██╔══╝██╔═══██╗████╗ ████║
+// ██████╔╝███████║███████║██╔██╗ ██║   ██║   ██║   ██║██╔████╔██║
+// ██╔═══╝ ██╔══██║██╔══██║██║╚██╗██║   ██║   ██║   ██║██║╚██╔╝██║
+// ██║     ██║  ██║██║  ██║██║ ╚████║   ██║   ╚██████╔╝██║ ╚═╝ ██║
+// ╚═╝     ╚═╝  ╚═╝╚═╝  ╚═╝╚═╝  ╚═══╝   ╚═╝    ╚═════╝ ╚═╝     ╚═╝
+//
+// Copyright (c) 2025 Rıza Emre ARAS <r.emrearas@proton.me>
+// Licensed under AGPL-3.0 - see LICENSE file for details
+// WireGuard® is a registered trademark of Jason A. Donenfeld.
+//
+// Test Engine: Workflow Base
+//
+// What every workflow inherits: the context accessors, the vocabulary a
+// step speaks in, and the arrangements a step should never re-implement.
+//
+// The vocabulary is four verbs, and the distinction between them is the
+// suite's honesty:
+//
+//   check(_:_:)  a claim that can go red — the message states what is
+//                true when it passes
+//   fail(_:)     the step could not be arranged, or the claim did not hold
+//   skip(_:)     the environment cannot answer this question, and the run
+//                says WHICH reading refused rather than going quiet
+//   log(_:_:)    an observation carrying no verdict
+//
+// The waiting helpers exist because reading a system value once is the
+// most common way a step measures its own sampling rate rather than the
+// product: `awaitStatus`, `settle(within:until:)` and `race` all bound the
+// wait and report whether it landed.
+//
+// `onTeardown(_:_:)` registers cleanup that runs whether the step passed,
+// failed or was never reached — a workflow that plants something owes its
+// removal to the machine it borrowed.
+//
+// `_bind` and `_run` are the runner's entry points and belong to it.
+
 #if DEBUG
 import Foundation
 

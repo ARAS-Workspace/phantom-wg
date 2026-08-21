@@ -1,3 +1,30 @@
+// ██████╗ ██╗  ██╗ █████╗ ███╗   ██╗████████╗ ██████╗ ███╗   ███╗
+// ██╔══██╗██║  ██║██╔══██╗████╗  ██║╚══██╔══╝██╔═══██╗████╗ ████║
+// ██████╔╝███████║███████║██╔██╗ ██║   ██║   ██║   ██║██╔████╔██║
+// ██╔═══╝ ██╔══██║██╔══██║██║╚██╗██║   ██║   ██║   ██║██║╚██╔╝██║
+// ██║     ██║  ██║██║  ██║██║ ╚████║   ██║   ╚██████╔╝██║ ╚═╝ ██║
+// ╚═╝     ╚═╝  ╚═╝╚═╝  ╚═╝╚═╝  ╚═══╝   ╚═╝    ╚═════╝ ╚═╝     ╚═╝
+//
+// Copyright (c) 2025 Rıza Emre ARAS <r.emrearas@proton.me>
+// Licensed under AGPL-3.0 - see LICENSE file for details
+// WireGuard® is a registered trademark of Jason A. Donenfeld.
+//
+// Test Engine: Screen
+//
+// The DEBUG-only surface behind Settings → Test Engine. It assembles a
+// `TestContext` from the environment — the same objects the app itself
+// runs on — hands it to the runner, and renders the transcript with a
+// colour and weight per `OutputKind`.
+//
+// A configuration gate stands in front of the runner: two tunnels named
+// `Test-Ghost` and `Test-WireGuard` must be present, and the gate shows
+// which of the two is missing rather than a single refusal. Workflows
+// drive those two rather than minting their own, so a run measures a
+// tunnel that reached the vault the way the user's tunnels do.
+//
+// The transcript can be copied or written to a timestamped file; a failed
+// write reports itself rather than being swallowed.
+
 #if DEBUG
 import SwiftUI
 import AppKit
