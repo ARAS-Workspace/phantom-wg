@@ -70,8 +70,12 @@ final class ActivationSeamWorkflow: TestWorkflow {
             WorkflowStep("A Refused Disarm Surfaces And The Stop Still Lands", refusedDisarmSurfaces),
             WorkflowStep("A List Refresh Cannot Cancel An Activation", refreshCannotCancelActivation),
             WorkflowStep("A List Refresh Cannot Take A Queued Tunnel's Turn", refreshCannotDropTheQueue),
-            WorkflowStep("An Occupant Grounded From .invalid Does Not Hand On The Queue",
-                         aGroundedInvalidOccupantDoesNotHandOnTheQueue),
+            WorkflowStep("An .invalid Occupant Does Not Hand On The Queue",
+                         anInvalidOccupantDoesNotHandOnTheQueue),
+            WorkflowStep("A Stop Nobody Answers Grounds Its Own Row",
+                         aStopNobodyAnswersGroundsItsOwnRow),
+            WorkflowStep("An Armed .invalid Occupant Does Not Hand On The Queue Either",
+                         anArmedInvalidOccupantDoesNotHandOnTheQueue),
             WorkflowStep("A Removal Hands The Queue On Only When The Slot Is Free", removalHandsOnTheQueue),
             WorkflowStep("A Queue Slot Whose Tunnel Left The List Is Discarded", staleQueueSlotIsDiscarded),
             WorkflowStep("An Attempt That Never Resolves Is Withdrawn", wedgedAttemptIsWithdrawn),
@@ -386,52 +390,6 @@ final class ActivationSeamWorkflow: TestWorkflow {
         container.refreshStatus()
         check(container.status == .active,
               "a .connected refresh still landed — status=\(container.status)")
-    }
-
-    private func aGroundedInvalidOccupantDoesNotHandOnTheQueue() async {
-        let idA = TunnelIdentity(id: UUID(), name: "TE-Seam-InvalidA-\(runTag)", createdAt: Date(), isGhost: false)
-        let idB = TunnelIdentity(id: UUID(), name: "TE-Seam-InvalidB-\(runTag)", createdAt: Date(), isGhost: false)
-        let fakeA = FakeSlotProvider(name: idA.name, identity: idA, status: .connected)
-        fakeA.isEnabled = true
-        let fakeB = FakeSlotProvider(name: idB.name, identity: idB, status: .disconnected)
-
-        let manager = TunnelsManager(
-            tunnelProviders: [fakeA, fakeB],
-            providerFactory: FakeSlotFactory(canned: [fakeA, fakeB]),
-            vault: vault,
-            observesSystemChanges: false
-        )
-        guard let a = manager.tunnels.first(where: { $0.id == idA.id }),
-              let b = manager.tunnels.first(where: { $0.id == idB.id }) else {
-            fail("side manager did not materialize the queue rig")
-            return
-        }
-        guard a.status == .active else {
-            fail("the rig's occupant did not start active — status=\(a.status)")
-            return
-        }
-        check(!a.isActivateOnDemandEnabled,
-              "the occupant is UNARMED, which is what makes its stop run inside the caller rather than a parked task —"
-              + " the armed path defers and would leave the row reading active here")
-
-        fakeA.setStatusSilently(.invalid)
-
-        manager.startActivation(of: b)
-
-        check(fakeA.stopCount == 1,
-              "the stop reached the occupant — stops=\(fakeA.stopCount), expected 1")
-        check(a.status == .inactive,
-              "and the row was grounded flat on that reading, which is what makes the slot LOOK free below —"
-              + " status=\(a.status)")
-
-        let startedEarly = await settle(within: 1) { fakeB.startCount > 0 }
-        check(!startedEarly,
-              "yet no session was raised over an occupant whose .invalid can still be a live one"
-              + " (starts=\(fakeB.startCount))")
-        check(b.status == .waiting,
-              "the queued tunnel kept its slot instead — status=\(b.status)")
-        check(manager.waitingTunnel === b,
-              "and the manager still holds that slot, so the system's own answer is what hands it on")
     }
 
     private func refreshCannotDropTheQueue() async {

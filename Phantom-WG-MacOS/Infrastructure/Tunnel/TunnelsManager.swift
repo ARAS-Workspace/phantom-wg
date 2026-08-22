@@ -553,9 +553,17 @@ class TunnelsManager {
         }
     }
 
+    /// @witness ActivationSeam.anInvalidOccupantDoesNotHandOnTheQueue
+    private func releaseGroundingCeiling(for tunnel: TunnelContainer, on systemStatus: NEVPNStatus) {
+        guard systemStatus != .invalid else { return }
+        tunnel.groundingCeilingTask?.cancel()
+        tunnel.groundingCeilingTask = nil
+    }
+
     // swiftlint:disable:next cyclomatic_complexity function_body_length
     private func handleStatusChange(for tunnel: TunnelContainer) {
         let systemStatus = tunnel.tunnelProvider.connectionStatus
+        releaseGroundingCeiling(for: tunnel, on: systemStatus)
 
         if tunnel.isAttemptingActivation {
             switch systemStatus {

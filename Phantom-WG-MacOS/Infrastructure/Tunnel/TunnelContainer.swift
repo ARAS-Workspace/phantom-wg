@@ -36,6 +36,7 @@ class TunnelContainer: Identifiable {
     }
     @ObservationIgnored var respawnReviveConsumed = false
     @ObservationIgnored var respawnReviveTask: Task<Void, Never>?
+    @ObservationIgnored var groundingCeilingTask: Task<Void, Never>?
 
     init(tunnel: TunnelProviding) {
         tunnelProvider = tunnel
@@ -53,9 +54,12 @@ class TunnelContainer: Identifiable {
     }
 
     /// @witness ActivationSeam
+    /// @witness ActivationSeam.anInvalidOccupantDoesNotHandOnTheQueue
     func refreshStatus() {
-        let derived = TunnelStatus(from: tunnelProvider.connectionStatus)
+        let system = tunnelProvider.connectionStatus
+        let derived = TunnelStatus(from: system)
         if isManagerDriven, derived == .inactive || derived == .deactivating { return }
+        if groundingCeilingTask != nil, system == .invalid { return }
         status = derived
         clearErrorOnRise()
     }

@@ -23,7 +23,7 @@ extension TunnelsManager {
         beginActivation(of: tunnel)
     }
 
-    /// @witness ActivationSeam.aGroundedInvalidOccupantDoesNotHandOnTheQueue
+    /// @witness ActivationSeam.anInvalidOccupantDoesNotHandOnTheQueue
     func beginActivation(of tunnel: TunnelContainer) {
         guard !removingIds.contains(tunnel.id) else { return }
         guard tunnel.status == .inactive else { return }
@@ -406,7 +406,8 @@ extension TunnelsManager {
         }
     }
 
-    /// @witness ActivationSeam.aGroundedInvalidOccupantDoesNotHandOnTheQueue
+    /// @witness ActivationSeam.anInvalidOccupantDoesNotHandOnTheQueue
+    /// @witness ActivationSeam.aStopNobodyAnswersGroundsItsOwnRow
     func performDeactivation(of tunnel: TunnelContainer) {
 
         tunnel.tunnelProvider.stopTunnel()
@@ -416,12 +417,26 @@ extension TunnelsManager {
             tunnel.status = .inactive
             activateWaitingTunnelIfNeeded()
         case .invalid:
-            tunnel.status = .inactive
-            if waitingTunnel != nil {
-                NSLog("[activation] \(tunnel.name) was grounded from .invalid with a tunnel queued behind it — the queue waits for the system's own answer, since .invalid does not tell a finished session from a live one")
-            }
+            tunnel.status = .deactivating
+            armGroundingCeiling(for: tunnel)
         default:
             tunnel.status = .deactivating
+        }
+    }
+
+    /// @witness ActivationSeam.aStopNobodyAnswersGroundsItsOwnRow
+    private func armGroundingCeiling(for tunnel: TunnelContainer) {
+        tunnel.groundingCeilingTask?.cancel()
+        NSLog("[activation] \(tunnel.name) answered the stop with .invalid, which does not tell a finished session from a live one — the row is held at deactivating for \(Int(Self.groundingBudget))s to give the system its say")
+        tunnel.groundingCeilingTask = Task { [weak self] in
+            try? await Task.sleep(for: .seconds(Self.groundingBudget))
+            guard !Task.isCancelled, let self else { return }
+            guard tunnel.status == .deactivating else { return }
+            tunnel.groundingCeilingTask = nil
+            tunnel.refreshStatus()
+            guard tunnel.status == .inactive else { return }
+            NSLog("[activation] the system never spoke for \(tunnel.name) within \(Int(Self.groundingBudget))s — the hold is released and the slot goes to whoever is waiting")
+            self.activateWaitingTunnelIfNeeded()
         }
     }
 
@@ -480,6 +495,7 @@ extension TunnelsManager {
     }
 
     private nonisolated static let resetBudget: TimeInterval = 10
+    nonisolated static let groundingBudget: TimeInterval = 3
 }
 
 private enum ResetOutcome: Sendable {
