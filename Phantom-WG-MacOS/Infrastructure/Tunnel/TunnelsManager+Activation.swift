@@ -117,6 +117,8 @@ extension TunnelsManager {
     /// @witness RecoverySwitch
     /// @witness Unreachable
     /// @witness VaultIntegrity
+    /// @witness ActivationSeam.aTeardownTakesTheCeilingsItFinds
+    /// @witness ActivationSeam.aTeardownWaitsOutTheStopItParked
     func disarmAllRecovery() async {
         waitingTunnel = nil
         for tunnel in tunnels {
@@ -128,15 +130,26 @@ extension TunnelsManager {
             tunnel.respawnReviveTask?.cancel()
             tunnel.respawnReviveTask = nil
             tunnel.standDownCeiling()
-            if tunnel.status == .activating || tunnel.status == .waiting
-                || tunnel.status == .deactivating {
-                tunnel.status = .inactive
-            }
         }
-        let rungs = tunnels.compactMap(\.activationRungTask)
+        let deferred = tunnels.flatMap { [$0.activationRungTask, $0.pendingDisarmTask] }.compactMap { $0 }
         _ = await bounded(15) {
-            for rung in rungs { await rung.value }
+            for task in deferred { await task.value }
             return true
+        }
+        // A stop that resumed inside the wait above has painted its own row and
+        // armed its own ceiling, so the verdict is reached after them, not
+        // before — and reached the way the ceiling would have reached it, by
+        // asking the system rather than writing over its answer.
+        for tunnel in tunnels {
+            tunnel.standDownCeiling()
+            switch tunnel.status {
+            case .activating, .waiting:
+                tunnel.status = .inactive
+            case .deactivating:
+                tunnel.refreshStatus()
+            case .inactive, .active, .reasserting:
+                break
+            }
         }
         for tunnel in tunnels {
             guard mayWriteStore(tunnel) else {
@@ -247,7 +260,6 @@ extension TunnelsManager {
     }
 
     /// @witness ActivationSeam.aTeardownHoldingTheStoreArmsNothing
-    /// @witness ActivationSeam.aTeardownTakesTheCeilingsItFinds
     /// @witness ActivationSeam.aRungAlreadyPastTheEntryArmsNothingEither
     /// @witness ActivationSeam.aRowTheListDroppedRaisesNoSessionEither
     func mayArmRecovery(_ tunnel: TunnelContainer) -> Bool {
@@ -440,14 +452,31 @@ extension TunnelsManager {
     /// @witness ActivationSeam.aFlickerBackToInvalidIsStillNotAnAnswer
     /// @witness ActivationSeam.aCeilingDoesNotGroundARowTheListNoLongerHolds
     /// @witness ActivationSeam.aLateInvalidDoesNotHandOnTheQueueEither
-    /// @witness ActivationSeam.anInvalidWhileTheStopWaitsOnItsRuleHoldsToo
-    /// @witness ActivationSeam.aTeardownTakesTheCeilingsItFinds
-    /// @witness ActivationSeam.aHoldThatMayNotArmStillRefusesToGround
+    /// @witness ActivationSeam.aTeardownsHoldDoesNotTurnAReadingIntoAnAnswer
     func armGroundingCeiling(for tunnel: TunnelContainer) {
-        guard mayArmRecovery(tunnel) else { return }
-        tunnel.groundingCeilingTask?.cancel()
         NSLog("[activation] \(tunnel.name) answered the stop with .invalid, which does not tell a finished session from a live one — the row is held at deactivating for \(Int(Self.groundingBudget))s to give the system its say")
+        scheduleGroundingCeiling(for: tunnel)
+    }
+
+    /// The hold is nothing but an in-memory timer, so no caller is refused one:
+    /// both of them paint the row `.deactivating` on the line above, and a
+    /// refused arm would leave that paint with nothing behind it that could ever
+    /// take it back. Every consequence the hold carries is taken in the body
+    /// below instead, where it is read against the state at the moment it would
+    /// be acted on rather than the state it was armed in.
+    ///
+    /// The budget waits behind the stop rather than in front of it: on an armed
+    /// row the stop runs inside a task parked on its own disarm save, so a
+    /// budget started at the reading would be counting down a wait that has not
+    /// begun — and could spend itself before the stop was ever issued.
+    /// @witness ActivationSeam.aRefreshDuringAParkedStopDoesNotGroundTheRow
+    /// @witness ActivationSeam.anInvalidWhileTheStopWaitsOnItsRuleHoldsToo
+    /// @witness ActivationSeam.aCeilingDoesNotGroundARowTheListNoLongerHolds
+    private func scheduleGroundingCeiling(for tunnel: TunnelContainer) {
+        tunnel.groundingCeilingTask?.cancel()
+        let parkedStop = tunnel.pendingDisarmTask
         tunnel.groundingCeilingTask = Task { [weak self, weak tunnel] in
+            await parkedStop?.value
             try? await Task.sleep(for: .seconds(Self.groundingBudget))
             guard !Task.isCancelled, let self, let tunnel else { return }
             tunnel.groundingCeilingTask = nil

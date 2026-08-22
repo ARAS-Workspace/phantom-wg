@@ -469,9 +469,15 @@ class TunnelsManager {
     var isStoreHeldForTeardown: Bool { refreshSuspended }
     #endif
 
+    /// Giving the store back has to re-open the questions the bar parked while
+    /// it was held. A queue slot is the one that cannot re-ask itself: the
+    /// reading that would have spent it has already been and gone, so without
+    /// this the row waits for a notification that will never come again.
     /// @witness VaultIntegrity.aTeardownThatTookTheStoreStopsTheRestore
+    /// @witness ActivationSeam.aTeardownHoldingTheStoreTakesNoHandOff
     func releaseStoreAfterUninstall() {
         refreshSuspended = false
+        activateWaitingTunnelIfNeeded()
     }
 
     /// @witness VaultIntegrity.theExtensionsComingBackDoesNotLowerTheTeardownsBar
@@ -678,9 +684,7 @@ class TunnelsManager {
                tunnel.status == .deactivating || tunnel.stopIsWaitingOnItsRule,
                tunnel.groundingCeilingTask == nil {
                 tunnel.status = .deactivating
-                if tunnel.pendingDisarmCount == 0 {
-                    armGroundingCeiling(for: tunnel)
-                }
+                armGroundingCeiling(for: tunnel)
                 return
             }
             tunnel.refreshStatus()

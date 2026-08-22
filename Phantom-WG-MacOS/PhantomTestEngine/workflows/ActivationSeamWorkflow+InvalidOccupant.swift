@@ -89,14 +89,32 @@
 //       done still has to happen, or the row is left stopping for ever,
 //       holding the single slot against every tunnel including itself.
 //
-//   I — A Hold That May Not Arm Still Refuses To Ground
+//   I — A Teardown's Hold Does Not Turn A Reading Into An Answer
 //       The bar on arming was first written as one more condition on the
 //       hold's own `if`, which quietly made a barred hold fall through to
-//       the grounding it exists to prevent. Refusing to arm and deciding
-//       the question are different acts: the reading is still not an
-//       answer, whoever may or may not write. The gate now lives inside
-//       `armGroundingCeiling`, where every door reaches it, and the hold
-//       returns whether or not a ceiling was armed.
+//       the grounding it exists to prevent. Moving that bar into
+//       `armGroundingCeiling` cured the fall-through and left something
+//       worse behind it: a refused arm leaves the row painted
+//       `.deactivating` with nothing standing behind it at all. A hold
+//       writes nothing to the store, so a teardown's grip on the store is
+//       no reason to refuse one — nor a licence to decide the question.
+//
+//   J — A Refresh During A Parked Stop Does Not Ground The Row
+//       On an armed row the stop runs inside a task parked on its own
+//       disarm save, so the budget must not start at the reading. Holding
+//       the hold back until the stop went out was the wrong way to buy
+//       that: it left a window where the row was painted and nothing held
+//       it, and the next `refreshStatus` — the call every list reload
+//       makes on every row it keeps — read the same `.invalid` and
+//       grounded it. The hold is armed at the reading. It is the BUDGET
+//       that waits behind the stop.
+//
+//   K — A Teardown Waits Out The Stop It Parked
+//       The sweep awaited every activation rung but not the one deferred
+//       task that can repaint a row `.deactivating`: the parked disarm.
+//       `remove(tunnel:)` has always awaited both. A stop resuming after
+//       the sweep had passed undid precisely what the sweep was there to
+//       do, and left no backstop behind it.
 //
 // What this file cannot prove is which of the two things `.invalid` meant.
 // Nothing can, at the moment it is read — that is the whole reason the
@@ -403,7 +421,7 @@ extension ActivationSeamWorkflow {
             fail("the rig's occupant is not armed, so its stop would not park on a disarm at all")
             return
         }
-        rig.fakeA.saveAnswer = .succeedsAfter(seconds: TunnelsManager.groundingBudget + 2)
+        rig.fakeA.saveAnswer = .succeedsAfter(seconds: TunnelsManager.groundingBudget * 2 + 1)
 
         rig.manager.startActivation(of: rig.b)
         let disarmIssued = await settle(within: 3) { rig.fakeA.saveCount == 1 }
@@ -426,23 +444,31 @@ extension ActivationSeamWorkflow {
               + " starts=\(rig.fakeB.startCount), expected 0")
         check(rig.a.status == .deactivating,
               "the row is taken into the hold instead of grounded — status=\(rig.a.status)")
-        guard check(!rig.a.isHoldingForAnAnswer,
-                    "and NO ceiling is armed yet: the stop is still inside the parked disarm, so a budget started"
-                    + " here would be counting down a wait that has not begun") else { return }
+        guard check(rig.a.isHoldingForAnAnswer,
+                    "and the hold is a BACKSTOP rather than a coat of paint — a row painted deactivating with"
+                    + " nothing standing behind it is grounded again by the very next reading that reaches it")
+        else { return }
 
-        let spentTheBudget = await settle(within: TunnelsManager.groundingBudget + 1) { rig.fakeB.startCount > 0 }
+        let spentTheBudget = await settle(within: TunnelsManager.groundingBudget + 1) {
+            rig.a.status != .deactivating || rig.fakeB.startCount > 0
+        }
         check(!spentTheBudget,
-              "a whole budget passes with the stop still parked and nothing grounded on it — starts="
-              + "\(rig.fakeB.startCount), status=\(rig.a.status)")
+              "a whole budget passes with nothing decided on it — status=\(rig.a.status), starts="
+              + "\(rig.fakeB.startCount)")
+        check(rig.a.isHoldingForAnAnswer && rig.fakeA.stopCount == 0,
+              "because the budget waits BEHIND the stop rather than in front of it: the stop is still inside the"
+              + " parked disarm, and a budget started here would be counting down a wait that has not begun"
+              + " (stops=\(rig.fakeA.stopCount))")
 
-        let stopWentOut = await settle(within: 4) { rig.fakeA.stopCount >= 1 }
+        let stopWentOut = await settle(within: 5) { rig.fakeA.stopCount >= 1 }
         guard check(stopWentOut,
                     "the parked disarm then finished and put the stop out — stops=\(rig.fakeA.stopCount)")
         else { return }
-        check(rig.a.isHoldingForAnAnswer,
-              "and THAT is when the ceiling is armed, so the budget it spends measures the wait for an answer to a"
-              + " stop that has actually been issued")
+        check(rig.a.isHoldingForAnAnswer && rig.a.status == .deactivating,
+              "and THAT is the budget that decides, because it is the first one measuring a wait that has begun"
+              + " — status=\(rig.a.status)")
 
+        rig.fakeA.saveAnswer = .succeeds
         rig.fakeA.drive(.disconnected)
         let tookItsTurn = await settle(within: 3) { rig.fakeB.startCount >= 1 }
         check(tookItsTurn,
@@ -498,7 +524,7 @@ extension ActivationSeamWorkflow {
               + " (status=\(rig.a.status))")
     }
 
-    func aHoldThatMayNotArmStillRefusesToGround() async {
+    func aTeardownsHoldDoesNotTurnAReadingIntoAnAnswer() async {
         guard let rig = invalidQueueRig("NoArmNoGround") else { return }
 
         rig.manager.suspendRefreshForUninstall()
@@ -507,18 +533,100 @@ extension ActivationSeamWorkflow {
 
         rig.manager.startActivation(of: rig.b)
         guard check(rig.a.status == .deactivating && !rig.a.isHoldingForAnAnswer,
-                    "so the occupant's stop lands with no ceiling behind it, and none may be armed while the store"
-                    + " is held — status=\(rig.a.status)") else { return }
+                    "the occupant's stop lands while the provider still reads .connected, so nothing has held it"
+                    + " yet — status=\(rig.a.status)") else { return }
 
         rig.fakeA.drive(.invalid)
-        _ = await settle(within: 1) { rig.a.status != .deactivating }
-        check(!rig.a.isHoldingForAnAnswer,
-              "the reading arms nothing, because arming is a write and the store is not ours right now")
+        let held = await settle(within: 2) { rig.a.isHoldingForAnAnswer }
+        guard check(held,
+                    "the reading reached the handler and left a backstop behind it — the one reading in this step"
+                    + " the arrangement alone could not have produced, and the hold a teardown's grip on the"
+                    + " STORE has no business refusing, because a hold writes nothing to it") else { return }
         check(rig.a.status == .deactivating,
-              "but it does not GROUND the row either — a reading that may not be acted on is still not an answer,"
-              + " and refusing to arm is no licence to decide (status=\(rig.a.status))")
-        check(rig.fakeB.startCount == 0,
-              "so nothing was handed the slot on the strength of it — starts=\(rig.fakeB.startCount), expected 0")
+              "with the row held rather than grounded: a teardown holding the store says nothing about the"
+              + " session, and being unable to write is no licence to decide (status=\(rig.a.status))")
+
+        rig.manager.releaseStoreAfterUninstall()
+        guard check(!rig.manager.isStoreHeldForTeardown, "the store is then given back") else { return }
+        check(rig.fakeB.startCount == 0 && rig.a.isHoldingForAnAnswer,
+              "and even with it back the slot is not spent, because the question the reading asked is still the"
+              + " open one — starts=\(rig.fakeB.startCount)")
+
+        rig.fakeA.drive(.disconnected)
+        let handedOn = await settle(within: 3) { rig.fakeB.startCount >= 1 }
+        check(handedOn,
+              "only the terminal answer spends it — starts=\(rig.fakeB.startCount), expected 1")
+        check(rig.a.status == .inactive,
+              "with the occupant grounded on that answer — status=\(rig.a.status)")
+    }
+
+    func aRefreshDuringAParkedStopDoesNotGroundTheRow() async {
+        guard let rig = invalidQueueRig("ParkedRefresh") else { return }
+        rig.fakeA.arrangeArmed()
+        guard rig.a.isActivateOnDemandEnabled else {
+            fail("the rig's occupant is not armed, so its stop would not park on a disarm at all")
+            return
+        }
+        rig.fakeA.saveAnswer = .succeedsAfter(seconds: TunnelsManager.groundingBudget * 2 + 1)
+
+        rig.manager.startActivation(of: rig.b)
+        guard await settle(within: 3, until: { rig.a.stopIsWaitingOnItsRule }) else {
+            fail("the stop never parked on its disarm — count=\(rig.a.pendingDisarmCount), status=\(rig.a.status)")
+            return
+        }
+
+        rig.fakeA.drive(.invalid)
+        guard check(rig.a.status == .deactivating && rig.a.isHoldingForAnAnswer,
+                    "the reading in that window holds the row AND leaves a backstop standing — status="
+                    + "\(rig.a.status)") else { return }
+
+        rig.a.refreshStatus()
+        check(rig.a.status == .deactivating,
+              "so the call a list reload makes on every row it already holds reads the same .invalid without"
+              + " grounding it — a hold that were only a painted status would be undone here, by a pass that"
+              + " settles nothing (status=\(rig.a.status))")
+
+        rig.fakeA.drive(.reasserting)
+        let repainted = await settle(within: 1) { rig.a.status != .deactivating }
+        check(!repainted,
+              "and the next notification through the door does not repaint it either — status=\(rig.a.status)")
+        check(rig.fakeB.startCount == 0 && rig.fakeA.stopCount == 0,
+              "so no session was raised over a stop that has not even gone out yet — starts="
+              + "\(rig.fakeB.startCount), stops=\(rig.fakeA.stopCount)")
+        check(rig.a.isHoldingForAnAnswer,
+              "with the backstop still standing past both of them, rather than spent by readings that answer"
+              + " nothing")
+    }
+
+    func aTeardownWaitsOutTheStopItParked() async {
+        guard let rig = invalidQueueRig("SweepWaits") else { return }
+        rig.fakeA.arrangeArmed()
+        guard rig.a.isActivateOnDemandEnabled else {
+            fail("the rig's occupant is not armed, so its stop would not park on a disarm at all")
+            return
+        }
+        rig.fakeA.saveAnswer = .succeedsAfter(seconds: 2)
+        rig.fakeA.setStatusSilently(.invalid)
+
+        rig.manager.startDeactivation(of: rig.a)
+        guard check(rig.a.pendingDisarmCount == 1 && rig.fakeA.stopCount == 0,
+                    "the stop is parked on its own disarm save and has not gone out — count="
+                    + "\(rig.a.pendingDisarmCount), stops=\(rig.fakeA.stopCount)") else { return }
+        rig.fakeA.saveAnswer = .succeeds
+
+        rig.manager.suspendRefreshForUninstall()
+        await rig.manager.disarmAllRecovery()
+
+        guard check(rig.fakeA.stopCount == 1,
+                    "the sweep waited that stop out instead of stepping over it — every OTHER save in this rig"
+                    + " answers at once, so the only thing it could have been waiting on is the parked disarm"
+                    + " (stops=\(rig.fakeA.stopCount))") else { return }
+        check(!rig.a.isHoldingForAnAnswer,
+              "and the ceiling that stop armed on its way past was taken by the same sweep, rather than left to"
+              + " fire once the store is back")
+        check(rig.a.status == .inactive,
+              "with the row that stop repainted carried to a verdict rather than left stopping for ever —"
+              + " status=\(rig.a.status)")
     }
 }
 #endif

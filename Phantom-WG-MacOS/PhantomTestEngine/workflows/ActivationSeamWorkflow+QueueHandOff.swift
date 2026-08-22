@@ -119,14 +119,14 @@ extension ActivationSeamWorkflow {
         guard check(!rig.manager.isStoreHeldForTeardown,
                     "the store is given back") else { return }
 
-        rig.fakeA.drive(.disconnected)
         let handedOn = await settle(within: 3) { rig.b.status == .activating }
         check(handedOn,
-              "and the SAME reading hands the slot on once the store is back — which is what says the bar"
-              + " above was the teardown's and not this rig's inability to take a turn (status="
-              + "\(rig.b.status))")
+              "and giving it back re-opens the question the bar parked, rather than waiting on a second reading:"
+              + " the reading that would have spent this slot has already been and gone, so a slot left waiting"
+              + " for another one waits for ever (status=\(rig.b.status))")
         check(rig.manager.waitingTunnel == nil,
-              "with the slot given up as it went")
+              "with the slot given up as it went — which is also what says the bar above was the teardown's and"
+              + " not this rig's inability to take a turn")
     }
 
     func aTeardownHoldingTheStoreArmsNothing() async {
