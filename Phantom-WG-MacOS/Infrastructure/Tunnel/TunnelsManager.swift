@@ -473,6 +473,7 @@ class TunnelsManager {
         refreshSuspended = false
     }
 
+    /// @witness VaultIntegrity.theExtensionsComingBackDoesNotLowerTheTeardownsBar
     func releaseAbandonedStoreLatch() {
         guard refreshSuspended else { return }
         NSLog("[uninstall] the refresh latch outlived its teardown — released on the extensions' return")

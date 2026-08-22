@@ -117,6 +117,8 @@ final class VaultIntegrityWorkflow: TestWorkflow {
                          theUninstallsRemovalIsNotUndoneByTheRestore),
             WorkflowStep("A Teardown That Takes No Entry Leaves The Restore Alone",
                          aTeardownThatTakesNoEntryLeavesTheRestoreAlone),
+            WorkflowStep("The Extensions Coming Back Does Not Lower The Teardown's Bar",
+                         theExtensionsComingBackDoesNotLowerTheTeardownsBar),
             WorkflowStep("Entry Survives Corruption (Reconcile)", corruptionSurvival),
             WorkflowStep("Undecodable Payload Stays Listed (Reload)", custodyVisibility),
         ]
