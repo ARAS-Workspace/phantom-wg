@@ -40,3 +40,11 @@ enum TunnelStatus: Equatable {
         }
     }
 }
+
+extension NEVPNStatus {
+    /// The two readings that settle the question a stop asks. Every other —
+    /// `.invalid` ambiguous, `.connecting`/`.disconnecting`/`.reasserting`
+    /// still in motion — leaves the question open.
+    /// @witness ActivationSeam.aTransientDoesNotRepaintAHeldRow
+    var isTerminalAnswer: Bool { self == .disconnected || self == .connected }
+}

@@ -74,6 +74,8 @@ final class ActivationSeamWorkflow: TestWorkflow {
                          anInvalidOccupantDoesNotHandOnTheQueue),
             WorkflowStep("A Flicker Back To .invalid Is Still Not An Answer",
                          aFlickerBackToInvalidIsStillNotAnAnswer),
+            WorkflowStep("A Transient Does Not Repaint A Held Row",
+                         aTransientDoesNotRepaintAHeldRow),
             WorkflowStep("A Stop Nobody Answers Grounds Its Own Row",
                          aStopNobodyAnswersGroundsItsOwnRow),
             WorkflowStep("An Armed .invalid Occupant Does Not Hand On The Queue Either",

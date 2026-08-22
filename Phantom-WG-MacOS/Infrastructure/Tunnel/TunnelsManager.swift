@@ -576,8 +576,9 @@ class TunnelsManager {
 
     /// @witness ActivationSeam.anInvalidOccupantDoesNotHandOnTheQueue
     /// @witness ActivationSeam.aFlickerBackToInvalidIsStillNotAnAnswer
+    /// @witness ActivationSeam.aTransientDoesNotRepaintAHeldRow
     private func releaseGroundingCeiling(for tunnel: TunnelContainer, on systemStatus: NEVPNStatus) {
-        guard systemStatus == .disconnected || systemStatus == .connected else { return }
+        guard systemStatus.isTerminalAnswer else { return }
         tunnel.groundingCeilingTask?.cancel()
         tunnel.groundingCeilingTask = nil
     }

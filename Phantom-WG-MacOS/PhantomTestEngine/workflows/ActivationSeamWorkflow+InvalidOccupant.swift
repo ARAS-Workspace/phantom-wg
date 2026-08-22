@@ -38,6 +38,18 @@
 //       where `performDeactivation` runs inside a parked disarm task
 //       rather than inside the caller.
 //
+//   D — A Transient Does Not Repaint A Held Row
+//       The hold is only as good as the reading that may end it. A held row
+//       used to refuse `.invalid` alone, so `.reasserting` and `.connecting`
+//       repainted it to a live-looking status and the ceiling then failed
+//       its own `.deactivating` guard and stood down without grounding
+//       anything. Both the hold's bar and the ceiling's release now read one
+//       predicate — `NEVPNStatus.isTerminalAnswer` — so they cannot drift
+//       apart. The step's control comes LAST and reuses the SAME drive: once
+//       the terminal answer has taken the backstop away, a second
+//       `.reasserting` repaints the row, which is what says the readings
+//       above were barred rather than never delivered.
+//
 // What this file cannot prove is which of the two things `.invalid` meant.
 // Nothing can, at the moment it is read — that is the whole reason the
 // hold exists. What is proven is that the app stops guessing.
@@ -261,6 +273,46 @@ extension ActivationSeamWorkflow {
         let startedEarly = await settle(within: 1) { rig.fakeB.startCount > 0 }
         check(!startedEarly,
               "and no session was raised over it (starts=\(rig.fakeB.startCount))")
+    }
+
+    func aTransientDoesNotRepaintAHeldRow() async {
+        guard let rig = invalidQueueRig("Transient") else { return }
+
+        rig.fakeA.setStatusSilently(.invalid)
+        rig.manager.startActivation(of: rig.b)
+        guard check(rig.a.status == .deactivating,
+                    "the occupant is held on the reading that cannot answer — status=\(rig.a.status)") else { return }
+        guard check(rig.a.isHoldingForAnAnswer,
+                    "with a backstop standing behind that hold") else { return }
+
+        rig.fakeA.drive(.reasserting)
+        _ = await settle(within: 0.5) { rig.a.status != .deactivating }
+        check(rig.a.status == .deactivating,
+              "a .reasserting says the session is still WORKING, not that the stop is done, so it does not repaint"
+              + " the held row out from under its backstop — status=\(rig.a.status)")
+
+        rig.fakeA.drive(.connecting)
+        _ = await settle(within: 0.5) { rig.a.status != .deactivating }
+        check(rig.a.status == .deactivating,
+              "and neither does a .connecting, the other reading that would have painted a live-looking status onto"
+              + " a row that is being held — status=\(rig.a.status)")
+
+        guard check(rig.a.isHoldingForAnAnswer,
+                    "the backstop is still standing and has not spent its budget, so what hands the queue on below"
+                    + " is the ANSWER rather than the ceiling running out under a slow rig") else { return }
+
+        rig.fakeA.drive(.disconnected)
+        let tookItsTurn = await settle(within: 3) { rig.fakeB.startCount >= 1 }
+        check(tookItsTurn,
+              "only the TERMINAL answer hands the queue on — starts=\(rig.fakeB.startCount), expected 1")
+        guard check(rig.a.status == .inactive,
+                    "with the occupant grounded on it — status=\(rig.a.status)") else { return }
+
+        rig.fakeA.drive(.reasserting)
+        let repainted = await settle(within: 1) { rig.a.status == .reasserting }
+        check(repainted,
+              "and that SAME reading repaints the row once no backstop stands behind it — which is what says the"
+              + " two above were barred rather than never delivered (status=\(rig.a.status))")
     }
 }
 #endif

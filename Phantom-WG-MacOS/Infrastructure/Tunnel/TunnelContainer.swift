@@ -59,11 +59,12 @@ class TunnelContainer: Identifiable {
 
     /// @witness ActivationSeam
     /// @witness ActivationSeam.anInvalidOccupantDoesNotHandOnTheQueue
+    /// @witness ActivationSeam.aTransientDoesNotRepaintAHeldRow
     func refreshStatus() {
         let system = tunnelProvider.connectionStatus
         let derived = TunnelStatus(from: system)
         if isManagerDriven, derived == .inactive || derived == .deactivating { return }
-        if groundingCeilingTask != nil, system == .invalid { return }
+        if groundingCeilingTask != nil, !system.isTerminalAnswer { return }
         status = derived
         clearErrorOnRise()
     }
