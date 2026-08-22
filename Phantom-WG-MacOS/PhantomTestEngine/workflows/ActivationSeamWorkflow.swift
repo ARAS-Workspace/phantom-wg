@@ -82,6 +82,8 @@ final class ActivationSeamWorkflow: TestWorkflow {
                          aCeilingDoesNotGroundARowTheListNoLongerHolds),
             WorkflowStep("A Removal Hands The Queue On Only When The Slot Is Free", removalHandsOnTheQueue),
             WorkflowStep("A Queue Slot Whose Tunnel Left The List Is Discarded", staleQueueSlotIsDiscarded),
+            WorkflowStep("A Teardown Holding The Store Takes No Hand-Off",
+                         aTeardownHoldingTheStoreTakesNoHandOff),
             WorkflowStep("An Attempt That Never Resolves Is Withdrawn", wedgedAttemptIsWithdrawn),
             WorkflowStep("A Withdrawal Leaves The Dying Session To The System", dyingSessionIsWithdrawnInPlace),
             WorkflowStep("A Grounded Row Cannot Silence Its Own Attempt", groundedRowIsStillWithdrawn),

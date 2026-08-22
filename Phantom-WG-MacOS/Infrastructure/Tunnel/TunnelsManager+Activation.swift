@@ -446,7 +446,9 @@ extension TunnelsManager {
         }
     }
 
+    /// @witness ActivationSeam.aTeardownHoldingTheStoreTakesNoHandOff
     func activateWaitingTunnelIfNeeded() {
+        guard !refreshSuspended else { return }
         guard let waitingTunnel else { return }
         guard tunnels.contains(where: { $0 === waitingTunnel }) else {
             self.waitingTunnel = nil

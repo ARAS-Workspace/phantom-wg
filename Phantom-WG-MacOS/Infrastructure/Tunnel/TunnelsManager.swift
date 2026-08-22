@@ -25,7 +25,7 @@ class TunnelsManager {
 
     @ObservationIgnored private var pendingRefresh: Task<Void, Never>?
 
-    @ObservationIgnored private var refreshSuspended = false
+    @ObservationIgnored private(set) var refreshSuspended = false
 
     @ObservationIgnored private var restoreBarredByTeardown = false
 
