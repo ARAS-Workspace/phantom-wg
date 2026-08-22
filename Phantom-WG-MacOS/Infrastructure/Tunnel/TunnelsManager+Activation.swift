@@ -128,7 +128,8 @@ extension TunnelsManager {
             tunnel.respawnReviveTask?.cancel()
             tunnel.respawnReviveTask = nil
             tunnel.standDownCeiling()
-            if tunnel.status == .activating || tunnel.status == .waiting {
+            if tunnel.status == .activating || tunnel.status == .waiting
+                || tunnel.status == .deactivating {
                 tunnel.status = .inactive
             }
         }
@@ -246,7 +247,7 @@ extension TunnelsManager {
     }
 
     /// @witness ActivationSeam.aTeardownHoldingTheStoreArmsNothing
-    /// @witness ActivationSeam.aTeardownTakesTheCeilingsAndArmsNoNewOne
+    /// @witness ActivationSeam.aTeardownTakesTheCeilingsItFinds
     /// @witness ActivationSeam.aRungAlreadyPastTheEntryArmsNothingEither
     /// @witness ActivationSeam.aRowTheListDroppedRaisesNoSessionEither
     func mayArmRecovery(_ tunnel: TunnelContainer) -> Bool {
@@ -440,8 +441,10 @@ extension TunnelsManager {
     /// @witness ActivationSeam.aCeilingDoesNotGroundARowTheListNoLongerHolds
     /// @witness ActivationSeam.aLateInvalidDoesNotHandOnTheQueueEither
     /// @witness ActivationSeam.anInvalidWhileTheStopWaitsOnItsRuleHoldsToo
-    /// @witness ActivationSeam.aTeardownTakesTheCeilingsAndArmsNoNewOne
+    /// @witness ActivationSeam.aTeardownTakesTheCeilingsItFinds
+    /// @witness ActivationSeam.aHoldThatMayNotArmStillRefusesToGround
     func armGroundingCeiling(for tunnel: TunnelContainer) {
+        guard mayArmRecovery(tunnel) else { return }
         tunnel.groundingCeilingTask?.cancel()
         NSLog("[activation] \(tunnel.name) answered the stop with .invalid, which does not tell a finished session from a live one — the row is held at deactivating for \(Int(Self.groundingBudget))s to give the system its say")
         tunnel.groundingCeilingTask = Task { [weak self, weak tunnel] in

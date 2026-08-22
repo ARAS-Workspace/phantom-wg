@@ -676,10 +676,11 @@ class TunnelsManager {
         } else {
             if systemStatus == .invalid,
                tunnel.status == .deactivating || tunnel.stopIsWaitingOnItsRule,
-               tunnel.groundingCeilingTask == nil,
-               mayArmRecovery(tunnel) {
+               tunnel.groundingCeilingTask == nil {
                 tunnel.status = .deactivating
-                armGroundingCeiling(for: tunnel)
+                if tunnel.pendingDisarmCount == 0 {
+                    armGroundingCeiling(for: tunnel)
+                }
                 return
             }
             tunnel.refreshStatus()

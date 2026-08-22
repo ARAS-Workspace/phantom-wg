@@ -83,12 +83,20 @@
 //       suppress a later reading in a give-up it has nothing to do with.
 //       The release now lives with the reading, not with the door.
 //
-//   H — A Teardown Takes The Ceilings And Arms No New One
-//       Every other arming site asks `mayArmRecovery`; the notification
-//       hold was the one that did not, and the uninstall sweep took every
-//       deferred task except this one. Both halves in one step, because a
-//       teardown that cancels the standing ceiling but arms a fresh one on
-//       the next `.invalid` has closed nothing.
+//   H — A Teardown Takes The Ceilings It Finds
+//       The uninstall sweep took every deferred task except this one. And
+//       taking a backstop is only half the job: whatever it would have
+//       done still has to happen, or the row is left stopping for ever,
+//       holding the single slot against every tunnel including itself.
+//
+//   I — A Hold That May Not Arm Still Refuses To Ground
+//       The bar on arming was first written as one more condition on the
+//       hold's own `if`, which quietly made a barred hold fall through to
+//       the grounding it exists to prevent. Refusing to arm and deciding
+//       the question are different acts: the reading is still not an
+//       answer, whoever may or may not write. The gate now lives inside
+//       `armGroundingCeiling`, where every door reaches it, and the hold
+//       returns whether or not a ceiling was armed.
 //
 // What this file cannot prove is which of the two things `.invalid` meant.
 // Nothing can, at the moment it is read — that is the whole reason the
@@ -395,7 +403,7 @@ extension ActivationSeamWorkflow {
             fail("the rig's occupant is not armed, so its stop would not park on a disarm at all")
             return
         }
-        rig.fakeA.saveAnswer = .succeedsAfter(seconds: 2)
+        rig.fakeA.saveAnswer = .succeedsAfter(seconds: TunnelsManager.groundingBudget + 2)
 
         rig.manager.startActivation(of: rig.b)
         let disarmIssued = await settle(within: 3) { rig.fakeA.saveCount == 1 }
@@ -418,14 +426,22 @@ extension ActivationSeamWorkflow {
               + " starts=\(rig.fakeB.startCount), expected 0")
         check(rig.a.status == .deactivating,
               "the row is taken into the hold instead of grounded — status=\(rig.a.status)")
-        guard check(rig.a.isHoldingForAnAnswer,
-                    "with the ceiling armed, which is what lets the hold end on its own budget rather than sitting"
-                    + " on a status no ceiling can see") else { return }
+        guard check(!rig.a.isHoldingForAnAnswer,
+                    "and NO ceiling is armed yet: the stop is still inside the parked disarm, so a budget started"
+                    + " here would be counting down a wait that has not begun") else { return }
+
+        let spentTheBudget = await settle(within: TunnelsManager.groundingBudget + 1) { rig.fakeB.startCount > 0 }
+        check(!spentTheBudget,
+              "a whole budget passes with the stop still parked and nothing grounded on it — starts="
+              + "\(rig.fakeB.startCount), status=\(rig.a.status)")
 
         let stopWentOut = await settle(within: 4) { rig.fakeA.stopCount >= 1 }
-        check(stopWentOut,
-              "and the parked disarm still finished and put the stop out past the hold —"
-              + " stops=\(rig.fakeA.stopCount)")
+        guard check(stopWentOut,
+                    "the parked disarm then finished and put the stop out — stops=\(rig.fakeA.stopCount)")
+        else { return }
+        check(rig.a.isHoldingForAnAnswer,
+              "and THAT is when the ceiling is armed, so the budget it spends measures the wait for an answer to a"
+              + " stop that has actually been issued")
 
         rig.fakeA.drive(.disconnected)
         let tookItsTurn = await settle(within: 3) { rig.fakeB.startCount >= 1 }
@@ -460,7 +476,7 @@ extension ActivationSeamWorkflow {
               + " suppress a reading in some other flow")
     }
 
-    func aTeardownTakesTheCeilingsAndArmsNoNewOne() async {
+    func aTeardownTakesTheCeilingsItFinds() async {
         guard let rig = invalidQueueRig("CeilingSweep") else { return }
 
         rig.fakeA.setStatusSilently(.invalid)
@@ -476,12 +492,33 @@ extension ActivationSeamWorkflow {
         check(!rig.a.isHoldingForAnAnswer,
               "and its sweep took the standing ceiling with every other deferred task, rather than leaving one"
               + " behind to fire after the store is given back")
+        check(rig.a.status == .inactive,
+              "and it finished what that ceiling would have done rather than leaving the row stopping for ever —"
+              + " a row left at deactivating holds the single slot against every tunnel including itself"
+              + " (status=\(rig.a.status))")
+    }
+
+    func aHoldThatMayNotArmStillRefusesToGround() async {
+        guard let rig = invalidQueueRig("NoArmNoGround") else { return }
+
+        rig.manager.suspendRefreshForUninstall()
+        guard check(rig.manager.isStoreHeldForTeardown,
+                    "a teardown holds the store before the stop below is even issued") else { return }
+
+        rig.manager.startActivation(of: rig.b)
+        guard check(rig.a.status == .deactivating && !rig.a.isHoldingForAnAnswer,
+                    "so the occupant's stop lands with no ceiling behind it, and none may be armed while the store"
+                    + " is held — status=\(rig.a.status)") else { return }
 
         rig.fakeA.drive(.invalid)
-        _ = await settle(within: 1) { rig.a.isHoldingForAnAnswer }
+        _ = await settle(within: 1) { rig.a.status != .deactivating }
         check(!rig.a.isHoldingForAnAnswer,
-              "and no FRESH one is armed under the held store either — a sweep that cancels one ceiling while the"
-              + " next reading arms another has closed nothing")
+              "the reading arms nothing, because arming is a write and the store is not ours right now")
+        check(rig.a.status == .deactivating,
+              "but it does not GROUND the row either — a reading that may not be acted on is still not an answer,"
+              + " and refusing to arm is no licence to decide (status=\(rig.a.status))")
+        check(rig.fakeB.startCount == 0,
+              "so nothing was handed the slot on the strength of it — starts=\(rig.fakeB.startCount), expected 0")
     }
 }
 #endif
