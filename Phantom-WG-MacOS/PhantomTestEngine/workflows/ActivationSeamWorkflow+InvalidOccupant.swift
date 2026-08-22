@@ -576,7 +576,8 @@ extension ActivationSeamWorkflow {
         }
 
         rig.fakeA.drive(.invalid)
-        guard check(rig.a.status == .deactivating && rig.a.isHoldingForAnAnswer,
+        let held = await settle(within: 2) { rig.a.isHoldingForAnAnswer }
+        guard check(held && rig.a.status == .deactivating,
                     "the reading in that window holds the row AND leaves a backstop standing — status="
                     + "\(rig.a.status)") else { return }
 
