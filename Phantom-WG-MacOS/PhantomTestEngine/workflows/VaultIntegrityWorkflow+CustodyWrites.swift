@@ -406,6 +406,84 @@ extension VaultIntegrityWorkflow {
               "so the list the user is left with stays empty — rows=\(manager.tunnels.count), expected 0")
     }
 
+    func aTeardownThatTakesNoEntryLeavesTheRestoreAlone() async {
+        let name = "TE-Uninstall-Untouched-\(runTag)"
+        guard let payload = TestConfigFactory.throwaway(name: name) else {
+            fail("could not build the untouched config")
+            return
+        }
+        let identity = TunnelIdentity(id: payload.id, name: name, createdAt: payload.createdAt, isGhost: false)
+
+        func arrangedVault() -> FaultVaultClient {
+            let vault = FaultVaultClient()
+            vault.readAnswer = .answers(.config(payload))
+            vault.readAnswers = [payload.id: .answers(.config(payload))]
+            vault.readAllAnswer = .answers(.configs([payload]))
+            vault.storeAnswer = .answers(.done)
+            vault.deleteAnswer = .answers(.done)
+            return vault
+        }
+
+        let darkFake = FakeSlotProvider(name: name, identity: identity, status: .disconnected)
+        let darkFactory = FakeSlotFactory(
+            canned: [darkFake],
+            loadFailure: NSError(domain: "TE.Uninstall", code: 81,
+                                 userInfo: [NSLocalizedDescriptionKey: "driven system list failure"]))
+        let darkManager = TunnelsManager(
+            tunnelProviders: [],
+            providerFactory: darkFactory,
+            vault: arrangedVault(),
+            observesSystemChanges: false
+        )
+
+        await darkManager.removeEntriesForUninstall([payload.id])
+        guard check(darkFake.removeCount == 0 && darkFake.entryExists,
+                    "a teardown whose system list would not load took NOTHING, though the id it was given is exactly"
+                    + " the one that list holds — removes=\(darkFake.removeCount), expected 0") else { return }
+        let darkRestored = await darkManager.reconcileFromVault()
+        check(darkRestored == 1 && darkFactory.minted.providers.count == 1,
+              "so the restore is left alone and still mints what the system has lost —"
+              + " restored=\(darkRestored), minted=\(darkFactory.minted.providers.count), expected 1 and 1")
+
+        let idleFake = FakeSlotProvider(name: name, identity: identity, status: .disconnected)
+        let idleFactory = FakeSlotFactory(canned: [idleFake])
+        let idleManager = TunnelsManager(
+            tunnelProviders: [],
+            providerFactory: idleFactory,
+            vault: arrangedVault(),
+            observesSystemChanges: false
+        )
+
+        await idleManager.removeEntriesForUninstall([UUID()])
+        guard check(idleFake.removeCount == 0 && idleFake.entryExists,
+                    "and a teardown whose list DID load but classified nothing as removable took nothing either —"
+                    + " removes=\(idleFake.removeCount), expected 0") else { return }
+        let idleRestored = await idleManager.reconcileFromVault()
+        check(idleRestored == 1 && idleFactory.minted.providers.count == 1,
+              "so that restore is left alone too — the bar belongs to entries actually taken, not to the flow having"
+              + " been entered (restored=\(idleRestored), minted=\(idleFactory.minted.providers.count))")
+
+        let refusedFake = FakeSlotProvider(name: name, identity: identity, status: .disconnected)
+        refusedFake.removeAnswer = .fails(NSError(domain: "TE.Uninstall", code: 82,
+                                                  userInfo: [NSLocalizedDescriptionKey: "driven removal refusal"]))
+        let refusedFactory = FakeSlotFactory(canned: [refusedFake])
+        let refusedManager = TunnelsManager(
+            tunnelProviders: [],
+            providerFactory: refusedFactory,
+            vault: arrangedVault(),
+            observesSystemChanges: false
+        )
+
+        await refusedManager.removeEntriesForUninstall([payload.id])
+        guard check(refusedFake.removeCount == 1 && refusedFake.entryExists,
+                    "and a teardown that ASKED for its entry and was refused reached the removal and still holds it —"
+                    + " removes=\(refusedFake.removeCount), entryExists=\(refusedFake.entryExists)") else { return }
+        let refusedRestored = await refusedManager.reconcileFromVault()
+        check(refusedRestored == 1 && refusedFactory.minted.providers.count == 1,
+              "so its restore is left alone as well — a bar raised for a removal that never landed is taken back down"
+              + " (restored=\(refusedRestored), minted=\(refusedFactory.minted.providers.count))")
+    }
+
     func theUninstallSweepDoesNotWriteToARowBeingRemoved() async {
         let name = "TE-Sweep-Removing-\(runTag)"
         guard let payload = TestConfigFactory.throwaway(name: name) else {

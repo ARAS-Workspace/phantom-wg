@@ -504,24 +504,42 @@ class TunnelsManager {
 
     /// @witness VaultIntegrity.theUninstallRemovalTakesOnlyTheClassifiedEntries
     /// @witness VaultIntegrity.theUninstallsRemovalIsNotUndoneByTheRestore
+    /// @witness VaultIntegrity.aTeardownThatTakesNoEntryLeavesTheRestoreAlone
     func removeEntriesForUninstall(_ removableIds: Set<UUID>) async {
-        restoreBarredByTeardown = true
         guard let providers = try? await providerFactory.loadAllFromPreferences() else {
             NSLog("[uninstall] entry removal skipped — the system list did not load")
             return
         }
         var unclassified = 0
+        var removable: [(id: UUID, provider: TunnelProviding)] = []
         for provider in providers {
             guard let id = provider.tunnelIdentity?.id else { continue }
-            guard removableIds.contains(id) else {
+            if removableIds.contains(id) {
+                removable.append((id, provider))
+            } else {
                 unclassified += 1
-                continue
             }
+        }
+
+        let barWasAlreadyUp = restoreBarredByTeardown
+        if !removable.isEmpty {
+            restoreBarredByTeardown = true
+            NSLog("[uninstall] the restore is barred from here on: \(removable.count) entry(ies) are being taken while their payloads stay in the vault")
+        }
+
+        var taken = 0
+        for (id, provider) in removable {
             do {
                 try await provider.removePreferences()
+                taken += 1
             } catch {
                 NSLog("[uninstall] entry removal failed for \(provider.localizedDescription ?? id.uuidString): \(error.localizedDescription)")
             }
+        }
+
+        if taken == 0, !barWasAlreadyUp, restoreBarredByTeardown {
+            restoreBarredByTeardown = false
+            NSLog("[uninstall] every removal was refused, so no entry was taken and the restore is not barred after all")
         }
         if unclassified > 0 {
             NSLog("[uninstall] \(unclassified) identified entry(ies) were outside the removable set and stay in the system store — another user's, or ours with a payload that does not decode")

@@ -286,6 +286,7 @@ final class MintedProviderLedger {
 
 struct FakeSlotFactory: TunnelProviderFactory {
     let canned: [TunnelProviding]
+    var loadFailure: Error?
 
     let minted = MintedProviderLedger()
 
@@ -298,6 +299,7 @@ struct FakeSlotFactory: TunnelProviderFactory {
     }
 
     func loadAllFromPreferences() async throws -> [TunnelProviding] {
+        if let loadFailure { throw loadFailure }
         let all: [TunnelProviding] = canned + minted.providers
         return all.filter { ($0 as? FakeSlotProvider)?.entryExists ?? true }
     }
