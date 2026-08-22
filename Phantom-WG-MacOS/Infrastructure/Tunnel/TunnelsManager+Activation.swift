@@ -425,14 +425,15 @@ extension TunnelsManager {
     }
 
     /// @witness ActivationSeam.aStopNobodyAnswersGroundsItsOwnRow
+    /// @witness ActivationSeam.aFlickerBackToInvalidIsStillNotAnAnswer
     private func armGroundingCeiling(for tunnel: TunnelContainer) {
         tunnel.groundingCeilingTask?.cancel()
         NSLog("[activation] \(tunnel.name) answered the stop with .invalid, which does not tell a finished session from a live one — the row is held at deactivating for \(Int(Self.groundingBudget))s to give the system its say")
         tunnel.groundingCeilingTask = Task { [weak self] in
             try? await Task.sleep(for: .seconds(Self.groundingBudget))
             guard !Task.isCancelled, let self else { return }
-            guard tunnel.status == .deactivating else { return }
             tunnel.groundingCeilingTask = nil
+            guard tunnel.status == .deactivating else { return }
             tunnel.refreshStatus()
             guard tunnel.status == .inactive else { return }
             NSLog("[activation] the system never spoke for \(tunnel.name) within \(Int(Self.groundingBudget))s — the hold is released and the slot goes to whoever is waiting")

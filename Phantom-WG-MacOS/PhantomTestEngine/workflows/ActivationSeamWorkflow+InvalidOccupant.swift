@@ -112,6 +112,45 @@ extension ActivationSeamWorkflow {
               "with the occupant grounded on that answer rather than on a guess — status=\(rig.a.status)")
     }
 
+    func aFlickerBackToInvalidIsStillNotAnAnswer() async {
+        guard let rig = invalidQueueRig("Flicker") else { return }
+
+        rig.fakeA.setStatusSilently(.invalid)
+        rig.manager.startActivation(of: rig.b)
+        guard check(rig.a.status == .deactivating,
+                    "the occupant is held on the reading that cannot answer — status=\(rig.a.status)") else { return }
+
+        guard check(rig.a.isHoldingForAnAnswer,
+                    "with a backstop standing behind that hold") else { return }
+
+        rig.fakeA.drive(.disconnecting)
+        _ = await settle(within: 0.5) { !rig.a.isHoldingForAnAnswer }
+        check(rig.a.isHoldingForAnAnswer,
+              "a .disconnecting says the system is WORKING on it, not that it is done, so it does NOT take the"
+              + " backstop away — which is the whole reason the reading below still has a guard to meet")
+        check(rig.a.status == .deactivating,
+              "and the row is still held — status=\(rig.a.status)")
+
+        rig.fakeA.drive(.invalid)
+        let startedOnFlicker = await settle(within: 0.5) { rig.fakeB.startCount > 0 }
+        check(!startedOnFlicker,
+              "and when the reading FLICKERS BACK to .invalid the hold is still standing, because the transient"
+              + " never took the backstop away (starts=\(rig.fakeB.startCount))")
+        check(rig.a.status == .deactivating,
+              "so the row was not repainted out from under it — status=\(rig.a.status)")
+
+        guard check(rig.a.isHoldingForAnAnswer,
+                    "the backstop has still not spent its budget, so what hands the queue on below is the ANSWER"
+                    + " rather than the ceiling running out under a slow rig") else { return }
+
+        rig.fakeA.drive(.disconnected)
+        let tookItsTurn = await settle(within: 3) { rig.fakeB.startCount >= 1 }
+        check(tookItsTurn,
+              "only the TERMINAL answer hands the queue on — starts=\(rig.fakeB.startCount), expected 1")
+        check(rig.a.status == .inactive,
+              "with the occupant grounded on it — status=\(rig.a.status)")
+    }
+
     func aStopNobodyAnswersGroundsItsOwnRow() async {
         guard let rig = invalidQueueRig("Ceiling") else { return }
 

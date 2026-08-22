@@ -72,6 +72,8 @@ final class ActivationSeamWorkflow: TestWorkflow {
             WorkflowStep("A List Refresh Cannot Take A Queued Tunnel's Turn", refreshCannotDropTheQueue),
             WorkflowStep("An .invalid Occupant Does Not Hand On The Queue",
                          anInvalidOccupantDoesNotHandOnTheQueue),
+            WorkflowStep("A Flicker Back To .invalid Is Still Not An Answer",
+                         aFlickerBackToInvalidIsStillNotAnAnswer),
             WorkflowStep("A Stop Nobody Answers Grounds Its Own Row",
                          aStopNobodyAnswersGroundsItsOwnRow),
             WorkflowStep("An Armed .invalid Occupant Does Not Hand On The Queue Either",

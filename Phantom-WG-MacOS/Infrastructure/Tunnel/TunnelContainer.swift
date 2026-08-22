@@ -38,6 +38,10 @@ class TunnelContainer: Identifiable {
     @ObservationIgnored var respawnReviveTask: Task<Void, Never>?
     @ObservationIgnored var groundingCeilingTask: Task<Void, Never>?
 
+    #if DEBUG
+    var isHoldingForAnAnswer: Bool { groundingCeilingTask != nil }
+    #endif
+
     init(tunnel: TunnelProviding) {
         tunnelProvider = tunnel
         id = tunnel.tunnelIdentity?.id ?? UUID()

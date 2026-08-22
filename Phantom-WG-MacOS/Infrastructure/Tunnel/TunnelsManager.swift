@@ -422,6 +422,8 @@ class TunnelsManager {
         tunnel.respawnReviveConsumed = true
         tunnel.respawnReviveTask?.cancel()
         tunnel.respawnReviveTask = nil
+        tunnel.groundingCeilingTask?.cancel()
+        tunnel.groundingCeilingTask = nil
 
         if let disarmError = await Self.standDownRecovery(on: tunnel.tunnelProvider) {
             NSLog("[remove] disarm save refused on \(tunnel.name) — armed=\(tunnel.tunnelProvider.isOnDemandEnabled) is the truest reading available: \(disarmError.localizedDescription)")
@@ -573,8 +575,9 @@ class TunnelsManager {
     }
 
     /// @witness ActivationSeam.anInvalidOccupantDoesNotHandOnTheQueue
+    /// @witness ActivationSeam.aFlickerBackToInvalidIsStillNotAnAnswer
     private func releaseGroundingCeiling(for tunnel: TunnelContainer, on systemStatus: NEVPNStatus) {
-        guard systemStatus != .invalid else { return }
+        guard systemStatus == .disconnected || systemStatus == .connected else { return }
         tunnel.groundingCeilingTask?.cancel()
         tunnel.groundingCeilingTask = nil
     }
