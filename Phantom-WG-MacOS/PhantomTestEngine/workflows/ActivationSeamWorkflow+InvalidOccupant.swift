@@ -75,6 +75,21 @@
 //       row is taken into `.deactivating` as it is held, because a ceiling
 //       that cannot see the hold in the status cannot end it on budget.
 //
+//   G — A Terminal Reading Ends The Hold Wherever It Is Read
+//       The hold was released on a terminal answer only where the observer
+//       handled one. A list refresh reads the same answer through
+//       `refreshStatus` and used to repaint the row while leaving the
+//       ceiling armed behind it — a ceiling outliving its hold, free to
+//       suppress a later reading in a give-up it has nothing to do with.
+//       The release now lives with the reading, not with the door.
+//
+//   H — A Teardown Takes The Ceilings And Arms No New One
+//       Every other arming site asks `mayArmRecovery`; the notification
+//       hold was the one that did not, and the uninstall sweep took every
+//       deferred task except this one. Both halves in one step, because a
+//       teardown that cancels the standing ceiling but arms a fresh one on
+//       the next `.invalid` has closed nothing.
+//
 // What this file cannot prove is which of the two things `.invalid` meant.
 // Nothing can, at the moment it is read — that is the whole reason the
 // hold exists. What is proven is that the app stops guessing.
@@ -418,6 +433,55 @@ extension ActivationSeamWorkflow {
               "only the terminal answer hands the queue on — starts=\(rig.fakeB.startCount), expected 1")
         check(rig.a.status == .inactive,
               "with the occupant grounded on that answer — status=\(rig.a.status)")
+    }
+
+    func aTerminalReadingEndsTheHoldWhereverItIsRead() async {
+        guard let rig = invalidQueueRig("HoldRelease") else { return }
+
+        rig.fakeA.setStatusSilently(.invalid)
+        rig.manager.startActivation(of: rig.b)
+        guard check(rig.a.status == .deactivating && rig.a.isHoldingForAnAnswer,
+                    "the occupant is held with a backstop behind it — status=\(rig.a.status)") else { return }
+
+        rig.fakeA.setStatusSilently(.reasserting)
+        rig.a.refreshStatus()
+        check(rig.a.status == .deactivating,
+              "a list refresh that reads a transient leaves the hold exactly where it was — status=\(rig.a.status)")
+        guard check(rig.a.isHoldingForAnAnswer,
+                    "backstop included, which is what makes the SAME call below a measurement of the reading rather"
+                    + " than of the call") else { return }
+
+        rig.fakeA.setStatusSilently(.disconnected)
+        rig.a.refreshStatus()
+        check(rig.a.status == .inactive,
+              "the same call reading a TERMINAL answer repaints the row — status=\(rig.a.status)")
+        check(!rig.a.isHoldingForAnAnswer,
+              "and takes the hold down with it, so no ceiling outlives the row it was holding and turns up later to"
+              + " suppress a reading in some other flow")
+    }
+
+    func aTeardownTakesTheCeilingsAndArmsNoNewOne() async {
+        guard let rig = invalidQueueRig("CeilingSweep") else { return }
+
+        rig.fakeA.setStatusSilently(.invalid)
+        rig.manager.startActivation(of: rig.b)
+        guard check(rig.a.isHoldingForAnAnswer,
+                    "a ceiling stands before the teardown begins, which is what the sweep below has to find")
+        else { return }
+
+        rig.manager.suspendRefreshForUninstall()
+        await rig.manager.disarmAllRecovery()
+        guard check(rig.manager.isStoreHeldForTeardown,
+                    "the teardown holds the store") else { return }
+        check(!rig.a.isHoldingForAnAnswer,
+              "and its sweep took the standing ceiling with every other deferred task, rather than leaving one"
+              + " behind to fire after the store is given back")
+
+        rig.fakeA.drive(.invalid)
+        _ = await settle(within: 1) { rig.a.isHoldingForAnAnswer }
+        check(!rig.a.isHoldingForAnAnswer,
+              "and no FRESH one is armed under the held store either — a sweep that cancels one ceiling while the"
+              + " next reading arms another has closed nothing")
     }
 }
 #endif

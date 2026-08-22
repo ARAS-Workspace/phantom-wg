@@ -422,8 +422,7 @@ class TunnelsManager {
         tunnel.respawnReviveConsumed = true
         tunnel.respawnReviveTask?.cancel()
         tunnel.respawnReviveTask = nil
-        tunnel.groundingCeilingTask?.cancel()
-        tunnel.groundingCeilingTask = nil
+        tunnel.standDownCeiling()
 
         if let disarmError = await Self.standDownRecovery(on: tunnel.tunnelProvider) {
             NSLog("[remove] disarm save refused on \(tunnel.name) — armed=\(tunnel.tunnelProvider.isOnDemandEnabled) is the truest reading available: \(disarmError.localizedDescription)")
@@ -579,8 +578,7 @@ class TunnelsManager {
     /// @witness ActivationSeam.aTransientDoesNotRepaintAHeldRow
     private func releaseGroundingCeiling(for tunnel: TunnelContainer, on systemStatus: NEVPNStatus) {
         guard systemStatus.isTerminalAnswer else { return }
-        tunnel.groundingCeilingTask?.cancel()
-        tunnel.groundingCeilingTask = nil
+        tunnel.standDownCeiling()
     }
 
     // swiftlint:disable:next cyclomatic_complexity function_body_length
@@ -678,7 +676,8 @@ class TunnelsManager {
         } else {
             if systemStatus == .invalid,
                tunnel.status == .deactivating || tunnel.stopIsWaitingOnItsRule,
-               tunnel.groundingCeilingTask == nil {
+               tunnel.groundingCeilingTask == nil,
+               mayArmRecovery(tunnel) {
                 tunnel.status = .deactivating
                 armGroundingCeiling(for: tunnel)
                 return

@@ -59,12 +59,23 @@ class TunnelContainer: Identifiable {
 
     /// @witness ActivationSeam
     /// @witness ActivationSeam.anInvalidOccupantDoesNotHandOnTheQueue
+    /// @witness ActivationSeam.aCeilingDoesNotGroundARowTheListNoLongerHolds
+    /// @witness ActivationSeam.aTerminalReadingEndsTheHoldWhereverItIsRead
+    func standDownCeiling() {
+        groundingCeilingTask?.cancel()
+        groundingCeilingTask = nil
+    }
+
     /// @witness ActivationSeam.aTransientDoesNotRepaintAHeldRow
+    /// @witness ActivationSeam.aTerminalReadingEndsTheHoldWhereverItIsRead
     func refreshStatus() {
         let system = tunnelProvider.connectionStatus
         let derived = TunnelStatus(from: system)
         if isManagerDriven, derived == .inactive || derived == .deactivating { return }
-        if groundingCeilingTask != nil, !system.isTerminalAnswer { return }
+        if groundingCeilingTask != nil {
+            guard system.isTerminalAnswer else { return }
+            standDownCeiling()
+        }
         status = derived
         clearErrorOnRise()
     }
