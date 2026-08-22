@@ -437,6 +437,7 @@ extension TunnelsManager {
     /// @witness ActivationSeam.aFlickerBackToInvalidIsStillNotAnAnswer
     /// @witness ActivationSeam.aCeilingDoesNotGroundARowTheListNoLongerHolds
     /// @witness ActivationSeam.aLateInvalidDoesNotHandOnTheQueueEither
+    /// @witness ActivationSeam.anInvalidWhileTheStopWaitsOnItsRuleHoldsToo
     func armGroundingCeiling(for tunnel: TunnelContainer) {
         tunnel.groundingCeilingTask?.cancel()
         NSLog("[activation] \(tunnel.name) answered the stop with .invalid, which does not tell a finished session from a live one — the row is held at deactivating for \(Int(Self.groundingBudget))s to give the system its say")

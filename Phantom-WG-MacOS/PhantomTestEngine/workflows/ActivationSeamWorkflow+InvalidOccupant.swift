@@ -64,6 +64,17 @@
 //       arms is both the fix and the step's proof that the reading was
 //       delivered at all.
 //
+//   F — An .invalid While The Stop Waits On Its Rule Holds Too
+//       E keyed the notification hold on `.deactivating`, and an ARMED
+//       occupant is not `.deactivating` yet: its stop parks on its own
+//       disarm save and the row stays `.active` until `performDeactivation`
+//       runs inside that parked task. An `.invalid` landing in THAT window
+//       walked straight past E's guard and grounded a live row. The row
+//       already names the window — `stopIsWaitingOnItsRule` — so the hold
+//       reads it rather than inventing a second notion of "stopping". The
+//       row is taken into `.deactivating` as it is held, because a ceiling
+//       that cannot see the hold in the status cannot end it on budget.
+//
 // What this file cannot prove is which of the two things `.invalid` meant.
 // Nothing can, at the moment it is read — that is the whole reason the
 // hold exists. What is proven is that the app stops guessing.
@@ -360,6 +371,53 @@ extension ActivationSeamWorkflow {
         check(rig.a.status == .inactive,
               "with the occupant grounded on that answer rather than on the reading that could not give one —"
               + " status=\(rig.a.status)")
+    }
+
+    func anInvalidWhileTheStopWaitsOnItsRuleHoldsToo() async {
+        guard let rig = invalidQueueRig("StopWaiting") else { return }
+        rig.fakeA.arrangeArmed()
+        guard rig.a.isActivateOnDemandEnabled else {
+            fail("the rig's occupant is not armed, so its stop would not park on a disarm at all")
+            return
+        }
+        rig.fakeA.saveAnswer = .succeedsAfter(seconds: 2)
+
+        rig.manager.startActivation(of: rig.b)
+        let disarmIssued = await settle(within: 3) { rig.fakeA.saveCount == 1 }
+        guard check(disarmIssued,
+                    "the armed occupant's stop parked on its own disarm save — saves=\(rig.fakeA.saveCount)")
+        else { return }
+        guard check(rig.a.status == .active,
+                    "and while that save is in flight the row is still ACTIVE, because performDeactivation runs"
+                    + " INSIDE the parked task — status=\(rig.a.status)") else { return }
+        guard check(rig.a.stopIsWaitingOnItsRule,
+                    "which is the window the row itself already names, rather than a second notion of stopping")
+        else { return }
+        guard check(!rig.a.isHoldingForAnAnswer && rig.fakeB.startCount == 0,
+                    "with no ceiling behind it yet and nothing raised") else { return }
+
+        rig.fakeA.drive(.invalid)
+        let startedOnTheReading = await settle(within: 1) { rig.fakeB.startCount > 0 }
+        check(!startedOnTheReading,
+              "an .invalid arriving in THAT window does not hand the slot on over a session still reading up —"
+              + " starts=\(rig.fakeB.startCount), expected 0")
+        check(rig.a.status == .deactivating,
+              "the row is taken into the hold instead of grounded — status=\(rig.a.status)")
+        guard check(rig.a.isHoldingForAnAnswer,
+                    "with the ceiling armed, which is what lets the hold end on its own budget rather than sitting"
+                    + " on a status no ceiling can see") else { return }
+
+        let stopWentOut = await settle(within: 4) { rig.fakeA.stopCount >= 1 }
+        check(stopWentOut,
+              "and the parked disarm still finished and put the stop out past the hold —"
+              + " stops=\(rig.fakeA.stopCount)")
+
+        rig.fakeA.drive(.disconnected)
+        let tookItsTurn = await settle(within: 3) { rig.fakeB.startCount >= 1 }
+        check(tookItsTurn,
+              "only the terminal answer hands the queue on — starts=\(rig.fakeB.startCount), expected 1")
+        check(rig.a.status == .inactive,
+              "with the occupant grounded on that answer — status=\(rig.a.status)")
     }
 }
 #endif

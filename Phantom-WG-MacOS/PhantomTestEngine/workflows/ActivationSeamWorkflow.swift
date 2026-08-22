@@ -74,6 +74,8 @@ final class ActivationSeamWorkflow: TestWorkflow {
                          anInvalidOccupantDoesNotHandOnTheQueue),
             WorkflowStep("A Late .invalid Does Not Hand On The Queue Either",
                          aLateInvalidDoesNotHandOnTheQueueEither),
+            WorkflowStep("An .invalid While The Stop Waits On Its Rule Holds Too",
+                         anInvalidWhileTheStopWaitsOnItsRuleHoldsToo),
             WorkflowStep("A Flicker Back To .invalid Is Still Not An Answer",
                          aFlickerBackToInvalidIsStillNotAnAnswer),
             WorkflowStep("A Transient Does Not Repaint A Held Row",
