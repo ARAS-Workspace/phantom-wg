@@ -197,9 +197,12 @@ extension ActivationSeamWorkflow {
         faultVault.storeAnswer = .answers(.done)
         faultVault.deleteAnswer = .answers(.done)
 
+        // The list is seeded with BOTH rows, but the factory only ever knows
+        // about the queued one — so the pass below drops the occupant without
+        // anything having to be removed from a store first.
         let manager = TunnelsManager(
             tunnelProviders: [fakeA, fakeB],
-            providerFactory: FakeSlotFactory(canned: [fakeA, fakeB]),
+            providerFactory: FakeSlotFactory(canned: [fakeB]),
             vault: faultVault,
             observesSystemChanges: false
         )
@@ -214,12 +217,16 @@ extension ActivationSeamWorkflow {
         guard check(a.status == .deactivating && a.isHoldingForAnAnswer,
                     "the occupant is held with a backstop behind it — status=\(a.status)") else { return }
 
-        try? await fakeA.removePreferences()
         await manager.prune()
 
         guard check(!manager.tunnels.contains(where: { $0 === a }),
                     "the list dropped the row while its ceiling was still standing, which is the arrangement the"
                     + " guard below is for — rows=\(manager.tunnels.count)") else { return }
+        guard check(manager.tunnels.contains(where: { $0 === b }),
+                    "and it kept the queued one, so the slot below is still a slot") else { return }
+        guard check(a.isHoldingForAnAnswer,
+                    "with the dropped row's ceiling still armed — nothing cancelled it on the way out, which is"
+                    + " exactly the forgotten-cancel this guard stands in for") else { return }
         guard check(a.status == .deactivating,
                     "and nothing else has repainted it, so the ceiling is the only thing that could —"
                     + " status=\(a.status)") else { return }
