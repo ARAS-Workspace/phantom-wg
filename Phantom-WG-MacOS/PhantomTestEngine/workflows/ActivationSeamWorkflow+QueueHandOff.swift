@@ -46,6 +46,15 @@
 //       preflightBudget`, which must stay well past the step's own end or
 //       its stand-down save would be read as an arm.
 //
+//   C — A Rung Already Past The Entry Arms Nothing Either
+//       B bars the DOOR; this bars the WRITE. A rung-0 body suspends in
+//       its slot pre-flight before it arms, and on the way out it used to
+//       re-read only the attempt and the row — never the store's latch. A
+//       vault that answers late parks that pre-flight for exactly the
+//       budget `bounded` allows, so the teardown can be staged inside it.
+//       The pre-flight is single-shot per manager, so the control cannot
+//       follow the bar on one rig: it runs FIRST, on a twin.
+//
 // Neither reading is taken off a timer where one can be avoided. A's
 // readings move synchronously inside the notification handler; B's are
 // snapshotted the moment a rung lands, so the next rung is a whole
@@ -155,6 +164,63 @@ extension ActivationSeamWorkflow {
         check(savesAtBar < manager.maxRetries,
               "with rungs left to climb, so what ended the climb is the teardown rather than a ladder that ran"
               + " out — \(savesAtBar) of the \(manager.maxRetries) it was given had been spent")
+    }
+
+    private func parkedPreflightRig(_ label: String) -> (
+        fake: FakeSlotProvider, row: TunnelContainer, manager: TunnelsManager
+    )? {
+        let identity = TunnelIdentity(id: UUID(), name: "TE-Seam-\(label)-\(runTag)",
+                                      createdAt: Date(), isGhost: false)
+        let fake = FakeSlotProvider(name: identity.name, identity: identity, status: .disconnected)
+        let faultVault = FaultVaultClient()
+        faultVault.readAllAnswer = .answersAfter(seconds: 30, .unreachable)
+        let manager = TunnelsManager(
+            tunnelProviders: [fake],
+            providerFactory: FakeSlotFactory(canned: [fake]),
+            vault: faultVault,
+            retryInterval: 30,
+            observesSystemChanges: false
+        )
+        guard let row = manager.tunnels.first(where: { $0.id == identity.id }) else {
+            fail("side manager did not materialize the parked pre-flight rig")
+            return nil
+        }
+        return (fake, row, manager)
+    }
+
+    func aRungAlreadyPastTheEntryArmsNothingEither() async {
+        guard let control = parkedPreflightRig("InFlightFree") else { return }
+        let parked = control.manager.preflightBudget
+
+        control.manager.startActivation(of: control.row)
+        guard check(control.fake.saveCount == 0,
+                    "the rung is past the entry guard and inside its rung-0 pre-flight, where nothing has been"
+                    + " written yet — saves=\(control.fake.saveCount)") else { return }
+        let controlArmed = await settle(within: parked * 2) { control.fake.storedOnDemand }
+        guard check(controlArmed,
+                    "and with nobody taking the store it comes out of that pre-flight and ARMS — which is what says"
+                    + " a parked rung can reach the write at all (saves=\(control.fake.saveCount),"
+                    + " starts=\(control.fake.startCount))") else { return }
+
+        guard let barred = parkedPreflightRig("InFlightHeld") else { return }
+        barred.manager.startActivation(of: barred.row)
+        _ = await settle(within: parked / 2) { barred.fake.saveCount > 0 }
+        guard check(barred.fake.saveCount == 0,
+                    "its twin is still inside the same pre-flight half a budget later, so the store below is taken"
+                    + " while that rung is genuinely in flight rather than before it began") else { return }
+
+        barred.manager.suspendRefreshForUninstall()
+        guard check(barred.manager.isStoreHeldForTeardown,
+                    "a teardown takes the store from under a rung that already passed the entry guard") else { return }
+
+        _ = await settle(within: parked * 2) { barred.fake.saveCount > 0 }
+        check(!barred.fake.storedOnDemand,
+              "so the rung asks again on its way out of the pre-flight and arms nothing — the reading it entered on"
+              + " is not the one it acts on (storedOnDemand=\(barred.fake.storedOnDemand))")
+        check(barred.fake.saveCount == 0,
+              "with no save issued at all — saves=\(barred.fake.saveCount), expected 0")
+        check(barred.fake.startCount == 0,
+              "and no session raised under the teardown — starts=\(barred.fake.startCount), expected 0")
     }
 }
 #endif

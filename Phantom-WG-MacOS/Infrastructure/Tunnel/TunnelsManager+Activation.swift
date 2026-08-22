@@ -245,6 +245,7 @@ extension TunnelsManager {
     }
 
     /// @witness ActivationSeam.aTeardownHoldingTheStoreArmsNothing
+    /// @witness ActivationSeam.aRungAlreadyPastTheEntryArmsNothingEither
     func mayArmRecovery(_ tunnel: TunnelContainer) -> Bool {
         !refreshSuspended && !removingIds.contains(tunnel.id)
     }
@@ -321,6 +322,7 @@ extension TunnelsManager {
             }
             guard tunnel.activationAttemptId == attemptId,
                   tunnel.status == .activating || tunnel.status == .reasserting else { return }
+            guard mayArmRecovery(tunnel) else { return }
 
             tunnel.tunnelProvider.isEnabled = true
             Self.armRecovery(on: tunnel.tunnelProvider)
