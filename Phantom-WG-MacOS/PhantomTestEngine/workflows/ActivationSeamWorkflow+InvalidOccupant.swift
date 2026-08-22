@@ -50,6 +50,20 @@
 //       `.reasserting` repaints the row, which is what says the readings
 //       above were barred rather than never delivered.
 //
+//   E — A Late .invalid Does Not Hand On The Queue Either
+//       The hold used to be armed from ONE door: the synchronous reading
+//       taken right after `stopTunnel()`. But that call is asynchronous, so
+//       a live session still reads `.connected` there and takes the plain
+//       `default` arm — no ceiling. The `.invalid` then arrives as a
+//       NOTIFICATION, finds no ceiling to bar it, grounds the row and hands
+//       the slot on: the exact hand-off this file exists to prevent, on the
+//       door a real session actually walks through. Every run of this suite
+//       says so — the arming log fires only for the driven `TE-Seam-*` rows
+//       and never once for a real tunnel. The notification door now answers
+//       `.invalid` the way the synchronous one does, and the ceiling it
+//       arms is both the fix and the step's proof that the reading was
+//       delivered at all.
+//
 // What this file cannot prove is which of the two things `.invalid` meant.
 // Nothing can, at the moment it is read — that is the whole reason the
 // hold exists. What is proven is that the app stops guessing.
@@ -313,6 +327,39 @@ extension ActivationSeamWorkflow {
         check(repainted,
               "and that SAME reading repaints the row once no backstop stands behind it — which is what says the"
               + " two above were barred rather than never delivered (status=\(rig.a.status))")
+    }
+
+    func aLateInvalidDoesNotHandOnTheQueueEither() async {
+        guard let rig = invalidQueueRig("LateInvalid") else { return }
+
+        rig.manager.startActivation(of: rig.b)
+        guard check(rig.a.status == .deactivating,
+                    "the occupant's stop landed through the ordinary door, with the system still reading .connected"
+                    + " when it was asked — status=\(rig.a.status)") else { return }
+        guard check(!rig.a.isHoldingForAnAnswer,
+                    "so NO ceiling was armed on the way out — this is the door a real session takes and the one the"
+                    + " synchronous arm never sees") else { return }
+        guard check(rig.b.status == .waiting && rig.fakeB.startCount == 0,
+                    "with the slot held for the queued tunnel and nothing raised yet") else { return }
+
+        rig.fakeA.drive(.invalid)
+        let startedOnTheReading = await settle(within: 1) { rig.fakeB.startCount > 0 }
+        check(!startedOnTheReading,
+              "an .invalid that arrives AFTER the stop still cannot tell a finished session from a live one, so it"
+              + " does not hand the slot on — starts=\(rig.fakeB.startCount), expected 0")
+        check(rig.a.status == .deactivating,
+              "and the row is HELD rather than grounded on that reading — status=\(rig.a.status)")
+        guard check(rig.a.isHoldingForAnAnswer,
+                    "the notification armed the hold itself, which is both the fix and the proof that the reading"
+                    + " reached the handler rather than never arriving") else { return }
+
+        rig.fakeA.drive(.disconnected)
+        let tookItsTurn = await settle(within: 3) { rig.fakeB.startCount >= 1 }
+        check(tookItsTurn,
+              "and the system's OWN answer hands the queue on — starts=\(rig.fakeB.startCount), expected 1")
+        check(rig.a.status == .inactive,
+              "with the occupant grounded on that answer rather than on the reading that could not give one —"
+              + " status=\(rig.a.status)")
     }
 }
 #endif
