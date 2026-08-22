@@ -244,9 +244,14 @@ extension TunnelsManager {
         !removingIds.contains(tunnel.id) && tunnels.contains(where: { $0 === tunnel })
     }
 
+    /// @witness ActivationSeam.aTeardownHoldingTheStoreArmsNothing
+    func mayArmRecovery(_ tunnel: TunnelContainer) -> Bool {
+        !refreshSuspended && !removingIds.contains(tunnel.id)
+    }
+
     // swiftlint:disable:next cyclomatic_complexity function_body_length
     func startActivation(of tunnel: TunnelContainer, at retryIndex: Int) {
-        guard !removingIds.contains(tunnel.id) else { return }
+        guard mayArmRecovery(tunnel) else { return }
         guard retryIndex < maxRetries else {
             tunnel.isAttemptingActivation = false
             tunnel.activationAttemptId = nil
