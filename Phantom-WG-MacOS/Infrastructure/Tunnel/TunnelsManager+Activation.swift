@@ -23,8 +23,13 @@ extension TunnelsManager {
         beginActivation(of: tunnel)
     }
 
+    /// A slot claimed while a teardown holds the store is one whose sweep has
+    /// already passed: nothing will hand it on, and the stop this would issue
+    /// lands on a session the teardown is about to take anyway.
     /// @witness ActivationSeam.anInvalidOccupantDoesNotHandOnTheQueue
+    /// @witness ActivationSeam.aTeardownHoldingTheStoreTakesNoQueueSlot
     func beginActivation(of tunnel: TunnelContainer) {
+        guard !refreshSuspended else { return }
         guard !removingIds.contains(tunnel.id) else { return }
         guard tunnel.status == .inactive else { return }
 
@@ -131,22 +136,31 @@ extension TunnelsManager {
             tunnel.respawnReviveTask = nil
             tunnel.standDownCeiling()
         }
-        let deferred = tunnels.flatMap { [$0.activationRungTask, $0.pendingDisarmTask] }.compactMap { $0 }
-        _ = await bounded(15) {
-            for task in deferred { await task.value }
+        // Read each row's deferred work INSIDE the wait rather than snapshotting
+        // it first: `park(_:on:)` replaces `pendingDisarmTask` with a fresh
+        // wrapper, so a handle taken before the await can complete without
+        // covering the one that replaced it.
+        let settled = await bounded(15) {
+            for tunnel in self.tunnels {
+                await tunnel.activationRungTask?.value
+                await tunnel.pendingDisarmTask?.value
+            }
             return true
         }
+        if settled != true {
+            NSLog("[uninstall] the recovery sweep gave up waiting on the deferred work of \(tunnels.count) row(s) after 15s — whatever resumes past here writes behind the sweep rather than in front of it")
+        }
         // A stop that resumed inside the wait above has painted its own row and
-        // armed its own ceiling, so the verdict is reached after them, not
-        // before — and reached the way the ceiling would have reached it, by
-        // asking the system rather than writing over its answer.
+        // armed its own ceiling, so the verdict is reached after them. It is a
+        // flat one: the sweep has issued no stop and is not a reading of the
+        // session, so the provider's answer here is whatever NE has not caught
+        // up on yet — and a row left anything but inactive holds the single slot
+        // against every tunnel including itself.
         for tunnel in tunnels {
             tunnel.standDownCeiling()
             switch tunnel.status {
-            case .activating, .waiting:
+            case .activating, .waiting, .deactivating:
                 tunnel.status = .inactive
-            case .deactivating:
-                tunnel.refreshStatus()
             case .inactive, .active, .reasserting:
                 break
             }
@@ -454,7 +468,7 @@ extension TunnelsManager {
     /// @witness ActivationSeam.aLateInvalidDoesNotHandOnTheQueueEither
     /// @witness ActivationSeam.aTeardownsHoldDoesNotTurnAReadingIntoAnAnswer
     func armGroundingCeiling(for tunnel: TunnelContainer) {
-        NSLog("[activation] \(tunnel.name) answered the stop with .invalid, which does not tell a finished session from a live one — the row is held at deactivating for \(Int(Self.groundingBudget))s to give the system its say")
+        NSLog("[activation] \(tunnel.name) read .invalid with a stop under way on it, and .invalid does not tell a finished session from a live one — the row is held at deactivating until the system answers, or until a budget of \(Int(Self.groundingBudget))s passes with the stop already issued")
         scheduleGroundingCeiling(for: tunnel)
     }
 
@@ -465,18 +479,20 @@ extension TunnelsManager {
     /// below instead, where it is read against the state at the moment it would
     /// be acted on rather than the state it was armed in.
     ///
-    /// The budget waits behind the stop rather than in front of it: on an armed
-    /// row the stop runs inside a task parked on its own disarm save, so a
-    /// budget started at the reading would be counting down a wait that has not
-    /// begun — and could spend itself before the stop was ever issued.
+    /// A budget may only measure a wait that has begun. On an armed row the stop
+    /// runs inside a task parked on its own disarm save, so a budget that runs
+    /// out while the row still says a stop is under way is RENEWED rather than
+    /// spent. Each renewal is a fresh cancellable sleep that re-asks every
+    /// question above it, so a row the list drops, a row that moves off
+    /// `.deactivating`, and a stop that finally goes out all end the chain — the
+    /// one case that does not is a disarm save the system never answers, and
+    /// holding there is the truthful reading, because no stop was ever issued.
     /// @witness ActivationSeam.aRefreshDuringAParkedStopDoesNotGroundTheRow
     /// @witness ActivationSeam.anInvalidWhileTheStopWaitsOnItsRuleHoldsToo
     /// @witness ActivationSeam.aCeilingDoesNotGroundARowTheListNoLongerHolds
-    private func scheduleGroundingCeiling(for tunnel: TunnelContainer) {
+    private func scheduleGroundingCeiling(for tunnel: TunnelContainer, renewed: Bool = false) {
         tunnel.groundingCeilingTask?.cancel()
-        let parkedStop = tunnel.pendingDisarmTask
         tunnel.groundingCeilingTask = Task { [weak self, weak tunnel] in
-            await parkedStop?.value
             try? await Task.sleep(for: .seconds(Self.groundingBudget))
             guard !Task.isCancelled, let self, let tunnel else { return }
             tunnel.groundingCeilingTask = nil
@@ -485,6 +501,13 @@ extension TunnelsManager {
                 return
             }
             guard tunnel.status == .deactivating else { return }
+            guard tunnel.pendingDisarmCount == 0 else {
+                if !renewed {
+                    NSLog("[activation] the budget for \(tunnel.name) ran out before its stop did — the stop is still parked on its own disarm save, so the hold is renewed until that stop is actually issued")
+                }
+                self.scheduleGroundingCeiling(for: tunnel, renewed: true)
+                return
+            }
             tunnel.refreshStatus()
             guard tunnel.status == .inactive else { return }
             NSLog("[activation] the system never spoke for \(tunnel.name) within \(Int(Self.groundingBudget))s — the hold is released and the slot goes to whoever is waiting")

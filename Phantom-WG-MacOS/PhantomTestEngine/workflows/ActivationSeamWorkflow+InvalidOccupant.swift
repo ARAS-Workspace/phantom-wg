@@ -106,8 +106,14 @@
 //       that: it left a window where the row was painted and nothing held
 //       it, and the next `refreshStatus` — the call every list reload
 //       makes on every row it keeps — read the same `.invalid` and
-//       grounded it. The hold is armed at the reading. It is the BUDGET
-//       that waits behind the stop.
+//       grounded it. And making the hold WAIT for that stop before its
+//       budget begins was the second wrong way: `Task<Void, Never>.value`
+//       ignores its awaiter's cancellation and no `savePreferences` on any
+//       path carries a timeout, so a hold parked there cannot be stood down
+//       and pins the row for ever. The hold is armed at the reading, on a
+//       plain cancellable budget; a budget that runs out while the row
+//       still says a stop is under way is RENEWED, which re-asks every
+//       question rather than waiting on one answer.
 //
 //   K — A Teardown Waits Out The Stop It Parked
 //       The sweep awaited every activation rung but not the one deferred
@@ -456,9 +462,9 @@ extension ActivationSeamWorkflow {
               "a whole budget passes with nothing decided on it — status=\(rig.a.status), starts="
               + "\(rig.fakeB.startCount)")
         check(rig.a.isHoldingForAnAnswer && rig.fakeA.stopCount == 0,
-              "because the budget waits BEHIND the stop rather than in front of it: the stop is still inside the"
-              + " parked disarm, and a budget started here would be counting down a wait that has not begun"
-              + " (stops=\(rig.fakeA.stopCount))")
+              "because a budget that runs out while the row still says a stop is under way is RENEWED rather than"
+              + " spent: the stop is still inside the parked disarm, and no budget may measure a wait that has"
+              + " not begun (stops=\(rig.fakeA.stopCount))")
 
         let stopWentOut = await settle(within: 5) { rig.fakeA.stopCount >= 1 }
         guard check(stopWentOut,
@@ -527,14 +533,15 @@ extension ActivationSeamWorkflow {
     func aTeardownsHoldDoesNotTurnAReadingIntoAnAnswer() async {
         guard let rig = invalidQueueRig("NoArmNoGround") else { return }
 
-        rig.manager.suspendRefreshForUninstall()
-        guard check(rig.manager.isStoreHeldForTeardown,
-                    "a teardown holds the store before the stop below is even issued") else { return }
-
         rig.manager.startActivation(of: rig.b)
         guard check(rig.a.status == .deactivating && !rig.a.isHoldingForAnAnswer,
                     "the occupant's stop lands while the provider still reads .connected, so nothing has held it"
                     + " yet — status=\(rig.a.status)") else { return }
+
+        rig.manager.suspendRefreshForUninstall()
+        guard check(rig.manager.isStoreHeldForTeardown,
+                    "and THEN a teardown takes the store, so the reading below arrives on a row this manager may"
+                    + " no longer write") else { return }
 
         rig.fakeA.drive(.invalid)
         let held = await settle(within: 2) { rig.a.isHoldingForAnAnswer }
@@ -567,7 +574,7 @@ extension ActivationSeamWorkflow {
             fail("the rig's occupant is not armed, so its stop would not park on a disarm at all")
             return
         }
-        rig.fakeA.saveAnswer = .succeedsAfter(seconds: TunnelsManager.groundingBudget * 2 + 1)
+        rig.fakeA.saveAnswer = .succeedsAfter(seconds: TunnelsManager.groundingBudget)
 
         rig.manager.startActivation(of: rig.b)
         guard await settle(within: 3, until: { rig.a.stopIsWaitingOnItsRule }) else {
@@ -597,6 +604,14 @@ extension ActivationSeamWorkflow {
         check(rig.a.isHoldingForAnAnswer,
               "with the backstop still standing past both of them, rather than spent by readings that answer"
               + " nothing")
+
+        rig.fakeA.saveAnswer = .succeeds
+        rig.fakeA.drive(.disconnected)
+        let handedOn = await settle(within: 5) { rig.fakeB.startCount >= 1 }
+        check(handedOn,
+              "and it is the terminal answer that finally spends the slot — which also drains this rig rather"
+              + " than leaving its parked save and its hold to run on into the steps below"
+              + " (starts=\(rig.fakeB.startCount))")
     }
 
     func aTeardownWaitsOutTheStopItParked() async {
@@ -610,9 +625,18 @@ extension ActivationSeamWorkflow {
         rig.fakeA.setStatusSilently(.invalid)
 
         rig.manager.startDeactivation(of: rig.a)
+        guard await settle(within: 3, until: { rig.fakeA.saveCount == 1 }) else {
+            fail("the parked disarm never reached its save, so nothing here is arranged to be slow —"
+                 + " saves=\(rig.fakeA.saveCount)")
+            return
+        }
         guard check(rig.a.pendingDisarmCount == 1 && rig.fakeA.stopCount == 0,
                     "the stop is parked on its own disarm save and has not gone out — count="
                     + "\(rig.a.pendingDisarmCount), stops=\(rig.fakeA.stopCount)") else { return }
+        // Only now: the slow save is already ISSUED, so restoring the answer
+        // cannot reach it. Set before the disarm task's body ever ran, this
+        // whole arrangement would be inert and the guard below would hold
+        // against the unfixed sweep too.
         rig.fakeA.saveAnswer = .succeeds
 
         rig.manager.suspendRefreshForUninstall()

@@ -16,8 +16,8 @@
 // raise a session or arm a recovery rule under it. `reload()` already
 // asked; the writers below were not.
 //
-// The invariant has two doors, and each earns its own step because each
-// was open for a different reason.
+// The invariant has one door per writer, and each earns its own step
+// because each was open for a different reason.
 //
 // Scenarios:
 //
@@ -29,7 +29,15 @@
 //       store held and once with it given back, so the first half is
 //       measuring a bar rather than a rig that could not take a turn.
 //
-//   B — A Teardown Holding The Store Arms Nothing
+//   B — A Teardown Holding The Store Takes No Queue Slot
+//       A is only half of it: a slot the hand-off is barred from serving
+//       is a slot nothing else will serve either, because the sweep that
+//       clears the queue has already run. Barring the hand-off and letting
+//       the slot be CLAIMED leaves the row waiting for ever — and the claim
+//       itself stops a live session on the way in. The bar belongs at
+//       `beginActivation`, where the slot is taken, rather than after it.
+//
+//   C — A Teardown Holding The Store Arms Nothing
 //       The hand-off is only one caller. `armRecovery` has a single call
 //       site, inside the rung task that `startActivation(of:at:)` spawns,
 //       and every door — the user's own press, a respawn revive, the retry
@@ -46,8 +54,8 @@
 //       preflightBudget`, which must stay well past the step's own end or
 //       its stand-down save would be read as an arm.
 //
-//   C — A Rung Already Past The Entry Arms Nothing Either
-//       B bars the DOOR; this bars the WRITE. A rung-0 body suspends in
+//   D — A Rung Already Past The Entry Arms Nothing Either
+//       C bars the DOOR; this bars the WRITE. A rung-0 body suspends in
 //       its slot pre-flight before it arms, and on the way out it used to
 //       re-read only the attempt and the row — never the store's latch. A
 //       vault that answers late parks that pre-flight for exactly the
@@ -55,8 +63,8 @@
 //       The pre-flight is single-shot per manager, so the control cannot
 //       follow the bar on one rig: it runs FIRST, on a twin.
 //
-//   D — A Row The List Dropped Raises No Session Either
-//       C bars the ARM; this bars the START. Two awaits still sit between
+//   E — A Row The List Dropped Raises No Session Either
+//       D bars the ARM; this bars the START. Two awaits still sit between
 //       the arm and `startTunnel` — the arm's own save and the load behind
 //       it — and only one guard is needed to cover both, because it sits
 //       past them. The step also drives the OTHER way a row stops being
@@ -69,15 +77,14 @@
 //       the latch half fails without the guard, the dropped half fails
 //       without the subset.
 //
-// Neither reading is taken off a timer where one can be avoided. A's
-// readings move synchronously inside the notification handler; B's are
-// snapshotted the moment a rung lands, so the next rung is a whole
-// interval away rather than in flight across the bar.
+// No reading is taken off a timer where one can be avoided. A's and B's
+// move inside the handler and the toggle themselves; C's are snapshotted
+// the moment a rung lands, so the next rung is a whole interval away
+// rather than in flight across the bar.
 //
 // What this file does not prove is the ceiling door — a grounding ceiling
 // whose budget expires inside `removableEntryIds()`. Staging that needs a
-// slow vault and a wall clock; the bars it would meet are the two proven
-// here.
+// slow vault and a wall clock; the bars it would meet are proven here.
 
 #if DEBUG
 import Foundation
@@ -119,14 +126,41 @@ extension ActivationSeamWorkflow {
         guard check(!rig.manager.isStoreHeldForTeardown,
                     "the store is given back") else { return }
 
+        rig.fakeA.drive(.disconnected)
         let handedOn = await settle(within: 3) { rig.b.status == .activating }
         check(handedOn,
-              "and giving it back re-opens the question the bar parked, rather than waiting on a second reading:"
-              + " the reading that would have spent this slot has already been and gone, so a slot left waiting"
-              + " for another one waits for ever (status=\(rig.b.status))")
+              "and the SAME reading hands the slot on once the store is back — which is what says the bar"
+              + " above was the teardown's and not this rig's inability to take a turn (status="
+              + "\(rig.b.status))")
         check(rig.manager.waitingTunnel == nil,
-              "with the slot given up as it went — which is also what says the bar above was the teardown's and"
-              + " not this rig's inability to take a turn")
+              "with the slot given up as it went")
+    }
+
+    func aTeardownHoldingTheStoreTakesNoQueueSlot() async {
+        guard let rig = invalidQueueRig("NoSlotUnderTeardown") else { return }
+
+        rig.manager.suspendRefreshForUninstall()
+        guard check(rig.manager.isStoreHeldForTeardown,
+                    "a teardown holds the store before the toggle below is pressed") else { return }
+
+        rig.manager.startActivation(of: rig.b)
+        check(rig.b.status == .inactive && rig.manager.waitingTunnel == nil,
+              "and a toggle under it takes NO queue slot — the sweep that would have served one has already"
+              + " passed, so a slot claimed here waits for a hand-off nothing will issue (status="
+              + "\(rig.b.status))")
+        check(rig.fakeA.stopCount == 0,
+              "nor was the occupant it would have queued behind stopped for it, on a session the teardown is"
+              + " taking anyway — stops=\(rig.fakeA.stopCount)")
+
+        rig.manager.releaseStoreAfterUninstall()
+        guard check(!rig.manager.isStoreHeldForTeardown, "the store is then given back") else { return }
+
+        rig.manager.startActivation(of: rig.b)
+        check(rig.b.status == .waiting && rig.manager.waitingTunnel === rig.b,
+              "and the SAME toggle takes a slot once it is back — which is what says the readings above were"
+              + " the teardown's bar rather than a rig that could not queue at all (status=\(rig.b.status))")
+        check(rig.fakeA.stopCount == 1,
+              "stopping the occupant on its way, as it always did — stops=\(rig.fakeA.stopCount)")
     }
 
     func aTeardownHoldingTheStoreArmsNothing() async {

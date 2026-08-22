@@ -431,7 +431,14 @@ class TunnelsManager {
         do {
             try await tunnel.tunnelProvider.removePreferences()
         } catch {
-            if entryFirst { tunnel.refreshStatus() }
+            if entryFirst {
+                // Taking the entry is what makes NE answer `.invalid`, so a
+                // notification may have armed a fresh hold since the
+                // `standDownCeiling()` above — and a hold is exactly what bars
+                // the repaint below.
+                tunnel.standDownCeiling()
+                tunnel.refreshStatus()
+            }
             throw TunnelManagementError.vpnSystemErrorOnRemoveTunnel(systemError: error)
         }
 
@@ -469,15 +476,16 @@ class TunnelsManager {
     var isStoreHeldForTeardown: Bool { refreshSuspended }
     #endif
 
-    /// Giving the store back has to re-open the questions the bar parked while
-    /// it was held. A queue slot is the one that cannot re-ask itself: the
-    /// reading that would have spent it has already been and gone, so without
-    /// this the row waits for a notification that will never come again.
+    /// Giving the store back does nothing but give it back. Raising a session
+    /// from here would run in a `defer` that fires on the throwing path too, on
+    /// a row whose configuration the uninstall has already deleted — and
+    /// `startActivation` would write that configuration straight back. The
+    /// questions the bar parked are closed where they are asked instead: the
+    /// sweep grounds the rows it takes, and `beginActivation` takes no slot
+    /// while the latch is up.
     /// @witness VaultIntegrity.aTeardownThatTookTheStoreStopsTheRestore
-    /// @witness ActivationSeam.aTeardownHoldingTheStoreTakesNoHandOff
     func releaseStoreAfterUninstall() {
         refreshSuspended = false
-        activateWaitingTunnelIfNeeded()
     }
 
     /// @witness VaultIntegrity.theExtensionsComingBackDoesNotLowerTheTeardownsBar
