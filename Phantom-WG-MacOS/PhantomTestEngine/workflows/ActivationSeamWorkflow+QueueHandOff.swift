@@ -38,6 +38,14 @@
 //       proves the bar where all four doors meet. Its control comes FIRST:
 //       the climb is measured before the store is taken.
 //
+//       Its windows are read back off the rig rather than written as
+//       literals, so retuning the rig cannot quietly turn a bar reading
+//       vacuous. The ladder is given far more rungs than it climbs for two
+//       reasons: exhaustion is excluded by measurement, and each rung's
+//       withdrawal watchdog sleeps `(maxRetries + 1) * retryInterval +
+//       preflightBudget`, which must stay well past the step's own end or
+//       its stand-down save would be read as an arm.
+//
 // Neither reading is taken off a timer where one can be avoided. A's
 // readings move synchronously inside the notification handler; B's are
 // snapshotted the moment a rung lands, so the next rung is a whole
@@ -107,7 +115,7 @@ extension ActivationSeamWorkflow {
             providerFactory: FakeSlotFactory(canned: [fake]),
             vault: vault,
             retryInterval: 0.6,
-            maxRetries: 12,
+            maxRetries: 30,
             observesSystemChanges: false
         )
         guard let row = manager.tunnels.first(where: { $0.id == identity.id }) else {
@@ -115,8 +123,9 @@ extension ActivationSeamWorkflow {
             return
         }
 
+        let aRungOrTwo = manager.preflightBudget + manager.retryInterval * 4
         manager.startActivation(of: row)
-        let climbed = await settle(within: 6) { fake.saveCount >= 2 }
+        let climbed = await settle(within: aRungOrTwo) { fake.saveCount >= 2 }
         guard check(climbed,
                     "the ladder climbs on its own: nothing ever answers this session, so the row stays activating"
                     + " and every rung arms the rule again — saves=\(fake.saveCount)") else { return }
@@ -125,7 +134,7 @@ extension ActivationSeamWorkflow {
                     + " not have written under it") else { return }
 
         let landed = fake.saveCount
-        let anotherLanded = await settle(within: 3) { fake.saveCount > landed }
+        let anotherLanded = await settle(within: aRungOrTwo) { fake.saveCount > landed }
         guard check(anotherLanded,
                     "a rung has landed this very moment, which is what puts the next one a whole interval away"
                     + " rather than in flight across the bar below — saves=\(fake.saveCount)") else { return }
@@ -136,15 +145,16 @@ extension ActivationSeamWorkflow {
 
         let savesAtBar = fake.saveCount
         let startsAtBar = fake.startCount
-        _ = await settle(within: 2) { fake.saveCount > savesAtBar }
+        let threeIntervals = manager.retryInterval * 3
+        _ = await settle(within: threeIntervals) { fake.saveCount > savesAtBar }
         check(fake.saveCount == savesAtBar,
-              "the ladder armed nothing more while the teardown held the store — saves=\(fake.saveCount),"
-              + " unchanged from \(savesAtBar)")
+              "the ladder armed nothing more across three of its own intervals while the teardown held the store"
+              + " — saves=\(fake.saveCount), unchanged from \(savesAtBar)")
         check(fake.startCount == startsAtBar,
               "nor raised another session under it — starts=\(fake.startCount), unchanged from \(startsAtBar)")
-        check(savesAtBar < 12,
+        check(savesAtBar < manager.maxRetries,
               "with rungs left to climb, so what ended the climb is the teardown rather than a ladder that ran"
-              + " out — \(savesAtBar) of the twelve it was given had been spent")
+              + " out — \(savesAtBar) of the \(manager.maxRetries) it was given had been spent")
     }
 }
 #endif
