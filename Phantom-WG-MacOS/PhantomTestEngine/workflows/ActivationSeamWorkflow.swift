@@ -88,6 +88,8 @@ final class ActivationSeamWorkflow: TestWorkflow {
                          aTeardownHoldingTheStoreArmsNothing),
             WorkflowStep("A Rung Already Past The Entry Arms Nothing Either",
                          aRungAlreadyPastTheEntryArmsNothingEither),
+            WorkflowStep("A Row The List Dropped Raises No Session Either",
+                         aRowTheListDroppedRaisesNoSessionEither),
             WorkflowStep("An Attempt That Never Resolves Is Withdrawn", wedgedAttemptIsWithdrawn),
             WorkflowStep("A Withdrawal Leaves The Dying Session To The System", dyingSessionIsWithdrawnInPlace),
             WorkflowStep("A Grounded Row Cannot Silence Its Own Attempt", groundedRowIsStillWithdrawn),

@@ -55,6 +55,20 @@
 //       The pre-flight is single-shot per manager, so the control cannot
 //       follow the bar on one rig: it runs FIRST, on a twin.
 //
+//   D — A Row The List Dropped Raises No Session Either
+//       C bars the ARM; this bars the START. Two awaits still sit between
+//       the arm and `startTunnel` — the arm's own save and the load behind
+//       it — and only one guard is needed to cover both, because it sits
+//       past them. The step also drives the OTHER way a row stops being
+//       this manager's: not a teardown and not a removal, but an ingest
+//       that rebuilds the list without it. That door leaves `removingIds`
+//       empty and the latch down, so it is the LIST alone the guard must
+//       notice — which is why `mayArmRecovery` had to become a strict
+//       subset of `mayWriteStore` rather than a second opinion beside it.
+//       Both halves are barred in one step because each needs the other:
+//       the latch half fails without the guard, the dropped half fails
+//       without the subset.
+//
 // Neither reading is taken off a timer where one can be avoided. A's
 // readings move synchronously inside the notification handler; B's are
 // snapshotted the moment a rung lands, so the next rung is a whole
@@ -154,6 +168,7 @@ extension ActivationSeamWorkflow {
 
         let savesAtBar = fake.saveCount
         let startsAtBar = fake.startCount
+        let attemptAtBar = row.activationAttemptId
         let threeIntervals = manager.retryInterval * 3
         _ = await settle(within: threeIntervals) { fake.saveCount > savesAtBar }
         check(fake.saveCount == savesAtBar,
@@ -161,6 +176,9 @@ extension ActivationSeamWorkflow {
               + " — saves=\(fake.saveCount), unchanged from \(savesAtBar)")
         check(fake.startCount == startsAtBar,
               "nor raised another session under it — starts=\(fake.startCount), unchanged from \(startsAtBar)")
+        check(row.activationAttemptId == attemptAtBar,
+              "and the rung was turned back at the ENTRY rather than deeper in: no new attempt was minted for it,"
+              + " which is the one reading the write-site bar further down cannot produce")
         check(savesAtBar < manager.maxRetries,
               "with rungs left to climb, so what ended the climb is the teardown rather than a ladder that ran"
               + " out — \(savesAtBar) of the \(manager.maxRetries) it was given had been spent")
@@ -221,6 +239,73 @@ extension ActivationSeamWorkflow {
               "with no save issued at all — saves=\(barred.fake.saveCount), expected 0")
         check(barred.fake.startCount == 0,
               "and no session raised under the teardown — starts=\(barred.fake.startCount), expected 0")
+    }
+
+    private func armedSaveParkRig(_ label: String, dropsOnPrune: Bool) -> (
+        fake: FakeSlotProvider, row: TunnelContainer, manager: TunnelsManager
+    )? {
+        let identity = TunnelIdentity(id: UUID(), name: "TE-Seam-\(label)-\(runTag)",
+                                      createdAt: Date(), isGhost: false)
+        let fake = FakeSlotProvider(name: identity.name, identity: identity, status: .disconnected)
+        fake.saveAnswer = .succeedsAfter(seconds: 1)
+        let faultVault = FaultVaultClient()
+        faultVault.readAllAnswer = .answers(.configs([]))
+        let manager = TunnelsManager(
+            tunnelProviders: [fake],
+            providerFactory: FakeSlotFactory(canned: dropsOnPrune ? [] : [fake]),
+            vault: faultVault,
+            retryInterval: 30,
+            observesSystemChanges: false
+        )
+        guard let row = manager.tunnels.first(where: { $0.id == identity.id }) else {
+            fail("side manager did not materialize the parked-save rig")
+            return nil
+        }
+        return (fake, row, manager)
+    }
+
+    func aRowTheListDroppedRaisesNoSessionEither() async {
+        guard let control = armedSaveParkRig("SaveParkFree", dropsOnPrune: false) else { return }
+        control.manager.startActivation(of: control.row)
+        let controlIssued = await settle(within: 4) { control.fake.saveCount == 1 }
+        guard check(controlIssued,
+                    "the rung armed and its save is in flight — the two awaits between the arm and startTunnel are"
+                    + " open (saves=\(control.fake.saveCount))") else { return }
+        let controlStarted = await settle(within: 4) { control.fake.startCount > 0 }
+        guard check(controlStarted,
+                    "and with nothing changing under it the save lands and the session goes up — which is what says"
+                    + " a rung parked at its save can reach startTunnel at all (starts=\(control.fake.startCount))")
+        else { return }
+
+        guard let held = armedSaveParkRig("SaveParkHeld", dropsOnPrune: false) else { return }
+        held.manager.startActivation(of: held.row)
+        let heldIssued = await settle(within: 4) { held.fake.saveCount == 1 }
+        guard check(heldIssued,
+                    "a second rung is parked at the same save") else { return }
+        held.manager.suspendRefreshForUninstall()
+        guard check(held.manager.isStoreHeldForTeardown,
+                    "and a teardown takes the store before that save lands") else { return }
+        _ = await settle(within: 4) { held.fake.startCount > 0 }
+        check(held.fake.startCount == 0,
+              "so the rung asks again past its save and raises no session under the teardown —"
+              + " starts=\(held.fake.startCount), expected 0")
+
+        guard let dropped = armedSaveParkRig("SaveParkDropped", dropsOnPrune: true) else { return }
+        dropped.manager.startActivation(of: dropped.row)
+        let droppedIssued = await settle(within: 4) { dropped.fake.saveCount == 1 }
+        guard check(droppedIssued,
+                    "a third rung is parked at the same save") else { return }
+        await dropped.manager.prune()
+        guard check(!dropped.manager.tunnels.contains(where: { $0 === dropped.row }),
+                    "and an INGEST rebuilds the list without its row — the door that is neither a teardown nor a"
+                    + " removal") else { return }
+        guard check(!dropped.manager.isStoreHeldForTeardown && dropped.manager.removingIds.isEmpty,
+                    "with the latch down and no removal in flight, so the LIST alone is what the guard below has to"
+                    + " notice") else { return }
+        _ = await settle(within: 4) { dropped.fake.startCount > 0 }
+        check(dropped.fake.startCount == 0,
+              "so no session is raised on a provider this manager no longer holds —"
+              + " starts=\(dropped.fake.startCount), expected 0")
     }
 }
 #endif

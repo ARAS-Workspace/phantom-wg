@@ -246,8 +246,9 @@ extension TunnelsManager {
 
     /// @witness ActivationSeam.aTeardownHoldingTheStoreArmsNothing
     /// @witness ActivationSeam.aRungAlreadyPastTheEntryArmsNothingEither
+    /// @witness ActivationSeam.aRowTheListDroppedRaisesNoSessionEither
     func mayArmRecovery(_ tunnel: TunnelContainer) -> Bool {
-        !refreshSuspended && !removingIds.contains(tunnel.id)
+        !refreshSuspended && mayWriteStore(tunnel)
     }
 
     // swiftlint:disable:next cyclomatic_complexity function_body_length
@@ -363,6 +364,7 @@ extension TunnelsManager {
 
         guard tunnel.activationAttemptId == attemptId,
               tunnel.status == .activating || tunnel.status == .reasserting else { return }
+        guard mayArmRecovery(tunnel) else { return }
 
         do {
             try tunnel.tunnelProvider.startTunnel()
