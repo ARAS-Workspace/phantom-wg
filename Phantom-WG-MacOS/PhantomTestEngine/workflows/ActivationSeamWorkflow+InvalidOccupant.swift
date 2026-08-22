@@ -175,6 +175,65 @@ extension ActivationSeamWorkflow {
               "handing the slot to the queued tunnel as it went — starts=\(rig.fakeB.startCount), expected 1")
     }
 
+    func aCeilingDoesNotGroundARowTheListNoLongerHolds() async {
+        let nameA = "TE-Seam-DroppedA-\(runTag)"
+        let nameB = "TE-Seam-DroppedB-\(runTag)"
+        guard let cfgA = TestConfigFactory.throwaway(name: nameA),
+              let cfgB = TestConfigFactory.throwaway(name: nameB) else {
+            fail("could not build the dropped-row configs")
+            return
+        }
+        let idA = TunnelIdentity(id: cfgA.id, name: nameA, createdAt: cfgA.createdAt, isGhost: false)
+        let idB = TunnelIdentity(id: cfgB.id, name: nameB, createdAt: cfgB.createdAt, isGhost: false)
+        let fakeA = FakeSlotProvider(name: nameA, identity: idA, status: .connected)
+        fakeA.isEnabled = true
+        let fakeB = FakeSlotProvider(name: nameB, identity: idB, status: .disconnected)
+
+        // The pass below runs a real ingest, so the vault has to own both ids
+        // or it would drop the queued row along with the one under test.
+        let faultVault = FaultVaultClient()
+        faultVault.readAnswer = .answers(.unreachable)
+        faultVault.readAllAnswer = .answers(.configs([cfgA, cfgB]))
+        faultVault.storeAnswer = .answers(.done)
+        faultVault.deleteAnswer = .answers(.done)
+
+        let manager = TunnelsManager(
+            tunnelProviders: [fakeA, fakeB],
+            providerFactory: FakeSlotFactory(canned: [fakeA, fakeB]),
+            vault: faultVault,
+            observesSystemChanges: false
+        )
+        guard let a = manager.tunnels.first(where: { $0.id == idA.id }),
+              let b = manager.tunnels.first(where: { $0.id == idB.id }), a.status == .active else {
+            fail("side manager did not materialize the dropped-row rig")
+            return
+        }
+
+        fakeA.setStatusSilently(.invalid)
+        manager.startActivation(of: b)
+        guard check(a.status == .deactivating && a.isHoldingForAnAnswer,
+                    "the occupant is held with a backstop behind it — status=\(a.status)") else { return }
+
+        try? await fakeA.removePreferences()
+        await manager.prune()
+
+        guard check(!manager.tunnels.contains(where: { $0 === a }),
+                    "the list dropped the row while its ceiling was still standing, which is the arrangement the"
+                    + " guard below is for — rows=\(manager.tunnels.count)") else { return }
+        guard check(a.status == .deactivating,
+                    "and nothing else has repainted it, so the ceiling is the only thing that could —"
+                    + " status=\(a.status)") else { return }
+        guard check(manager.waitingTunnel === b,
+                    "with the queue slot still held, so a hand-off from the ceiling would be visible") else { return }
+
+        let moved = await settle(within: TunnelsManager.groundingBudget + 3) { a.status != .deactivating }
+        check(!moved,
+              "the ceiling spent its budget and stood down rather than grounding a row this manager no longer"
+              + " holds — status=\(a.status)")
+        check(fakeB.startCount == 0,
+              "so it handed the slot to nobody either — starts=\(fakeB.startCount), expected 0")
+    }
+
     func anArmedInvalidOccupantDoesNotHandOnTheQueue() async {
         guard let rig = invalidQueueRig("ArmedInvalid") else { return }
         rig.fakeA.arrangeArmed()

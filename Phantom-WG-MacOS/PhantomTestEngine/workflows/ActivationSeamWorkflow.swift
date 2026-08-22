@@ -78,6 +78,8 @@ final class ActivationSeamWorkflow: TestWorkflow {
                          aStopNobodyAnswersGroundsItsOwnRow),
             WorkflowStep("An Armed .invalid Occupant Does Not Hand On The Queue Either",
                          anArmedInvalidOccupantDoesNotHandOnTheQueue),
+            WorkflowStep("A Ceiling Does Not Ground A Row The List No Longer Holds",
+                         aCeilingDoesNotGroundARowTheListNoLongerHolds),
             WorkflowStep("A Removal Hands The Queue On Only When The Slot Is Free", removalHandsOnTheQueue),
             WorkflowStep("A Queue Slot Whose Tunnel Left The List Is Discarded", staleQueueSlotIsDiscarded),
             WorkflowStep("An Attempt That Never Resolves Is Withdrawn", wedgedAttemptIsWithdrawn),
