@@ -138,19 +138,23 @@ extension ActivationSeamWorkflow {
 
     func aTeardownHoldingTheStoreTakesNoQueueSlot() async {
         guard let rig = invalidQueueRig("NoSlotUnderTeardown") else { return }
+        guard !rig.a.isActivateOnDemandEnabled else {
+            fail("the rig's occupant is armed, so the stop below would park on a disarm and the synchronous stop count would read nothing")
+            return
+        }
 
         rig.manager.suspendRefreshForUninstall()
         guard check(rig.manager.isStoreHeldForTeardown,
                     "a teardown holds the store before the toggle below is pressed") else { return }
 
         rig.manager.startActivation(of: rig.b)
-        check(rig.b.status == .inactive && rig.manager.waitingTunnel == nil,
-              "and a toggle under it takes NO queue slot — the sweep that would have served one has already"
-              + " passed, so a slot claimed here waits for a hand-off nothing will issue (status="
-              + "\(rig.b.status))")
-        check(rig.fakeA.stopCount == 0,
-              "nor was the occupant it would have queued behind stopped for it, on a session the teardown is"
-              + " taking anyway — stops=\(rig.fakeA.stopCount)")
+        guard check(rig.b.status == .inactive && rig.manager.waitingTunnel == nil,
+                    "and a toggle under it takes NO queue slot — the sweep that would have served one has already"
+                    + " passed, so a slot claimed here waits for a hand-off nothing will issue (status="
+                    + "\(rig.b.status))") else { return }
+        guard check(rig.fakeA.stopCount == 0,
+                    "nor was the occupant it would have queued behind stopped for it, on a session the teardown is"
+                    + " taking anyway — stops=\(rig.fakeA.stopCount)") else { return }
 
         rig.manager.releaseStoreAfterUninstall()
         guard check(!rig.manager.isStoreHeldForTeardown, "the store is then given back") else { return }

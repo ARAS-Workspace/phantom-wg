@@ -574,7 +574,7 @@ extension ActivationSeamWorkflow {
             fail("the rig's occupant is not armed, so its stop would not park on a disarm at all")
             return
         }
-        rig.fakeA.saveAnswer = .succeedsAfter(seconds: TunnelsManager.groundingBudget)
+        rig.fakeA.saveAnswer = .succeedsAfter(seconds: TunnelsManager.groundingBudget * 2 + 1)
 
         rig.manager.startActivation(of: rig.b)
         guard await settle(within: 3, until: { rig.a.stopIsWaitingOnItsRule }) else {
@@ -609,9 +609,12 @@ extension ActivationSeamWorkflow {
         rig.fakeA.drive(.disconnected)
         let handedOn = await settle(within: 5) { rig.fakeB.startCount >= 1 }
         check(handedOn,
-              "and it is the terminal answer that finally spends the slot — which also drains this rig rather"
-              + " than leaving its parked save and its hold to run on into the steps below"
-              + " (starts=\(rig.fakeB.startCount))")
+              "and it is the terminal answer that finally spends the slot — starts=\(rig.fakeB.startCount)")
+        let parkedStopLanded = await settle(within: TunnelsManager.groundingBudget * 2 + 2) { rig.fakeA.stopCount >= 1 }
+        check(parkedStopLanded,
+              "with the parked save landing inside this step — stops=\(rig.fakeA.stopCount); every save issued"
+              + " after the reset above answers at once, so the hand-off's own stand-down cannot outlive the"
+              + " step either")
     }
 
     func aTeardownWaitsOutTheStopItParked() async {
