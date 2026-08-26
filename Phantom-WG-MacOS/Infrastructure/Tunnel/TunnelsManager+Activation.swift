@@ -200,7 +200,8 @@ extension TunnelsManager {
     /// The one bound on the one call nobody can cancel. The save is never
     /// cancelled and never assumed: the wait on it ends at the user's
     /// patience, and a save that has not answered by then keeps running on
-    /// its own — its late answer feeds no decision anywhere.
+    /// its own — its late answer only restores the provider's own flag and
+    /// joins no flow here.
     /// @witness ActivationSeam.aStopTheRuleSaveCannotAnswerStillGoesOut
     @discardableResult
     static func standDownRecovery(on provider: TunnelProviding) async -> DisarmAnswer {
@@ -230,7 +231,7 @@ extension TunnelsManager {
             }
         }
         guard let answer = landed else {
-            NSLog("[activation] the disarm save on \(provider.localizedDescription ?? "?") has not answered within \(Int(Self.disarmPatience))s — proceeding without it; the save keeps running and its late answer feeds no decision")
+            NSLog("[activation] the disarm save on \(provider.localizedDescription ?? "?") has not answered within \(Int(Self.disarmPatience))s — proceeding without it; the save keeps running, and its late answer only refreshes the provider's own flag")
             return .unanswered
         }
         if let error = answer {
@@ -368,18 +369,20 @@ extension TunnelsManager {
                   tunnel.isAttemptingActivation,
                   tunnel.lastActivationError == nil,
                   tunnel.status == .activating || tunnel.status == .reasserting
-                    || tunnel.status == .deactivating || tunnel.status == .inactive,
+                    || tunnel.status == .deactivating || tunnel.status == .inactive
+                    || tunnel.status == .unknown,
                   !self.removingIds.contains(tunnel.id),
                   self.tunnels.contains(where: { $0 === tunnel }) else { return }
             let derived = TunnelStatus(from: tunnel.tunnelProvider.connectionStatus)
-            guard derived == .inactive || derived == .deactivating else { return }
+            guard derived == .inactive || derived == .deactivating || derived == .unknown else { return }
             NSLog("[activation] attempt on \(tunnel.name) never resolved — withdrawing it")
             tunnel.isAttemptingActivation = false
             tunnel.activationAttemptId = nil
             tunnel.activationTask?.cancel()
             tunnel.activationTask = nil
             tunnel.refreshStatus()
-            guard tunnel.status == .inactive || tunnel.status == .deactivating else {
+            guard tunnel.status == .inactive || tunnel.status == .deactivating
+                    || tunnel.status == .unknown else {
                 NSLog("[activation] the system answered while \(tunnel.name) was being withdrawn — leaving the session to it")
                 return
             }

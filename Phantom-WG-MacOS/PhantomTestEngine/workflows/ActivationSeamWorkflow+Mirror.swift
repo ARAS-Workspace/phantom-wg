@@ -129,6 +129,62 @@ extension ActivationSeamWorkflow {
               + " expected \(startsBeforeDrop)")
     }
 
+    // The withdrawal ceiling is the attempt's own backstop, and it must
+    // reach a row whose reading went .unknown mid-attempt: that is one of
+    // the very "never resolved" endings it exists for. A guard still written
+    // for the old folding would skip the withdrawal, leave the attempt flag
+    // up, and the flag alone pins the slot against every tunnel.
+    func anAttemptWedgedOverAnUnknownReadingIsStillWithdrawn() async {
+        let identity = TunnelIdentity(id: UUID(), name: "TE-Seam-UnknownWedge-\(runTag)", createdAt: Date(), isGhost: false)
+        let fake = FakeSlotProvider(name: identity.name, identity: identity, status: .disconnected)
+        fake.saveAnswer = .hangs
+        let manager = TunnelsManager(
+            tunnelProviders: [fake],
+            providerFactory: FakeSlotFactory(canned: [fake]),
+            vault: vault,
+            retryInterval: 1.0,
+            maxRetries: 2,
+            observesSystemChanges: false
+        )
+        guard let container = manager.tunnels.first(where: { $0.id == identity.id }) else {
+            fail("side manager did not materialize the unknown-wedge tunnel")
+            return
+        }
+        onTeardown("unknown-wedge save") { [weak self] in
+            let released = fake.releaseHeldCompletions()
+            self?.log(released == 0
+                      ? "teardown: nothing was still held — the unknown-wedge step released its own wedge"
+                      : "teardown: released \(released) held request(s) from the unknown-wedge rig")
+        }
+
+        manager.startActivation(of: container)
+        guard await settle(within: 8, until: { fake.saveCount >= 1 }) else {
+            skip("environment: the rung never reached its arm save")
+            return
+        }
+        guard check(container.status == .activating,
+                    "the attempt is wedged inside a save that will never answer — status=\(container.status)")
+        else { return }
+
+        fake.setStatusSilently(.invalid)
+
+        let explained = await settle(within: 8) { container.lastActivationError != nil }
+        check(explained,
+              "the ceiling withdraws an attempt whose reading went .unknown mid-flight — that ending is"
+              + " exactly what it exists for (error=\(container.lastActivationError.map { String(describing: $0) } ?? "nil"))")
+        var named = false
+        if case .activationUnresolved = container.lastActivationError { named = true }
+        check(named, "and says the system never answered rather than inventing an error it did not give")
+        check(!container.isAttemptingActivation,
+              "the attempt flag comes down with it — the flag alone occupies the slot, so a withdrawal"
+              + " this guard skips would pin the queue against every tunnel")
+        check(container.status == .unknown,
+              "and the row shows what is known — status=\(container.status)")
+
+        let released = fake.releaseHeldCompletions()
+        check(released >= 1, "the step released the wedge it planted (released=\(released))")
+    }
+
     // GUARD (green on both sides of the rework) - the frequent case the
     // live-reading gate must not sacrifice: a user who turns A off and
     // immediately presses B gets an ORDERLY hand-over. While A's stop is

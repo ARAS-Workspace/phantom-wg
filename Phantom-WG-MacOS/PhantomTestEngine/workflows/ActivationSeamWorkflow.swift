@@ -113,6 +113,8 @@ final class ActivationSeamWorkflow: TestWorkflow {
                          anUnknownOccupantDoesNotBarTheQueue),
             WorkflowStep("A Drop Ends With A Sentence, Not A Second Start",
                          aDropEndsWithASentenceNotASecondStart),
+            WorkflowStep("An Attempt Wedged Over An Unknown Reading Is Still Withdrawn",
+                         anAttemptWedgedOverAnUnknownReadingIsStillWithdrawn),
             WorkflowStep("A Second Press Queues Behind A Stop Still Landing",
                          aSecondPressQueuesBehindAStopStillLanding),
         ]
