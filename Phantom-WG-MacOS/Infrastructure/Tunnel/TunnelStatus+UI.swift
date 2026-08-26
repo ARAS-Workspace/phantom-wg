@@ -9,7 +9,7 @@ extension TunnelStatus {
             return .green
         case .activating, .waiting, .reasserting, .deactivating:
             return .orange
-        case .inactive:
+        case .inactive, .unknown:
             return .secondary
         }
     }
@@ -24,6 +24,8 @@ extension TunnelStatus {
             return "arrow.down.circle"
         case .inactive:
             return "shield.slash"
+        case .unknown:
+            return "questionmark.circle"
         }
     }
 
@@ -31,7 +33,7 @@ extension TunnelStatus {
         switch self {
         case .active, .activating, .waiting, .reasserting:
             return true
-        case .inactive, .deactivating:
+        case .inactive, .deactivating, .unknown:
             return false
         }
     }

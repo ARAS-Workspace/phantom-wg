@@ -38,7 +38,7 @@ struct ActionsSection: View {
             } label: {
                 Label(loc.t("detail_delete_tunnel"), systemImage: "trash")
             }
-            .disabled(tunnel.status != .inactive || deleting)
+            .disabled(!tunnel.isKnownInactive || deleting)
             .listRowSeparator(.hidden)
             .accessibilityIdentifier(AXID.TunnelDetail.Actions.deleteButton)
         } header: {
@@ -51,7 +51,7 @@ struct ActionsSection: View {
     }
 
     private var canEdit: Bool {
-        tunnel.status == .inactive
+        tunnel.isKnownInactive
     }
 
     private func copyButton(_ title: String, icon: String, id: String, action: @escaping () -> Void) -> some View {

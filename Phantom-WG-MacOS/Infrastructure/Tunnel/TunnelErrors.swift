@@ -9,6 +9,8 @@ enum TunnelActivationError: Error {
     case foreignSlotHolder
     case activationUnresolved
     case stopDisarmRefused(systemError: Error)
+    case connectedDespiteStopRequest
+    case stopRuleStandDownUnconfirmed
 
     var alertText: String {
         let loc = LocalizationManager.shared
@@ -17,6 +19,10 @@ enum TunnelActivationError: Error {
             return loc.t("error_foreign_slot")
         case .activationUnresolved:
             return loc.t("error_activation_unresolved")
+        case .connectedDespiteStopRequest:
+            return loc.t("error_connected_despite_stop")
+        case .stopRuleStandDownUnconfirmed:
+            return loc.t("error_stop_rule_unconfirmed")
         case .startingFailed(let error):
             return loc.t("error_starting_failed", error.localizedDescription)
         case .savingFailed(let error):

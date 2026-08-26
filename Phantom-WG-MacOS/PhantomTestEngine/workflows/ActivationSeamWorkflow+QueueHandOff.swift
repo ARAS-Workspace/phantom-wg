@@ -40,11 +40,11 @@
 //   C — A Teardown Holding The Store Arms Nothing
 //       The hand-off is only one caller. `armRecovery` has a single call
 //       site, inside the rung task that `startActivation(of:at:)` spawns,
-//       and every door — the user's own press, a respawn revive, the retry
-//       ladder, the hand-off — funnels through it. This step drives the
-//       ladder, which climbs on its own against a fake nothing answers, and
-//       proves the bar where all four doors meet. Its control comes FIRST:
-//       the climb is measured before the store is taken.
+//       and every door — the user's own press, the retry ladder, the
+//       hand-off — funnels through it. This step drives the ladder, which
+//       climbs on its own against a fake nothing answers, and proves the
+//       bar where all three doors meet. Its control comes FIRST: the climb
+//       is measured before the store is taken.
 //
 //       Its windows are read back off the rig rather than written as
 //       literals, so retuning the rig cannot quietly turn a bar reading
@@ -81,10 +81,6 @@
 // move inside the handler and the toggle themselves; C's are snapshotted
 // the moment a rung lands, so the next rung is a whole interval away
 // rather than in flight across the bar.
-//
-// What this file does not prove is the ceiling door — a grounding ceiling
-// whose budget expires inside `removableEntryIds()`. Staging that needs a
-// slow vault and a wall clock; the bars it would meet are proven here.
 
 #if DEBUG
 import Foundation
@@ -101,9 +97,6 @@ extension ActivationSeamWorkflow {
         guard check(rig.a.status == .deactivating,
                     "and the occupant took the ordinary door: its stop landed while the system still read"
                     + " .connected — status=\(rig.a.status)") else { return }
-        guard check(!rig.a.isHoldingForAnAnswer,
-                    "so no ceiling stands behind it, which is what makes the notification below a plain one"
-                    + " rather than the held-occupant case another step already covers") else { return }
 
         rig.manager.suspendRefreshForUninstall()
         guard check(rig.manager.isStoreHeldForTeardown,

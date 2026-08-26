@@ -195,11 +195,15 @@ extension ActivationSeamWorkflow {
         let cleared = await settle(within: 3) { !fake.storedOnDemand }
         check(cleared,
               "and the repair behind it stood down the rule its own flag denied (store=\(fake.storedOnDemand), flag=\(fake.isOnDemandEnabled))")
-        let restopped = await settle(within: 3) { fake.stopCount >= stopsBefore + 2 }
-        check(restopped,
-              "and the session the rule brought back was stopped again rather than left running (stops=\(fake.stopCount))")
-        check(container.lastActivationError == nil,
-              "with no error written over a stop that worked — lastActivationError=\(container.lastActivationError.map { String(describing: $0) } ?? "nil")")
+        _ = await settle(within: 2) { fake.stopCount >= stopsBefore + 2 }
+        check(fake.stopCount == stopsBefore + 1,
+              "and the session the rule brought back is NOT stopped again — fighting the rule is a loop, so"
+              + " the one stop stands (stops=\(fake.stopCount), expected \(stopsBefore + 1))")
+        var said = false
+        if case .connectedDespiteStopRequest = container.lastActivationError { said = true }
+        check(said,
+              "and what happened is SAID rather than fought: connected despite the stop request —"
+              + " error=\(container.lastActivationError.map { String(describing: $0) } ?? "nil")")
         check(fake.saveCount == savesBefore + 1,
               "exactly the stop's own stand-down followed (saves=\(fake.saveCount), expected \(savesBefore + 1))")
 

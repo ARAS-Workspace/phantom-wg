@@ -419,24 +419,20 @@ class TunnelsManager {
         tunnel.activationAttemptId = nil
         tunnel.activationTask?.cancel()
         tunnel.activationTask = nil
-        tunnel.respawnReviveConsumed = true
-        tunnel.respawnReviveTask?.cancel()
-        tunnel.respawnReviveTask = nil
-        tunnel.standDownCeiling()
 
-        if let disarmError = await Self.standDownRecovery(on: tunnel.tunnelProvider) {
+        switch await Self.standDownRecovery(on: tunnel.tunnelProvider) {
+        case .done:
+            break
+        case .refused(let disarmError):
             NSLog("[remove] disarm save refused on \(tunnel.name) — armed=\(tunnel.tunnelProvider.isOnDemandEnabled) is the truest reading available: \(disarmError.localizedDescription)")
+        case .unanswered:
+            NSLog("[remove] disarm save on \(tunnel.name) has not answered — the removal moves on: taking the entry is what retires the rule either way")
         }
 
         do {
             try await tunnel.tunnelProvider.removePreferences()
         } catch {
             if entryFirst {
-                // Taking the entry is what makes NE answer `.invalid`, so a
-                // notification may have armed a fresh hold since the
-                // `standDownCeiling()` above — and a hold is exactly what bars
-                // the repaint below.
-                tunnel.standDownCeiling()
                 tunnel.refreshStatus()
             }
             throw TunnelManagementError.vpnSystemErrorOnRemoveTunnel(systemError: error)
@@ -587,18 +583,9 @@ class TunnelsManager {
         }
     }
 
-    /// @witness ActivationSeam.anInvalidOccupantDoesNotHandOnTheQueue
-    /// @witness ActivationSeam.aFlickerBackToInvalidIsStillNotAnAnswer
-    /// @witness ActivationSeam.aTransientDoesNotRepaintAHeldRow
-    private func releaseGroundingCeiling(for tunnel: TunnelContainer, on systemStatus: NEVPNStatus) {
-        guard systemStatus.isTerminalAnswer else { return }
-        tunnel.standDownCeiling()
-    }
-
-    // swiftlint:disable:next cyclomatic_complexity function_body_length
+    // swiftlint:disable:next function_body_length
     private func handleStatusChange(for tunnel: TunnelContainer) {
         let systemStatus = tunnel.tunnelProvider.connectionStatus
-        releaseGroundingCeiling(for: tunnel, on: systemStatus)
 
         if tunnel.isAttemptingActivation {
             switch systemStatus {
@@ -610,7 +597,6 @@ class TunnelsManager {
                 tunnel.clearErrorOnRise()
 
             case .disconnected:
-                let droppedMidActivation = tunnel.status == .activating || tunnel.status == .reasserting
                 tunnel.isAttemptingActivation = false
                 tunnel.activationTask?.cancel()
                 tunnel.activationTask = nil
@@ -644,30 +630,6 @@ class TunnelsManager {
                         let unanswered = fetched == nil
                         let standIn = Self.noSystemDetail(LocalizationManager.shared.t(
                             unanswered ? "error_detail_timeout" : "error_detail_session_ended"))
-                        if droppedMidActivation, !tunnel.respawnReviveConsumed {
-                            tunnel.respawnReviveConsumed = true
-                            tunnel.respawnReviveTask = Task { @MainActor [weak self] in
-                                try? await Task.sleep(for: .seconds(1))
-                                guard let self, !Task.isCancelled else { return }
-                                guard tunnel.activationAttemptId == attemptId,
-                                      tunnel.status == .inactive,
-                                      tunnel.lastActivationError == nil,
-                                      !self.removingIds.contains(tunnel.id),
-                                      self.tunnels.contains(where: { $0 === tunnel }),
-                                      !self.tunnels.contains(where: { $0.id != tunnel.id && $0.status != .inactive })
-                                else {
-                                    if tunnel.activationAttemptId == attemptId,
-                                       tunnel.lastActivationError == nil,
-                                       tunnel.status == .inactive {
-                                        tunnel.lastActivationError = .failedWhileActivating(systemError: standIn)
-                                    }
-                                    return
-                                }
-                                NSLog("[activation] mid-activation drop with \(unanswered ? "no answer from the system" : "no system record") — spending the one revive on \(tunnel.name)")
-                                self.beginActivation(of: tunnel)
-                            }
-                            return
-                        }
                         tunnel.lastActivationError = .failedWhileActivating(systemError: standIn)
                     }
                 }
@@ -688,16 +650,9 @@ class TunnelsManager {
                 break
             }
         } else {
-            if systemStatus == .invalid,
-               tunnel.status == .deactivating || tunnel.stopIsWaitingOnItsRule,
-               tunnel.groundingCeilingTask == nil {
-                tunnel.status = .deactivating
-                armGroundingCeiling(for: tunnel)
-                return
-            }
             tunnel.refreshStatus()
 
-            if tunnel.status == .inactive {
+            if tunnel.status == .inactive || tunnel.status == .unknown {
                 activateWaitingTunnelIfNeeded()
             }
         }

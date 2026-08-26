@@ -15,10 +15,12 @@
 // main file. Two subjects share this file:
 //
 //   The armed stop's own visibility while it waits. A stop on an ARMED row
-//   waits for the recovery rule's save before anything moves — the status
-//   stays `.active`, the toggle stays ON, and if the save hangs that is
-//   the user's whole experience. These steps drive that window and read
-//   what the interface can now see of it.
+//   waits for the recovery rule's save up to the user's patience — the
+//   status stays `.active` and the row says a stand-down is under way. A
+//   save that never answers cannot make that the whole experience any
+//   more: the stop still goes out, the hint ends by arithmetic, and what
+//   it can no longer show is said in a sentence. These steps drive that
+//   window and read what the interface sees on both sides of it.
 //
 //   Opcode 3's reply, driven against a fake that can answer in shapes a
 //   deployed extension cannot: an older extension's bare byte, a newer
@@ -70,7 +72,7 @@ extension ActivationSeamWorkflow {
               "and the refusal still surfaced, so the count came down past a verdict rather than instead of one — \(refused.container.lastActivationError.map { String(describing: $0) } ?? "nil")")
     }
 
-    func aLandedStopStopsClaimingToBeUnderWay() async {
+    func theStopHintOutlivesTheStopAndEndsWithASentence() async {
         guard let rig = await drivenActiveRig("TE-Seam-StopHint-\(runTag)") else { return }
         guard rig.fake.storedOnDemand else {
             skip("environment: the rig's activation left no armed rule, so the armed stop branch is not the one under test")
@@ -88,10 +90,10 @@ extension ActivationSeamWorkflow {
             return
         }
         check(rig.container.stopIsWaitingOnItsRule,
-              "the row says a stop is under way while its own status still shows nothing — status=\(rig.container.status)")
+              "the row says a rule stand-down is under way while its own status still shows nothing — status=\(rig.container.status)")
 
         guard await settle(within: 3, until: { !rig.fake.isOnDemandEnabled }) else {
-            skip("environment: the disarm never reached its save, so the second stop would take the same branch as the first")
+            skip("environment: the disarm never cleared its flag, so the second press would take the same branch as the first")
             return
         }
         rig.manager.startDeactivation(of: rig.container)
@@ -101,10 +103,25 @@ extension ActivationSeamWorkflow {
             fail("the second stop did not land — status=\(rig.container.status)")
             return
         }
-        check(rig.container.pendingDisarmCount > 0,
-              "the first disarm is still parked on a save nobody will answer, which is what makes the reading below worth taking (count=\(rig.container.pendingDisarmCount))")
-        check(!rig.container.stopIsWaitingOnItsRule,
-              "and the row stopped claiming a stop was under way once the stop actually landed — status=\(rig.container.status), count=\(rig.container.pendingDisarmCount)")
+        check(rig.container.stopIsWaitingOnItsRule,
+              "and the hint OUTLIVES that landed stop, because the first disarm save is still in flight —"
+              + " the claim is about the rule, not the session (count=\(rig.container.pendingDisarmCount))")
+
+        let hintEnded = await settle(within: TunnelsManager.disarmPatience + 2) {
+            rig.container.pendingDisarmCount == 0
+        }
+        check(hintEnded,
+              "the hint ends with the patience, by arithmetic — nothing had to remember to take it down"
+              + " (count=\(rig.container.pendingDisarmCount))")
+        var said = false
+        if case .stopRuleStandDownUnconfirmed = rig.container.lastActivationError { said = true }
+        check(said,
+              "and what the hint can no longer show is now SAID: the rule's stand-down was not confirmed —"
+              + " error=\(rig.container.lastActivationError.map { String(describing: $0) } ?? "nil")")
+        check(rig.fake.stopCount == 2,
+              "with each press having put its own stop out rather than parking behind the save —"
+              + " stops=\(rig.fake.stopCount)")
+        _ = rig.fake.releaseHeldCompletions()
     }
 
     func drivenActiveRig(

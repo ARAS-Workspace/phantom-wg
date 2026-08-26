@@ -17,7 +17,7 @@
 // hand-off racing for the same slot.
 //
 // The registered steps are the authority on coverage. Indicatively, the
-// file covers the drop belts and the one revive, a list refresh that must
+// file covers the drop belts, a list refresh that must
 // disturb neither a running activation nor a queued turn, removals against
 // the queue, the ceiling watchdog's withdrawals, the sweep and the stop
 // reaching a rule the flag denies, give-up paths losing their rule, and
@@ -63,39 +63,14 @@ final class ActivationSeamWorkflow: TestWorkflow {
         [
             WorkflowStep("Removal Bars A Queued Disarm Save", disarmDuringRemoval),
             WorkflowStep("Belt Files A System Record As The Failure", beltFilesRecord),
-            WorkflowStep("Belt Spends The One Revive On A Silent Drop", beltSpendsRevive),
-            WorkflowStep("Spent Revive Still Leaves An Error Behind", beltStandInAfterSpentRevive),
+            WorkflowStep("A Mute Drop Still Files A Stand-In Error", beltStandInOnAMuteDrop),
             WorkflowStep("Belt Does Not Write Over A Revived Session", beltRespectsRevivedSession),
             WorkflowStep("A Stop Cannot Be Answered With A Start", stopBeatsInFlightSave),
             WorkflowStep("A Refused Disarm Surfaces And The Stop Still Lands", refusedDisarmSurfaces),
             WorkflowStep("A List Refresh Cannot Cancel An Activation", refreshCannotCancelActivation),
             WorkflowStep("A List Refresh Cannot Take A Queued Tunnel's Turn", refreshCannotDropTheQueue),
-            WorkflowStep("An .invalid Occupant Does Not Hand On The Queue",
-                         anInvalidOccupantDoesNotHandOnTheQueue),
-            WorkflowStep("A Late .invalid Does Not Hand On The Queue Either",
-                         aLateInvalidDoesNotHandOnTheQueueEither),
-            WorkflowStep("An .invalid While The Stop Waits On Its Rule Holds Too",
-                         anInvalidWhileTheStopWaitsOnItsRuleHoldsToo),
-            WorkflowStep("A Terminal Reading Ends The Hold Wherever It Is Read",
-                         aTerminalReadingEndsTheHoldWhereverItIsRead),
-            WorkflowStep("A Teardown Takes The Ceilings It Finds",
-                         aTeardownTakesTheCeilingsItFinds),
-            WorkflowStep("A Teardown's Hold Does Not Turn A Reading Into An Answer",
-                         aTeardownsHoldDoesNotTurnAReadingIntoAnAnswer),
-            WorkflowStep("A Refresh During A Parked Stop Does Not Ground The Row",
-                         aRefreshDuringAParkedStopDoesNotGroundTheRow),
             WorkflowStep("A Teardown Waits Out The Stop It Parked",
                          aTeardownWaitsOutTheStopItParked),
-            WorkflowStep("A Flicker Back To .invalid Is Still Not An Answer",
-                         aFlickerBackToInvalidIsStillNotAnAnswer),
-            WorkflowStep("A Transient Does Not Repaint A Held Row",
-                         aTransientDoesNotRepaintAHeldRow),
-            WorkflowStep("A Stop Nobody Answers Grounds Its Own Row",
-                         aStopNobodyAnswersGroundsItsOwnRow),
-            WorkflowStep("An Armed .invalid Occupant Does Not Hand On The Queue Either",
-                         anArmedInvalidOccupantDoesNotHandOnTheQueue),
-            WorkflowStep("A Ceiling Does Not Ground A Row The List No Longer Holds",
-                         aCeilingDoesNotGroundARowTheListNoLongerHolds),
             WorkflowStep("A Removal Hands The Queue On Only When The Slot Is Free", removalHandsOnTheQueue),
             WorkflowStep("A Queue Slot Whose Tunnel Left The List Is Discarded", staleQueueSlotIsDiscarded),
             WorkflowStep("A Teardown Holding The Store Takes No Hand-Off",
@@ -128,8 +103,18 @@ final class ActivationSeamWorkflow: TestWorkflow {
                          resetNobodyAnswersEndsItsOwnWait),
             WorkflowStep("A Stop On An Armed Row Is Visible While It Waits",
                          stopOnAnArmedRowIsVisibleWhileItWaits),
-            WorkflowStep("A Landed Stop Stops Claiming To Be Under Way",
-                         aLandedStopStopsClaimingToBeUnderWay),
+            WorkflowStep("The Stop Hint Outlives The Stop And Ends With A Sentence",
+                         theStopHintOutlivesTheStopAndEndsWithASentence),
+            WorkflowStep("A Stop The Rule Save Cannot Answer Still Goes Out",
+                         aStopTheRuleSaveCannotAnswerStillGoesOut),
+            WorkflowStep("A Session The Rule Brings Back Is Shown, Not Fought",
+                         aSessionTheRuleBringsBackIsShownNotFought),
+            WorkflowStep("An Unknown Occupant Does Not Bar The Queue",
+                         anUnknownOccupantDoesNotBarTheQueue),
+            WorkflowStep("A Drop Ends With A Sentence, Not A Second Start",
+                         aDropEndsWithASentenceNotASecondStart),
+            WorkflowStep("A Second Press Queues Behind A Stop Still Landing",
+                         aSecondPressQueuesBehindAStopStillLanding),
         ]
     }
 
@@ -254,23 +239,7 @@ final class ActivationSeamWorkflow: TestWorkflow {
         check(rig.fake.startCount == 1, "no retry was spent on an explained failure (starts=\(rig.fake.startCount))")
     }
 
-    private func beltSpendsRevive() async {
-        guard let rig = await activatedRig(name: "TE-Seam-Revive-\(runTag)", configure: {
-            $0.disconnectAnswer = .none
-        }) else { return }
-        rig.fake.drive(.disconnected)
-        let revived = await settle(within: 12) { rig.fake.startCount >= 2 }
-        if !revived {
-            if case .unreachable = await vault.ping() {
-                skip("environment: vault dark during the belt's verdict leg — revive timing unprovable this run")
-                return
-            }
-        }
-        check(revived, "the one revive restarted the tunnel (starts=\(rig.fake.startCount))")
-        check(rig.container.respawnReviveConsumed, "the revive is marked spent")
-    }
-
-    private func beltStandInAfterSpentRevive() async {
+    private func beltStandInOnAMuteDrop() async {
         guard let rig = await activatedRig(name: "TE-Seam-StandIn-\(runTag)", configure: {
             $0.disconnectAnswer = .never
         }) else { return }
@@ -280,7 +249,6 @@ final class ActivationSeamWorkflow: TestWorkflow {
                       ? "teardown: no held fetch remained"
                       : "teardown: released \(released) held fetch completion(s)")
         }
-        rig.container.respawnReviveConsumed = true
         rig.fake.drive(.disconnected)
         let explained = await settle(within: 10) { rig.container.lastActivationError != nil }
         if !explained {
@@ -302,7 +270,6 @@ final class ActivationSeamWorkflow: TestWorkflow {
         guard let rig = await activatedRig(name: "TE-Seam-Green-\(runTag)", configure: {
             $0.disconnectAnswer = .recordAfter(seconds: 2, NSError(domain: "TE.Seam", code: 42))
         }) else { return }
-        rig.container.respawnReviveConsumed = true
         rig.fake.drive(.disconnected)
         try? await Task.sleep(for: .milliseconds(300))
         rig.fake.drive(.connected)

@@ -110,10 +110,13 @@ final class ConnectionGateCoordinator {
             guard let id = provider.tunnelIdentity?.id, ownedIDs.contains(id) else { continue }
             let name = provider.localizedDescription ?? id.uuidString
             guard let manager = currentTunnelsManager?() else {
-                if let error = await TunnelsManager.standDownRecovery(on: provider) {
-                    NSLog("[slot] gate could not disarm recovery on \(name), written without the removal bars — armed=\(provider.isOnDemandEnabled) is the truest reading available: \(error.localizedDescription)")
-                } else {
+                switch await TunnelsManager.standDownRecovery(on: provider) {
+                case .done:
                     NSLog("[slot] gate disarmed recovery on \(name) — no manager yet, written without the removal bars")
+                case .refused(let error):
+                    NSLog("[slot] gate could not disarm recovery on \(name), written without the removal bars — armed=\(provider.isOnDemandEnabled) is the truest reading available: \(error.localizedDescription)")
+                case .unanswered:
+                    NSLog("[slot] gate's disarm save on \(name) has not answered — left running, nothing decided on it")
                 }
                 continue
             }
@@ -124,6 +127,8 @@ final class ConnectionGateCoordinator {
                 NSLog("[slot] gate left \(name) alone: it is being removed, or the list no longer holds it")
             case .refused:
                 NSLog("[slot] gate could not disarm recovery on \(name) — the save was refused, reported above")
+            case .unanswered:
+                NSLog("[slot] gate's disarm save on \(name) has not answered — left running, nothing decided on it")
             }
         }
     }

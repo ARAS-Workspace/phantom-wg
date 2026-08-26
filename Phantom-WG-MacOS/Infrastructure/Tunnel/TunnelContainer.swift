@@ -32,15 +32,19 @@ class TunnelContainer: Identifiable {
     var pendingDisarmCount = 0
 
     var stopIsWaitingOnItsRule: Bool {
-        pendingDisarmCount > 0 && (status == .active || status == .reasserting)
+        pendingDisarmCount > 0
     }
-    @ObservationIgnored var respawnReviveConsumed = false
-    @ObservationIgnored var respawnReviveTask: Task<Void, Never>?
-    @ObservationIgnored var groundingCeilingTask: Task<Void, Never>?
 
-    #if DEBUG
-    var isHoldingForAnAnswer: Bool { groundingCeilingTask != nil }
-    #endif
+    /// The moment this manager last issued a stop to the system. Written by
+    /// `performDeactivation` alone and never cleared: the window it opens is
+    /// closed by arithmetic, not by any writer.
+    /// @witness ActivationSeam.aStopTheRuleSaveCannotAnswerStillGoesOut
+    @ObservationIgnored var stopIssuedAt: ContinuousClock.Instant?
+
+    /// The one reading on which a session provably does not exist.
+    var isKnownInactive: Bool {
+        tunnelProvider.connectionStatus == .disconnected
+    }
 
     init(tunnel: TunnelProviding) {
         tunnelProvider = tunnel
@@ -53,29 +57,15 @@ class TunnelContainer: Identifiable {
         switch status {
         case .waiting: return true
         case .activating, .reasserting: return isAttemptingActivation
-        case .inactive, .active, .deactivating: return false
+        case .inactive, .active, .deactivating, .unknown: return false
         }
     }
 
-    /// @witness ActivationSeam
-    /// @witness ActivationSeam.anInvalidOccupantDoesNotHandOnTheQueue
-    /// @witness ActivationSeam.aCeilingDoesNotGroundARowTheListNoLongerHolds
-    /// @witness ActivationSeam.aTerminalReadingEndsTheHoldWhereverItIsRead
-    func standDownCeiling() {
-        groundingCeilingTask?.cancel()
-        groundingCeilingTask = nil
-    }
-
-    /// @witness ActivationSeam.aTransientDoesNotRepaintAHeldRow
-    /// @witness ActivationSeam.aTerminalReadingEndsTheHoldWhereverItIsRead
+    /// @witness ActivationSeam.refreshCannotCancelActivation
     func refreshStatus() {
         let system = tunnelProvider.connectionStatus
         let derived = TunnelStatus(from: system)
-        if isManagerDriven, derived == .inactive || derived == .deactivating { return }
-        if groundingCeilingTask != nil {
-            guard system.isTerminalAnswer else { return }
-            standDownCeiling()
-        }
+        if isManagerDriven, derived == .inactive || derived == .deactivating || derived == .unknown { return }
         status = derived
         clearErrorOnRise()
     }
@@ -85,9 +75,11 @@ class TunnelContainer: Identifiable {
         lastActivationError = nil
     }
 
+    /// @witness ActivationSeam.aSessionTheRuleBringsBackIsShownNotFought
     func clearErrorOnRise() {
         guard status == .active || status == .reasserting else { return }
         if case .stopDisarmRefused = lastActivationError, activationAttemptId == nil { return }
+        if case .connectedDespiteStopRequest = lastActivationError { return }
         lastActivationError = nil
     }
 }

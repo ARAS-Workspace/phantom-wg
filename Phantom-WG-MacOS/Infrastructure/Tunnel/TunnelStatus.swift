@@ -8,6 +8,7 @@ enum TunnelStatus: Equatable {
     case deactivating
     case reasserting
     case waiting
+    case unknown
 
     init(from systemStatus: NEVPNStatus) {
         switch systemStatus {
@@ -22,9 +23,9 @@ enum TunnelStatus: Equatable {
         case .reasserting:
             self = .reasserting
         case .invalid:
-            self = .inactive
+            self = .unknown
         @unknown default:
-            self = .inactive
+            self = .unknown
         }
     }
 
@@ -37,14 +38,7 @@ enum TunnelStatus: Equatable {
         case .deactivating: return loc.t("status_deactivating")
         case .reasserting: return loc.t("status_reasserting")
         case .waiting: return loc.t("status_waiting")
+        case .unknown: return loc.t("status_unknown")
         }
     }
-}
-
-extension NEVPNStatus {
-    /// The two readings that settle the question a stop asks. Every other —
-    /// `.invalid` ambiguous, `.connecting`/`.disconnecting`/`.reasserting`
-    /// still in motion — leaves the question open.
-    /// @witness ActivationSeam.aTransientDoesNotRepaintAHeldRow
-    var isTerminalAnswer: Bool { self == .disconnected || self == .connected }
 }
