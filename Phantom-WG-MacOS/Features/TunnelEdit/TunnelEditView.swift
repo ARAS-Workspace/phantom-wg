@@ -13,6 +13,8 @@ struct TunnelEditView: View {
 
     @State private var original: TunnelConfig?
     @State private var loaded = false
+    @State private var loadUnreachable = false
+    @State private var saving = false
 
     init(tunnel: TunnelContainer) {
         self.tunnel = tunnel
@@ -49,14 +51,27 @@ struct TunnelEditView: View {
         let result = await vault.read(id: tunnel.id, attempts: 3)
         loaded = true
 
-        if case .config(let config) = result {
+        switch result {
+        case .config(let config):
             original = config
             name = config.name
             rawInput = config.asConfString()
-        } else {
+            loadUnreachable = false
+            errorMessages = []
+        case .unreachable:
             name = tunnel.name
+            loadUnreachable = true
+            errorMessages = [loc.t("detail_config_unreachable")]
+        case .missing, .undecodable:
+            name = tunnel.name
+            loadUnreachable = false
             errorMessages = [loc.t("detail_config_unavailable")]
         }
+    }
+
+    private func retryLoad() async {
+        loaded = false
+        await loadOriginal()
     }
 
     // MARK: - Sections
@@ -100,6 +115,13 @@ struct TunnelEditView: View {
                         .fixedSize(horizontal: false, vertical: true)
                 }
             }
+
+            if loadUnreachable {
+                Button(loc.t("detail_config_retry")) {
+                    Task { await retryLoad() }
+                }
+                .controlSize(.small)
+            }
         }
         .foregroundStyle(.white)
         .padding(12)
@@ -113,15 +135,24 @@ struct TunnelEditView: View {
 
     private var canSubmit: Bool {
         original != nil
-            && tunnel.status == .inactive
+            && !saving
+            && tunnel.isSettledInactive
             && !name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
             && !rawInput.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
     }
 
     private func submit() {
+        guard !saving else { return }
         errorMessages = []
 
         guard let original else { return }
+
+        // The gate is re-read at the moment of the click; a row that has
+        // moved since the button was painted refuses here, before modify.
+        guard tunnel.isSettledInactive else {
+            errorMessages = [loc.t("edit_err_not_settled")]
+            return
+        }
 
         let trimmedName = name.trimmingCharacters(in: .whitespacesAndNewlines)
         let trimmedInput = rawInput.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -160,11 +191,13 @@ struct TunnelEditView: View {
             return
         }
 
+        saving = true
         Task {
             do {
                 try await tunnelsManager.modify(tunnel: tunnel, with: config)
                 dismiss()
             } catch {
+                saving = false
                 errorMessages = [error.localizedDescription]
             }
         }

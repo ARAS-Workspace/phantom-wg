@@ -107,12 +107,12 @@ extension VaultIntegrityWorkflow {
     ) async {
         faultVault.readAllAnswer = .answers(.configs([]))
         faultVault.storeAnswer = .answersAfter(seconds: 2, .done)
-        let racing = Task { () -> Bool in
+        let racing = Task { () -> Error? in
             do {
                 _ = try await manager.add(config: racer)
-                return true
+                return nil
             } catch {
-                return false
+                return error
             }
         }
         var waited = 0.0
@@ -132,17 +132,35 @@ extension VaultIntegrityWorkflow {
         }
         faultVault.storeAnswer = .answers(.done)
         faultVault.readAllAnswer = .answers(.configs([racer]))
+        var rivalError: Error?
         do {
             _ = try await manager.add(config: rival)
         } catch {
-            fail("the racing import failed outright: \(error.localizedDescription)")
-            _ = await racing.value
-            return
+            rivalError = error
         }
         check(!faultVault.deletedIds.contains(racer.id),
               "and a payload whose entry is still being created keeps its secret through a second import of the same name")
-        let racerLanded = await racing.value
-        check(racerLanded, "with the first import landing on its own terms, so no rollback of its own touched that payload")
+        let racerError = await racing.value
+        // Two imports raced one name. The name re-read makes whoever LISTS
+        // first the winner; the other is refused and rolls its own payload
+        // back. The step pins that contract, not who wins the race.
+        let racerLanded = racerError == nil
+        let rivalLanded = rivalError == nil
+        check(racerLanded != rivalLanded,
+              "exactly one of the two same-name imports landed — racer=\(racerLanded), rival=\(rivalLanded)")
+        let rows = manager.tunnels.filter { $0.name.caseInsensitiveCompare(racer.name) == .orderedSame }
+        check(rows.count == 1,
+              "and the name is on the list exactly once — rows=\(rows.count)")
+        let winnerId = racerLanded ? racer.id : rival.id
+        let loserId = racerLanded ? rival.id : racer.id
+        check(!faultVault.deletedIds.contains(winnerId) && faultVault.deletedIds.contains(loserId),
+              "the loser's own rollback took its payload back, and only its own — no orphan secret, no touch"
+              + " on the winner's (winnerDeleted=\(faultVault.deletedIds.contains(winnerId)))")
+        var refusedByName = false
+        if let error = (racerLanded ? rivalError : racerError) as? TunnelManagementError,
+           case .tunnelAlreadyExistsWithThatName = error { refusedByName = true }
+        check(refusedByName,
+              "and the loser was refused with the name clash the user can read, not a stand-in failure")
     }
 
     func reconcileProvesAPayloadBeforeMinting() async {
@@ -482,6 +500,65 @@ extension VaultIntegrityWorkflow {
         check(row.tunnelProvider === minted,
               "and the row the user sees wraps that entry rather than a stand-in beside it — with no reload armed in this "
               + "rig, the pass's own append is the only way the row could have arrived")
+    }
+
+    // Realign reaches a row whose reading went unknown: a drifted
+    // projection over a live `.invalid` is exactly the kind of row a save
+    // can repair, while a row with a live session is never written under it.
+    func realignReachesARowGoneUnknown() async {
+        let unknownName = "TE-Realign-Unknown-\(runTag)"
+        let liveName = "TE-Realign-Live-\(runTag)"
+        guard let unknownConfig = TestConfigFactory.throwaway(name: unknownName),
+              let liveConfig = TestConfigFactory.throwaway(name: liveName) else {
+            fail("could not build the realign configs")
+            return
+        }
+        let staleUnknown = TunnelIdentity(id: unknownConfig.id, name: unknownName + "-stale",
+                                          createdAt: unknownConfig.createdAt, isGhost: false)
+        let staleLive = TunnelIdentity(id: liveConfig.id, name: liveName + "-stale",
+                                       createdAt: liveConfig.createdAt, isGhost: false)
+        let fakeUnknown = FakeSlotProvider(name: staleUnknown.name, identity: staleUnknown, status: .invalid)
+        let fakeLive = FakeSlotProvider(name: staleLive.name, identity: staleLive, status: .connected)
+
+        let faultVault = FaultVaultClient()
+        faultVault.readAnswer = .answers(.unreachable)
+        // The realign proves every candidate fresh before writing (the mint
+        // path's discipline); a rig that answers only readAll would read as a
+        // dark vault and stop the pass before any write.
+        faultVault.readAnswers = [
+            unknownConfig.id: .answers(.config(unknownConfig)),
+            liveConfig.id: .answers(.config(liveConfig)),
+        ]
+        faultVault.storeAnswer = .answers(.done)
+        faultVault.deleteAnswer = .answers(.done)
+        faultVault.readAllAnswer = .answers(.configs([unknownConfig, liveConfig]))
+
+        let manager = TunnelsManager(
+            tunnelProviders: [fakeUnknown, fakeLive],
+            providerFactory: FakeSlotFactory(canned: [fakeUnknown, fakeLive]),
+            vault: faultVault,
+            observesSystemChanges: false
+        )
+        guard let row = manager.tunnels.first(where: { $0.id == unknownConfig.id }) else {
+            fail("side manager did not materialize the unknown drifted row")
+            return
+        }
+        guard check(row.status == .unknown,
+                    "the drifted row starts on a dead reading — painted unknown") else { return }
+
+        await manager.refresh()
+
+        check(fakeUnknown.saveCount == 1,
+              "reconcile realigned the unknown row — the drifted projection took the vault's write "
+              + "(saves=\(fakeUnknown.saveCount), expected 1)")
+        check(fakeUnknown.tunnelIdentity?.name == unknownName && row.name == unknownName,
+              "and the projection and the row both carry the vault's name again — "
+              + "projection=\(fakeUnknown.tunnelIdentity?.name ?? "nil")")
+        check(fakeLive.saveCount == 0,
+              "while the row with a live session was not written under it (saves=\(fakeLive.saveCount), expected 0)")
+        check(fakeLive.tunnelIdentity?.name == staleLive.name,
+              "so its projection still shows the drift a later grounded pass will repair — "
+              + "name=\(fakeLive.tunnelIdentity?.name ?? "nil")")
     }
 }
 #endif

@@ -31,6 +31,8 @@ extension TunnelsManager {
             if let previousWaiting = waitingTunnel, previousWaiting.id != tunnel.id {
                 withdrawQueueSlot(previousWaiting)
             }
+            // Queueing is a fresh user request — the old sentence comes down, same clearing as rung 0.
+            tunnel.lastActivationError = nil
             tunnel.status = .waiting
             waitingTunnel = tunnel
             startDeactivation(of: activeTunnel)
@@ -46,8 +48,16 @@ extension TunnelsManager {
     /// @witness Unreachable
     /// @witness ActivationSeam.aStopTheRuleSaveCannotAnswerStillGoesOut
     func startDeactivation(of tunnel: TunnelContainer) {
-        guard tunnel.status != .inactive && tunnel.status != .deactivating
-                && tunnel.status != .unknown else { return }
+        // The entry gate asks BOTH surfaces, because its callers do not ask
+        // the same one: the queue picks its occupier from the LIVE reading,
+        // while a silent paint can sit over a session whose rise notification
+        // is still queued behind this press. The decision — a silent paint
+        // alone does not swallow the stop: the gate returns only when the
+        // live reading implies no session either. Live .disconnecting stays
+        // inside the return: a stop still landing draws no second stop from
+        // this gate, through every door occupiesSlot's stamp window routes
+        // here.
+        guard !tunnel.status.carriesNoSession || tunnel.tunnelProvider.connectionStatus.impliesSession else { return }
 
         tunnel.isAttemptingActivation = false
         tunnel.activationAttemptId = nil
@@ -59,7 +69,10 @@ extension TunnelsManager {
 
         if tunnel.status == .waiting {
             withdrawQueueSlot(tunnel)
-            return
+            // A withdrawn row that grounded leaves nothing to stop. One the
+            // rule had already raised live now shows that reading, and the
+            // press falls through to stop the session it names.
+            if tunnel.status.carriesNoSession { return }
         }
 
         if tunnel.isActivateOnDemandEnabled {
@@ -89,7 +102,11 @@ extension TunnelsManager {
 
     /// Fighting the rule is a loop: a session it brings back after our stop is
     /// SHOWN and said, never stopped again on the user's behalf. Try-again is
-    /// the toggle itself.
+    /// the toggle itself. The verdict reads the LIVE connection, not the
+    /// painted row — a repaint can still be queued behind this resume — and
+    /// each verdict says what its save answered: refused and unanswered name
+    /// the save's fate whatever the session is doing, done adds a sentence
+    /// only when the live reading shows a session after the stop.
     /// @witness ActivationSeam.aSessionTheRuleBringsBackIsShownNotFought
     private func repairRuleAfterStop(_ tunnel: TunnelContainer) {
         let repair = Task {
@@ -100,17 +117,12 @@ extension TunnelsManager {
             case .barred:
                 break
             case .refused(let disarmError):
-                if tunnel.status == .inactive || tunnel.status == .deactivating {
-                    tunnel.lastActivationError = .stopDisarmRefused(systemError: disarmError)
-                }
+                tunnel.lastActivationError = .stopDisarmRefused(systemError: disarmError)
             case .unanswered:
-                if tunnel.status == .inactive || tunnel.status == .deactivating {
-                    tunnel.lastActivationError = .stopRuleStandDownUnconfirmed
-                }
+                tunnel.lastActivationError = .stopRuleStandDownUnconfirmed
             case .done:
                 tunnel.clearStopRefusalOnceDisarmed()
-                if tunnel.status == .active || tunnel.status == .reasserting
-                    || tunnel.status == .activating {
+                if tunnel.tunnelProvider.connectionStatus.impliesSession {
                     tunnel.lastActivationError = .connectedDespiteStopRequest
                 }
             }
@@ -155,9 +167,10 @@ extension TunnelsManager {
         // A stop that resumed inside the wait above has painted its own row,
         // so the verdict is reached after it. It is a flat one: the sweep has
         // issued no stop and is not a reading of the session, so the
-        // provider's answer here is whatever NE has not caught up on yet —
-        // and a row left anything but inactive holds the single slot against
-        // every tunnel including itself.
+        // provider's answer here is whatever NE has not caught up on yet.
+        // The transitional paints come down because nothing drives them any
+        // more; paint holds no slot — occupiesSlot reads the live connection
+        // and the attempt flag, never the row.
         for tunnel in tunnels {
             switch tunnel.status {
             case .activating, .waiting, .deactivating:
@@ -175,7 +188,7 @@ extension TunnelsManager {
             case .done:
                 break
             case .refused(let error):
-                NSLog("[uninstall] disarm save refused on \(tunnel.name) — armed=\(tunnel.tunnelProvider.isOnDemandEnabled) is the truest reading available: \(error.localizedDescription)")
+                NSLog("[uninstall] disarm save refused on \(tunnel.name) — the flag here holds this sweep's write (disarmed); the store keeps whatever the refusal left until the next load: \(error.localizedDescription)")
             case .unanswered:
                 NSLog("[uninstall] disarm save on \(tunnel.name) has not answered — the sweep moves on and the save keeps running behind it, feeding no decision")
             }
@@ -200,23 +213,31 @@ extension TunnelsManager {
     /// The one bound on the one call nobody can cancel. The save is never
     /// cancelled and never assumed: the wait on it ends at the user's
     /// patience, and a save that has not answered by then keeps running on
-    /// its own — its late answer only restores the provider's own flag and
-    /// joins no flow here.
+    /// its own — no flow here reads its late answer, and the save itself
+    /// rewrites nothing when it lands: a refusal leaves the store holding
+    /// whatever the refusal left, for the next owner-flow load to re-read.
+    /// A disarm against a provider whose disarm save is still in flight
+    /// JOINS that save rather than stacking another, and
+    /// `awaitLingeringDisarmSave(on:within:)` hands a bounded wait on the
+    /// lingering save to whoever must not run behind it.
     /// @witness ActivationSeam.aStopTheRuleSaveCannotAnswerStillGoesOut
     @discardableResult
     static func standDownRecovery(on provider: TunnelProviding) async -> DisarmAnswer {
-        let wasArmed = provider.isOnDemandEnabled
         provider.isOnDemandEnabled = false
-        let save = Task { () -> Error? in
-            do {
-                try await provider.savePreferences()
-                return nil
-            } catch {
-                if (try? await provider.loadPreferences()) == nil {
-                    provider.isOnDemandEnabled = wasArmed
+        let save: Task<Error?, Never>
+        if let joined = DisarmSaveLedger.save(for: provider) {
+            save = joined
+        } else {
+            let opened = Task { () -> Error? in
+                do {
+                    try await provider.savePreferences()
+                    return nil
+                } catch {
+                    return error
                 }
-                return error
             }
+            DisarmSaveLedger.track(opened, for: provider)
+            save = opened
         }
         // The same one-shot bridge `bounded(_:_:)` is built on. A task group
         // cannot race this wait: leaving a group awaits every child, and
@@ -231,13 +252,35 @@ extension TunnelsManager {
             }
         }
         guard let answer = landed else {
-            NSLog("[activation] the disarm save on \(provider.localizedDescription ?? "?") has not answered within \(Int(Self.disarmPatience))s — proceeding without it; the save keeps running, and its late answer only refreshes the provider's own flag")
+            NSLog("[activation] the disarm save on \(provider.localizedDescription ?? "?") has not answered within \(Int(Self.disarmPatience))s — proceeding without it; the save keeps running on the ledger, where a later disarm joins it and a removal can wait it out")
             return .unanswered
         }
         if let error = answer {
             return .refused(error)
         }
         return .done
+    }
+
+    /// The bounded wait on a disarm save this file opened against `provider`
+    /// that has not landed yet. Returns true when no such save is in flight
+    /// or when it lands within `seconds`; false when it is still running at
+    /// the bound — the caller owns what that means for its flow. The save is
+    /// never cancelled or read here: only its landing is waited on.
+    static func awaitLingeringDisarmSave(on provider: TunnelProviding,
+                                         within seconds: TimeInterval) async -> Bool {
+        guard let save = DisarmSaveLedger.save(for: provider) else { return true }
+        let landed: Bool? = await withCheckedContinuation { continuation in
+            let resume = SingleResume(continuation)
+            Task { @MainActor in
+                _ = await save.value
+                resume.finish(true)
+            }
+            Task {
+                try? await Task.sleep(for: .seconds(seconds))
+                resume.finish(nil)
+            }
+        }
+        return landed ?? false
     }
 
     enum StandDownOutcome {
@@ -258,8 +301,7 @@ extension TunnelsManager {
         context: @autoclosure () -> String = "",
         loggingRefusal: Bool = true
     ) async -> StandDownOutcome {
-        guard !removingIds.contains(tunnel.id),
-              tunnels.contains(where: { $0 === tunnel }) else { return .barred }
+        guard mayWriteStore(tunnel) else { return .barred }
         switch await Self.standDownRecovery(on: tunnel.tunnelProvider) {
         case .done:
             return .done
@@ -304,7 +346,7 @@ extension TunnelsManager {
 
     private static func logDisarmRefusal(on tunnel: TunnelContainer, _ context: String, _ error: Error) {
         let suffix = context.isEmpty ? "" : " \(context)"
-        NSLog("[activation] disarm save refused on \(tunnel.name)\(suffix) — armed=\(tunnel.tunnelProvider.isOnDemandEnabled) is the truest reading available: \(error.localizedDescription)")
+        NSLog("[activation] disarm save refused on \(tunnel.name)\(suffix) — the flag here holds this manager's write (disarmed); the store keeps whatever the refusal left until the next load: \(error.localizedDescription)")
     }
 
     private func withdrawQueueSlot(_ tunnel: TunnelContainer) {
@@ -317,7 +359,22 @@ extension TunnelsManager {
             tunnel.refreshStatus()
             return
         }
-        tunnel.status = .inactive
+        // A queued row the rule has already raised live is handed to the live
+        // reading, not painted down: an .inactive paint here would tell the
+        // stop that follows there is nothing to stop while the session runs.
+        let live = tunnel.tunnelProvider.connectionStatus
+        guard !live.impliesSession else {
+            tunnel.refreshStatus()
+            return
+        }
+        // An off-session reading is painted as what it IS, not flattened:
+        // .disconnected paints .inactive, a dead reading (.invalid, readings
+        // this build does not know) paints .unknown, and a stop already
+        // landing (.disconnecting) paints .deactivating — stampless, so it
+        // opens no slot window and draws no second stop at the fall-through.
+        // The derived-paint contract is TunnelStatus(from:), shared with
+        // performDeactivation.
+        tunnel.status = TunnelStatus(from: live)
     }
 
     func mayWriteStore(_ tunnel: TunnelContainer) -> Bool {
@@ -335,6 +392,11 @@ extension TunnelsManager {
     func startActivation(of tunnel: TunnelContainer, at retryIndex: Int) {
         guard mayArmRecovery(tunnel) else { return }
         guard retryIndex < maxRetries else {
+            // The ladder ran out, and the on-demand rule STAYS ARMED on
+            // purpose: arming it was the user's explicit intent, and this app
+            // does not lower that intent on the user's behalf. The OS may
+            // keep trying past our give-up — that is the armed rule doing
+            // what the user asked, not a leak of this ladder.
             tunnel.isAttemptingActivation = false
             tunnel.activationAttemptId = nil
             tunnel.activationTask?.cancel()
@@ -374,15 +436,14 @@ extension TunnelsManager {
                   !self.removingIds.contains(tunnel.id),
                   self.tunnels.contains(where: { $0 === tunnel }) else { return }
             let derived = TunnelStatus(from: tunnel.tunnelProvider.connectionStatus)
-            guard derived == .inactive || derived == .deactivating || derived == .unknown else { return }
+            guard derived.carriesNoSession else { return }
             NSLog("[activation] attempt on \(tunnel.name) never resolved — withdrawing it")
             tunnel.isAttemptingActivation = false
             tunnel.activationAttemptId = nil
             tunnel.activationTask?.cancel()
             tunnel.activationTask = nil
             tunnel.refreshStatus()
-            guard tunnel.status == .inactive || tunnel.status == .deactivating
-                    || tunnel.status == .unknown else {
+            guard tunnel.status.carriesNoSession else {
                 NSLog("[activation] the system answered while \(tunnel.name) was being withdrawn — leaving the session to it")
                 return
             }
@@ -394,7 +455,7 @@ extension TunnelsManager {
         tunnel.activationRungTask = Task {
             if retryIndex == 0, case .heldByForeign = await foreignSlotVerdict(within: preflightBudget) {
                 guard tunnel.activationAttemptId == attemptId,
-                      tunnel.status == .activating else { return }
+                      tunnel.status == .activating || tunnel.status == .reasserting else { return }
                 tunnel.isAttemptingActivation = false
                 if groundedAfterGiveUp(tunnel, "a proven foreign holder") {
                     tunnel.lastActivationError = .foreignSlotHolder
@@ -402,6 +463,20 @@ extension TunnelsManager {
                 }
                 await Self.standDownAfterGiveUp(tunnel, "at the rung-0 pre-flight, after a proven foreign holder")
                 return
+            }
+            // The rung's own save must not run BEHIND a disarm save still on
+            // the ledger: two saves in flight land in an order the system
+            // owns, so the rung orders itself instead — it waits the ledger
+            // row out before it arms. The wait starts only when a row is in
+            // flight, and the row's own landing ends it. Its bound is
+            // disarmPatience — the user-surface patience class an ON press
+            // lives in; the 20s ceiling modify/remove use answers a store
+            // teardown, not a press. At the bound the rung proceeds as those
+            // flows do — once it moves on, the order between that save's
+            // landing and the arm save below is not this app's to control —
+            // and the guards below re-read the row after the suspension.
+            if !(await Self.awaitLingeringDisarmSave(on: tunnel.tunnelProvider, within: Self.disarmPatience)) {
+                NSLog("[activation] the disarm save on \(tunnel.name) was still running at the rung's ceiling — the rung arms with the save in flight")
             }
             guard tunnel.activationAttemptId == attemptId,
                   tunnel.status == .activating || tunnel.status == .reasserting else { return }
@@ -417,8 +492,15 @@ extension TunnelsManager {
             } catch {
                 guard tunnel.activationAttemptId == attemptId else { return }
                 tunnel.isAttemptingActivation = false
+                tunnel.activationAttemptId = nil
+                tunnel.activationTask?.cancel()
+                tunnel.activationTask = nil
                 tunnel.refreshStatus()
-                guard tunnel.status == .inactive || tunnel.status == .deactivating else {
+                // A refused save wrote nothing: whatever the store already
+                // held — an armed rule included — stays put, and nothing here
+                // stands it down. Same decision as the ladder's exit: the app
+                // does not lower the user's ON intent on their behalf.
+                guard tunnel.status.carriesNoSession else {
                     NSLog("[activation] arm save refused on \(tunnel.name) but the row has moved on (status=\(tunnel.status)) — leaving it be")
                     return
                 }
@@ -499,19 +581,27 @@ extension TunnelsManager {
 
     /// "Deactivating" is a fact about US, not a claim about NE: the stop went
     /// out and no terminal answer has been seen. Nothing waits behind the
-    /// paint — the next reading through any door repaints the row freely, and
-    /// every gate reads the live status rather than this one.
+    /// paint — any next reading through any door repaints the row freely, and
+    /// the slot and delete gates read the live status rather than this one.
+    /// It is only claimed over readings that can still answer, though: a
+    /// reading with no session behind it and no notification coming
+    /// (.invalid, readings this build does not know) posts nothing to take a
+    /// stronger paint down, so the row takes the derived reading instead.
     /// @witness ActivationSeam.aStopTheRuleSaveCannotAnswerStillGoesOut
     /// @witness ActivationSeam.aSecondPressQueuesBehindAStopStillLanding
     func performDeactivation(of tunnel: TunnelContainer) {
         tunnel.tunnelProvider.stopTunnel()
         tunnel.stopIssuedAt = ContinuousClock.now
 
-        if tunnel.tunnelProvider.connectionStatus == .disconnected {
+        let live = tunnel.tunnelProvider.connectionStatus
+        if live == .disconnected {
             tunnel.status = .inactive
             activateWaitingTunnelIfNeeded()
-        } else {
+        } else if live.impliesSession || live == .disconnecting {
             tunnel.status = .deactivating
+        } else {
+            tunnel.status = TunnelStatus(from: live)
+            activateWaitingTunnelIfNeeded()
         }
     }
 
@@ -520,9 +610,11 @@ extension TunnelsManager {
     /// .disconnected) does not occupy the slot, whatever the row still shows.
     /// .disconnecting occupies it only inside the stop-landing window — a
     /// timestamp closed by arithmetic, so a stop the system never finishes
-    /// cannot pin the queue for ever.
+    /// cannot pin the queue for ever. The stamp is this process's own: a
+    /// teardown some other writer issued opens no window here.
     /// @witness ActivationSeam.anUnknownOccupantDoesNotBarTheQueue
     /// @witness ActivationSeam.aSecondPressQueuesBehindAStopStillLanding
+    /// @witness ActivationSeam.aStopTheSystemNeverFinishesCannotPinTheQueue
     private func occupiesSlot(_ tunnel: TunnelContainer) -> Bool {
         if tunnel.isAttemptingActivation { return true }
         switch tunnel.tunnelProvider.connectionStatus {
@@ -556,4 +648,46 @@ extension TunnelsManager {
     /// disarm save's wait and the width of the stop-landing window, from the
     /// user surface rather than from anything NE promises.
     nonisolated static let disarmPatience: TimeInterval = 3
+}
+
+// MARK: - Disarm-Save Ledger
+
+/// This file's own ledger of the disarm saves it has opened and not yet seen
+/// land — a memory of our OWN writes, never of any NE answer. One row per
+/// provider: a disarm against a provider whose save is still running joins
+/// that save instead of stacking another, and a removal can wait the row out.
+/// A row retires itself the moment its save lands, whenever that is.
+@MainActor
+private enum DisarmSaveLedger {
+    private static var inFlight: [ObjectIdentifier: Task<Error?, Never>] = [:]
+
+    static func save(for provider: TunnelProviding) -> Task<Error?, Never>? {
+        inFlight[ObjectIdentifier(provider)]
+    }
+
+    static func track(_ save: Task<Error?, Never>, for provider: TunnelProviding) {
+        let key = ObjectIdentifier(provider)
+        inFlight[key] = save
+        Task { @MainActor in
+            _ = await save.value
+            if inFlight[key] == save { inFlight[key] = nil }
+        }
+    }
+}
+
+// MARK: - Named Status Sets
+
+private extension TunnelStatus {
+    /// The painted shapes with no session claim behind them: a verdict or a
+    /// withdrawal that lands on one of these overwrites no session.
+    var carriesNoSession: Bool {
+        self == .inactive || self == .deactivating || self == .unknown
+    }
+}
+
+private extension NEVPNStatus {
+    /// The live readings that name a session: one is up, or coming up.
+    var impliesSession: Bool {
+        self == .connected || self == .connecting || self == .reasserting
+    }
 }

@@ -94,6 +94,7 @@ final class VaultIntegrityWorkflow: TestWorkflow {
             WorkflowStep("Reconcile Refuses A Payload It Cannot Trust", reconcileRefusesAPayloadItCannotTrust),
             WorkflowStep("A Dark Vault Stops The Minting Where It Went Dark", reconcileStopsMintingWhenTheVaultGoesDark),
             WorkflowStep("A Restore Puts The Tunnel Back As An Entry", aRestorePutsTheTunnelBackAsAnEntry),
+            WorkflowStep("Realign Reaches A Row Gone Unknown", realignReachesARowGoneUnknown),
             WorkflowStep("A Refused Vault Write Reads Differently From A Silent One",
                          aRefusedVaultWriteReadsDifferentlyFromASilentOne),
             WorkflowStep("A Creation Yields To A Row The List Already Took",

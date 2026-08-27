@@ -50,6 +50,14 @@ extension ActivationSeamWorkflow {
         check(rose, "the row can say a stop is under way before the status moves — count=\(rig.container.pendingDisarmCount)")
         check(rig.container.status == .active,
               "and it says it while the status still reads active, which is the whole reason it exists — status=\(rig.container.status)")
+        // The "in one turn" mechanic named below is a precondition, not an
+        // assumption: the first press's disarm task has not run yet, so the
+        // flag is still up and the second press takes the armed branch. A
+        // future await slipping in above would break that silently — this
+        // reading turns the step red at the cause instead.
+        guard check(rig.container.isActivateOnDemandEnabled,
+                    "the flag is still up when the second press lands, so it takes the armed branch the"
+                    + " count below is counting") else { return }
         rig.manager.startDeactivation(of: rig.container)
         check(rig.container.pendingDisarmCount == 2,
               "two stops dispatched in one turn are both counted rather than one replacing the other (count=\(rig.container.pendingDisarmCount))")
@@ -160,6 +168,12 @@ extension ActivationSeamWorkflow {
         check(layerDown,
               "an adapter that never restarted reaches the user as a layer that is down — \(down?.localizedDescription ?? "NO ERROR")")
 
+        let torn = await verdict(.status(.wstunnelFailed))
+        var tornDown = false
+        if case TunnelManagementError.resetLayerDown? = torn { tornDown = true }
+        check(tornDown,
+              "a wstunnel that did not come back reaches the user as the same layer-down verdict — \(torn?.localizedDescription ?? "NO ERROR")")
+
         let nothing = await verdict(.status(.skipped))
         var nothingToRebuild = false
         if case TunnelManagementError.resetNothingToRebuild? = nothing { nothingToRebuild = true }
@@ -174,8 +188,8 @@ extension ActivationSeamWorkflow {
         if case TunnelManagementError.resetOutcomeUnrecognised(let raw)? = unknown { unreadable = raw == 200 }
         check(unreadable,
               "and an outcome byte from a newer extension reaches the user as an answer that could not be read, carrying the byte itself — \(unknown?.localizedDescription ?? "NO ERROR")")
-        check(rig.fake.providerMessageCount == 5,
-              "all five verdicts came from a message that was really sent (messages=\(rig.fake.providerMessageCount), expected 5)")
+        check(rig.fake.providerMessageCount == 6,
+              "all six verdicts came from a message that was really sent (messages=\(rig.fake.providerMessageCount), expected 6)")
     }
 
     func resetNobodyAnswersEndsItsOwnWait() async {

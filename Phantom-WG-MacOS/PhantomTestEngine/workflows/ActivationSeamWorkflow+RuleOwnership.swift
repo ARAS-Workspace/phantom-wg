@@ -128,6 +128,22 @@ extension ActivationSeamWorkflow {
         check(manager.tunnels.contains(where: { $0.id == idB.id }) && !b.isActivateOnDemandEnabled,
               "and the row is still IN THE LIST while reading disarmed — a listed row is exactly what a flag-filtered sweep walked past")
 
+        // The wedged stop is carried to a terminal answer before the sweep is
+        // asked anything: the released save LANDS as a refusal — which writes
+        // nothing, so the store-only rule survives its own stop's ending —
+        // and the ledger row retires, so the sweep below opens its own save
+        // rather than joining a dead one.
+        let released = fakeB.releaseHeldCompletions()
+        check(released >= 1, "the step released the wedge it planted (released=\(released))")
+        guard await settle(within: 8, until: { b.pendingDisarmCount == 0 }) else {
+            fail("the wedged stop never reached a terminal answer — count=\(b.pendingDisarmCount)")
+            return
+        }
+        let ledgerClear = await TunnelsManager.awaitLingeringDisarmSave(on: fakeB, within: 5)
+        check(ledgerClear, "the ledger row retired with its landed save")
+        check(!fakeB.isOnDemandEnabled && fakeB.storedOnDemand,
+              "and the refusal wrote nothing back — the store still holds the rule the flag denies (flag=\(fakeB.isOnDemandEnabled), store=\(fakeB.storedOnDemand))")
+
         fakeB.saveAnswer = .succeeds
         let savesBeforeSweep = fakeB.saveCount
 
@@ -143,28 +159,16 @@ extension ActivationSeamWorkflow {
               "rung 0 stood down a rule its own flag denied (store=\(fakeB.storedOnDemand), flag=\(fakeB.isOnDemandEnabled))")
         check(fakeB.saveCount > savesBeforeSweep,
               "the sweep issued a save for that row at all (saves=\(fakeB.saveCount), before=\(savesBeforeSweep))")
-
-        let released = fakeB.releaseHeldCompletions()
-        check(released >= 1, "the step released the wedge it planted (released=\(released))")
         manager.startDeactivation(of: a)
     }
 
     func stopReachesAStoreOnlyRule() async {
-        let identity = TunnelIdentity(id: UUID(), name: "TE-Seam-StopRule-\(runTag)", createdAt: Date(), isGhost: false)
-        let fake = FakeSlotProvider(name: identity.name, identity: identity, status: .connected)
-        fake.isEnabled = true
-        fake.arrangeArmed()
-        fake.saveAnswer = .hangs
-        let manager = TunnelsManager(
-            tunnelProviders: [fake],
-            providerFactory: FakeSlotFactory(canned: [fake]),
-            vault: vault,
-            observesSystemChanges: false
-        )
-        guard let container = manager.tunnels.first(where: { $0.id == identity.id }) else {
-            fail("side manager did not materialize the stop-rule tunnel")
-            return
-        }
+        guard let rig = sideRow("TE-Seam-StopRule-\(runTag)", status: .connected, configure: {
+            $0.isEnabled = true
+            $0.arrangeArmed()
+            $0.saveAnswer = .hangs
+        }) else { return }
+        let (fake, container, manager) = rig
         onTeardown("wedged stop-disarm (stop-rule rig)") { [weak self] in
             let released = fake.releaseHeldCompletions()
             self?.log(released == 0
@@ -179,36 +183,238 @@ extension ActivationSeamWorkflow {
         }
         check(!fake.isOnDemandEnabled && fake.storedOnDemand,
               "the wedged stop left the flag down over a rule still in the store (flag=\(fake.isOnDemandEnabled), store=\(fake.storedOnDemand))")
-        check(container.status == .active,
-              "and the session it was stopping is still up — status=\(container.status)")
+        check(fake.connectionStatus == .connected,
+              "and the session it was stopping is still up in the system's own reading — live=connected")
+
+        // The first press is carried to a terminal answer before anything
+        // else is claimed: the released save LANDS, and the parked stop ends
+        // on one of its own closed endings — refused or unconfirmed — rather
+        // than on a clock the readings below would have to race.
+        var released = fake.releaseHeldCompletions()
+        check(released >= 1, "the step released the wedge it planted (released=\(released))")
+        guard await settle(within: 8, until: { container.pendingDisarmCount == 0 }) else {
+            fail("the parked stop never reached a terminal answer — count=\(container.pendingDisarmCount)")
+            return
+        }
+        var firstEnding = false
+        switch container.lastActivationError {
+        case .stopDisarmRefused, .stopRuleStandDownUnconfirmed: firstEnding = true
+        default: firstEnding = false
+        }
+        check(firstEnding,
+              "the press ended on one of its two terminal sentences — error=\(container.lastActivationError.map { String(describing: $0) } ?? "nil")")
+        check(fake.stopCount == 1,
+              "and put exactly its own stop out on the way (stops=\(fake.stopCount))")
+        let ledgerClear = await TunnelsManager.awaitLingeringDisarmSave(on: fake, within: 5)
+        check(ledgerClear && !fake.isOnDemandEnabled && fake.storedOnDemand,
+              "the ledger row retired with the landed save, and the refusal wrote nothing back —"
+              + " the store still holds the rule the flag denies (flag=\(fake.isOnDemandEnabled), store=\(fake.storedOnDemand))")
+
+        // That rule brings the session back; the row shows it.
+        fake.drive(.connected)
+        guard await settle(within: 3, until: { container.status == .active }) else {
+            fail("the risen session never repainted the row — status=\(container.status)")
+            return
+        }
 
         fake.saveAnswer = .succeeds
         let savesBefore = fake.saveCount
         let stopsBefore = fake.stopCount
-
         manager.startDeactivation(of: container)
-        check(fake.stopCount > stopsBefore,
-              "the stop went out BEFORE anything awaited a save (stops=\(fake.stopCount))")
+        check(fake.stopCount == stopsBefore + 1,
+              "the second stop went out BEFORE anything awaited a save (stops=\(fake.stopCount))")
 
         fake.setStatusSilently(.connecting)
         fake.drive(.connecting)
-        let cleared = await settle(within: 3) { !fake.storedOnDemand }
+        let cleared = await settle(within: 8) { !fake.storedOnDemand }
         check(cleared,
               "and the repair behind it stood down the rule its own flag denied (store=\(fake.storedOnDemand), flag=\(fake.isOnDemandEnabled))")
-        _ = await settle(within: 2) { fake.stopCount >= stopsBefore + 2 }
+        let said = await settle(within: 8) {
+            if case .connectedDespiteStopRequest = container.lastActivationError { return true }
+            return false
+        }
+        check(said,
+              "and what happened is SAID rather than fought: connected despite the stop request, read from"
+              + " the LIVE session — error=\(container.lastActivationError.map { String(describing: $0) } ?? "nil")")
+        check(fake.saveCount == savesBefore + 1,
+              "exactly the stop's own stand-down followed (saves=\(fake.saveCount), expected \(savesBefore + 1))")
+        // Every flow that could still stop has answered — the first press
+        // ended above, the repair's verdict just landed, and the repair
+        // writes sentences, not stops — so this read follows terminals
+        // rather than spending a timed window.
         check(fake.stopCount == stopsBefore + 1,
               "and the session the rule brought back is NOT stopped again — fighting the rule is a loop, so"
               + " the one stop stands (stops=\(fake.stopCount), expected \(stopsBefore + 1))")
-        var said = false
-        if case .connectedDespiteStopRequest = container.lastActivationError { said = true }
-        check(said,
-              "and what happened is SAID rather than fought: connected despite the stop request —"
-              + " error=\(container.lastActivationError.map { String(describing: $0) } ?? "nil")")
-        check(fake.saveCount == savesBefore + 1,
-              "exactly the stop's own stand-down followed (saves=\(fake.saveCount), expected \(savesBefore + 1))")
+        released = fake.releaseHeldCompletions()
+        check(released == 0, "no wedge remains planted (released=\(released))")
+    }
 
+    func unconfirmedSentenceSurvivesTheRuleRevival() async {
+        guard let rig = sideRow("TE-Seam-Unconfirmed-\(runTag)", status: .connected, configure: {
+            $0.isEnabled = true
+            $0.arrangeArmed()
+            $0.saveAnswer = .hangs
+        }) else { return }
+        let (fake, container, manager) = rig
+        onTeardown("wedged stop-disarm (unconfirmed rig)") { [weak self] in
+            let released = fake.releaseHeldCompletions()
+            self?.log(released == 0
+                      ? "teardown: the unconfirmed rig's wedge was released by the step itself"
+                      : "teardown: released \(released) held request(s) from the unconfirmed rig")
+        }
+
+        manager.startDeactivation(of: container)
+        guard await settle(within: 5, until: { fake.saveCount >= 1 }) else {
+            fail("the armed stop never reached its disarm save (saves=\(fake.saveCount))")
+            return
+        }
+        guard await settle(within: 8, until: { container.pendingDisarmCount == 0 }) else {
+            fail("the parked stop never reached its terminal answer — count=\(container.pendingDisarmCount)")
+            return
+        }
+        var saidUnconfirmed = false
+        if case .stopRuleStandDownUnconfirmed = container.lastActivationError { saidUnconfirmed = true }
+        guard check(saidUnconfirmed,
+                    "the positive control holds first: the save nobody answered was named at the user's patience —"
+                    + " error=\(container.lastActivationError.map { String(describing: $0) } ?? "nil")") else { return }
+
+        fake.drive(.connected)
+        guard await settle(within: 3, until: { container.status == .active }) else {
+            fail("the revival never repainted the row — status=\(container.status)")
+            return
+        }
+        var kept = false
+        if case .stopRuleStandDownUnconfirmed = container.lastActivationError { kept = true }
+        check(kept,
+              "the rise does not refute the sentence: it is about the RULE's save, not the session — and the rule"
+              + " bringing the session back is that sentence's most likely sequel (error=\(container.lastActivationError.map { String(describing: $0) } ?? "nil"))")
         let released = fake.releaseHeldCompletions()
         check(released >= 1, "the step released the wedge it planted (released=\(released))")
+    }
+
+    func stopSurvivorSentenceEndsWithItsSession() async {
+        guard let rig = sideRow("TE-Seam-Survivor-\(runTag)", status: .connected, configure: {
+            $0.isEnabled = true
+        }) else { return }
+        let (fake, container, manager) = rig
+        guard check(!container.isActivateOnDemandEnabled,
+                    "the row is UNARMED, so its stop runs inline and the rule repair follows it") else { return }
+
+        manager.startDeactivation(of: container)
+        check(fake.stopCount == 1, "the stop went out inline (stops=\(fake.stopCount))")
+        let said = await settle(within: 5) {
+            if case .connectedDespiteStopRequest = container.lastActivationError { return true }
+            return false
+        }
+        guard check(said,
+                    "the positive control holds first: the survivor sentence is written over the live session —"
+                    + " error=\(container.lastActivationError.map { String(describing: $0) } ?? "nil")") else { return }
+
+        fake.drive(.disconnected)
+        let grounded = await settle(within: 3) { container.status == .inactive }
+        check(grounded, "the row grounds on the system's own reading — status=\(container.status)")
+        let sentenceGone = await settle(within: 3) { container.lastActivationError == nil }
+        check(sentenceGone,
+              "and the sentence comes down at the same paint: it named a session, and the live reading now proves"
+              + " that session no longer exists — error=\(container.lastActivationError.map { String(describing: $0) } ?? "nil")")
+
+        // D4's other death: the session ends on a live .invalid instead of
+        // a .disconnected. Same proof standard as the slot question — a
+        // reading the system walked away from carries no session claim.
+        guard let dead = sideRow("TE-Seam-SurvivorDead-\(runTag)", status: .connected, configure: {
+            $0.isEnabled = true
+        }) else { return }
+        dead.manager.startDeactivation(of: dead.container)
+        check(dead.fake.stopCount == 1,
+              "the second rig's stop went out inline too (stops=\(dead.fake.stopCount))")
+        let saidOnDead = await settle(within: 5) {
+            if case .connectedDespiteStopRequest = dead.container.lastActivationError { return true }
+            return false
+        }
+        guard check(saidOnDead,
+                    "its survivor sentence is written over the live session — the dead-reading leg's own"
+                    + " positive control") else { return }
+
+        dead.fake.setStatusSilently(.invalid)
+        dead.container.refreshStatus()
+        check(dead.container.status == .unknown,
+              "this session ended by dying instead of grounding, and the row shows what is known —"
+              + " status=\(dead.container.status)")
+        check(dead.container.lastActivationError == nil,
+              "and the survivor sentence ends with its session HERE too: a live .invalid is a reading the"
+              + " system has walked away from — no session claim, the same standard the slot question"
+              + " reads — error=\(dead.container.lastActivationError.map { String(describing: $0) } ?? "nil")")
+    }
+
+    func restGateClosesAcrossOwnedWindows() async {
+        // Positive control first: a row at rest opens the one gate every
+        // config door reads. Then each owned window is shown to close it.
+        guard let solo = sideRow("TE-Seam-RestGate-\(runTag)", status: .disconnected) else { return }
+        check(solo.container.isSettledInactive,
+              "a row at rest — live disconnected, painted inactive, no attempt, no waiting stop — opens the gate")
+
+        solo.manager.startActivation(of: solo.container)
+        guard check(solo.container.isAttemptingActivation && solo.fake.connectionStatus == .disconnected,
+                    "an attempt owns the row while the live reading has not moved — the rung-0 pre-start window")
+        else { return }
+        check(!solo.container.isSettledInactive, "and the gate is closed across it")
+        solo.manager.startDeactivation(of: solo.container)
+        let reopened = await settle(within: 5) { solo.container.isSettledInactive }
+        check(reopened, "withdrawing the intent reopens the gate once the row is back at rest")
+
+        let idA = TunnelIdentity(id: UUID(), name: "TE-Seam-RestGateA-\(runTag)", createdAt: Date(), isGhost: false)
+        let idB = TunnelIdentity(id: UUID(), name: "TE-Seam-RestGateB-\(runTag)", createdAt: Date(), isGhost: false)
+        let fakeA = FakeSlotProvider(name: idA.name, identity: idA, status: .connected)
+        fakeA.isEnabled = true
+        let fakeB = FakeSlotProvider(name: idB.name, identity: idB, status: .disconnected)
+        let queue = TunnelsManager(
+            tunnelProviders: [fakeA, fakeB],
+            providerFactory: FakeSlotFactory(canned: [fakeA, fakeB]),
+            vault: vault,
+            observesSystemChanges: false
+        )
+        guard let b = queue.tunnels.first(where: { $0.id == idB.id }) else {
+            fail("side manager did not materialize the rest-gate queue rig")
+            return
+        }
+        queue.startActivation(of: b)
+        guard check(b.status == .waiting && b.isKnownInactive,
+                    "the queued row holds a slot over a live reading that proves no session") else { return }
+        check(!b.isSettledInactive,
+              "and the gate is closed on the queue's paint — a door opened here would race its own turn")
+
+        guard let unknown = sideRow("TE-Seam-RestGateU-\(runTag)", status: .invalid) else { return }
+        unknown.fake.setStatusSilently(.disconnected)
+        guard check(unknown.container.status == .unknown && unknown.container.isKnownInactive,
+                    "the unknown paint stands over a live reading that proves no session") else { return }
+        check(!unknown.container.isSettledInactive,
+              "and the gate keeps the conscious closed door on .unknown: the painted row must concur before a"
+              + " config door opens")
+
+        guard let waiting = sideRow("TE-Seam-RestGateW-\(runTag)", status: .connected, configure: {
+            $0.isEnabled = true
+            $0.arrangeArmed()
+            $0.saveAnswer = .hangs
+        }) else { return }
+        waiting.manager.startDeactivation(of: waiting.container)
+        guard await settle(within: 5, until: { waiting.fake.saveCount >= 1 }) else {
+            fail("the armed stop never reached its disarm save (saves=\(waiting.fake.saveCount))")
+            return
+        }
+        waiting.fake.setStatusSilently(.disconnected)
+        waiting.container.refreshStatus()
+        guard check(waiting.container.status == .inactive && waiting.container.pendingDisarmCount == 1,
+                    "the row is painted down and provably sessionless while its stop still waits on the rule")
+        else { return }
+        check(!waiting.container.isSettledInactive,
+              "and the gate is closed on it — the COUNTED park is the gate's whole stop axis; the wider"
+              + " set of deferred stand-down saves lives on the ledger, and their order against an edit is"
+              + " enforced by modify's own ledger wait rather than widened into this gate")
+        let released = waiting.fake.releaseHeldCompletions()
+        check(released >= 1, "the step released the wedge it planted (released=\(released))")
+        let settled = await settle(within: 8) { waiting.container.pendingDisarmCount == 0 }
+        check(settled && waiting.container.isSettledInactive,
+              "and the gate opens when the stop's rule is answered — count=\(waiting.container.pendingDisarmCount)")
     }
 
     func revivalClearsTheVerdict() async {
@@ -269,7 +475,17 @@ extension ActivationSeamWorkflow {
         fake.setStatusSilently(.connected)
 
         guard await settle(within: 10, until: { container.status != .activating }) else {
-            skip("environment: rung 0 never reached its collision verdict (vault too slow?)")
+            // A dark vault does not park this rig — it reroutes it: the
+            // pre-flight falls to .free at its bound and the rung arms and
+            // starts instead of giving up. The skip names which world this
+            // run actually saw, off the rig's own counters.
+            if fake.startCount > 0 || fake.isEnabled {
+                skip("environment: the vault never proved the collision — the pre-flight fell to .free and"
+                     + " the rung armed and started instead (starts=\(fake.startCount),"
+                     + " isEnabled=\(fake.isEnabled))")
+            } else {
+                skip("environment: rung 0 never reached its collision verdict (vault too slow?)")
+            }
             return
         }
         check(container.status == .active,
@@ -457,6 +673,34 @@ extension ActivationSeamWorkflow {
         let reminted = await settle(within: slowDisarm + 3) { fake.entryExists }
         check(!reminted,
               "and no save landed after the entry went — the removal waited the stop's disarm out instead of racing it (entryExists=\(fake.entryExists))")
+    }
+
+    // K-Delete's other half, at the manager's own level: the confirmed
+    // Delete carries its stop UNCONDITIONALLY, so the gate itself must be
+    // safe on a row with no session on either surface — silent, no stop,
+    // no sentence — and the removal behind it still walks. The view's
+    // press cannot be driven from here; this is the composite it runs.
+    func aDeleteOnARestingRowStopsNothingAndStillRemoves() async {
+        guard let rig = sideRow("TE-Seam-RestingDelete-\(runTag)", status: .disconnected) else { return }
+        let (fake, container, manager) = rig
+        guard check(container.status == .inactive,
+                    "the row starts at rest on both surfaces — status=\(container.status)") else { return }
+
+        manager.startDeactivation(of: container)
+        check(fake.stopCount == 0,
+              "the unconditional stop is swallowed by the gate itself — no stop reaches a session that"
+              + " does not exist (stops=\(fake.stopCount))")
+        check(container.lastActivationError == nil && container.status == .inactive,
+              "with no sentence and no repaint left behind — status=\(container.status)")
+
+        guard let removed = await race(30, { (try? await manager.remove(tunnel: container)) != nil }),
+              removed else {
+            skip("environment: the removal itself failed (vault dark?) — the composite is unproven this run")
+            return
+        }
+        check(fake.removeCount == 1,
+              "and the removal behind the silent gate still walks (removes=\(fake.removeCount))")
+        check(!manager.tunnels.contains(where: { $0 === container }), "the tunnel left the list")
     }
 
     func startFailureStandsTheRuleDown() async {

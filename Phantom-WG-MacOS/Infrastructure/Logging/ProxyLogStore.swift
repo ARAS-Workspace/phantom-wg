@@ -25,7 +25,8 @@ final class ProxyLogStore: LogEntryProvider {
                 } catch {
                     break
                 }
-                await self?.fetchLogs()
+                guard let self else { break }
+                await self.fetchLogs()
             }
         }
     }

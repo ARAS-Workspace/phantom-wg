@@ -10,6 +10,7 @@ struct ActionsSection: View {
     let deleting: Bool
     @Binding var showingDeleteConfirmation: Bool
     @State private var copiedItem: String?
+    @State private var copyFeedbackTask: Task<Void, Never>?
     @Environment(LocalizationManager.self) private var loc
 
     var body: some View {
@@ -38,7 +39,7 @@ struct ActionsSection: View {
             } label: {
                 Label(loc.t("detail_delete_tunnel"), systemImage: "trash")
             }
-            .disabled(!tunnel.isKnownInactive || deleting)
+            .disabled(!tunnel.isSettledInactive || deleting)
             .listRowSeparator(.hidden)
             .accessibilityIdentifier(AXID.TunnelDetail.Actions.deleteButton)
         } header: {
@@ -51,16 +52,17 @@ struct ActionsSection: View {
     }
 
     private var canEdit: Bool {
-        tunnel.isKnownInactive
+        tunnel.isSettledInactive
     }
 
     private func copyButton(_ title: String, icon: String, id: String, action: @escaping () -> Void) -> some View {
         Button {
             action()
             copiedItem = id
-            Task {
-                try? await Task.sleep(for: .seconds(2))
-                if copiedItem == id { copiedItem = nil }
+            copyFeedbackTask?.cancel()
+            copyFeedbackTask = Task {
+                guard (try? await Task.sleep(for: .seconds(2))) != nil else { return }
+                copiedItem = nil
             }
         } label: {
             Label(copiedItem == id ? loc.t("detail_copied") : title,

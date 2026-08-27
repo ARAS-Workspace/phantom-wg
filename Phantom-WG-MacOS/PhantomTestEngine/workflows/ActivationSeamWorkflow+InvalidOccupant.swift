@@ -57,6 +57,11 @@ extension ActivationSeamWorkflow {
     // that disarm bounded to the user's patience, the park cannot outlive the
     // sweep's own budget — but the sweep still WAITS rather than stepping
     // over a stop in flight, which is the ordering contract measured here.
+    // The paint that stop leaves is the derived one: resuming over a live
+    // `.invalid` it writes `.unknown`, the same verdict its sibling
+    // `parkedStopOverADeadReadingPaintsWhatIsKnown` measures — and the
+    // sweep's own repaint pass leaves `.unknown` alone rather than
+    // flattening it to a rest nothing proved.
     func aTeardownWaitsOutTheStopItParked() async {
         guard let rig = invalidQueueRig("SweepWaits") else { return }
         rig.fakeA.arrangeArmed()
@@ -89,9 +94,10 @@ extension ActivationSeamWorkflow {
                     "the sweep waited that stop out instead of stepping over it — every OTHER save in this rig"
                     + " answers at once, so the only thing it could have been waiting on is the parked disarm"
                     + " (stops=\(rig.fakeA.stopCount))") else { return }
-        check(rig.a.status == .inactive,
-              "with the row that stop repainted carried to a verdict rather than left stopping for ever —"
-              + " status=\(rig.a.status)")
+        check(rig.a.status == .unknown,
+              "with the row showing what is known — the parked stop resumed over a dead reading and took the"
+              + " derived paint, and the sweep left that .unknown alone rather than flattening it to a rest"
+              + " nothing proved — status=\(rig.a.status)")
     }
 }
 #endif

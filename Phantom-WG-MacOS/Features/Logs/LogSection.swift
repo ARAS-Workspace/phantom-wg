@@ -14,6 +14,8 @@ struct LogView: View {
             .navigationTitle(loc.t("detail_logs"))
             .toolbar { toolbarContent }
             .overlay { emptyOverlay }
+            .onAppear { logStore.startPolling() }
+            .onDisappear { logStore.stopPolling() }
             .alert(loc.t("error"), isPresented: $showingSaveError) {
                 Button(loc.t("ok")) {}
                     .accessibilityIdentifier(AXID.LogView.saveErrorOK)
@@ -34,11 +36,10 @@ struct LogView: View {
                 .accessibilityIdentifier(AXID.LogView.list)
             }
             .background(Color(nsColor: .controlBackgroundColor))
-            .onChange(of: logStore.entries.count) { _, _ in
-                if let last = logStore.entries.last {
-                    withAnimation(.easeOut(duration: 0.2)) {
-                        proxy.scrollTo(last.id, anchor: .bottom)
-                    }
+            .onChange(of: logStore.entries.last?.id) { _, lastID in
+                guard let lastID else { return }
+                withAnimation(.easeOut(duration: 0.2)) {
+                    proxy.scrollTo(lastID, anchor: .bottom)
                 }
             }
         }

@@ -36,6 +36,10 @@ class TunnelsManager {
 
     let preflightBudget: TimeInterval = 2
 
+    /// An unanswered disarm save on the ledger makes each rung wait up to
+    /// disarmPatience before arming, so the belt may cut the ladder short of
+    /// retryLimitReached — in the safe direction; the ceiling leaves that
+    /// wait uncounted on purpose.
     var activationCeiling: TimeInterval {
         Double(maxRetries + 1) * retryInterval + preflightBudget
     }
@@ -118,6 +122,15 @@ class TunnelsManager {
         }
 
         do {
+            // The uniqueness reading at the top is stale by here: the vault
+            // writes above span suspensions a concurrent add can cross with
+            // the same name. Re-read before the entry is created; the catch
+            // below rolls the stored payload back.
+            if tunnels.contains(where: {
+                $0.id != config.id && $0.name.caseInsensitiveCompare(name) == .orderedSame
+            }) {
+                throw TunnelManagementError.tunnelAlreadyExistsWithThatName
+            }
             return try await createEntry(for: config)
         } catch {
             let rollback = await vault.delete(id: config.id, attempts: 3)
@@ -154,6 +167,7 @@ class TunnelsManager {
             if !candidates.isEmpty {
                 NSLog("[vault] reconcile minted nothing for \(candidates.count) payload(s): this process took their entries in a teardown and kept the secrets")
             }
+            guard !refreshSuspended else { return 0 }
             await realignDriftedProjections(with: payloads, skipping: [])
             return 0
         }
@@ -257,41 +271,71 @@ class TunnelsManager {
         with payloads: [TunnelConfig],
         skipping attempted: Set<UUID>
     ) async {
-        for config in payloads where !attempted.contains(config.id) {
+        for snapshot in payloads where !attempted.contains(snapshot.id) {
             guard !refreshSuspended else {
-                NSLog("[vault] realign stopped at \(config.id): a teardown took the store")
+                NSLog("[vault] realign stopped at \(snapshot.id): a teardown took the store")
                 return
             }
-            guard let tunnel = tunnels.first(where: { $0.id == config.id }),
-                  tunnel.status == .inactive,
+            guard let tunnel = tunnels.first(where: { $0.id == snapshot.id }),
                   let projected = tunnel.tunnelProvider.tunnelIdentity,
-                  projected.name != config.name || projected.isGhost != config.isGhostMode
+                  projected.name != snapshot.name || projected.isGhost != snapshot.isGhostMode
             else { continue }
 
-            let name = config.name.trimmingCharacters(in: .whitespacesAndNewlines)
-            guard !tunnels.contains(where: {
-                $0.id != config.id && $0.name.caseInsensitiveCompare(name) == .orderedSame
-            }) else {
-                NSLog("[vault] reconcile skipped realigning \(config.id): a tunnel named '\(name)' already exists")
+            // The snapshot only nominates. The write below follows the mint
+            // path's discipline: the payload is proven fresh first — an edit
+            // can move it while this reconcile's awaits run, and a t0 copy
+            // would drag a fresh projection back to a stale name.
+            let config: TunnelConfig
+            switch await provePayload(snapshot) {
+            case .mint(let fresh):
+                config = fresh
+            case .skip:
+                continue
+            case .dark:
+                NSLog("[vault] realign stopped at \(snapshot.id): the vault went dark — the remaining projections keep their drift for whichever trigger reconciles next")
+                return
+            }
+            guard !refreshSuspended else {
+                NSLog("[vault] realign stopped at \(snapshot.id): a teardown took the store while the payload was being proven")
+                return
+            }
+            guard let freshProjected = tunnel.tunnelProvider.tunnelIdentity,
+                  freshProjected.name != config.name || freshProjected.isGhost != config.isGhostMode
+            else { continue }
+
+            guard tunnel.status == .inactive || tunnel.status == .unknown else {
+                NSLog("[vault] reconcile skipped realigning \(config.id): the row shows \(tunnel.status) — only an inactive or unknown row takes this write")
                 continue
             }
 
-            guard mayWriteStore(tunnel) else {
-                NSLog("[vault] reconcile skipped realigning \(config.id): the row is no longer this manager's to write")
-                continue
-            }
+            await writeRealignedProjection(config, onto: tunnel)
+        }
+    }
 
-            tunnel.tunnelProvider.localizedDescription = config.name
-            tunnel.tunnelProvider.configure(with: config.identity)
-            do {
-                try await tunnel.tunnelProvider.savePreferences()
-                try await tunnel.tunnelProvider.loadPreferences()
-                tunnel.name = config.name
-                NSLog("[vault] reconcile realigned \(config.id): the projection had gone stale")
-            } catch {
-                try? await tunnel.tunnelProvider.loadPreferences()
-                NSLog("[vault] reconcile could not realign \(config.id): \(error.localizedDescription)")
-            }
+    private func writeRealignedProjection(_ config: TunnelConfig, onto tunnel: TunnelContainer) async {
+        let name = config.name.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !tunnels.contains(where: {
+            $0.id != config.id && $0.name.caseInsensitiveCompare(name) == .orderedSame
+        }) else {
+            NSLog("[vault] reconcile skipped realigning \(config.id): a tunnel named '\(name)' already exists")
+            return
+        }
+
+        guard mayWriteStore(tunnel) else {
+            NSLog("[vault] reconcile skipped realigning \(config.id): the row is no longer this manager's to write")
+            return
+        }
+
+        tunnel.tunnelProvider.localizedDescription = config.name
+        tunnel.tunnelProvider.configure(with: config.identity)
+        do {
+            try await tunnel.tunnelProvider.savePreferences()
+            try await tunnel.tunnelProvider.loadPreferences()
+            tunnel.name = config.name
+            NSLog("[vault] reconcile realigned \(config.id): the projection had gone stale")
+        } catch {
+            try? await tunnel.tunnelProvider.loadPreferences()
+            NSLog("[vault] reconcile could not realign \(config.id): \(error.localizedDescription)")
         }
     }
 
@@ -355,6 +399,24 @@ class TunnelsManager {
             throw TunnelManagementError.vpnSystemErrorOnModifyTunnel(
                 systemError: Self.noSystemDetail(LocalizationManager.shared.t("error_detail_session_ended")))
         }
+        // The disarm-save wait remove() runs is run here too: a save still on
+        // the ledger is waited out — under the same ceiling — before this edit
+        // writes the vault or the store. (remove() additionally waits out rung
+        // and parked-stop tasks — the wider set a removal must outlive.) Once
+        // the edit moves on, the order between that save's landing and
+        // savePreferences below is not this app's to control; if the bound
+        // passes, the edit proceeds as today.
+        let disarmSaveLanded = await Self.awaitLingeringDisarmSave(on: tunnel.tunnelProvider, within: 20)
+        if !disarmSaveLanded {
+            NSLog("[modify] the disarm save on \(tunnel.name) was still running at the edit's ceiling — the edit proceeds with the save in flight")
+        }
+        // The wait spans a suspension a removal can cross: the bar above is
+        // re-read — with list membership, since a finished removal has already
+        // left removingIds — before anything is written.
+        guard mayWriteStore(tunnel) else {
+            throw TunnelManagementError.vpnSystemErrorOnModifyTunnel(
+                systemError: Self.noSystemDetail(LocalizationManager.shared.t("error_detail_session_ended")))
+        }
         let name = config.name.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !name.isEmpty else {
             throw TunnelManagementError.tunnelInvalidName
@@ -370,6 +432,23 @@ class TunnelsManager {
 
         if let failure = TunnelManagementError.forVaultWrite(await vault.store(config, attempts: 3)) {
             throw failure
+        }
+
+        // The readings above are stale by here: the purge and store span
+        // suspensions a concurrent add, edit, or removal can cross. Both bars
+        // are re-read before the store is written. On a refusal the vault
+        // keeps the new payload — the drift the TunnelEdit witness declares,
+        // and realign's own name bar refuses the projection write while a
+        // clash stands.
+        guard mayWriteStore(tunnel) else {
+            throw TunnelManagementError.vpnSystemErrorOnModifyTunnel(
+                systemError: Self.noSystemDetail(LocalizationManager.shared.t("error_detail_session_ended")))
+        }
+        if tunnels.contains(where: {
+            $0.id != tunnel.id
+                && $0.name.caseInsensitiveCompare(name) == .orderedSame
+        }) {
+            throw TunnelManagementError.tunnelAlreadyExistsWithThatName
         }
 
         tunnel.tunnelProvider.localizedDescription = name
@@ -398,15 +477,7 @@ class TunnelsManager {
         guard !removingIds.contains(tunnel.id) else { return }
         removingIds.insert(tunnel.id)
         defer { removingIds.remove(tunnel.id) }
-        let rungSettled: Bool? = await bounded(20) {
-            await tunnel.activationRungTask?.value
-            await tunnel.pendingDisarmTask?.value
-            return true
-        }
-        guard rungSettled == true else {
-            throw TunnelManagementError.vpnSystemErrorOnRemoveTunnel(
-                systemError: Self.noSystemDetail(LocalizationManager.shared.t("error_detail_timeout")))
-        }
+        try await awaitRungsSettledForRemoval(of: tunnel)
         let entryFirst = try await entryGoesFirst(for: tunnel)
 
         if !entryFirst {
@@ -424,9 +495,18 @@ class TunnelsManager {
         case .done:
             break
         case .refused(let disarmError):
-            NSLog("[remove] disarm save refused on \(tunnel.name) — armed=\(tunnel.tunnelProvider.isOnDemandEnabled) is the truest reading available: \(disarmError.localizedDescription)")
+            NSLog("[remove] disarm save refused on \(tunnel.name) — the flag here holds this manager's write (disarmed); the store keeps whatever the refusal left until the next load: \(disarmError.localizedDescription)")
         case .unanswered:
-            NSLog("[remove] disarm save on \(tunnel.name) has not answered — the removal moves on: taking the entry is what retires the rule either way")
+            NSLog("[remove] disarm save on \(tunnel.name) has not answered — the removal waits it out below before touching the system store")
+        }
+
+        // A disarm save still on the ledger is waited out — under the same
+        // ceiling as the rung wait above — before the entry is removed: once
+        // the removal moves on, the order between that save's landing and
+        // removePreferences is not this app's to control.
+        let disarmSaveLanded = await Self.awaitLingeringDisarmSave(on: tunnel.tunnelProvider, within: 20)
+        if !disarmSaveLanded {
+            NSLog("[remove] the disarm save on \(tunnel.name) was still running at the removal's ceiling — the removal proceeds with the save in flight")
         }
 
         do {
@@ -434,6 +514,12 @@ class TunnelsManager {
         } catch {
             if entryFirst {
                 tunnel.refreshStatus()
+            } else {
+                // The undecodable payload is already deleted and its bytes
+                // cannot be written back (only a decoded config can be
+                // stored). The entry this removal failed on is now unbacked:
+                // the next ingest reads its id as .missing and drops the row.
+                NSLog("[remove] \(tunnel.name): the entry removal failed AFTER its undecodable payload was deleted — the entry is unbacked, and the next ingest will read it as another user's and drop the row; retrying the removal before that read still takes the entry, afterwards only System Settings does")
             }
             throw TunnelManagementError.vpnSystemErrorOnRemoveTunnel(systemError: error)
         }
@@ -446,6 +532,21 @@ class TunnelsManager {
         }
 
         retireFromListAndQueue(tunnel)
+    }
+
+    /// The removal's entry wait: an activation rung or a parked disarm task
+    /// still running would write behind the removal — both are waited out
+    /// under the removal's ceiling before anything is torn down.
+    private func awaitRungsSettledForRemoval(of tunnel: TunnelContainer) async throws {
+        let rungSettled: Bool? = await bounded(20) {
+            await tunnel.activationRungTask?.value
+            await tunnel.pendingDisarmTask?.value
+            return true
+        }
+        guard rungSettled == true else {
+            throw TunnelManagementError.vpnSystemErrorOnRemoveTunnel(
+                systemError: Self.noSystemDetail(LocalizationManager.shared.t("error_detail_timeout")))
+        }
     }
 
     private func retireFromListAndQueue(_ tunnel: TunnelContainer) {
@@ -497,7 +598,7 @@ class TunnelsManager {
         case .config, .missing:
             return true
         case .undecodable:
-            NSLog("[remove] \(tunnel.id): the payload does not decode — its entry is the only anchor, so the payload goes first")
+            NSLog("[remove] \(tunnel.id): the payload does not decode — its entry is the only anchor, so the payload goes first; should the entry removal then fail, the entry is left unbacked and the next ingest drops the row")
             return false
         case .unreachable:
             throw TunnelManagementError.vaultUnavailable
@@ -541,6 +642,7 @@ class TunnelsManager {
 
         var taken = 0
         for (id, provider) in removable {
+            await awaitDisarmSaveBeforeSweepRemoval(of: id, label: provider.localizedDescription ?? id.uuidString)
             do {
                 try await provider.removePreferences()
                 taken += 1
@@ -554,7 +656,22 @@ class TunnelsManager {
             NSLog("[uninstall] every removal was refused, so no entry was taken and the restore is not barred after all")
         }
         if unclassified > 0 {
-            NSLog("[uninstall] \(unclassified) identified entry(ies) were outside the removable set and stay in the system store — another user's, or ours with a payload that does not decode")
+            NSLog("[uninstall] \(unclassified) identified entry(ies) were outside the removable set and stay in the system store — another user's, ours with a payload that does not decode, or ours left unclassified because the vault did not answer while the removable set was taken")
+        }
+    }
+
+    /// The disarm-save wait remove() runs, run for the sweep on the LISTED
+    /// row's provider: the ledger is keyed by provider object, and the
+    /// freshly loaded copy the sweep iterates does not carry the listed
+    /// row's lingering save. A row the list no longer holds has no
+    /// addressable ledger entry to wait on.
+    private func awaitDisarmSaveBeforeSweepRemoval(of id: UUID, label: String) async {
+        guard let listed = tunnels.first(where: { $0.id == id })?.tunnelProvider else {
+            NSLog("[uninstall] no listed row for \(id) — the sweep has no addressable ledger entry to wait on before its removal")
+            return
+        }
+        if !(await Self.awaitLingeringDisarmSave(on: listed, within: 20)) {
+            NSLog("[uninstall] the disarm save on \(label) was still running at the sweep's ceiling — the removal proceeds with the save in flight")
         }
     }
 
@@ -604,16 +721,29 @@ class TunnelsManager {
 
                 if tunnel.lastActivationError == nil {
                     let attemptId = tunnel.activationAttemptId
+                    // The verdict guards below admit .unknown alongside
+                    // .inactive: the awaits in this task can span a repaint
+                    // (a live .invalid lands as .unknown), and neither
+                    // painted reading carries a session claim — the same
+                    // pair the else-door of this handler admits.
                     Task { @MainActor [weak self] in
                         guard let self else { return }
-                        if case .heldByForeign = await self.foreignSlotVerdict() {
-                            if case .barred = await self.guardedStandDown(tunnel, context: "after a proven foreign holder") {
-                                return
-                            }
+                        if case .heldByForeign = await self.foreignSlotVerdict(within: self.preflightBudget) {
+                            // The guards run BEFORE anything is written and
+                            // the sentence lands BEFORE the stand-down — the
+                            // siblings' order (rung-0 pre-flight, start-catch):
+                            // a stale verdict does not lower a fresh press's
+                            // arm on the user's behalf, and no write of this
+                            // task lands behind its own suspension. The
+                            // stand-down guards itself: guardedStandDown
+                            // re-reads mayWriteStore (list membership included)
+                            // across its own suspension.
                             guard tunnel.activationAttemptId == attemptId,
                                   tunnel.lastActivationError == nil,
-                                  tunnel.status == .inactive else { return }
+                                  tunnel.status == .inactive || tunnel.status == .unknown,
+                                  self.tunnels.contains(where: { $0 === tunnel }) else { return }
                             tunnel.lastActivationError = .foreignSlotHolder
+                            await self.guardedStandDown(tunnel, context: "after a proven foreign holder")
                             return
                         }
                         let fetched: NSError?? = await self.bounded(3) {
@@ -621,7 +751,7 @@ class TunnelsManager {
                         }
                         guard tunnel.activationAttemptId == attemptId,
                               tunnel.lastActivationError == nil,
-                              tunnel.status == .inactive,
+                              tunnel.status == .inactive || tunnel.status == .unknown,
                               self.tunnels.contains(where: { $0 === tunnel }) else { return }
                         if let record = fetched.flatMap({ $0 }) {
                             tunnel.lastActivationError = .failedWhileActivating(systemError: record)
@@ -782,7 +912,7 @@ class TunnelsManager {
             }
         }
         if kept.count != providers.count || custody > 0 {
-            NSLog("[vault] ingest uid \(currentUser): kept \(kept.count)/\(providers.count) via vault — \(foreign) other users', \(custody) kept for custody (payload present, not decodable), \(unverified) unverified in a dark window, \(unattributed) without identity")
+            NSLog("[vault] ingest uid \(currentUser): kept \(kept.count)/\(providers.count) via vault — \(foreign) other users', \(custody) kept for custody (payload present, not decodable), \(unverified) unverified in a dark window, \(unattributed) without identity\(vaultWentDark ? "; rows listed before the dark window were kept by the cache, not the vault" : "")")
         }
         return kept
     }

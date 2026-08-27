@@ -50,6 +50,14 @@
 //   D — An Edit Is Refused While The Row Is Being Removed
 //   E — A Name Another Row Holds Is Refused, Its Own Is Not
 //   F — A Blank Name Is Refused Before Either Store Is Touched
+//   G — An Edit Is Refused When A Removal Finished Inside Its Window
+//       D's bar read on entry goes stale across the vault write: a removal
+//       that COMPLETED inside that window has already left `removingIds`,
+//       so it is the list alone the re-read must notice.
+//   H — A Name Taken Inside The Edit's Window Is Refused
+//       E's reading, re-taken past the vault write: a concurrent add can
+//       claim the name while the edit's store is in flight. The refusal
+//       leaves the vault holding the edit — the declared drift.
 
 #if DEBUG
 import Foundation
@@ -72,6 +80,10 @@ final class TunnelEditWorkflow: TestWorkflow {
                          aTakenNameIsRefusedAndItsOwnIsNot),
             WorkflowStep("A Blank Name Is Refused Before Either Store Is Touched",
                          aBlankNameIsRefusedBeforeAnyWrite),
+            WorkflowStep("An Edit Is Refused When A Removal Finished Inside Its Window",
+                         anEditIsRefusedAfterARemovalCrossedItsWindow),
+            WorkflowStep("A Name Taken Inside The Edit's Window Is Refused",
+                         aNameTakenInsideTheEditsWindowIsRefused),
         ]
     }
 
@@ -397,6 +409,128 @@ final class TunnelEditWorkflow: TestWorkflow {
               "nor the system — saves=\(rig.provider.saveCount), expected 0")
         check(row.name == originalName,
               "and the row keeps the name it had")
+    }
+
+    private func anEditIsRefusedAfterARemovalCrossedItsWindow() async {
+        let vault = answeringVault()
+        guard let rig = rig(name: "TE-Edit-CrossedRemoval-\(runTag)", vault: vault) else {
+            fail("the config factory did not produce the throwaway this step needs")
+            return
+        }
+        guard let row = rig.manager.tunnels.first(where: { $0.id == rig.config.id }) else {
+            fail("the side manager did not materialize the listed tunnel")
+            return
+        }
+        let rename = edited(rig.config, to: "TE-Edit-CrossedRemoval-New-\(runTag)")
+
+        // The removal's own reads answer at once; the edit's vault write is
+        // the slow one, so the removal can run to completion INSIDE it.
+        vault.readAnswer = .answers(.missing)
+        vault.storeAnswer = .answersAfter(seconds: 2, .done)
+
+        let edit = Task { @MainActor () -> Error? in
+            do { try await rig.manager.modify(tunnel: row, with: rename); return nil } catch { return error }
+        }
+        guard await settle(within: 1.5, until: { vault.storedIds.contains(rig.config.id) }) else {
+            skip("environment: the edit never reached its vault write")
+            _ = await edit.value
+            return
+        }
+
+        guard let removed = await race(1.5, { (try? await rig.manager.remove(tunnel: row)) != nil }),
+              removed else {
+            fail("the removal did not run to completion inside the edit's vault-store window")
+            _ = await edit.value
+            return
+        }
+        guard check(!rig.manager.removingIds.contains(rig.config.id)
+                        && !rig.manager.tunnels.contains(where: { $0 === row }),
+                    "the removal FINISHED inside the window: not in flight any more and the row gone from"
+                    + " the list — so the list alone is what the re-read below has to notice") else {
+            _ = await edit.value
+            return
+        }
+
+        guard let thrown = await race(5, { await edit.value }) else {
+            fail("the edit never returned past its window")
+            return
+        }
+        var refused = false
+        if case TunnelManagementError.vpnSystemErrorOnModifyTunnel? = thrown { refused = true }
+        check(refused,
+              "the edit re-read its bar past the vault write and refused — the session-ended class, not a"
+              + " success over a row a removal emptied"
+              + " (error=\(thrown.map { String(describing: $0) } ?? "nil"))")
+        check(rig.provider.saveCount == 1,
+              "the system store holds only the removal's own stand-down — the edit's save never went out"
+              + " (saves=\(rig.provider.saveCount))")
+        check(rig.provider.removeCount == 1,
+              "the entry went once, to the removal (removes=\(rig.provider.removeCount))")
+        check(rig.provider.localizedDescription == rig.config.name,
+              "and the refused edit never repainted the projection")
+    }
+
+    private func aNameTakenInsideTheEditsWindowIsRefused() async {
+        let vault = answeringVault()
+        guard let subject = TestConfigFactory.throwaway(name: "TE-Edit-WindowName-\(runTag)"),
+              let arrival = TestConfigFactory.throwaway(name: "TE-Edit-WindowArrival-\(runTag)") else {
+            fail("the config factory did not produce the two throwaways this step needs")
+            return
+        }
+        let editing = FakeSlotProvider(name: subject.name, identity: subject.identity, status: .disconnected)
+        let manager = TunnelsManager(
+            tunnelProviders: [editing],
+            providerFactory: FakeSlotFactory(canned: [editing]),
+            vault: vault,
+            observesSystemChanges: false
+        )
+        guard let row = manager.tunnels.first(where: { $0.id == subject.id }) else {
+            fail("the side manager did not materialize the listed tunnel")
+            return
+        }
+        let contested = "TE-Edit-Contested-\(runTag)"
+
+        vault.storeAnswer = .answersAfter(seconds: 2, .done)
+        let edit = Task { @MainActor () -> Error? in
+            do {
+                try await manager.modify(tunnel: row, with: edited(subject, to: contested))
+                return nil
+            } catch { return error }
+        }
+        guard await settle(within: 1.5, until: { vault.storedIds.contains(subject.id) }) else {
+            skip("environment: the edit never reached its vault write")
+            _ = await edit.value
+            return
+        }
+
+        // The arriving add answers at once; the edit's own store call is
+        // already sleeping on the answer it captured.
+        vault.storeAnswer = .answers(.done)
+        var renamedArrival = arrival
+        renamedArrival.name = contested
+        guard let added = await race(1.5, { (try? await manager.add(config: renamedArrival)) != nil }),
+              added else {
+            fail("the concurrent add could not take the contested name inside the edit's window")
+            _ = await edit.value
+            return
+        }
+
+        guard let thrown = await race(5, { await edit.value }) else {
+            fail("the edit never returned past its window")
+            return
+        }
+        var named = false
+        if case TunnelManagementError.tunnelAlreadyExistsWithThatName? = thrown { named = true }
+        check(named,
+              "the edit re-read the name past its vault write and refused the clash it found there"
+              + " (error=\(thrown.map { String(describing: $0) } ?? "nil"))")
+        check(editing.saveCount == 0,
+              "so the edit's save never reached the system store (saves=\(editing.saveCount))")
+        check(editing.localizedDescription == subject.name && row.name == subject.name,
+              "and neither the projection nor the row was repainted")
+        check(vault.storedConfigs.last(where: { $0.id == subject.id })?.name == contested,
+              "while the vault HOLDS the edit — the declared drift, left for the realign whose own name"
+              + " bar refuses the projection write while the clash stands")
     }
 }
 #endif

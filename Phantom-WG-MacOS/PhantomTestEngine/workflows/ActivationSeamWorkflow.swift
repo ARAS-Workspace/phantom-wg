@@ -46,9 +46,9 @@
 // the gate. Fixed sleeps appear only to spend a window an arrangement
 // itself opened, never to stand in for an event a step could have watched.
 //
-// The family is split across three files at a type boundary rather than by
-// moving a threshold — `+RuleOwnership` and `+Reset` are the same
-// workflow, continued. The run tag and the shared `activatedRig` belong
+// The family is split across sibling files at type boundaries rather than
+// by moving a threshold — the registry below is the authority on
+// membership. The run tag and the shared `activatedRig` belong
 // here; `+Reset` builds the driven variant on top of it, and the polling
 // helper lives on `TestWorkflow`.
 
@@ -64,6 +64,14 @@ final class ActivationSeamWorkflow: TestWorkflow {
             WorkflowStep("Removal Bars A Queued Disarm Save", disarmDuringRemoval),
             WorkflowStep("Belt Files A System Record As The Failure", beltFilesRecord),
             WorkflowStep("A Mute Drop Still Files A Stand-In Error", beltStandInOnAMuteDrop),
+            WorkflowStep("A Dark Vault Cannot Park The Drop's Verdict",
+                         darkVaultCannotParkTheDropsVerdict),
+            WorkflowStep("The Belt Names A Foreign Holder On A Row Gone Unknown",
+                         beltNamesAForeignHolderOnARowGoneUnknown),
+            WorkflowStep("A Stale Verdict Stands Nothing Down Behind A Fresh Press",
+                         aStaleVerdictStandsNothingDownBehindAFreshPress),
+            WorkflowStep("The Belt Files The Record On A Row Gone Unknown",
+                         beltFilesTheRecordOnARowGoneUnknown),
             WorkflowStep("Belt Does Not Write Over A Revived Session", beltRespectsRevivedSession),
             WorkflowStep("A Stop Cannot Be Answered With A Start", stopBeatsInFlightSave),
             WorkflowStep("A Refused Disarm Surfaces And The Stop Still Lands", refusedDisarmSurfaces),
@@ -88,13 +96,28 @@ final class ActivationSeamWorkflow: TestWorkflow {
             WorkflowStep("A Grounded Row Cannot Silence Its Own Attempt", groundedRowIsStillWithdrawn),
             WorkflowStep("The Sweep Reaches A Rule The Flag Denies", sweepReachesAStoreOnlyRule),
             WorkflowStep("A Stop Reaches A Rule The Flag Denies", stopReachesAStoreOnlyRule),
+            WorkflowStep("A Second Disarm Joins The Save Still In Flight", aSecondDisarmJoinsTheSaveInFlight),
+            WorkflowStep("A Removal Waits Out A Lingering Disarm Save", removalWaitsOutALingeringDisarmSave),
+            WorkflowStep("An Edit Waits Out A Lingering Disarm Save", anEditWaitsOutALingeringDisarmSave),
+            WorkflowStep("The Arm Save Does Not Race A Lingering Disarm Save",
+                         armSaveDoesNotRaceALingeringDisarmSave),
+            WorkflowStep("A Ledger Save Nobody Answers Cannot Park The Press",
+                         aLedgerSaveNobodyAnswersCannotParkThePress),
+            WorkflowStep("The Uninstall Sweep Waits Out A Lingering Disarm Save",
+                         uninstallSweepWaitsOutALingeringDisarmSave),
             WorkflowStep("A Revived Session Sheds The Failed Attempt's Verdict", revivalClearsTheVerdict),
             WorkflowStep("A Give-Up Does Not Ground A Session The System Holds", giveUpDoesNotGroundALiveSession),
             WorkflowStep("The Watchdog Leaves A Rising Session Alone", peekLeavesARisingSessionAlone),
             WorkflowStep("A Config That Will Not Load Loses Its Rule", loadFailureStandsTheRuleDown),
             WorkflowStep("A Start The System Refuses Loses Its Rule", startFailureStandsTheRuleDown),
+            WorkflowStep("The Ladder Running Out Leaves The Rule Armed",
+                         ladderRunOutLeavesTheRuleArmed),
+            WorkflowStep("A Pre-Flight Verdict Reaches A Row Gone Reasserting",
+                         preflightVerdictReachesARowGoneReasserting),
             WorkflowStep("A Second Removal Is A Silent No-Op", secondRemovalIsASilentNoOp),
             WorkflowStep("The Delete Flow's Stop Cannot Outrun Its Removal", deleteFlowStopCannotOutrunItsRemoval),
+            WorkflowStep("A Delete On A Resting Row Stops Nothing And Still Removes",
+                         aDeleteOnARestingRowStopsNothingAndStillRemoves),
             WorkflowStep("The Armed Rule Is One Connect Rule For Any Interface",
                          theArmedRuleIsOneConnectRuleForAnyInterface),
             WorkflowStep("A Reset's Outcome Byte Decides The Caller's Verdict",
@@ -109,14 +132,38 @@ final class ActivationSeamWorkflow: TestWorkflow {
                          aStopTheRuleSaveCannotAnswerStillGoesOut),
             WorkflowStep("A Session The Rule Brings Back Is Shown, Not Fought",
                          aSessionTheRuleBringsBackIsShownNotFought),
+            WorkflowStep("A Stop Verdict Lands Whatever The Row Wears",
+                         stopVerdictLandsWhateverTheRowWears),
+            WorkflowStep("The Unconfirmed Sentence Survives The Rule's Revival",
+                         unconfirmedSentenceSurvivesTheRuleRevival),
+            WorkflowStep("The Stop Survivor's Sentence Ends With Its Session",
+                         stopSurvivorSentenceEndsWithItsSession),
+            WorkflowStep("The Rest Gate Closes Across Every Owned Window",
+                         restGateClosesAcrossOwnedWindows),
             WorkflowStep("An Unknown Occupant Does Not Bar The Queue",
                          anUnknownOccupantDoesNotBarTheQueue),
+            WorkflowStep("A Third Press Stops The Queued Row The Rule Raised",
+                         thirdPressStopsTheQueuedRowTheRuleRaised),
+            WorkflowStep("A Stop On A Queued Row The Rule Raised Falls Through",
+                         stopOnAQueuedRowTheRuleRaisedFallsThrough),
             WorkflowStep("A Drop Ends With A Sentence, Not A Second Start",
                          aDropEndsWithASentenceNotASecondStart),
             WorkflowStep("An Attempt Wedged Over An Unknown Reading Is Still Withdrawn",
                          anAttemptWedgedOverAnUnknownReadingIsStillWithdrawn),
+            WorkflowStep("An Arm Save Refusal Reaches A Row Gone Unknown",
+                         armSaveRefusalReachesARowGoneUnknown),
+            WorkflowStep("A Parked Stop Over A Dead Reading Paints What Is Known",
+                         parkedStopOverADeadReadingPaintsWhatIsKnown),
+            WorkflowStep("A Withdrawn Queue Slot Over A Dead Reading Paints What Is Known",
+                         withdrawnQueueSlotOverADeadReadingPaintsWhatIsKnown),
             WorkflowStep("A Second Press Queues Behind A Stop Still Landing",
                          aSecondPressQueuesBehindAStopStillLanding),
+            WorkflowStep("A Stop The System Never Finishes Cannot Pin The Queue",
+                         aStopTheSystemNeverFinishesCannotPinTheQueue),
+            WorkflowStep("A Press That Queues Sheds The Old Sentence",
+                         aPressThatQueuesShedsTheOldSentence),
+            WorkflowStep("A Queue Press Still Stops A Stale-Painted Occupant",
+                         aQueuePressStillStopsAStalePaintedOccupant),
         ]
     }
 
@@ -124,19 +171,36 @@ final class ActivationSeamWorkflow: TestWorkflow {
 
     // MARK: - Shared rig
 
+    // A rig names its ladder whole — both knobs together — or takes the
+    // manager's own defaults: a step that retunes one knob and reads a
+    // window off the other would measure a ladder nobody built.
     func activatedRig(
         name: String,
+        retryInterval: TimeInterval? = nil,
+        maxRetries: Int? = nil,
         configure: (FakeSlotProvider) -> Void
     ) async -> (fake: FakeSlotProvider, manager: TunnelsManager, container: TunnelContainer)? {
         let identity = TunnelIdentity(id: UUID(), name: name, createdAt: Date(), isGhost: false)
         let fake = FakeSlotProvider(name: name, identity: identity, status: .disconnected)
         configure(fake)
-        let manager = TunnelsManager(
-            tunnelProviders: [fake],
-            providerFactory: FakeSlotFactory(canned: [fake]),
-            vault: vault,
-            observesSystemChanges: false
-        )
+        let manager: TunnelsManager
+        if let retryInterval, let maxRetries {
+            manager = TunnelsManager(
+                tunnelProviders: [fake],
+                providerFactory: FakeSlotFactory(canned: [fake]),
+                vault: vault,
+                retryInterval: retryInterval,
+                maxRetries: maxRetries,
+                observesSystemChanges: false
+            )
+        } else {
+            manager = TunnelsManager(
+                tunnelProviders: [fake],
+                providerFactory: FakeSlotFactory(canned: [fake]),
+                vault: vault,
+                observesSystemChanges: false
+            )
+        }
         guard let container = manager.tunnels.first(where: { $0.id == identity.id }) else {
             fail("side manager did not materialize \(name)")
             return nil
@@ -152,6 +216,30 @@ final class ActivationSeamWorkflow: TestWorkflow {
         return nil
     }
 
+    /// One driven row on its own side manager, with reload triggers off —
+    /// the arrangement most single-row steps start from. The caller shapes
+    /// the fake before the manager reads it.
+    func sideRow(
+        _ name: String,
+        status: NEVPNStatus,
+        configure: (FakeSlotProvider) -> Void = { _ in }
+    ) -> (fake: FakeSlotProvider, container: TunnelContainer, manager: TunnelsManager)? {
+        let identity = TunnelIdentity(id: UUID(), name: name, createdAt: Date(), isGhost: false)
+        let fake = FakeSlotProvider(name: name, identity: identity, status: status)
+        configure(fake)
+        let manager = TunnelsManager(
+            tunnelProviders: [fake],
+            providerFactory: FakeSlotFactory(canned: [fake]),
+            vault: vault,
+            observesSystemChanges: false
+        )
+        guard let container = manager.tunnels.first(where: { $0.id == identity.id }) else {
+            fail("side manager did not materialize \(name)")
+            return nil
+        }
+        return (fake, container, manager)
+    }
+
     // MARK: - Steps
 
     private func disarmDuringRemoval() async {
@@ -164,7 +252,8 @@ final class ActivationSeamWorkflow: TestWorkflow {
         let manager = TunnelsManager(
             tunnelProviders: [fake],
             providerFactory: FakeSlotFactory(canned: [fake]),
-            vault: vault
+            vault: vault,
+            observesSystemChanges: false
         )
         guard let container = manager.tunnels.first(where: { $0.id == identity.id }) else {
             fail("side manager did not materialize the seam tunnel")
@@ -226,9 +315,11 @@ final class ActivationSeamWorkflow: TestWorkflow {
     private func beltFilesRecord() async {
         let record = NSError(domain: "TE.Seam", code: 41,
                              userInfo: [NSLocalizedDescriptionKey: "driven start failure"])
-        guard let rig = await activatedRig(name: "TE-Seam-Record-\(runTag)", configure: {
+        guard let rig = await activatedRig(name: "TE-Seam-Record-\(runTag)",
+                                           retryInterval: 1.0, maxRetries: 2, configure: {
             $0.disconnectAnswer = .record(record)
         }) else { return }
+        let startsBefore = rig.fake.startCount
         rig.fake.drive(.disconnected)
         let landed = await settle(within: 6) { rig.container.lastActivationError != nil }
         check(landed, "the drop was explained — lastActivationError=\(rig.container.lastActivationError.map { String(describing: $0) } ?? "nil")")
@@ -237,12 +328,21 @@ final class ActivationSeamWorkflow: TestWorkflow {
             filedTheRecord = (sys as NSError).domain == record.domain && (sys as NSError).code == record.code
         }
         check(filedTheRecord, "the SYSTEM's record was filed, not a stand-in")
-        try? await Task.sleep(for: .seconds(2))
-        check(rig.fake.startCount == 1, "no retry was spent on an explained failure (starts=\(rig.fake.startCount))")
+        // The negative window is DERIVED from the rig's own ladder, the
+        // wedged/dying pattern: retuning the ladder cannot quietly turn
+        // this reading vacuous. The count is a snapshot, not a literal:
+        // the claim is that the DROP spent no start, whatever the rig had
+        // already spent before it.
+        let window = rig.manager.preflightBudget + rig.manager.retryInterval
+        _ = await settle(within: window) { rig.fake.startCount > startsBefore }
+        check(rig.fake.startCount == startsBefore,
+              "no retry was spent on an explained failure (starts=\(rig.fake.startCount),"
+              + " expected \(startsBefore))")
     }
 
     private func beltStandInOnAMuteDrop() async {
-        guard let rig = await activatedRig(name: "TE-Seam-StandIn-\(runTag)", configure: {
+        guard let rig = await activatedRig(name: "TE-Seam-StandIn-\(runTag)",
+                                           retryInterval: 1.0, maxRetries: 2, configure: {
             $0.disconnectAnswer = .never
         }) else { return }
         onTeardown("held disconnect fetch") { [weak self] in
@@ -265,7 +365,63 @@ final class ActivationSeamWorkflow: TestWorkflow {
             }
         }
         check(explained, "a mute system still left an error behind — lastActivationError=\(rig.container.lastActivationError.map { String(describing: $0) } ?? "nil")")
+        var standIn = false
+        if case .failedWhileActivating = rig.container.lastActivationError { standIn = true }
+        check(standIn,
+              "and it is the belt's own stand-in sentence — failedWhileActivating, the same door its"
+              + " sibling's system record takes —"
+              + " error=\(rig.container.lastActivationError.map { String(describing: $0) } ?? "nil")")
+        // Derived negative window, the wedged/dying pattern.
+        let window = rig.manager.preflightBudget + rig.manager.retryInterval
+        _ = await settle(within: window) { rig.fake.startCount > 1 }
         check(rig.fake.startCount == 1, "and no retry was invented (starts=\(rig.fake.startCount))")
+    }
+
+    // The drop's verdict task asks the vault a slot question on its way to
+    // the record fetch. That question is bounded by the task's own budget:
+    // a vault that never answers costs the budget and falls to .free, and
+    // the belt still files its sentence — the verdict is never parked
+    // behind a readAll nobody will answer.
+    private func darkVaultCannotParkTheDropsVerdict() async {
+        let identity = TunnelIdentity(id: UUID(), name: "TE-Seam-DarkVerdict-\(runTag)",
+                                      createdAt: Date(), isGhost: false)
+        let fake = FakeSlotProvider(name: identity.name, identity: identity, status: .disconnected)
+        let faultVault = FaultVaultClient()
+        faultVault.readAllAnswer = .answersAfter(seconds: 30, .unreachable)
+        let manager = TunnelsManager(
+            tunnelProviders: [fake],
+            providerFactory: FakeSlotFactory(canned: [fake]),
+            vault: faultVault,
+            observesSystemChanges: false
+        )
+        guard let container = manager.tunnels.first(where: { $0.id == identity.id }) else {
+            fail("side manager did not materialize the dark-verdict tunnel")
+            return
+        }
+
+        manager.startActivation(of: container)
+        guard await settle(within: manager.preflightBudget + 4, until: { fake.startCount >= 1 }) else {
+            fail("the rung never came out of its own bounded pre-flight against the dark vault"
+                 + " — starts=\(fake.startCount)")
+            return
+        }
+        fake.drive(.disconnected)
+
+        // The verdict's own budgets: the bounded slot question plus the
+        // bounded(3) record fetch, with slack for the driven handler.
+        let verdictWindow = manager.preflightBudget + 5
+        let explained = await settle(within: verdictWindow) { container.lastActivationError != nil }
+        check(explained,
+              "the drop's verdict landed on its own budgets while the vault stayed dark — the slot question"
+              + " fell to .free instead of parking the task behind a readAll nobody answers"
+              + " (error=\(container.lastActivationError.map { String(describing: $0) } ?? "nil"))")
+        var filed = false
+        if case .failedWhileActivating = container.lastActivationError { filed = true }
+        check(filed,
+              "and it is the belt's own sentence — a record or a stand-in, not a foreign-holder verdict"
+              + " a dark vault cannot prove")
+        check(container.status == .inactive,
+              "with the row grounded by the drop itself — status=\(container.status)")
     }
 
     private func beltRespectsRevivedSession() async {
@@ -292,7 +448,8 @@ final class ActivationSeamWorkflow: TestWorkflow {
         let manager = TunnelsManager(
             tunnelProviders: [fake],
             providerFactory: FakeSlotFactory(canned: [fake]),
-            vault: vault
+            vault: vault,
+            observesSystemChanges: false
         )
         guard let container = manager.tunnels.first(where: { $0.id == identity.id }) else {
             fail("side manager did not materialize the stop-rig tunnel")
@@ -324,7 +481,8 @@ final class ActivationSeamWorkflow: TestWorkflow {
         let manager = TunnelsManager(
             tunnelProviders: [fake],
             providerFactory: FakeSlotFactory(canned: [fake]),
-            vault: vault
+            vault: vault,
+            observesSystemChanges: false
         )
         guard let container = manager.tunnels.first(where: { $0.id == identity.id }) else {
             fail("side manager did not materialize the refused-disarm tunnel")
@@ -338,10 +496,13 @@ final class ActivationSeamWorkflow: TestWorkflow {
         var surfaced = false
         if case .stopDisarmRefused = container.lastActivationError { surfaced = true }
         check(surfaced, "the refusal surfaced as stopDisarmRefused, the case whose sentence names the rule and the revival rather than a configuration save — lastActivationError=\(container.lastActivationError.map { String(describing: $0) } ?? "nil")")
-        check(fake.loadCount > loadsBefore,
-              "the refusal ASKED the store rather than reporting the value it had just written (loads=\(fake.loadCount), before=\(loadsBefore))")
-        check(fake.isOnDemandEnabled && fake.storedOnDemand,
-              "and the flag carries that answer — still armed — rather than the comfortable half (flag=\(fake.isOnDemandEnabled), store=\(fake.storedOnDemand))")
+        check(fake.loadCount == loadsBefore,
+              "the refusal wrote nothing back and asked nothing back either — no load followed it; the next owner-flow load is the one that re-reads the store (loads=\(fake.loadCount), before=\(loadsBefore))")
+        check(!fake.isOnDemandEnabled && fake.storedOnDemand,
+              "so the flag holds this manager's write — disarmed — while the store keeps what the refusal left (flag=\(fake.isOnDemandEnabled), store=\(fake.storedOnDemand))")
+        let retired = await TunnelsManager.awaitLingeringDisarmSave(on: fake, within: 3)
+        check(retired,
+              "and the ledger row retired with the landed refusal, feeding no later join")
 
         fake.drive(.disconnected)
         let grounded = await settle(within: 3) { container.status == .inactive }
@@ -355,7 +516,8 @@ final class ActivationSeamWorkflow: TestWorkflow {
         let manager = TunnelsManager(
             tunnelProviders: [fake],
             providerFactory: FakeSlotFactory(canned: [fake]),
-            vault: vault
+            vault: vault,
+            observesSystemChanges: false
         )
         guard let container = manager.tunnels.first(where: { $0.id == identity.id }) else {
             fail("side manager did not materialize the refresh-rig tunnel")
@@ -404,7 +566,8 @@ final class ActivationSeamWorkflow: TestWorkflow {
         let manager = TunnelsManager(
             tunnelProviders: [fakeA, fakeB, fakeC],
             providerFactory: FakeSlotFactory(canned: [fakeA, fakeB, fakeC]),
-            vault: vault
+            vault: vault,
+            observesSystemChanges: false
         )
         guard let a = manager.tunnels.first(where: { $0.id == idA.id }),
               let b = manager.tunnels.first(where: { $0.id == idB.id }) else {
@@ -443,10 +606,6 @@ final class ActivationSeamWorkflow: TestWorkflow {
 
         fakeA.drive(.disconnected)
         let tookItsTurn = await settle(within: 12) { fakeB.startCount >= 1 }
-        if !tookItsTurn, !manager.tunnels.contains(where: { $0.id == idB.id }) {
-            skip("environment: a refresh emptied the side manager's list mid-step")
-            return
-        }
         check(tookItsTurn, "the queued tunnel took its turn (starts=\(fakeB.startCount))")
         let sweptC = await settle(within: 5) { !fakeC.storedOnDemand }
         check(sweptC && !fakeC.isOnDemandEnabled,
@@ -465,7 +624,8 @@ final class ActivationSeamWorkflow: TestWorkflow {
         let manager = TunnelsManager(
             tunnelProviders: [fakeA, fakeB, fakeC],
             providerFactory: FakeSlotFactory(canned: [fakeA, fakeB, fakeC]),
-            vault: vault
+            vault: vault,
+            observesSystemChanges: false
         )
         guard let a = manager.tunnels.first(where: { $0.id == idA.id }),
               let b = manager.tunnels.first(where: { $0.id == idB.id }),
@@ -486,8 +646,13 @@ final class ActivationSeamWorkflow: TestWorkflow {
             skip("environment: removing the bystander failed (vault dark?)")
             return
         }
-        guard manager.tunnels.contains(where: { $0.id == idB.id }) else {
-            skip("environment: a refresh emptied the side manager's list mid-step")
+        // The first half's claim is only valid inside the stop-landing
+        // window: past `stopIssuedAt` + patience, `occupiesSlot` lets the
+        // queue through BY DESIGN, so a removal that outlived the window
+        // is the environment being slow, not the product handing on early.
+        guard let issued = a.stopIssuedAt,
+              ContinuousClock.now - issued < .seconds(TunnelsManager.disarmPatience) else {
+            skip("environment: removal outlived the stop-landing window")
             return
         }
         check(manager.tunnels.contains(where: { $0.id == idC.id }) == false, "the bystander left the list")
@@ -502,10 +667,6 @@ final class ActivationSeamWorkflow: TestWorkflow {
             return
         }
         let tookItsTurn = await settle(within: 12) { fakeB.startCount >= 1 }
-        if !tookItsTurn, !manager.tunnels.contains(where: { $0.id == idB.id }) {
-            skip("environment: a refresh emptied the side manager's list mid-step")
-            return
-        }
         check(tookItsTurn,
               "removing the blocker handed the queue on with no notification in sight (starts=\(fakeB.startCount))")
     }
@@ -520,7 +681,8 @@ final class ActivationSeamWorkflow: TestWorkflow {
         let manager = TunnelsManager(
             tunnelProviders: [fakeA, fakeB],
             providerFactory: FakeSlotFactory(canned: [fakeA, fakeB]),
-            vault: vault
+            vault: vault,
+            observesSystemChanges: false
         )
         guard let b = manager.tunnels.first(where: { $0.id == idB.id }) else {
             fail("side manager did not materialize the stale-slot rig")
@@ -533,7 +695,10 @@ final class ActivationSeamWorkflow: TestWorkflow {
         }
         fakeA.setStatusSilently(.disconnecting)
 
-        await manager.refresh()
+        // QueueHandOff-E's door: prune() rebuilds the list from the system
+        // alone. refresh() would run the full reload — a reconcile against
+        // the REAL vault, which can mint real rows into this side rig.
+        await manager.prune()
         guard manager.tunnels.contains(where: { $0.id == idB.id }) == false else {
             skip("environment: the reload kept the unbacked row, so there is no stale slot to discard")
             return
@@ -543,123 +708,6 @@ final class ActivationSeamWorkflow: TestWorkflow {
         check(manager.waitingTunnel == nil, "and the stale slot was discarded rather than kept")
         let started = await settle(within: 1) { fakeB.startCount > 0 }
         check(!started, "no session was raised for a row the list no longer holds (starts=\(fakeB.startCount))")
-    }
-
-    private func wedgedAttemptIsWithdrawn() async {
-        let identity = TunnelIdentity(id: UUID(), name: "TE-Seam-Wedged-\(runTag)", createdAt: Date(), isGhost: false)
-        let fake = FakeSlotProvider(name: identity.name, identity: identity, status: .disconnected)
-        fake.saveAnswer = .hangs
-        let manager = TunnelsManager(
-            tunnelProviders: [fake],
-            providerFactory: FakeSlotFactory(canned: [fake]),
-            vault: vault,
-            retryInterval: 1.0,
-            maxRetries: 2,
-            observesSystemChanges: false
-        )
-        guard let container = manager.tunnels.first(where: { $0.id == identity.id }) else {
-            fail("side manager did not materialize the wedged-attempt tunnel")
-            return
-        }
-        onTeardown("wedged save") { [weak self] in
-            let released = fake.releaseHeldCompletions()
-            self?.log(released == 0
-                      ? "teardown: nothing was still held — the step released the wedge itself"
-                      : "teardown: released \(released) held request(s) so the side manager can go")
-        }
-
-        manager.startActivation(of: container)
-        guard await settle(within: 8, until: { fake.saveCount >= 1 }) else {
-            skip("environment: the rung never reached its arm save")
-            return
-        }
-        let savesAtArm = fake.saveCount
-        check(container.status == .activating,
-              "the attempt is wedged inside a save that will never answer — status=\(container.status)")
-
-        let explained = await settle(within: 8) { container.lastActivationError != nil }
-        check(explained,
-              "the ceiling withdrew it — lastActivationError=\(container.lastActivationError.map { String(describing: $0) } ?? "nil")")
-        var named = false
-        if case .activationUnresolved = container.lastActivationError { named = true }
-        check(named, "and said the system never answered rather than inventing an error it did not give")
-        check(container.status == .inactive, "the row came back to rest — status=\(container.status)")
-        check(!container.isAttemptingActivation, "the attempt flag came down with it")
-
-        let window = manager.preflightBudget + manager.retryInterval
-        let climbedAgain = await settle(within: window) { fake.saveCount > savesAtArm + 1 }
-        check(!climbedAgain && fake.saveCount == savesAtArm + 1,
-              "exactly the arm save and the withdrawal's own stand-down (saves=\(fake.saveCount), expected \(savesAtArm + 1))")
-
-        let released = fake.releaseHeldCompletions()
-        check(released >= 1, "the step released the wedge it planted (released=\(released))")
-
-        let savesAfterRelease = fake.saveCount
-        let climbedAfterRelease = await settle(within: manager.preflightBudget + 0.5) {
-            fake.saveCount > savesAfterRelease
-        }
-        check(!climbedAfterRelease,
-              "and nothing climbed once the wedge was released (saves=\(fake.saveCount))")
-        var verdictKept = false
-        if case .activationUnresolved = container.lastActivationError { verdictKept = true }
-        check(verdictKept,
-              "the late save's refusal could not overwrite the withdrawal's verdict — error=\(container.lastActivationError.map { String(describing: $0) } ?? "nil")")
-    }
-
-    private func dyingSessionIsWithdrawnInPlace() async {
-        let identity = TunnelIdentity(id: UUID(), name: "TE-Seam-Dying-\(runTag)", createdAt: Date(), isGhost: false)
-        let fake = FakeSlotProvider(name: identity.name, identity: identity, status: .disconnected)
-        let manager = TunnelsManager(
-            tunnelProviders: [fake],
-            providerFactory: FakeSlotFactory(canned: [fake]),
-            vault: vault,
-            retryInterval: 1.0,
-            maxRetries: 2,
-            observesSystemChanges: false
-        )
-        guard let container = manager.tunnels.first(where: { $0.id == identity.id }) else {
-            fail("side manager did not materialize the dying-session tunnel")
-            return
-        }
-        onTeardown("held completions (dying-session step)") { [weak self] in
-            let released = fake.releaseHeldCompletions()
-            self?.log(released == 0
-                      ? "teardown: nothing was held, as this rig intends"
-                      : "teardown: released \(released) held request(s)")
-        }
-
-        manager.startActivation(of: container)
-        fake.drive(.disconnecting)
-        let dying = await settle(within: 2) {
-            container.status == .deactivating && container.isAttemptingActivation
-        }
-        check(dying, "the session is dying under an attempt that still holds its intent — status=\(container.status)")
-        let savesBeforeWithdrawal = fake.saveCount
-
-        let explained = await settle(within: 8) { container.lastActivationError != nil }
-        check(explained,
-              "the ceiling withdrew it — lastActivationError=\(container.lastActivationError.map { String(describing: $0) } ?? "nil")")
-        var named = false
-        if case .activationUnresolved = container.lastActivationError { named = true }
-        check(named, "and said the system never answered rather than inventing an error it did not give")
-        check(!container.isAttemptingActivation, "the attempt flag came down")
-        check(container.status == .deactivating,
-              "the dying session was left to the system — status=\(container.status)")
-        let window = manager.preflightBudget + manager.retryInterval
-        let climbed = await settle(within: window) {
-            fake.saveCount > savesBeforeWithdrawal + 1 || fake.startCount > 0
-        }
-        check(!climbed && fake.saveCount == savesBeforeWithdrawal + 1,
-              "exactly the withdrawal's own stand-down (saves=\(fake.saveCount), expected \(savesBeforeWithdrawal + 1))")
-        check(fake.startCount == 0,
-              "no session was ever raised over the dying one (starts=\(fake.startCount))")
-
-        fake.drive(.disconnected)
-        let grounded = await settle(within: 2) { container.status == .inactive }
-        check(grounded, "the system's own .disconnected grounded the row once it finally came — status=\(container.status)")
-        var explanationSurvived = false
-        if case .activationUnresolved = container.lastActivationError { explanationSurvived = true }
-        check(explanationSurvived, "and the withdrawal's explanation survived the grounding")
     }
 }
 #endif

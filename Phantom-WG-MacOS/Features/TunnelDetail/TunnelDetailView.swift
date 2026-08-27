@@ -12,7 +12,7 @@ struct TunnelDetailView: View {
     @State var configLoaded = false
     @State var readAttempt = 0
 
-    enum ConfigLoadFailure { case missing, unreachable }
+    enum ConfigLoadFailure { case missing, undecodable, unreachable }
     @State var loadFailure: ConfigLoadFailure?
 
     static let vaultReadAttempts = 3
@@ -28,6 +28,7 @@ struct TunnelDetailView: View {
     @State var rxBytes: String = "—"
     @State var txBytes: String = "—"
     @State var statsPollingTask: Task<Void, Never>?
+    @State private var configLoadTask: Task<Void, Never>?
 
     init(tunnel: TunnelContainer) {
         self.tunnel = tunnel
@@ -60,19 +61,28 @@ struct TunnelDetailView: View {
         .navigationDestination(isPresented: $showingEdit) {
             TunnelEditView(tunnel: tunnel)
         }
-        .task { await loadConfig() }
+        .task { reloadConfig() }
         .onChange(of: showingEdit) { _, isEditing in
             if !isEditing {
-                Task { await loadConfig() }
+                reloadConfig()
             }
         }
         .onAppear {
             logStore.startPolling()
-            if tunnel.status == .active { startStatsPolling() }
+            if Self.statsSessionImplied(tunnel.status) {
+                startStatsPolling()
+            } else {
+                // The session may have ended while this screen was off-screen
+                // (no onChange to catch it): repaint the placeholders so a
+                // dead session's last rx/tx numbers do not come back.
+                resetStats()
+            }
         }
         .onDisappear {
             logStore.stopPolling()
             stopStatsPolling()
+            configLoadTask?.cancel()
+            configLoadTask = nil
         }
         .confirmationDialog(loc.t("detail_delete_confirm_title"),
                             isPresented: $showingDeleteConfirmation,
@@ -91,11 +101,16 @@ struct TunnelDetailView: View {
             Text(errorMessage ?? "")
         }
         .onChange(of: tunnel.status) { _, newStatus in
-            if newStatus == .active {
+            switch newStatus {
+            case .active, .reasserting:
+                // Reasserting is a session-implying paint (statsSessionImplied):
+                // the stats row keeps polling through the re-handshake window.
                 startStatsPolling()
-            } else if newStatus == .inactive {
+            case .inactive, .unknown:
                 stopStatsPolling()
                 resetStats()
+            case .activating, .deactivating, .waiting:
+                break
             }
         }
     }
@@ -117,12 +132,18 @@ struct TunnelDetailView: View {
         } else if configLoaded {
             Section {
                 VStack(alignment: .leading, spacing: 8) {
-                    if loadFailure == .unreachable {
+                    switch loadFailure {
+                    case .unreachable:
                         Label(loc.t("detail_config_unreachable"), systemImage: "bolt.horizontal.circle")
                             .foregroundStyle(.secondary)
                             .fixedSize(horizontal: false, vertical: true)
                             .accessibilityIdentifier(AXID.TunnelDetail.configUnreachable)
-                    } else {
+                    case .missing:
+                        Label(loc.t("detail_config_missing"), systemImage: "questionmark.circle")
+                            .foregroundStyle(.secondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                            .accessibilityIdentifier(AXID.TunnelDetail.configUnavailable)
+                    case .undecodable, nil:
                         Label(loc.t("detail_config_unavailable"), systemImage: "lock.slash")
                             .foregroundStyle(.secondary)
                             .fixedSize(horizontal: false, vertical: true)
@@ -130,7 +151,7 @@ struct TunnelDetailView: View {
                     }
 
                     Button(loc.t("detail_config_retry")) {
-                        Task { await loadConfig() }
+                        reloadConfig()
                     }
                     .controlSize(.small)
                     .accessibilityIdentifier(AXID.TunnelDetail.configRetry)
@@ -150,6 +171,14 @@ struct TunnelDetailView: View {
         }
     }
 
+    /// Single owner for config loads: every trigger (first appearance, edit
+    /// dismissal, Retry) lands here, and a new trigger cancels the load in
+    /// flight so only the newest answer paints the screen.
+    private func reloadConfig() {
+        configLoadTask?.cancel()
+        configLoadTask = Task { await loadConfig() }
+    }
+
     private func loadConfig() async {
         configLoaded = false
         readAttempt = 0
@@ -157,8 +186,11 @@ struct TunnelDetailView: View {
         let result = await vault.read(
             id: tunnel.id,
             attempts: Self.vaultReadAttempts,
-            onAttempt: { readAttempt = $0 }
+            onAttempt: { if !Task.isCancelled { readAttempt = $0 } }
         )
+
+        // A newer trigger owns the screen now; this answer is stale.
+        guard !Task.isCancelled else { return }
 
         switch result {
         case .config(let loaded):
@@ -169,7 +201,7 @@ struct TunnelDetailView: View {
             loadFailure = .missing
         case .undecodable:
             config = nil
-            loadFailure = .missing
+            loadFailure = .undecodable
         case .unreachable:
             config = nil
             loadFailure = .unreachable

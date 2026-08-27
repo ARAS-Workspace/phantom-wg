@@ -434,6 +434,13 @@ extension VaultIntegrityWorkflow {
 
         let faultVault = FaultVaultClient()
         faultVault.readAnswer = .answers(.unreachable)
+        // The realign proves every candidate fresh before writing; without
+        // per-id answers the pass would stop on a dark vault before the row
+        // ahead of the teardown ever took its write.
+        faultVault.readAnswers = [
+            ahead.id: .answers(.config(ahead)),
+            behind.id: .answers(.config(behind)),
+        ]
         faultVault.storeAnswer = .answers(.done)
         faultVault.deleteAnswer = .answers(.done)
         faultVault.readAllAnswer = .answers(.configs([ahead, behind]))
