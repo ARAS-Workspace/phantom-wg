@@ -114,7 +114,7 @@ final class ConnectionGateCoordinator {
                 case .done:
                     NSLog("[slot] gate disarmed recovery on \(name) — no manager yet, written without the removal bars")
                 case .refused(let error):
-                    NSLog("[slot] gate could not disarm recovery on \(name), written without the removal bars — armed=\(provider.isOnDemandEnabled) is the truest reading available: \(error.localizedDescription)")
+                    NSLog("[slot] gate could not disarm recovery on \(name), written without the removal bars — the flag holds this write (disarmed); the store keeps whatever the refusal left until the next load: \(error.localizedDescription)")
                 case .unanswered:
                     NSLog("[slot] gate's disarm save on \(name) has not answered — left running, nothing decided on it")
                 }
