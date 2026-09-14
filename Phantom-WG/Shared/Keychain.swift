@@ -12,8 +12,8 @@ import Security
 /// item keeps the accessibility class it was created under.
 enum Keychain {
 
-    private static let accessGroup = "group.com.remrearas.phantom-wg"
-    private static let service = "com.remrearas.Phantom-WG"
+    private static let accessGroup = "group.com.artek.phantom-wg"
+    private static let service = "com.artek.Phantom-WG"
 
     static func openReference(called ref: Data) -> String? {
         var result: CFTypeRef?

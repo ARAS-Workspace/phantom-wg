@@ -39,9 +39,9 @@ jobs:
     permissions:
       contents: read
     env:
-      APP_BUNDLE_ID: com.remrearas.Phantom-WG
-      TUNNEL_BUNDLE_ID: com.remrearas.Phantom-WG.PhantomTunnel
-      TEAM_ID: 9C5SL5H7CM
+      APP_BUNDLE_ID: com.artek.Phantom-WG
+      TUNNEL_BUNDLE_ID: com.artek.Phantom-WG.PhantomTunnel
+      TEAM_ID: GZUHTM7439
 
     steps:
       # ── 0. Setup temp paths ─────────────────────────────────

@@ -34,7 +34,7 @@ extension NETunnelProviderProtocol {
             return nil
         }
 
-        providerBundleIdentifier = "com.remrearas.Phantom-WG.PhantomTunnel"
+        providerBundleIdentifier = "com.artek.Phantom-WG.PhantomTunnel"
         providerConfiguration = ["keychainRef": newRef]
         // Ghost carries the wstunnel URL; a validated standalone config
         // always carries its endpoint, so the chain never lands on nil.
