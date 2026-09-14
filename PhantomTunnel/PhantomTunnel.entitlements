@@ -10,8 +10,8 @@
 	<true/>
 	<key>com.apple.security.application-groups</key>
 	<array>
-		<string>group.com.remrearas.phantom-wg-macos</string>
-		<string>9C5SL5H7CM.*</string>
+		<string>group.com.artek.phantom-wg-macos</string>
+		<string>GZUHTM7439.*</string>
 	</array>
 	<key>com.apple.security.network.client</key>
 	<true/>

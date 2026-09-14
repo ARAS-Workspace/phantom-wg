@@ -18,7 +18,7 @@ final class TCPFlowRelay {
     private var selfRef: TCPFlowRelay?
 
     private let log = OSLog(
-        subsystem: "com.remrearas.Phantom-WG-MacOS.PhantomSplitTunnel",
+        subsystem: "com.artek.Phantom-WG-MacOS.PhantomSplitTunnel",
         category: "relay.tcp"
     )
 

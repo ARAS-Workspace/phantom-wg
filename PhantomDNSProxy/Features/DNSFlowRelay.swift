@@ -6,7 +6,7 @@ import os.log
 enum DNSFlowRelay {
 
     static let log = OSLog(
-        subsystem: "com.remrearas.Phantom-WG-MacOS.PhantomDNSProxy",
+        subsystem: "com.artek.Phantom-WG-MacOS.PhantomDNSProxy",
         category: "relay"
     )
 

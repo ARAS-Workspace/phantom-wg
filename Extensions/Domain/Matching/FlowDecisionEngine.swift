@@ -4,7 +4,7 @@ import Foundation
 
 enum FlowDecisionEngine {
 
-    static let selfSigningPrefix = "9C5SL5H7CM.com.remrearas.Phantom-WG-MacOS"
+    static let selfSigningPrefix = "GZUHTM7439.com.artek.Phantom-WG-MacOS"
 
     static func isOwnProcess(signingIdentifier: String?) -> Bool {
         guard let id = signingIdentifier, !id.isEmpty else { return false }

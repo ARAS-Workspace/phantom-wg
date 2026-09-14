@@ -215,7 +215,7 @@ enum PreviewFixtures {
         status: ExtensionGateController.Status
     ) -> ExtensionGateController {
         ExtensionGateController(
-            bundleID: "com.remrearas.Phantom-WG-MacOS.preview",
+            bundleID: "com.artek.Phantom-WG-MacOS.preview",
             displayName: LocalizationManager.shared.t(titleKey),
             status: status
         )

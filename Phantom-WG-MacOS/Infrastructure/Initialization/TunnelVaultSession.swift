@@ -21,7 +21,7 @@ final class TunnelVaultSession {
     @ObservationIgnored private var isProbing = false
 
     @ObservationIgnored private let log = OSLog(
-        subsystem: "com.remrearas.Phantom-WG-MacOS",
+        subsystem: "com.artek.Phantom-WG-MacOS",
         category: "vault-session"
     )
 

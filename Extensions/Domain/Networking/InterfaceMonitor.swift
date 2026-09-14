@@ -16,11 +16,11 @@ final class InterfaceMonitor {
 
     private let monitor = NWPathMonitor(prohibitedInterfaceTypes: [.other, .loopback])
     private let queue = DispatchQueue(
-        label: "com.remrearas.Phantom-WG-MacOS.interface-monitor",
+        label: "com.artek.Phantom-WG-MacOS.interface-monitor",
         qos: .utility
     )
     private let syncQueue = DispatchQueue(
-        label: "com.remrearas.Phantom-WG-MacOS.interface-monitor.sync"
+        label: "com.artek.Phantom-WG-MacOS.interface-monitor.sync"
     )
 
     // MARK: - Lifecycle

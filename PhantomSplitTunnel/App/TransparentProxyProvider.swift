@@ -5,7 +5,7 @@ import os.log
 final class TransparentProxyProvider: NETransparentProxyProvider, ActiveFlowRelayRegistry, ProxyConfigReceiver {
 
     private let log = OSLog(
-        subsystem: "com.remrearas.Phantom-WG-MacOS.PhantomSplitTunnel",
+        subsystem: "com.artek.Phantom-WG-MacOS.PhantomSplitTunnel",
         category: "proxy"
     )
     private let logger = RingBufferLogger.shared

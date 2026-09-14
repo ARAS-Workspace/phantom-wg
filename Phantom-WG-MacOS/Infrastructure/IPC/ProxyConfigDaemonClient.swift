@@ -13,7 +13,7 @@ class ProxyConfigDaemonClient {
 
     init(machServiceName: String) {
         self.machServiceName = machServiceName
-        self.log = OSLog(subsystem: "com.remrearas.Phantom-WG-MacOS",
+        self.log = OSLog(subsystem: "com.artek.Phantom-WG-MacOS",
                          category: "proxy-daemon-client")
     }
 

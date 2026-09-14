@@ -17,7 +17,7 @@ class TunnelVaultClient {
     @ObservationIgnored private var sparedWhileDark = 0
 
     @ObservationIgnored private let log = OSLog(
-        subsystem: "com.remrearas.Phantom-WG-MacOS",
+        subsystem: "com.artek.Phantom-WG-MacOS",
         category: "vault-client"
     )
 

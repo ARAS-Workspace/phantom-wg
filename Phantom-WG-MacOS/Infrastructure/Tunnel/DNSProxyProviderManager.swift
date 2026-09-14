@@ -6,11 +6,11 @@ import os.log
 @MainActor
 class DNSProxyProviderManager {
 
-    private static let providerBundleID = "com.remrearas.Phantom-WG-MacOS.PhantomDNSProxy"
+    private static let providerBundleID = "com.artek.Phantom-WG-MacOS.PhantomDNSProxy"
     private static let localizedDescription = "Phantom-WG DNSProxy"
 
     private let log = OSLog(
-        subsystem: "com.remrearas.Phantom-WG-MacOS",
+        subsystem: "com.artek.Phantom-WG-MacOS",
         category: "dns-proxy-manager"
     )
 

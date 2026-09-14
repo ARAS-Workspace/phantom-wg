@@ -6,7 +6,7 @@ enum InterfaceDNSResolver {
     static func dnsServers(for interfaceName: String) -> [String] {
         guard let store = SCDynamicStoreCreate(
             nil,
-            "com.remrearas.Phantom-WG-MacOS.InterfaceDNSResolver" as CFString,
+            "com.artek.Phantom-WG-MacOS.InterfaceDNSResolver" as CFString,
             nil,
             nil
         ) else { return [] }
@@ -38,7 +38,7 @@ enum InterfaceDNSResolver {
     static func globalResolverServers() -> [String] {
         guard let store = SCDynamicStoreCreate(
             nil,
-            "com.remrearas.Phantom-WG-MacOS.InterfaceDNSResolver.global" as CFString,
+            "com.artek.Phantom-WG-MacOS.InterfaceDNSResolver.global" as CFString,
             nil,
             nil
         ) else { return [] }

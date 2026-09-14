@@ -18,7 +18,7 @@ class SplitTunnelProviderManager {
     @ObservationIgnored private var manager: NETransparentProxyManager?
     @ObservationIgnored private var statusObserver: NSObjectProtocol?
 
-    private static let providerBundleID = "com.remrearas.Phantom-WG-MacOS.PhantomSplitTunnel"
+    private static let providerBundleID = "com.artek.Phantom-WG-MacOS.PhantomSplitTunnel"
     private static let localizedDescription = "Phantom-WG Split-Tunnel"
 
     // MARK: - Load

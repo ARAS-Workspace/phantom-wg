@@ -1,6 +1,6 @@
 name: Phantom-WG-MacOS
 options:
-  bundleIdPrefix: com.remrearas
+  bundleIdPrefix: com.artek
   deploymentTarget:
     macOS: "15.1"
   xcodeVersion: "16.0"
@@ -73,11 +73,11 @@ targets:
         ARCHS: "$(ARCHS_STANDARD)"
         ENABLE_HARDENED_RUNTIME: YES
         PRODUCT_NAME: Phantom-WG Mac
-        PRODUCT_BUNDLE_IDENTIFIER: com.remrearas.Phantom-WG-MacOS
+        PRODUCT_BUNDLE_IDENTIFIER: com.artek.Phantom-WG-MacOS
         INFOPLIST_FILE: Phantom-WG-MacOS/Info.plist
         CODE_SIGN_ENTITLEMENTS: Phantom-WG-MacOS/Phantom-WG-MacOS.entitlements
         CODE_SIGN_STYLE: Manual
-        DEVELOPMENT_TEAM: 9C5SL5H7CM
+        DEVELOPMENT_TEAM: GZUHTM7439
         OTHER_LDFLAGS:
           - "-lresolv"
           - "-Wl,-w"
@@ -125,10 +125,10 @@ targets:
         # service name (`….tunnelvault` / `….splittunnel` /
         # `….dnsproxy`), which is what authorizes this sandboxed
         # app's `NSXPCConnection` lookups — plus the TeamID-prefixed
-        # wildcard `9C5SL5H7CM.*` carried by the provisioning profile.
+        # wildcard `GZUHTM7439.*` carried by the provisioning profile.
         com.apple.security.application-groups:
-          - group.com.remrearas.phantom-wg-macos
-          - 9C5SL5H7CM.*
+          - group.com.artek.phantom-wg-macos
+          - GZUHTM7439.*
         com.apple.developer.networking.networkextension:
           - packet-tunnel-provider-systemextension
           - app-proxy-provider-systemextension
@@ -188,14 +188,14 @@ targets:
         ENABLE_HARDENED_RUNTIME: YES
         ENABLE_USER_SCRIPT_SANDBOXING: NO
         CODE_SIGN_INJECT_BASE_ENTITLEMENTS: NO
-        PRODUCT_NAME: com.remrearas.Phantom-WG-MacOS.PhantomTunnel
+        PRODUCT_NAME: com.artek.Phantom-WG-MacOS.PhantomTunnel
         PRODUCT_MODULE_NAME: PhantomTunnel
-        PRODUCT_BUNDLE_IDENTIFIER: com.remrearas.Phantom-WG-MacOS.PhantomTunnel
+        PRODUCT_BUNDLE_IDENTIFIER: com.artek.Phantom-WG-MacOS.PhantomTunnel
         INFOPLIST_FILE: PhantomTunnel/Info.plist
         CODE_SIGN_ENTITLEMENTS: PhantomTunnel/PhantomTunnel.entitlements
         CODE_SIGN_STYLE: Manual
         CODE_SIGN_IDENTITY: "Developer ID Application"
-        DEVELOPMENT_TEAM: 9C5SL5H7CM
+        DEVELOPMENT_TEAM: GZUHTM7439
         PROVISIONING_PROFILE_SPECIFIER: Phantom-WG Mac Tunnel DeveloperID
         SWIFT_OBJC_BRIDGING_HEADER: PhantomTunnel/BridgingHeader.h
         HEADER_SEARCH_PATHS:
@@ -225,7 +225,7 @@ targets:
           # secrets at import time, before any tunnel has ever run.
           # Must be prefixed by one of the entitlement's
           # application-groups; mirrors the two proxy extensions.
-          NEMachServiceName: group.com.remrearas.phantom-wg-macos.tunnelvault
+          NEMachServiceName: group.com.artek.phantom-wg-macos.tunnelvault
           NEProviderClasses:
             com.apple.networkextension.packet-tunnel: $(PRODUCT_MODULE_NAME).PacketTunnelProvider
     entitlements:
@@ -240,8 +240,8 @@ targets:
         # the same group set the embedded provisioning profile
         # authorizes.
         com.apple.security.application-groups:
-          - group.com.remrearas.phantom-wg-macos
-          - 9C5SL5H7CM.*
+          - group.com.artek.phantom-wg-macos
+          - GZUHTM7439.*
         com.apple.security.network.client: true
         com.apple.security.network.server: true
 
@@ -280,14 +280,14 @@ targets:
         ENABLE_HARDENED_RUNTIME: YES
         ENABLE_USER_SCRIPT_SANDBOXING: NO
         CODE_SIGN_INJECT_BASE_ENTITLEMENTS: NO
-        PRODUCT_NAME: com.remrearas.Phantom-WG-MacOS.PhantomSplitTunnel
+        PRODUCT_NAME: com.artek.Phantom-WG-MacOS.PhantomSplitTunnel
         PRODUCT_MODULE_NAME: PhantomSplitTunnel
-        PRODUCT_BUNDLE_IDENTIFIER: com.remrearas.Phantom-WG-MacOS.PhantomSplitTunnel
+        PRODUCT_BUNDLE_IDENTIFIER: com.artek.Phantom-WG-MacOS.PhantomSplitTunnel
         INFOPLIST_FILE: PhantomSplitTunnel/Info.plist
         CODE_SIGN_ENTITLEMENTS: PhantomSplitTunnel/PhantomSplitTunnel.entitlements
         CODE_SIGN_STYLE: Manual
         CODE_SIGN_IDENTITY: "Developer ID Application"
-        DEVELOPMENT_TEAM: 9C5SL5H7CM
+        DEVELOPMENT_TEAM: GZUHTM7439
         PROVISIONING_PROFILE_SPECIFIER: Phantom-WG Mac SplitTunnel DeveloperID
         ALWAYS_EMBED_SWIFT_STANDARD_LIBRARIES: YES
         SWIFT_VERSION: "5.0"
@@ -306,7 +306,7 @@ targets:
           # the app's XPC client can look it up. Must be prefixed by one
           # of the entitlement's application-groups (the `group.<id>`
           # one). Mirrors PhantomDNSProxy.
-          NEMachServiceName: group.com.remrearas.phantom-wg-macos.splittunnel
+          NEMachServiceName: group.com.artek.phantom-wg-macos.splittunnel
           NEProviderClasses:
             com.apple.networkextension.app-proxy: $(PRODUCT_MODULE_NAME).TransparentProxyProvider
     entitlements:
@@ -318,8 +318,8 @@ targets:
         # Wildcard claim mirrors the main app and the DNSProxy
         # sibling — see PhantomTunnel comment.
         com.apple.security.application-groups:
-          - group.com.remrearas.phantom-wg-macos
-          - 9C5SL5H7CM.*
+          - group.com.artek.phantom-wg-macos
+          - GZUHTM7439.*
         com.apple.security.network.client: true
         com.apple.security.network.server: true
 
@@ -357,14 +357,14 @@ targets:
         ENABLE_HARDENED_RUNTIME: YES
         ENABLE_USER_SCRIPT_SANDBOXING: NO
         CODE_SIGN_INJECT_BASE_ENTITLEMENTS: NO
-        PRODUCT_NAME: com.remrearas.Phantom-WG-MacOS.PhantomDNSProxy
+        PRODUCT_NAME: com.artek.Phantom-WG-MacOS.PhantomDNSProxy
         PRODUCT_MODULE_NAME: PhantomDNSProxy
-        PRODUCT_BUNDLE_IDENTIFIER: com.remrearas.Phantom-WG-MacOS.PhantomDNSProxy
+        PRODUCT_BUNDLE_IDENTIFIER: com.artek.Phantom-WG-MacOS.PhantomDNSProxy
         INFOPLIST_FILE: PhantomDNSProxy/Info.plist
         CODE_SIGN_ENTITLEMENTS: PhantomDNSProxy/PhantomDNSProxy.entitlements
         CODE_SIGN_STYLE: Manual
         CODE_SIGN_IDENTITY: "Developer ID Application"
-        DEVELOPMENT_TEAM: 9C5SL5H7CM
+        DEVELOPMENT_TEAM: GZUHTM7439
         PROVISIONING_PROFILE_SPECIFIER: Phantom-WG Mac DNSProxy DeveloperID
         ALWAYS_EMBED_SWIFT_STANDARD_LIBRARIES: YES
         SWIFT_VERSION: "5.0"
@@ -382,7 +382,7 @@ targets:
           # NEMachServiceName must be prefixed by one of the literal
           # strings in `com.apple.security.application-groups`
           # entitlement (Apple DTS DevForums #654765, #128550).
-          # `group.com.remrearas.phantom-wg-macos` is the literal
+          # `group.com.artek.phantom-wg-macos` is the literal
           # App Group on both the container app and this sysex; the
           # `.dnsproxy` suffix disambiguates from the App Group.
           # NE framework publishes this Mach service to launchd at
@@ -390,7 +390,7 @@ targets:
           # system-namespace bootstrap split. The constant on the
           # Swift side (`ProxyConfigService.dnsProxy`) carries the
           # byte-identical string.
-          NEMachServiceName: group.com.remrearas.phantom-wg-macos.dnsproxy
+          NEMachServiceName: group.com.artek.phantom-wg-macos.dnsproxy
           NEProviderClasses:
             com.apple.networkextension.dns-proxy: $(PRODUCT_MODULE_NAME).DNSProxyProvider
     entitlements:
@@ -402,13 +402,13 @@ targets:
         # Two app-groups: the conventional `group.<id>` one for the
         # shared container — its literal also prefixes this sysex's
         # Mach service name (`….dnsproxy`, NEMachServiceName above) —
-        # plus the TeamID-prefixed wildcard `9C5SL5H7CM.*` (per the
+        # plus the TeamID-prefixed wildcard `GZUHTM7439.*` (per the
         # embedded provisioning profile, which already permits it).
         # Field observation: without the wildcard claim, OS sysex
         # validation rejected activation with `validationFailed`.
         com.apple.security.application-groups:
-          - group.com.remrearas.phantom-wg-macos
-          - 9C5SL5H7CM.*
+          - group.com.artek.phantom-wg-macos
+          - GZUHTM7439.*
         com.apple.security.network.client: true
         com.apple.security.network.server: true
 

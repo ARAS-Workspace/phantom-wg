@@ -6,7 +6,7 @@ final class TunnelVaultDaemon: NSObject, NSXPCListenerDelegate {
     static var shared: TunnelVaultDaemon?
 
     private static let peerCodeRequirement =
-        #"identifier "com.remrearas.Phantom-WG-MacOS" and anchor apple generic and certificate leaf[subject.OU] = "9C5SL5H7CM""#
+        #"identifier "com.artek.Phantom-WG-MacOS" and anchor apple generic and certificate leaf[subject.OU] = "GZUHTM7439""#
 
     private let listener: NSXPCListener
     private let log: OSLog

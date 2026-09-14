@@ -25,7 +25,7 @@
 	<key>NetworkExtension</key>
 	<dict>
 		<key>NEMachServiceName</key>
-		<string>group.com.remrearas.phantom-wg-macos.dnsproxy</string>
+		<string>group.com.artek.phantom-wg-macos.dnsproxy</string>
 		<key>NEProviderClasses</key>
 		<dict>
 			<key>com.apple.networkextension.dns-proxy</key>

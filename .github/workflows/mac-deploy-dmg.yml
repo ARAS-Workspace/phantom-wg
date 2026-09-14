@@ -39,11 +39,11 @@ jobs:
     permissions:
       contents: read
     env:
-      APP_BUNDLE_ID: com.remrearas.Phantom-WG-MacOS
-      TUNNEL_BUNDLE_ID: com.remrearas.Phantom-WG-MacOS.PhantomTunnel
-      SPLITTUNNEL_BUNDLE_ID: com.remrearas.Phantom-WG-MacOS.PhantomSplitTunnel
-      DNSPROXY_BUNDLE_ID: com.remrearas.Phantom-WG-MacOS.PhantomDNSProxy
-      TEAM_ID: 9C5SL5H7CM
+      APP_BUNDLE_ID: com.artek.Phantom-WG-MacOS
+      TUNNEL_BUNDLE_ID: com.artek.Phantom-WG-MacOS.PhantomTunnel
+      SPLITTUNNEL_BUNDLE_ID: com.artek.Phantom-WG-MacOS.PhantomSplitTunnel
+      DNSPROXY_BUNDLE_ID: com.artek.Phantom-WG-MacOS.PhantomDNSProxy
+      TEAM_ID: GZUHTM7439
       APP_NAME: "Phantom-WG Mac"
       MAC_DIR: .
 

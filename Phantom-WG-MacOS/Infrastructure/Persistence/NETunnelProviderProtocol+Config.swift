@@ -20,7 +20,7 @@ extension NETunnelProviderProtocol {
     convenience init(identity: TunnelIdentity) {
         self.init()
 
-        providerBundleIdentifier = "com.remrearas.Phantom-WG-MacOS.PhantomTunnel"
+        providerBundleIdentifier = "com.artek.Phantom-WG-MacOS.PhantomTunnel"
         serverAddress = "Phantom-WG"
 
         providerConfiguration = [

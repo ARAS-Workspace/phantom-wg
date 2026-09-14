@@ -78,7 +78,7 @@ final class SplitTunnelingSessionCoordinator {
     @ObservationIgnored private let dnsDaemonClient: DNSProxyDaemonClient
     @ObservationIgnored private let splitDaemonClient: SplitTunnelDaemonClient
     @ObservationIgnored private let oslog = OSLog(
-        subsystem: "com.remrearas.Phantom-WG-MacOS",
+        subsystem: "com.artek.Phantom-WG-MacOS",
         category: "session-coordinator"
     )
 

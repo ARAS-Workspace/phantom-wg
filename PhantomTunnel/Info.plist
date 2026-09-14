@@ -25,7 +25,7 @@
 	<key>NetworkExtension</key>
 	<dict>
 		<key>NEMachServiceName</key>
-		<string>group.com.remrearas.phantom-wg-macos.tunnelvault</string>
+		<string>group.com.artek.phantom-wg-macos.tunnelvault</string>
 		<key>NEProviderClasses</key>
 		<dict>
 			<key>com.apple.networkextension.packet-tunnel</key>

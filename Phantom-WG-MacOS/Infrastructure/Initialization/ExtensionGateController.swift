@@ -72,7 +72,7 @@ final class ExtensionGateController: NSObject, OSSystemExtensionRequestDelegate 
         self.bundleID = bundleID
         self.displayName = displayName
         self.oslog = OSLog(
-            subsystem: "com.remrearas.Phantom-WG-MacOS",
+            subsystem: "com.artek.Phantom-WG-MacOS",
             category: "gate.\(displayName)"
         )
         self.status = status

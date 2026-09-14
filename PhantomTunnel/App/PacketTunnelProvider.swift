@@ -2,7 +2,7 @@ import NetworkExtension
 import WireGuardKit
 import os.log
 
-private let extLog = OSLog(subsystem: "com.remrearas.Phantom-WG-MacOS.PhantomTunnel", category: "tunnel")
+private let extLog = OSLog(subsystem: "com.artek.Phantom-WG-MacOS.PhantomTunnel", category: "tunnel")
 
 class PacketTunnelProvider: NEPacketTunnelProvider {
 

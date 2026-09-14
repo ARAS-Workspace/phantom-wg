@@ -233,8 +233,8 @@ final class SplitControlPlaneWorkflow: TestWorkflow {
 
     // MARK: - Shared
 
-    private static let probeSigningIDA = "com.remrearas.phantom-wg.test-engine.no-such-process.a"
-    private static let probeSigningIDB = "com.remrearas.phantom-wg.test-engine.no-such-process.b"
+    private static let probeSigningIDA = "com.artek.phantom-wg.test-engine.no-such-process.a"
+    private static let probeSigningIDB = "com.artek.phantom-wg.test-engine.no-such-process.b"
 
     private func probeEntry(_ id: String) -> AppEntry {
         AppEntry(signingIdentifier: id, bundleIdentifier: id, displayName: "PhantomTestEngine probe")

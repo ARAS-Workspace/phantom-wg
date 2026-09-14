@@ -4,10 +4,10 @@ import os.log
 
 enum SystemKeychainVault {
 
-    static let service = "com.remrearas.Phantom-WG-MacOS.tunnelvault"
+    static let service = "com.artek.Phantom-WG-MacOS.tunnelvault"
 
     private static let log = OSLog(
-        subsystem: "com.remrearas.Phantom-WG-MacOS.PhantomTunnel",
+        subsystem: "com.artek.Phantom-WG-MacOS.PhantomTunnel",
         category: "vault"
     )
 

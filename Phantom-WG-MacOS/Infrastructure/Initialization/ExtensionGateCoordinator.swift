@@ -12,7 +12,7 @@ final class ExtensionGateCoordinator {
     let dns: ExtensionGateController
 
     @ObservationIgnored private let oslog = OSLog(
-        subsystem: "com.remrearas.Phantom-WG-MacOS",
+        subsystem: "com.artek.Phantom-WG-MacOS",
         category: "gate.coordinator"
     )
     @ObservationIgnored private var foregroundObserver: NSObjectProtocol?
@@ -35,7 +35,7 @@ final class ExtensionGateCoordinator {
         let loc = LocalizationManager.shared
         self.init(
             tunnel: ExtensionGateController(
-                bundleID: "com.remrearas.Phantom-WG-MacOS.PhantomTunnel",
+                bundleID: "com.artek.Phantom-WG-MacOS.PhantomTunnel",
                 displayName: loc.t("gate_ext_tunnel"),
                 identityProbe: {
                     switch await vault.ping() {
@@ -47,12 +47,12 @@ final class ExtensionGateCoordinator {
                 }
             ),
             split: ExtensionGateController(
-                bundleID: "com.remrearas.Phantom-WG-MacOS.PhantomSplitTunnel",
+                bundleID: "com.artek.Phantom-WG-MacOS.PhantomSplitTunnel",
                 displayName: loc.t("gate_ext_split"),
                 identityProbe: { await splitDaemon.identity() }
             ),
             dns: ExtensionGateController(
-                bundleID: "com.remrearas.Phantom-WG-MacOS.PhantomDNSProxy",
+                bundleID: "com.artek.Phantom-WG-MacOS.PhantomDNSProxy",
                 displayName: loc.t("gate_ext_dns"),
                 identityProbe: { await dnsDaemon.identity() }
             )
@@ -164,7 +164,7 @@ private final class WorkspaceEcho: NSObject, OSSystemExtensionsWorkspaceObserver
     }
 
     private func forward(_ info: OSSystemExtensionInfo) {
-        guard info.bundleIdentifier.hasPrefix("com.remrearas.Phantom-WG-MacOS.") else { return }
+        guard info.bundleIdentifier.hasPrefix("com.artek.Phantom-WG-MacOS.") else { return }
         onTransition(info.bundleIdentifier)
     }
 

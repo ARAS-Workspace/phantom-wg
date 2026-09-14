@@ -12,6 +12,6 @@ import Foundation
 }
 
 public enum ProxyConfigService {
-    public static let dnsProxy = "group.com.remrearas.phantom-wg-macos.dnsproxy"
-    public static let splitTunnel = "group.com.remrearas.phantom-wg-macos.splittunnel"
+    public static let dnsProxy = "group.com.artek.phantom-wg-macos.dnsproxy"
+    public static let splitTunnel = "group.com.artek.phantom-wg-macos.splittunnel"
 }

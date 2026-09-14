@@ -7,7 +7,7 @@ import os.log
 final class DNSProxyProvider: NEDNSProxyProvider, ProxyConfigReceiver {
 
     private let log = OSLog(
-        subsystem: "com.remrearas.Phantom-WG-MacOS.PhantomDNSProxy",
+        subsystem: "com.artek.Phantom-WG-MacOS.PhantomDNSProxy",
         category: "provider"
     )
     private let logger = RingBufferLogger.shared

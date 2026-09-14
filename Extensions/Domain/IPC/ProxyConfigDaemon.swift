@@ -10,7 +10,7 @@ final class ProxyConfigDaemon: NSObject, NSXPCListenerDelegate, ProxyConfigDaemo
     static var shared: ProxyConfigDaemon?
 
     private static let peerCodeRequirement =
-        #"anchor apple generic and certificate leaf[subject.OU] = "9C5SL5H7CM""#
+        #"anchor apple generic and certificate leaf[subject.OU] = "GZUHTM7439""#
 
     private let listener: NSXPCListener
     private let log: OSLog

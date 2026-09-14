@@ -2,12 +2,12 @@ import Foundation
 import NetworkExtension
 import os.log
 
-let bootLog = OSLog(subsystem: "com.remrearas.Phantom-WG-MacOS.PhantomDNSProxy", category: "boot")
+let bootLog = OSLog(subsystem: "com.artek.Phantom-WG-MacOS.PhantomDNSProxy", category: "boot")
 os_log("PhantomDNSProxy system extension BOOT", log: bootLog, type: .default)
 
 ProxyConfigDaemon.shared = ProxyConfigDaemon(
     machServiceName: ProxyConfigService.dnsProxy,
-    subsystem: "com.remrearas.Phantom-WG-MacOS.PhantomDNSProxy"
+    subsystem: "com.artek.Phantom-WG-MacOS.PhantomDNSProxy"
 )
 ProxyConfigDaemon.shared?.start()
 

@@ -17,5 +17,5 @@ import Foundation
 }
 
 public enum TunnelVaultService {
-    public static let machServiceName = "group.com.remrearas.phantom-wg-macos.tunnelvault"
+    public static let machServiceName = "group.com.artek.phantom-wg-macos.tunnelvault"
 }

@@ -29,7 +29,7 @@
             <BuildableReference
                BuildableIdentifier = "primary"
                BlueprintIdentifier = "ABFDE9606833E3E1938A9A40"
-               BuildableName = "com.remrearas.Phantom-WG-MacOS.PhantomDNSProxy.systemextension"
+               BuildableName = "com.artek.Phantom-WG-MacOS.PhantomDNSProxy.systemextension"
                BlueprintName = "PhantomDNSProxy"
                ReferencedContainer = "container:Phantom-WG-MacOS.xcodeproj">
             </BuildableReference>
@@ -43,7 +43,7 @@
             <BuildableReference
                BuildableIdentifier = "primary"
                BlueprintIdentifier = "8E5EEB11F91CACC292D33DE0"
-               BuildableName = "com.remrearas.Phantom-WG-MacOS.PhantomSplitTunnel.systemextension"
+               BuildableName = "com.artek.Phantom-WG-MacOS.PhantomSplitTunnel.systemextension"
                BlueprintName = "PhantomSplitTunnel"
                ReferencedContainer = "container:Phantom-WG-MacOS.xcodeproj">
             </BuildableReference>

@@ -10,7 +10,7 @@ protocol ActiveFlowRelayRegistry: AnyObject {
 enum FlowRelay {
 
     static let log = OSLog(
-        subsystem: "com.remrearas.Phantom-WG-MacOS.PhantomSplitTunnel",
+        subsystem: "com.artek.Phantom-WG-MacOS.PhantomSplitTunnel",
         category: "relay"
     )
 

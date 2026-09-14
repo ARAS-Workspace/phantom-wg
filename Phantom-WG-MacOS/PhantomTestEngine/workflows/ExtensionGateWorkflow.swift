@@ -71,7 +71,7 @@ final class ExtensionGateWorkflow: TestWorkflow {
         ]
     }
 
-    private static let absentBundleID = "com.remrearas.Phantom-WG-MacOS.TE-NoSuchExtension"
+    private static let absentBundleID = "com.artek.Phantom-WG-MacOS.TE-NoSuchExtension"
 
     private nonisolated static let testBudget: Duration = .seconds(2)
 

@@ -11,7 +11,7 @@ final class PhysicalInterfaceResolver {
 
     @ObservationIgnored private var monitor: NWPathMonitor?
     @ObservationIgnored private let queue = DispatchQueue(
-        label: "com.remrearas.Phantom-WG-MacOS.interface-monitor",
+        label: "com.artek.Phantom-WG-MacOS.interface-monitor",
         qos: .utility
     )
 
