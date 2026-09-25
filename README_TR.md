@@ -323,14 +323,27 @@ Phantom-Frontmatter, Phantom-WG Modern sunucusundan ayrı ve bağımsız bir bar
 
 ### Kurulum
 
-Güncel sürüm: [frontmatter-v1.0.0](https://github.com/ARAS-Workspace/phantom-wg/releases/tag/frontmatter-v1.0.0)
+Güncel sürüm: [frontmatter-v1.0.1](https://github.com/ARAS-Workspace/phantom-wg/releases/tag/frontmatter-v1.0.1)
 
 ```bash
-wget https://github.com/ARAS-Workspace/phantom-wg/releases/download/frontmatter-v1.0.0/phantom-wg-frontmatter-v1.0.0.zip
-unzip phantom-wg-frontmatter-v1.0.0.zip
-cd phantom-wg-frontmatter-v1.0.0
+wget https://github.com/ARAS-Workspace/phantom-wg/releases/download/frontmatter-v1.0.1/phantom-wg-frontmatter-v1.0.1.zip
+unzip phantom-wg-frontmatter-v1.0.1.zip
+cd phantom-wg-frontmatter-v1.0.1
 sudo ./frontmatter-install.sh
 ```
+
+### Güncelleme
+
+Kurulu bir sunucu yerinde güncellenir. SQLite durumu, TLS materyali ve tünel gizli anahtarı korunur; böylece istemci yapılandırmaları güncelleme boyunca çalışmaya devam eder. `frontmatter-install.sh` yalnızca ilk kurulum içindir.
+
+```bash
+wget https://github.com/ARAS-Workspace/phantom-wg/releases/download/frontmatter-v1.0.1/phantom-wg-frontmatter-v1.0.1.zip
+unzip phantom-wg-frontmatter-v1.0.1.zip
+cd phantom-wg-frontmatter-v1.0.1
+sudo ./frontmatter-update.sh
+```
+
+**v1.0.0 → v1.0.1** güncelleyicinin kendisini getirir ve paketlenmiş tünel ikilisini [wstunnel](https://github.com/erebe/wstunnel) 10.5.2'den forkumuzun [10.5.2+Phantom.Patch.1](https://github.com/ARAS-Workspace/wstunnel) sürümüne taşır. Bu sürüm 10.5.2 üzerine iki upstream düzeltme taşır: Frontmatter'ın koştuğu sunucu rolünü de kapsayan bir WebSocket keep-alive ve alım kilitlenmesi düzeltmesi ile istemci bağlantı havuzundaki TLS el sıkışma zaman aşımı.
 
 ### Yapılandırma
 

@@ -322,14 +322,27 @@ Phantom-Frontmatter is installed on a separate, dedicated bare-metal server from
 
 ### Installation
 
-Latest release: [frontmatter-v1.0.0](https://github.com/ARAS-Workspace/phantom-wg/releases/tag/frontmatter-v1.0.0)
+Latest release: [frontmatter-v1.0.1](https://github.com/ARAS-Workspace/phantom-wg/releases/tag/frontmatter-v1.0.1)
 
 ```bash
-wget https://github.com/ARAS-Workspace/phantom-wg/releases/download/frontmatter-v1.0.0/phantom-wg-frontmatter-v1.0.0.zip
-unzip phantom-wg-frontmatter-v1.0.0.zip
-cd phantom-wg-frontmatter-v1.0.0
+wget https://github.com/ARAS-Workspace/phantom-wg/releases/download/frontmatter-v1.0.1/phantom-wg-frontmatter-v1.0.1.zip
+unzip phantom-wg-frontmatter-v1.0.1.zip
+cd phantom-wg-frontmatter-v1.0.1
 sudo ./frontmatter-install.sh
 ```
+
+### Update
+
+An existing host is updated in place. The SQLite state, the TLS material and the tunnel secret are preserved, so client configurations keep working across the update. `frontmatter-install.sh` is for first-time installs only.
+
+```bash
+wget https://github.com/ARAS-Workspace/phantom-wg/releases/download/frontmatter-v1.0.1/phantom-wg-frontmatter-v1.0.1.zip
+unzip phantom-wg-frontmatter-v1.0.1.zip
+cd phantom-wg-frontmatter-v1.0.1
+sudo ./frontmatter-update.sh
+```
+
+**v1.0.0 → v1.0.1** introduces the updater itself and moves the bundled tunnel binary from [wstunnel](https://github.com/erebe/wstunnel) 10.5.2 to our fork's [10.5.2+Phantom.Patch.1](https://github.com/ARAS-Workspace/wstunnel), which carries two upstream fixes on top of 10.5.2: a WebSocket keep-alive and receive-deadlock fix that covers the server role Frontmatter runs, and a TLS handshake timeout in the client connection pool.
 
 ### Configuration
 
