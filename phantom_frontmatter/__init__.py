@@ -27,6 +27,6 @@ Third-party licenses - see THIRD_PARTY_LICENSES file for details
 WireGuard® is a registered trademark of Jason A. Donenfeld.
 """
 
-__version__ = "1.0.0"
+__version__ = "1.0.1"
 __author__ = "Rıza Emre ARAS"
 __license__ = "AGPL-3.0"
