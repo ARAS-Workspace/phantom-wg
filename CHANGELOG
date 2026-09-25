@@ -5,6 +5,27 @@ passwords, TOTP MFA, RBAC, audit log, authenticated reverse proxy
 to the daemon UDS.
 
 
+v1.1.6 - 2026-09-26
+-------------------
+
+  Security maintenance release. Patches the bundled anyio runtime
+  for two Snyk findings: CVE-2026-63374 (TLSStream.wrap resolves
+  internationalized hostnames with IDNA 2003, so server_hostname
+  can verify against a certificate whose SAN was encoded under
+  IDNA 2008 — MitM on IDN targets) and CVE-2026-64847 (to_process
+  leaves worker stderr on the parent pipe, where a blocking write
+  deadlocks the worker). Neither path is exercised here: the proxy
+  target defaults to a UDS, which carries no TLS hostname at all,
+  and to_process appears nowhere in the service. anyio is pulled in
+  transitively by httpx, starlette and watchfiles; the bump is
+  surgical (4.12.1 -> 4.14.2) with no other pin moving. Lockfile
+  regenerated via `uv pip compile --upgrade-package anyio`;
+  requirements.in pins anyio explicitly, as it already does for
+  starlette and idna.
+
+  No API, schema, or migration impact.
+
+
 v1.1.5 - 2026-07-17
 -------------------
 
@@ -77,7 +98,7 @@ v1.1.3 - 2026-06-22
 v1.1.2 - 2026-05-16
 -------------------
 
-  Security maintenance release. Patches the fbundled click runtime
+  Security maintenance release. Patches the bundled click runtime
   for CVE-2026-7246 (command injection via untrusted shell-quoted
   argument handling on Windows). click is pulled in transitively
   by uvicorn; the bump is surgical (8.3.1 -> 8.3.3) with no source
