@@ -1,2 +1,2 @@
-7cb9d2f88d5f0058f626cb479dc23ebbcdfc11da387059a34b79e782543730e9  wstunnel_10.5.2_linux_amd64.tar.gz
-11ee9a2bf6a54d11c746da46d09909dec489af67cf1edc83ec03f978ad186d87  wstunnel_10.5.2_linux_arm64.tar.gz
+d830d916b23122feaa0ea98b60abd9b1399b276a5d8c9e0e53f16fa4f40a1fac  ./wstunnel_10.5.2+Phantom.Patch.1_linux_amd64.tar.gz
+2b827b5b71d6931b87a9707478be1ec4b131bac8c2a81654a7c2ad344d2c3937  ./wstunnel_10.5.2+Phantom.Patch.1_linux_arm64.tar.gz

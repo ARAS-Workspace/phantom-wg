@@ -4,15 +4,15 @@ wstunnel bundled binaries
 This directory ships the pre-built wstunnel release tarballs that
 phantom_frontmatter extracts at `setup init` time. The linux/amd64
 and linux/arm64 archives below are produced by the ARAS-Workspace
-fork's "Release Linux" workflow and dropped here verbatim.
+fork's `linux` branch release workflow and dropped here verbatim.
 
 References:
 
-  ARAS-Workspace/wstunnel (fork)             - https://github.com/ARAS-Workspace/wstunnel
-  erebe/wstunnel (upstream)                  - https://github.com/erebe/wstunnel
-  v10.5.2 release (source of these tarballs) - https://github.com/ARAS-Workspace/wstunnel/releases/tag/v10.5.2
-  Build run that produced v10.5.2 archives   - https://github.com/ARAS-Workspace/wstunnel/actions/runs/24295740708
-  main branch commit history                 - https://github.com/ARAS-Workspace/wstunnel/commits/main/
+  ARAS-Workspace/wstunnel (fork)   - https://github.com/ARAS-Workspace/wstunnel
+  erebe/wstunnel (upstream)        - https://github.com/erebe/wstunnel
+  release (source of these files)  - https://github.com/ARAS-Workspace/wstunnel/releases/tag/linux-v10.5.2%2BPhantom.Patch.1
+  build run that produced them     - https://github.com/ARAS-Workspace/wstunnel/actions/runs/36175403584
+  linux branch commit history      - https://github.com/ARAS-Workspace/wstunnel/commits/linux/
 
 Files in this directory:
 

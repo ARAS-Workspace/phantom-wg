@@ -26,7 +26,7 @@ from typing import Callable, Optional
 # Pinned version. To upgrade: drop new
 # wstunnel_<NEW>_linux_amd64.tar.gz / wstunnel_<NEW>_linux_arm64.tar.gz
 # into the bundled directory and bump this constant in the same commit.
-WSTUNNEL_VERSION = "10.5.2"
+WSTUNNEL_VERSION = "10.5.2+Phantom.Patch.1"
 
 # Where the bundled tarballs live inside the package. Resolved
 # relative to this file:
