@@ -73,7 +73,7 @@ id_rsa*
 xcuserdata/
 DerivedData/
 build/
-Libraries/
+Libraries/*
 !Libraries/WstunnelKit/
 
 # Project exclude paths
