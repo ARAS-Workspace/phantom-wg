@@ -58,6 +58,7 @@ jobs:
 
           cp -r phantom_frontmatter "/tmp/${ARCHIVE}/"
           cp frontmatter-install.sh "/tmp/${ARCHIVE}/"
+          cp frontmatter-update.sh "/tmp/${ARCHIVE}/"
           cp requirements.txt "/tmp/${ARCHIVE}/"
           cp LICENSE "/tmp/${ARCHIVE}/"
           cp THIRD_PARTY_LICENSES "/tmp/${ARCHIVE}/"
@@ -98,6 +99,14 @@ jobs:
             unzip phantom-wg-frontmatter-v${{ steps.version.outputs.number }}.zip
             cd phantom-wg-frontmatter-v${{ steps.version.outputs.number }}
             sudo ./frontmatter-install.sh
+            ```
+
+            ### Update an existing host
+
+            ```bash
+            unzip phantom-wg-frontmatter-v${{ steps.version.outputs.number }}.zip
+            cd phantom-wg-frontmatter-v${{ steps.version.outputs.number }}
+            sudo ./frontmatter-update.sh
             ```
 
             ### Setup

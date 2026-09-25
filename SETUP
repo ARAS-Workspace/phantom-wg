@@ -14,6 +14,7 @@ Prerequisites:
 Directory structure:
   phantom-wg-frontmatter/
   ├── frontmatter-install.sh     One-shot installer (apt deps + venv + symlinks)
+  ├── frontmatter-update.sh      In-place updater (package + bundled binary)
   ├── requirements.txt           Python package requirements
   ├── SETUP                      This file
   ├── LICENSE                    AGPL-3.0
@@ -167,13 +168,20 @@ Updating:
 
   unzip phantom-wg-frontmatter-v<VERSION>.zip
   cd phantom-wg-frontmatter-v<VERSION>
-  sudo ./frontmatter-install.sh
-  sudo frontmatter-api ghost restart
+  sudo ./frontmatter-update.sh
 
-  The installer replaces the package source under
-  /opt/phantom-frontmatter/phantom_frontmatter/ and preserves
-  /opt/phantom-frontmatter/data/ (SQLite database) and
-  /opt/phantom-frontmatter/secrets/ (TLS material).
+  The update script stops the data path if it is running, replaces the
+  package source under /opt/phantom-frontmatter/phantom_frontmatter/,
+  swaps /opt/phantom-frontmatter/bin/wstunnel when the release carries
+  a different bundled version, and starts the data path again if it
+  was the one that stopped it. The SQLite database under
+  /opt/phantom-frontmatter/data/ and the TLS material under
+  /opt/phantom-frontmatter/secrets/ are never touched, so existing
+  client configs keep working across an update.
+
+  frontmatter-install.sh is for first-time installs. Re-running it
+  replaces the package source but leaves the extracted wstunnel binary
+  at whatever version setup init originally installed.
 
 Uninstall:
   sudo frontmatter-uninstall

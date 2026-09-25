@@ -38,6 +38,14 @@ WSTUNNEL_VERSION = "10.5.2+Phantom.Patch.1"
 #       → phantom_frontmatter/bin/lib
 BUNDLED_DIR = Path(__file__).parent.parent.parent.parent / "bin" / "lib"
 
+# Full SemVer as printed by ``wstunnel --version``, including any
+# pre-release and build-metadata suffix. Matching only the numeric
+# triple would collapse every 10.5.2+Phantom.Patch.N into the same
+# string, making one patch level indistinguishable from the next.
+VERSION_RE = re.compile(
+    r"\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?"
+)
+
 # uname -m → release filename arch suffix
 ARCH_MAP = {
     "x86_64": "amd64",
@@ -163,14 +171,17 @@ def get_installed_version(
 ) -> Optional[str]:
     """Return the version reported by ``wstunnel --version``.
 
-    Used by ``setup status`` and the verification step at the end
-    of ``setup init``. Returns None if the binary doesn't run or
-    its output doesn't include a recognizable version triple.
+    Used by ``setup status``, the verification step at the end of
+    ``setup init``, and ``frontmatter-update.sh`` when it swaps the
+    binary. The returned string carries the build metadata, so it
+    compares directly against ``WSTUNNEL_VERSION``. Returns None if
+    the binary doesn't run or its output holds no recognizable
+    version.
     """
     if not binary_path.exists():
         return None
     result = run_command_func([str(binary_path), "--version"])
     if not result["success"]:
         return None
-    match = re.search(r"(\d+\.\d+\.\d+)", result["stdout"] + result["stderr"])
-    return match.group(1) if match else None
+    match = VERSION_RE.search(result["stdout"] + result["stderr"])
+    return match.group(0) if match else None
