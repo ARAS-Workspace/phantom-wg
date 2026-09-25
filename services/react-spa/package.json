@@ -23,10 +23,10 @@
     "qrcode.react": "4.2.0",
     "react": "19.2.4",
     "react-dom": "19.2.4",
-    "react-router-dom": "7.18.0",
+    "react-router-dom": "7.18.4",
     "remark-frontmatter": "5.0.0",
     "remark-gfm": "4.0.1",
-    "remark-mdx-frontmatter": "5.2.0",
+    "remark-mdx-frontmatter": "6.0.0",
     "swr": "2.4.1"
   },
   "devDependencies": {
