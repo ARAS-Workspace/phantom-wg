@@ -1,11 +1,11 @@
-#ifndef WSTUNNEL_IOS_H
-#define WSTUNNEL_IOS_H
+#ifndef WSTUNNEL_APPLE_H
+#define WSTUNNEL_APPLE_H
 
 #include <stdint.h>
 #include <stdbool.h>
 
 /*
- * wstunnel-ios: C FFI wrapper for wstunnel
+ * wstunnel-apple: C FFI wrapper for wstunnel (macOS + iOS)
  *
  * Wraps wstunnel identically to wstunnel-cli: constructs the same Client
  * config and calls run_client() internally. Only the interface differs.
@@ -141,4 +141,4 @@ int32_t wstunnel_client_is_running(void);
 const char *wstunnel_client_get_last_error(void);
 const char *wstunnel_get_version(void);
 
-#endif /* WSTUNNEL_IOS_H */
+#endif /* WSTUNNEL_APPLE_H */
