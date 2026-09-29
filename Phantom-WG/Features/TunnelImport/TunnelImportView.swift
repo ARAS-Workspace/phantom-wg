@@ -16,6 +16,11 @@ struct TunnelImportView: View {
     @State private var errorMessages: [String] = []
     @State private var showingQRScanner = false
 
+    /// Raised only by a failed `add`, never by a parse or validation
+    /// error. Saving is the step the system's VPN permission gates, so
+    /// it is the only failure a route into Settings could answer.
+    @State private var offersVPNSettings = false
+
     private var canSubmit: Bool {
         !tunnelName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
         && !inputText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
@@ -76,7 +81,18 @@ struct TunnelImportView: View {
         } header: {
             Label(loc.t("import_configuration"), systemImage: "doc.text")
         } footer: {
-            Text(loc.t("import_footer"))
+            VStack(alignment: .leading, spacing: 6) {
+                Text(loc.t("import_footer"))
+
+                // Said before the fact only while there is no tunnel
+                // yet: with one already saved the permission has been
+                // given, and repeating this on every later import would
+                // be noise.
+                if tunnelsManager.tunnels.isEmpty {
+                    Text(loc.t("import_vpn_permission_note"))
+                        .accessibilityIdentifier(AXID.TunnelImport.vpnPermissionNote)
+                }
+            }
         }
     }
 
@@ -115,6 +131,25 @@ struct TunnelImportView: View {
                         .fixedSize(horizontal: false, vertical: true)
                 }
             }
+
+            // The system's own error text is kept as it came, because it
+            // is the system's record. What is added is a way forward,
+            // and it is worded as a condition rather than a diagnosis:
+            // a rejected save reads the same whether the permission was
+            // declined or the write failed for its own reasons, so the
+            // screen offers the route without claiming to know which
+            // one happened.
+            if offersVPNSettings {
+                Text(loc.t("import_vpn_permission_hint"))
+                    .font(.caption)
+                    .fixedSize(horizontal: false, vertical: true)
+
+                Button(loc.t("open_settings")) { openSettings() }
+                    .font(.caption.weight(.semibold))
+                    .buttonStyle(.plain)
+                    .underline()
+                    .accessibilityIdentifier(AXID.TunnelImport.vpnSettingsButton)
+            }
         }
         .foregroundStyle(.white)
         .padding(12)
@@ -128,6 +163,7 @@ struct TunnelImportView: View {
 
     private func submit() {
         errorMessages = []
+        offersVPNSettings = false
 
         let trimmedName = tunnelName.trimmingCharacters(in: .whitespacesAndNewlines)
         let trimmedInput = inputText.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -168,8 +204,14 @@ struct TunnelImportView: View {
                 dismiss()
             } catch {
                 errorMessages = [error.localizedDescription]
+                offersVPNSettings = true
             }
         }
+    }
+
+    private func openSettings() {
+        guard let url = URL(string: UIApplication.openSettingsURLString) else { return }
+        UIApplication.shared.open(url)
     }
 }
 
