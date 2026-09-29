@@ -10,6 +10,27 @@
 	<key>NSPrivacyCollectedDataTypes</key>
 	<array/>
 	<key>NSPrivacyAccessedAPITypes</key>
-	<array/>
+	<array>
+		<!-- Neither this extension's own Swift nor the app's touches a
+		     file-timestamp API. The two static archives linked here do:
+		     libwstunnel_apple.a and libwg-go.a each import _stat,
+		     _fstat, _fstatat and _lstat through their Rust and Go
+		     runtimes, and both survive into the Release device binary
+		     (nm -u on PhantomTunnel.appex: 4 imports). They read files
+		     this process can already see — its own bundle and the app
+		     group container — so C617.1 is the reason that describes
+		     them. The app binary imports none of the four: it links the
+		     xcframework but holds no call site into it, so the linker
+		     drops the member, which is why the app's own manifest does
+		     not carry this category. -->
+		<dict>
+			<key>NSPrivacyAccessedAPIType</key>
+			<string>NSPrivacyAccessedAPICategoryFileTimestamp</string>
+			<key>NSPrivacyAccessedAPITypeReasons</key>
+			<array>
+				<string>C617.1</string>
+			</array>
+		</dict>
+	</array>
 </dict>
 </plist>
