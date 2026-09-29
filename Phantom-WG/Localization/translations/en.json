@@ -13,6 +13,7 @@
   "website": "Website",
   "documentation": "Documentation",
   "privacy": "Privacy",
+  "privacy_notice": "Phantom-WG collects no data.",
   "detail_transfer": "Transfer",
   "detail_handshake": "Handshake",
   "detail_received": "Received",

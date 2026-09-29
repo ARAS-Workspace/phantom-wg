@@ -41,19 +41,24 @@ struct EmptyStateView: View {
 
             Spacer()
 
-            HStack(spacing: 24) {
-                Link(destination: URL(string: "https://www.phantom.tc")!) {
-                    Label(loc.t("website"), systemImage: "globe")
-                        .font(.footnote)
-                }
-                Link(destination: URL(string: "https://www.phantom.tc/docs")!) {
-                    Label(loc.t("documentation"), systemImage: "book")
-                        .font(.footnote)
-                }
-                if let policy = loc.privacyPolicyURL {
-                    Link(destination: policy) {
-                        Label(loc.t("privacy"), systemImage: "hand.raised")
+            VStack(spacing: 8) {
+                Text(loc.t("privacy_notice"))
+                    .font(.caption2)
+
+                HStack(spacing: 24) {
+                    Link(destination: URL(string: "https://www.phantom.tc")!) {
+                        Label(loc.t("website"), systemImage: "globe")
                             .font(.footnote)
+                    }
+                    Link(destination: URL(string: "https://www.phantom.tc/docs")!) {
+                        Label(loc.t("documentation"), systemImage: "book")
+                            .font(.footnote)
+                    }
+                    if let policy = loc.privacyPolicyURL {
+                        Link(destination: policy) {
+                            Label(loc.t("privacy"), systemImage: "hand.raised")
+                                .font(.footnote)
+                        }
                     }
                 }
             }

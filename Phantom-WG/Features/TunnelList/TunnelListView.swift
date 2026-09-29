@@ -91,20 +91,30 @@ struct TunnelListView: View {
 
     /// Fixed footer — the form above scrolls as it grows, the links
     /// stay put. Mirrors the empty state's bottom-link styling.
+    ///
+    /// The line above the links is the declaration itself, not a link to
+    /// one: it sits on the first screen, before a tunnel has been
+    /// imported or started, so what the app does with data is answered
+    /// where the reader already is rather than behind a tap.
     private var bottomLinks: some View {
-        HStack(spacing: 24) {
-            Link(destination: URL(string: "https://www.phantom.tc")!) {
-                Label(loc.t("website"), systemImage: "globe")
-                    .font(.footnote)
-            }
-            Link(destination: URL(string: "https://www.phantom.tc/docs")!) {
-                Label(loc.t("documentation"), systemImage: "book")
-                    .font(.footnote)
-            }
-            if let policy = loc.privacyPolicyURL {
-                Link(destination: policy) {
-                    Label(loc.t("privacy"), systemImage: "hand.raised")
+        VStack(spacing: 8) {
+            Text(loc.t("privacy_notice"))
+                .font(.caption2)
+
+            HStack(spacing: 24) {
+                Link(destination: URL(string: "https://www.phantom.tc")!) {
+                    Label(loc.t("website"), systemImage: "globe")
                         .font(.footnote)
+                }
+                Link(destination: URL(string: "https://www.phantom.tc/docs")!) {
+                    Label(loc.t("documentation"), systemImage: "book")
+                        .font(.footnote)
+                }
+                if let policy = loc.privacyPolicyURL {
+                    Link(destination: policy) {
+                        Label(loc.t("privacy"), systemImage: "hand.raised")
+                            .font(.footnote)
+                    }
                 }
             }
         }
