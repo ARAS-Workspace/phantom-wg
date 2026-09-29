@@ -23,6 +23,13 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
     private var currentTunnelConfig: TunnelConfig?
     private var currentWireGuardConfig: TunnelConfiguration?
 
+    /// One rebuild at a time. A second request does not start a second
+    /// stop/start over the first — it joins the one already running and
+    /// is answered with the same outcome, so two taps can never report
+    /// two different fates for one layer.
+    private let resetSlotLock = NSLock()
+    private var inFlightReset: Task<TunnelResetReply, Never>?
+
     // MARK: - Tunnel Lifecycle
 
     override func startTunnel(options: [String: NSObject]? = nil) async throws {
@@ -136,10 +143,16 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
         case 3:
             // Reset the tunnel layer without touching utun / routing.
             // Preserves the provider surface so no packet escapes to
-            // the physical interface during the reset window.
+            // the physical interface during the reset window. The
+            // second byte is the outcome: the app cannot see the layer,
+            // so a reset that ended with it down has to say so.
             Task { [weak self] in
-                await self?.resetConnection()
-                completionHandler(Data([3]))
+                guard let self else {
+                    completionHandler(Data([3, TunnelResetReply.skipped.rawValue]))
+                    return
+                }
+                let outcome = await self.serializedReset()
+                completionHandler(Data([3, outcome.rawValue]))
             }
         default:
             completionHandler(nil)
@@ -147,6 +160,28 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
     }
 
     // MARK: - Layer Reset
+
+    /// The entry point opcode 3 goes through. A rebuild already running
+    /// is joined rather than raced: the second caller waits on the first
+    /// one's task and is answered with its outcome, so one layer can
+    /// never be torn down twice or reported two ways at once.
+    private func serializedReset() async -> TunnelResetReply {
+        let (reset, isOwner): (Task<TunnelResetReply, Never>, Bool) = resetSlotLock.withLock {
+            if let existing = inFlightReset { return (existing, false) }
+            let mine = Task { await self.resetConnection() }
+            inFlightReset = mine
+            return (mine, true)
+        }
+        guard isOwner else {
+            TunnelLogger.log(.tunnel, "Reset — one is already rebuilding this layer, waiting for it")
+            return await reset.value
+        }
+        let outcome = await reset.value
+        resetSlotLock.withLock {
+            if inFlightReset == reset { inFlightReset = nil }
+        }
+        return outcome
+    }
 
     /// Restart the tunnel layer (wstunnel + WireGuard in ghost mode,
     /// WireGuard alone in standalone mode) without tearing the
@@ -160,14 +195,17 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
     ///
     /// Failure semantics: if any restart step fails, the layer is
     /// left in a "no traffic flowing" state with `utun` still up. No
-    /// fallback to the physical route. The user retries via the UI
-    /// or disables the tunnel — the provider surface keeps traffic
-    /// contained until the user decides the next move.
-    private func resetConnection() async {
+    /// fallback to the physical route. That ending is returned rather
+    /// than absorbed — the app has no way to see the layer, so a reset
+    /// that ends with it down is indistinguishable from one that
+    /// worked unless this says otherwise. The provider surface keeps
+    /// traffic contained either way; the user decides the next move
+    /// once they have been told which ending they got.
+    private func resetConnection() async -> TunnelResetReply {
         guard let config = currentTunnelConfig,
               let wireguardConfig = currentWireGuardConfig else {
             TunnelLogger.log(.tunnel, "Reset skipped — no active layer config")
-            return
+            return .skipped
         }
 
         let modeLabel = isGhostMode ? "Ghost (wstunnel + WireGuard)" : "Standalone (WireGuard)"
@@ -179,10 +217,17 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
         reasserting = true
 
         // STOP PHASE — top-down
-        await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
-            adapter.stop { _ in continuation.resume() }
+        let stopFailure: Error? = await withCheckedContinuation { continuation in
+            adapter.stop { continuation.resume(returning: $0) }
         }
-        TunnelLogger.log(.wireGuard, "Reset — adapter stopped")
+        if let stopFailure {
+            // Not fatal on its own — the restart below is what decides
+            // whether the layer comes back — but it is the first thing
+            // to look at when it does not.
+            TunnelLogger.log(.wireGuard, "Reset — adapter was not stopped cleanly: \(stopFailure.localizedDescription)")
+        } else {
+            TunnelLogger.log(.wireGuard, "Reset — adapter stopped")
+        }
 
         if isGhostMode {
             WstunnelLifecycle.stop()
@@ -196,24 +241,27 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
                 TunnelLogger.log(.wstunnel, "Reset — wstunnel restarted")
             } catch {
                 TunnelLogger.log(.wstunnel, "Reset — wstunnel restart FAILED: \(error.localizedDescription)")
+                TunnelLogger.log(.tunnel, "Reset ended with the layer down — wstunnel did not come back")
                 reasserting = false
-                return
+                return .wstunnelFailed
             }
         }
 
-        await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
-            adapter.start(tunnelConfiguration: wireguardConfig) { error in
-                if let error {
-                    TunnelLogger.log(.wireGuard, "Reset — adapter restart FAILED: \(error.localizedDescription)")
-                } else {
-                    TunnelLogger.log(.wireGuard, "Reset — adapter restarted")
-                }
-                continuation.resume()
-            }
+        let startFailure: Error? = await withCheckedContinuation { continuation in
+            adapter.start(tunnelConfiguration: wireguardConfig) { continuation.resume(returning: $0) }
         }
 
         reasserting = false
+
+        if let startFailure {
+            TunnelLogger.log(.wireGuard, "Reset — adapter restart FAILED: \(startFailure.localizedDescription)")
+            TunnelLogger.log(.tunnel, "Reset ended with the layer down — the adapter did not restart")
+            return .adapterFailed
+        }
+
+        TunnelLogger.log(.wireGuard, "Reset — adapter restarted")
         TunnelLogger.log(.tunnel, "Reset complete")
+        return .rebuilt
     }
 
     // MARK: - Network Settings Override

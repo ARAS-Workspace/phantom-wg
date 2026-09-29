@@ -10,7 +10,10 @@ import SwiftUI
 ///   tapping it asks the extension to restart the tunnel layer in
 ///   place (wstunnel + WireGuard in ghost mode, WireGuard alone in
 ///   standalone) without touching utun — so no packet escapes to the
-///   physical interface during the reset window.
+///   physical interface during the reset window. It stays down while
+///   one is in flight: the extension answers a second request with the
+///   first one's outcome, so a second tap could only ever repeat an
+///   answer the user is still waiting for.
 /// - Delete is routed back to the parent's confirmation dialog via a
 ///   binding so the destructive action lives at the view root.
 struct ActionsSection: View {
@@ -19,6 +22,7 @@ struct ActionsSection: View {
     let copyAction: () -> Void
     let editAction: () -> Void
     let resetAction: () -> Void
+    let resetting: Bool
     @Binding var showingDeleteConfirmation: Bool
     @State private var copiedItem: String?
     @Environment(LocalizationManager.self) private var loc
@@ -38,7 +42,7 @@ struct ActionsSection: View {
             Button(action: resetAction) {
                 Label(loc.t("detail_reset_connection"), systemImage: "arrow.clockwise")
             }
-            .disabled(!canReset)
+            .disabled(!canReset || resetting)
             .accessibilityIdentifier(AXID.TunnelDetail.Actions.resetButton)
 
             Button(role: .destructive) {
@@ -94,6 +98,7 @@ struct ActionsSection: View {
                 copyAction: {},
                 editAction: {},
                 resetAction: {},
+                resetting: false,
                 showingDeleteConfirmation: showingDelete
             )
         }
@@ -112,6 +117,7 @@ struct ActionsSection: View {
                 copyAction: {},
                 editAction: {},
                 resetAction: {},
+                resetting: false,
                 showingDeleteConfirmation: showingDelete
             )
         }
@@ -130,6 +136,7 @@ struct ActionsSection: View {
                 copyAction: {},
                 editAction: {},
                 resetAction: {},
+                resetting: false,
                 showingDeleteConfirmation: showingDelete
             )
         }

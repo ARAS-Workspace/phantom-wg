@@ -92,7 +92,7 @@ final class PreviewTunnelProvider: TunnelProviding {
             logLines.removeAll()
             responseHandler(Data([2]))
         case 3:
-            responseHandler(Data())
+            responseHandler(Data([3, TunnelResetReply.rebuilt.rawValue]))
         default:
             responseHandler(nil)
         }

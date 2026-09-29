@@ -14,11 +14,16 @@ extension TunnelDetailView {
     // MARK: - Reset
 
     /// Ask the extension to restart its tunnel layer in place.
-    /// No user confirmation: reset is soft — worst case the user
-    /// sees a brief disconnect and presses it again. utun / routes
-    /// are preserved across the cycle (no physical-interface leak).
+    /// No user confirmation: reset is soft — utun / routes are
+    /// preserved across the cycle (no physical-interface leak), so the
+    /// worst case is a brief disconnect. What it is not is silent: the
+    /// call returns the layer's own verdict, and a rebuild that left
+    /// the layer down is said here rather than left to look like the
+    /// working one.
     func resetConnection() {
         Task {
+            isResetting = true
+            defer { isResetting = false }
             do {
                 try await tunnelsManager.resetConnection(of: tunnel)
             } catch {
