@@ -1,0 +1,7 @@
+/* System-drawn strings. iOS reads these from the bundle, never from
+   translations/*.json — the in-app flag cannot reach a permission
+   alert the system puts up. The same keys stay in Info.plist as the
+   fallback Apple requires; these are what actually ship, and the two
+   are kept identical. */
+
+"NSCameraUsageDescription" = "Camera access is needed to scan QR codes for tunnel configuration import.";

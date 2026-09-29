@@ -33,6 +33,14 @@ final class LocalizationManager {
 
     init() {
         // Resolve initial language: saved preference → device locale → English.
+        //
+        // The middle step reads `Locale.current`, which is the *app's*
+        // locale — the user's preferred languages intersected with the
+        // ones the bundle declares — not the device's raw setting. It
+        // can only ever answer `tr` while `tr.lproj` ships: drop that
+        // folder and this branch goes quiet without a line of this file
+        // changing. The flag still wins either way, because a language
+        // the user has picked once is saved and read first.
         if let saved = UserDefaults.standard.string(forKey: "app_language"),
            let lang = Language(rawValue: saved) {
             self.current = lang
