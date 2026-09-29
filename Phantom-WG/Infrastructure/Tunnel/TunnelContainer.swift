@@ -33,6 +33,16 @@ class TunnelContainer: Identifiable {
         tunnelProvider.isOnDemandEnabled
     }
 
+    /// Whether the system still holds a recovery rule for this tunnel.
+    /// Standing a rule down clears `isOnDemandEnabled` and leaves the rule
+    /// list in place, so a tunnel whose stand-down save was refused reads
+    /// false for the flag while the system still carries the rule it acts
+    /// on. Anything deciding whether a rule needs taking down reads this,
+    /// not the flag.
+    var carriesRecoveryRule: Bool {
+        tunnelProvider.isOnDemandEnabled || !(tunnelProvider.onDemandRules ?? []).isEmpty
+    }
+
     // Activation tracking (used by TunnelsManager). These are internal
     // state — excluded from observation tracking so they don't invalidate
     // views that have no visibility into activation bookkeeping.

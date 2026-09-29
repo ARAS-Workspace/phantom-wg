@@ -184,12 +184,7 @@ class TunnelsManager {
             return
         }
 
-        // Disarm every other tunnel's recovery rule first — recovery
-        // belongs to the tunnel being activated now
-        tunnels.filter { $0.id != tunnel.id && $0.isActivateOnDemandEnabled }.forEach { other in
-            other.tunnelProvider.isOnDemandEnabled = false
-            other.tunnelProvider.savePreferences { _ in }
-        }
+        disarmOtherRecoveryRules(except: tunnel)
 
         startActivation(of: tunnel, at: 0)
     }
@@ -208,19 +203,21 @@ class TunnelsManager {
         }
 
         // Stand the recovery rule down first — with it armed, the
-        // system would reconnect the moment the tunnel drops.
-        if tunnel.isActivateOnDemandEnabled {
+        // system would reconnect the moment the tunnel drops. What the
+        // save answers decides what is *said*, never whether the stop
+        // happens: the user asked for this tunnel to go down, and a rule
+        // left standing is a sentence, not a veto. A refusal leaves the
+        // store holding whatever it left — nothing here writes the flag
+        // back on its behalf, the next load re-reads it.
+        if tunnel.carriesRecoveryRule {
             tunnel.tunnelProvider.isOnDemandEnabled = false
             Task {
                 do {
                     try await tunnel.tunnelProvider.savePreferences()
-                    performDeactivation(of: tunnel)
                 } catch {
-                    // The tunnel keeps running and stays armed — a
-                    // fact, not a choice: the stop request could not
-                    // be persisted. Surface it instead of pretending.
-                    tunnel.lastActivationError = .savingFailed(systemError: error)
+                    tunnel.lastActivationError = .stopDisarmRefused(systemError: error)
                 }
+                performDeactivation(of: tunnel)
             }
         } else {
             performDeactivation(of: tunnel)
@@ -240,6 +237,25 @@ class TunnelsManager {
         provider.isOnDemandEnabled = true
     }
 
+    /// Recovery belongs to the tunnel being activated now, so every other
+    /// tunnel's rule comes down first. The gate reads `carriesRecoveryRule`
+    /// rather than the armed flag: a stand-down that was refused leaves the
+    /// flag false with the rule still standing, and a flag-shaped filter
+    /// walks past exactly that tunnel. A refusal is that tunnel's own
+    /// sentence on its own row — it is not the one the user just started.
+    private func disarmOtherRecoveryRules(except tunnel: TunnelContainer) {
+        tunnels.filter { $0.id != tunnel.id && $0.carriesRecoveryRule }.forEach { other in
+            other.tunnelProvider.isOnDemandEnabled = false
+            Task {
+                do {
+                    try await other.tunnelProvider.savePreferences()
+                } catch {
+                    other.lastActivationError = .stopDisarmRefused(systemError: error)
+                }
+            }
+        }
+    }
+
     /// Stands the recovery rule down and persists it. Used only on the
     /// give-up paths that failed *locally* — a config that cannot load,
     /// or whose `startTunnel` throws, would fail the same way on every
@@ -247,9 +263,22 @@ class TunnelsManager {
     /// trap. A timeout or a dropped session is the opposite case: that
     /// is the transient condition the recovery rule exists to ride out,
     /// so those paths leave it armed on purpose.
-    private static func disarmRecovery(on provider: TunnelProviding) async {
+    ///
+    /// Returns the error when the save was refused, `nil` when it landed.
+    /// The give-up paths that call this already carry the user's answer —
+    /// why the activation failed — so none of them replaces that sentence
+    /// with the rule's fate. The refusal is handed back rather than
+    /// swallowed so that choice is written down at the call site instead
+    /// of hiding inside a `try?`.
+    @discardableResult
+    private static func disarmRecovery(on provider: TunnelProviding) async -> Error? {
         provider.isOnDemandEnabled = false
-        try? await provider.savePreferences()
+        do {
+            try await provider.savePreferences()
+            return nil
+        } catch {
+            return error
+        }
     }
 
     private func startActivation(of tunnel: TunnelContainer, at retryIndex: Int) {
@@ -310,7 +339,9 @@ class TunnelsManager {
             tunnel.status = .inactive
             tunnel.lastActivationError = .loadingFailed(systemError: error)
             // Local failure — stand recovery down so the OS does not
-            // keep relaunching a config that cannot load.
+            // keep relaunching a config that cannot load. A refused
+            // stand-down is not written over the loading failure: that
+            // is the answer the user asked for.
             await Self.disarmRecovery(on: tunnel.tunnelProvider)
             activateWaitingTunnelIfNeeded()
             return
@@ -325,7 +356,9 @@ class TunnelsManager {
             tunnel.status = .inactive
             tunnel.lastActivationError = .startingFailed(systemError: error)
             // Local failure — stand recovery down so the OS does not
-            // keep relaunching a tunnel whose start throws.
+            // keep relaunching a tunnel whose start throws. A refused
+            // stand-down is not written over the starting failure: that
+            // is the answer the user asked for.
             await Self.disarmRecovery(on: tunnel.tunnelProvider)
             activateWaitingTunnelIfNeeded()
             return
@@ -371,6 +404,12 @@ class TunnelsManager {
 
         // Verify the waiting tunnel is still in waiting state
         guard waitingTunnel.status == .waiting else { return }
+
+        // The queue reaches the retry ladder directly, so the sweep that
+        // lives in the public entry point has to run here as well: the
+        // tunnel that just stopped may still carry its rule, and the one
+        // taking its turn is the one recovery now belongs to.
+        disarmOtherRecoveryRules(except: waitingTunnel)
 
         startActivation(of: waitingTunnel, at: 0)
     }
