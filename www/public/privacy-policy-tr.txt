@@ -1,0 +1,185 @@
+PHANTOM-WG GİZLİLİK POLİTİKASI
+
+Yürürlük tarihi: 29 Eylül 2026
+Son güncelleme: 29 Eylül 2026
+
+Phantom-WG, ARTEK İnovasyon Ar-Ge Sanayi ve Ticaret Limited Şirketi
+tarafından yayımlanan bir iOS WireGuard VPN istemcisidir. Bu politika
+uygulamanın bilgilerinizle ne yaptığını anlatır. Kapsamı uygulamanın
+kendisidir. Bağlandığınız sunucuları kapsamaz, çünkü o sunucuları biz değil
+siz işletirsiniz.
+
+
+VERİNİZİ TOPLAMIYORUZ
+
+Phantom-WG analitik toplamaz, telemetri göndermez, reklam içermez ve hiçbir
+üçüncü taraf izleme kütüphanesi barındırmaz. Ne uygulamada ne de ağ
+uzantısında bir HTTP istemcisi vardır: uygulama bize hiçbir istek göndermez,
+dolayısıyla kullanım, çökme ya da cihaz bilgisi uygulamadan bize ulaşmaz. Ağ
+üzerinde uygulamanın bağlandığı tek taraf, içe aktardığınız yapılandırmada
+yazan sunucudur.
+
+Hesap oluşturmanız ya da giriş yapmanız gerekmez; uygulamada hesap da giriş
+de yoktur. Uygulamayı kurduğunuzu, ne zaman kullandığınızı ya da nereye
+bağlandığınızı bilmeyiz.
+
+Uygulamanın içinde web sitemize giden bağlantılar bulunur. Bir bağlantıya
+dokunduğunuzda tarayıcınız açılır ve sitemiz, her web sitesinin gördüğü
+türden sıradan bir isteği görür. Bu, uygulamanın kendiliğinden yaptığı bir
+gönderim değil, sizin başlattığınız bir ziyarettir ve bu politikaya değil
+sitenin kendi politikasına tabidir.
+
+
+CİHAZINIZDA KALANLAR
+
+Uygulamanın kaydettiği her şey cihazınızda kalır:
+
+  - Gizli bilgiler, yani WireGuard özel anahtarınız, varsa ön paylaşımlı
+    anahtar (Preshared Key) ve ghost modundaki gizli anahtar, iOS
+    Keychain'e, yalnızca Phantom-WG ile kendi ağ uzantısının paylaştığı bir
+    erişim grubunda yazılır. Bunlar bize hiçbir zaman ulaşmaz.
+
+  - Tünelin adı ve işaret ettiği sunucu adresi Keychain'de değildir.
+    Uygulamanın iOS'ta oluşturduğu VPN profilinde durur ve kilidi açık
+    cihazınızı eline alan herkes tarafından Ayarlar > Genel > VPN ve Aygıt
+    Yönetimi altında görülebilir.
+
+  - Arayüz diliniz, dil düğmesiyle değiştirdiyseniz, tek bir uygulama ayarı
+    olarak saklanır. Siz değiştirmediğiniz sürece hiçbir şey yazılmaz.
+
+Uygulama hiçbir veritabanı tutmaz ve kendine ait belge yazmaz; sakladığı
+şeylerin tamamı yukarıdaki üç kalemdir.
+
+Bir tüneli sildiğinizde Keychain kaydı ve VPN profili silinir. Uygulamayı
+sildiğinizde geriye kalanlar da silinir.
+
+Yedeklemeler hakkında bilinmesi gereken bir nokta var: Keychain kayıtları,
+uzantının cihaz yeniden başladıktan sonra da bağlanabilmesi için o
+erişilebilirlik sınıfıyla yazılır; bu aynı zamanda yedekleme açıksa iOS'un
+bu kayıtları şifreli cihaz yedeğine dahil etmesi anlamına gelir. Kayıtlar
+Apple Hesabınız altında, Apple'ın cihaz yedeğinin içinde taşınır; bize
+gelmez.
+
+
+BAĞLANDIĞINIZ SUNUCULAR
+
+Phantom-WG, içe aktardığınız yapılandırmada yazan uç noktaya bağlanır. Ghost
+modunda ayrıca WireGuard trafiğinizi aynı yapılandırmada adı geçen köprüye
+giden bir WebSocket bağlantısının içinde taşır. İkisini de biz işletmeyiz.
+Phantom kendi sunucunuzda barındırılır: sunucuyu siz sağlar ve siz
+kurarsınız.
+
+O sunucuların bağlantınıza dair ne kaydettiği, kaydediyorlarsa, sizinle
+onları işleten taraf arasındaki bir meseledir.
+
+DNS. İçe aktardığınız yapılandırmada DNS satırı yoksa uygulama bu satırı
+sizin için Cloudflare (1.1.1.1) ve Quad9 (9.9.9.9) ile doldurur. Doldurduğu
+değerler tünelin ayrıntı ekranında gösterilir ve yapılandırmayı düzenleyerek
+değiştirebilirsiniz. Tünel ayaktayken bu çözümleyiciler cihazınızın sorduğu
+alan adlarını görür. Ghost modunda ayrıca tünel henüz kurulmadan önce
+yapılan bir sorgu vardır: uygulamanın taşıyıcıyı nereye açacağını bilmesi
+için köprünün alan adı, cihazınızın hâlihazırda kullandığı çözümleyiciyle,
+sıradan ağ bağlantısı üzerinden çözülür.
+
+Cihazınız ile uç nokta arasında trafiğiniz WireGuard tarafından şifrelenir.
+Bu şifreleme bize karşı da geçerlidir: o yolun üzerinde bir durak değiliz;
+ghost modunda durak olan aktarıcı ise sizin kendi sunucunuzdur.
+
+
+UYGULAMANIN KENDİLİĞİNDEN YAPTIKLARI
+
+Bir tüneli başlatmak, onu yalnızca bir kez başlatmaktan fazlasıdır.
+Uygulama, ağ uygun olduğu her an o tüneli kendiliğinden geri getirmesini
+iOS'tan ister: uygulama kapatıldıktan sonra, iOS uygulamayı arka planda
+sonlandırdıktan sonra ve cihaz yeniden başladıktan sonra. Bir tüneli
+başlatmanın, onun çalışmasını istediğinizi söylemek sayılmasının sebebi
+budur.
+
+Tüneli kapatmak bu düzenlemeyi aynı adımda geri alır. iOS geri almayı
+kaydetmeyi reddederse uygulama tüneli yine de durdurur ve otomatik yeniden
+bağlanmanın kaldırılamadığını tünelin ekranında size söyler.
+
+
+TÜNELİN DIŞINDAN GEÇENLER
+
+Bir VPN, taşıması için yapılandırıldığı şeyi taşır; bu da bir istisna
+değildir:
+
+  - Yapılandırmanızdaki AllowedIPs değeri hangi trafiğin tünele gireceğine
+    karar verir. Dar bir değer, geri kalan trafiğinizin tünelden geçmemesi
+    demektir. Uygulama AllowedIPs hiç bulunmayan bir yapılandırmayı
+    reddeder, ama size tam tünel dayatmaz.
+
+  - Ghost modunda köprünün kendi adresleri bilerek tünelin dışına
+    yönlendirilir. Bu zorunludur: tüneli taşıyan bağlantının kendisi o
+    tünelin içinden geçemez.
+
+  - Bir kill switch yoktur. Tünel düşerse, geri gelene kadar trafik sıradan
+    ağ bağlantınız üzerinden akar.
+
+
+PANO
+
+Uygulamadaki iki düğme, diğer uygulamalarla ve Handoff açıksa diğer Apple
+cihazlarınızla paylaşılan iOS sistem panosuna içerik yazar:
+
+  - "Yapılandırmayı Kopyala", tünelin yapılandırmasını düz metin olarak
+    kopyalar. Bu metin özel anahtarınızı ve varsa ön paylaşımlı anahtarı
+    içerir.
+
+  - "Günlükleri Kopyala", aşağıda anlatılan tanı günlüğünü kopyalar.
+
+İkisine de basmak size aittir; siz basmadıkça hiçbir şey kopyalanmaz. İçe
+aktarma ekranındaki "Yapıştır" düğmesi, yapılandırma alanını
+doldurabilmek için panoyu okur ve iOS bu okuma için sizden izin isteyebilir.
+
+
+GÜNLÜKLER
+
+Bir tünel çalışırken uygulama, bağlantının ne yaptığını görebilmeniz için
+kısa bir tanı günlüğü tutar. Bu günlük:
+
+  - ağ uzantısı tarafından bellekte tutulur ve uygulama tarafından diske
+    hiçbir zaman yazılmaz;
+
+  - sınırlı sayıda son satır tutar ve her tünel başlangıcında boşaltılır;
+
+  - tünel çalışmıyorken gösterilmez ve uzantının belleğinden daha uzun süre
+    var olamaz;
+
+  - hiçbir yere gönderilmez.
+
+Birisine göstermek için kopyalarsanız önce okuyun: günlük, bağlandığınız
+köprünün adresi dahil bağlantınızı anlatır.
+
+
+KAMERA
+
+Bir yapılandırmayı QR kod tarayarak içe aktarırsanız uygulama kamerayı
+yalnızca o kodu okumak için kullanır, başka hiçbir şey için. Hiçbir fotoğraf
+ya da video kaydedilmez, saklanmaz veya gönderilmez; kod okunur okunmaz
+tarama durur. Kamera erişimini reddedebilirsiniz; uygulama kamera
+erişiminin kapalı olduğunu size bildirir ve yapılandırmayı yapıştırarak da
+içe aktarabilirsiniz.
+
+
+APPLE'IN BİZE VEREBİLECEKLERİ
+
+Cihaz ayarlarınızda geliştiricilerle paylaşmayı seçtiklerinize bağlı olarak
+Apple bize uygulamaya dair toplu kullanım istatistikleri ve çökme raporları
+verebilir. Bu bilgi uygulamadan değil Apple'dan gelir, bize kimliğinizi
+belirlemeyen bir biçimde ulaşır ve başka hiçbir şeyle birleştirilmez. Bu
+tercih sizin denetiminizdedir: Ayarlar > Gizlilik ve Güvenlik > Analiz ve
+İyileştirmeler.
+
+
+BU POLİTİKADAKİ DEĞİŞİKLİKLER
+
+Bu politika değişirse yeni sürümü bu adreste yeni bir tarihle yayımlanır.
+Değişiklikten sonra uygulamayı kullanmaya devam etmeniz değişikliği kabul
+ettiğiniz anlamına gelir.
+
+
+İLETİŞİM
+
+Bu politikaya dair sorular: r.emrearas@proton.me, emre.aras@artek.tc

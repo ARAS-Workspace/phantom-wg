@@ -1,0 +1,181 @@
+PHANTOM-WG PRIVACY POLICY
+
+Effective date: 29 September 2026
+Last updated: 29 September 2026
+
+Türkçe: https://www.phantom.tc/privacy-policy-tr.txt
+
+Phantom-WG is a WireGuard VPN client for iOS, published by ARTEK İnovasyon
+Ar-Ge Sanayi ve Ticaret Limited Şirketi. This policy describes what the app
+does with your information. It covers the app itself. It does not cover the
+servers you connect to, because you run those, not us.
+
+
+WE DO NOT COLLECT YOUR DATA
+
+Phantom-WG contains no analytics, no telemetry, no advertising and no
+third-party tracking library. Neither the app nor its network extension
+contains an HTTP client: the app sends no request to us, so no usage, crash
+or device information reaches us from it. Over the network the app talks to
+one party only, and that is the server written in the configuration you
+imported.
+
+There is no account to create and no sign-in. We do not know that you have
+installed the app, when you use it, or where you connect.
+
+The app does contain links to our website. Following one opens your browser,
+and our website then sees an ordinary web request the way any website does.
+That is a visit you started, not something the app sends on its own, and it
+is covered by the website's own policy rather than this one.
+
+
+WHAT STAYS ON YOUR DEVICE
+
+Everything the app saves, it saves on your device:
+
+  - Secrets (your WireGuard private key, any pre-shared key, and the
+    ghost-mode secret) are written to the iOS Keychain, in an access group
+    shared only by Phantom-WG and its own network extension. We never
+    receive them.
+
+  - The tunnel's name and the server address it points at are not in the
+    Keychain. They live in the VPN profile the app creates in iOS, and are
+    visible to anyone holding your unlocked device under Settings >
+    General > VPN & Device Management.
+
+  - Your interface language, if you change it with the language button, is
+    saved as a single app setting. Until you change it, nothing is written.
+
+The app keeps no database and writes no documents of its own; the three
+items above are the whole of what it stores.
+
+Deleting a tunnel deletes its Keychain entry and its VPN profile. Deleting
+the app removes what remains.
+
+One thing to know about backups: the Keychain entries are written so that
+the extension can reconnect after a restart, which also means iOS includes
+them in an encrypted device backup if you have backups switched on. They
+travel inside Apple's backup of your device, under your Apple Account, never
+to us.
+
+
+THE SERVERS YOU CONNECT TO
+
+Phantom-WG connects to the endpoint written in the configuration you import.
+In ghost mode it also carries your WireGuard traffic inside a WebSocket
+connection to the bridge named in that same configuration. We operate
+neither. Phantom is self-hosted: the server is one you provisioned and
+installed yourself.
+
+What those servers record about your connection, if they record anything, is
+a matter between you and whoever runs them.
+
+DNS. If the configuration you import does not carry a DNS line, the app
+fills one in for you with Cloudflare (1.1.1.1) and Quad9 (9.9.9.9). The
+values it filled in are shown on the tunnel's detail screen, and you can
+replace them by editing the configuration. While the tunnel is up, those
+resolvers see the domain names your device looks up. In ghost mode there is
+also one query before the tunnel exists: the bridge's hostname is resolved
+by whatever resolver your device is already using, over the ordinary network
+connection, so that the app knows where to open the carrier.
+
+Between your device and the endpoint, your traffic is encrypted by
+WireGuard. That encryption holds against us as well: we are not a hop on
+that path, and the ghost-mode relay that is a hop is one of your own
+servers.
+
+
+WHAT THE APP DOES ON ITS OWN
+
+Starting a tunnel does more than start it once. The app asks iOS to bring
+that tunnel back by itself whenever a network is available: after the app
+is closed, after iOS terminates it in the background, and after the device
+restarts. This is why starting a tunnel is treated as saying you want it
+running.
+
+Turning the tunnel off withdraws that arrangement in the same step. If iOS
+refuses to record the withdrawal, the app stops the tunnel anyway and tells
+you on the tunnel's screen that the automatic reconnection could not be
+taken down.
+
+
+WHAT TRAVELS OUTSIDE THE TUNNEL
+
+A VPN carries what it is configured to carry, and this one is no exception:
+
+  - The AllowedIPs value in your configuration decides which traffic enters
+    the tunnel. A narrow value means the rest of your traffic does not go
+    through it. The app refuses a configuration with no AllowedIPs at all,
+    but it does not force a full tunnel on you.
+
+  - In ghost mode the bridge's own addresses are deliberately routed
+    outside the tunnel. They have to be: the connection that carries the
+    tunnel cannot be carried by it.
+
+  - There is no kill switch. If the tunnel drops, traffic goes over your
+    ordinary network connection until it is back.
+
+
+THE CLIPBOARD
+
+Two buttons in the app put things on the iOS system clipboard, which is
+shared with other apps and, if Handoff is on, with your other Apple devices:
+
+  - "Copy Config" copies the tunnel's configuration as plain text. That
+    text contains your private key and any pre-shared key.
+
+  - "Copy Logs" copies the diagnostic log described below.
+
+Both are yours to press; nothing is copied unless you press them. The import
+screen's "Paste" button reads the clipboard so it can fill the configuration
+field, and iOS may ask you to allow that read.
+
+
+LOGS
+
+While a tunnel is running, the app keeps a short diagnostic log so you can
+see what the connection is doing. That log:
+
+  - is held in memory by the network extension and is never written to disk
+    by the app;
+
+  - holds a limited number of recent lines, and is emptied each time a
+    tunnel starts;
+
+  - stops being shown once the tunnel is not running, and cannot outlive
+    the extension's own memory;
+
+  - is never transmitted anywhere.
+
+If you copy it to show someone, read it first: it describes your connection,
+including the address of the bridge you connect to.
+
+
+CAMERA
+
+If you import a configuration by scanning a QR code, the app uses the camera
+to read that code and for nothing else. No photo or video is recorded, kept
+or transmitted, and scanning stops the moment a code is read. You may
+decline camera access; the app will say so and you can paste the
+configuration instead.
+
+
+INFORMATION APPLE MAY GIVE US
+
+Depending on what you have chosen to share with developers in your device
+settings, Apple may give us aggregate usage statistics and crash reports for
+the app. That information comes from Apple rather than from the app, reaches
+us in a form that does not identify you, and is not combined with anything
+else. You control it under Settings > Privacy & Security > Analytics &
+Improvements.
+
+
+CHANGES TO THIS POLICY
+
+If this policy changes, the new version is published at this address with a
+new date. Continuing to use the app after a change means you accept it.
+
+
+CONTACT
+
+Questions about this policy: r.emrearas@proton.me, emre.aras@artek.tc
