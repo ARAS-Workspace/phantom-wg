@@ -14,11 +14,10 @@ servers you connect to, because you run those, not us.
 WE DO NOT COLLECT YOUR DATA
 
 Phantom-WG contains no analytics, no telemetry, no advertising and no
-third-party tracking library. Neither the app nor its network extension
-contains an HTTP client: the app sends no request to us, so no usage, crash
-or device information reaches us from it. Over the network the app talks to
-one party only, and that is the server written in the configuration you
-imported.
+third-party tracking library. The app makes no network request of its own:
+no update check, no crash upload, nothing, so no usage, crash or device
+information reaches us from it. The only connection it opens is the tunnel
+written in the configuration you imported.
 
 There is no account to create and no sign-in. We do not know that you have
 installed the app, when you use it, or where you connect.

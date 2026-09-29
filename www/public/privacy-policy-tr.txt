@@ -13,11 +13,11 @@ siz işletirsiniz.
 VERİNİZİ TOPLAMIYORUZ
 
 Phantom-WG analitik toplamaz, telemetri göndermez, reklam içermez ve hiçbir
-üçüncü taraf izleme kütüphanesi barındırmaz. Ne uygulamada ne de ağ
-uzantısında bir HTTP istemcisi vardır: uygulama bize hiçbir istek göndermez,
-dolayısıyla kullanım, çökme ya da cihaz bilgisi uygulamadan bize ulaşmaz. Ağ
-üzerinde uygulamanın bağlandığı tek taraf, içe aktardığınız yapılandırmada
-yazan sunucudur.
+üçüncü taraf izleme kütüphanesi barındırmaz. Uygulama kendi adına hiçbir ağ
+isteği yapmaz: güncelleme yoklaması yok, çökme raporu yok, hiçbiri yok;
+dolayısıyla kullanım, çökme ya da cihaz bilgisi uygulamadan bize ulaşmaz.
+Açtığı tek bağlantı, içe aktardığınız yapılandırmada yazan tünelin
+kendisidir.
 
 Hesap oluşturmanız ya da giriş yapmanız gerekmez; uygulamada hesap da giriş
 de yoktur. Uygulamayı kurduğunuzu, ne zaman kullandığınızı ya da nereye
