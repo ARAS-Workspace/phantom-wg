@@ -52,6 +52,18 @@ final class LocalizationManager {
         loadStrings()
     }
 
+    /// The privacy policy is published as two plain-text documents, one
+    /// per language. The app links to the one matching what it is
+    /// currently showing rather than handing the reader a language
+    /// switch to solve first — which is why this lives here, beside the
+    /// language itself, and not in the views that draw the link.
+    var privacyPolicyURL: URL? {
+        switch current {
+        case .tr: return URL(string: "https://www.phantom.tc/privacy-policy-tr.txt")
+        case .en: return URL(string: "https://www.phantom.tc/privacy-policy.txt")
+        }
+    }
+
     /// Simple key lookup.
     func t(_ key: String) -> String {
         strings[key] ?? key

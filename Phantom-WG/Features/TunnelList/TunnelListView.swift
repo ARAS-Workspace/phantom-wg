@@ -101,6 +101,12 @@ struct TunnelListView: View {
                 Label(loc.t("documentation"), systemImage: "book")
                     .font(.footnote)
             }
+            if let policy = loc.privacyPolicyURL {
+                Link(destination: policy) {
+                    Label(loc.t("privacy"), systemImage: "hand.raised")
+                        .font(.footnote)
+                }
+            }
         }
         .foregroundStyle(.secondary)
         .frame(maxWidth: .infinity)
