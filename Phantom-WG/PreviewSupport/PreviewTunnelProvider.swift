@@ -85,7 +85,7 @@ final class PreviewTunnelProvider: TunnelProviding {
     func sendProviderMessage(_ data: Data, responseHandler: @escaping @Sendable (Data?) -> Void) throws {
         switch data.first {
         case 0:
-            responseHandler(statsDump().data(using: .utf8))
+            responseHandler(statsSample().encoded())
         case 1:
             responseHandler(try? JSONEncoder().encode(logLines))
         case 2:
@@ -141,14 +141,16 @@ final class PreviewTunnelProvider: TunnelProviding {
         }
     }
 
-    /// WireGuard UAPI-style dump consumed by `StatsFormatter.parse`.
+    /// The same three numbers the extension sends, so the canvas
+    /// exercises the real reply shape rather than a stand-in.
     /// Counters advance a little on every poll so the canvas shows
     /// live-moving transfer numbers; the handshake stays ~12s old.
-    private func statsDump() -> String {
+    private func statsSample() -> TunnelRuntimeStats {
         rxBytes += 18_432
         txBytes += 6_144
-        let handshake = Int64(Date().timeIntervalSince1970) - 12
-        return "rx_bytes=\(rxBytes)\ntx_bytes=\(txBytes)\nlast_handshake_time_sec=\(handshake)"
+        return TunnelRuntimeStats(rxBytes: rxBytes,
+                                  txBytes: txBytes,
+                                  lastHandshakeTimestamp: Int64(Date().timeIntervalSince1970) - 12)
     }
 }
 

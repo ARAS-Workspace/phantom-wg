@@ -105,6 +105,7 @@ targets:
       - path: Phantom-WG/Domain/TunnelConfig.swift
       - path: Phantom-WG/Domain/ConfigTypes.swift
       - path: Phantom-WG/Domain/IPC/TunnelResetReply.swift
+      - path: Phantom-WG/Domain/IPC/TunnelRuntimeStats.swift
       - path: Phantom-WG/Infrastructure/Persistence/NETunnelProviderProtocol+Keychain.swift
       - path: Phantom-WG/Shared/WstunnelBridge.swift
       - path: Phantom-WG/Shared/Keychain.swift

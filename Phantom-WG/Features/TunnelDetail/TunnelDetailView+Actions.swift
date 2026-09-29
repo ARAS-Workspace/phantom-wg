@@ -83,9 +83,9 @@ extension TunnelDetailView {
 
         do {
             try tunnel.tunnelProvider.sendProviderMessage(Data([0])) { response in
-                guard let data = response, let config = String(data: data, encoding: .utf8) else { return }
+                guard let stats = TunnelRuntimeStats.decoded(from: response) else { return }
                 Task { @MainActor in
-                    applyRuntimeStats(config)
+                    applyRuntimeStats(stats)
                 }
             }
         } catch {
@@ -93,8 +93,7 @@ extension TunnelDetailView {
         }
     }
 
-    func applyRuntimeStats(_ config: String) {
-        let stats = StatsFormatter.parse(config)
+    func applyRuntimeStats(_ stats: TunnelRuntimeStats) {
         rxBytes = StatsFormatter.formatBytes(stats.rxBytes)
         txBytes = StatsFormatter.formatBytes(stats.txBytes)
 

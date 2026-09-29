@@ -128,9 +128,18 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
 
         switch messageData[0] {
         case 0:
-            // WireGuard runtime stats
+            // WireGuard runtime stats. The UAPI dump this reads also
+            // carries the interface private key and every peer's
+            // preshared key, so the three numbers the app shows are
+            // taken out here and the dump never leaves this process.
+            // No dump means no reading: the app keeps what it has
+            // rather than being handed zeros.
             adapter.getRuntimeConfiguration { config in
-                completionHandler(config?.data(using: .utf8))
+                guard let config else {
+                    completionHandler(nil)
+                    return
+                }
+                completionHandler(TunnelRuntimeStats.read(fromUAPI: config).encoded())
             }
         case 1:
             // Log entries (in-memory ring buffer snapshot)
