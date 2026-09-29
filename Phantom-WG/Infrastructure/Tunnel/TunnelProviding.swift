@@ -55,6 +55,18 @@ protocol TunnelProviding: AnyObject {
 
 // MARK: - Async Persistence (default implementations wrapping callback-based methods)
 
+/// None of these wait on a budget, and that is the decision rather than
+/// an omission. They are the system's own calls, not messages to our
+/// extension: Apple's position is that the NetworkExtension APIs are
+/// asynchronous precisely because they are not meant to answer until
+/// they are done, and that adding arbitrary waits around them is the
+/// bug — so a bound here would only let the app act on an answer the
+/// system has not given yet. `fetchLastDisconnectError` sits on the
+/// same side of that line: it reads the system's record, not ours.
+///
+/// The one place a bound belongs is a message to our own extension —
+/// a process that can die holding the reply — and those carry it at
+/// their call sites (`TunnelsManager+Reset`, `LogStore`).
 extension TunnelProviding {
 
     func savePreferences() async throws {

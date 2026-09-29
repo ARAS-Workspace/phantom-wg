@@ -59,7 +59,7 @@ final class LogStore: LogEntryProvider {
     /// tunnel continues to run.
     func clear() async {
         if tunnel?.status == .active || tunnel?.status == .activating {
-            _ = try? await sendMessage(Data([2]))
+            _ = await sendMessage(Data([2]))
         }
         entries.removeAll()
     }
@@ -72,10 +72,9 @@ final class LogStore: LogEntryProvider {
             return
         }
 
-        do {
-            let data = try await sendMessage(Data([1]))
-            guard let data else { return }
+        guard let data = await sendMessage(Data([1])) else { return }
 
+        do {
             let decoded = try JSONDecoder().decode([RemoteEntry].self, from: data)
 
             entries = decoded.enumerated().map { index, entry in
@@ -86,22 +85,43 @@ final class LogStore: LogEntryProvider {
                 )
             }
         } catch {
-            // Extension not reachable or decode failed — ignore silently.
+            // Decode failed — ignore silently; the next poll brings a
+            // fresh buffer. An unreachable extension never gets here:
+            // `sendMessage` reads it as nothing new to show.
         }
     }
 
-    private func sendMessage(_ data: Data) async throws -> Data? {
+    /// An extension that has died answers nothing at all, and the poll
+    /// loop above advances only when this returns — so without a bound
+    /// on the wait the log panel freezes for good, and `stopPolling`
+    /// cannot free it either: cancelling a task suspended on a
+    /// continuation nobody will resume changes nothing.
+    ///
+    /// The bound ends the wait, not the message: the request is never
+    /// withdrawn, and a reply that lands late finds the slot taken and
+    /// is dropped rather than painting a stale buffer over a newer one.
+    /// A missing answer reads the same as an empty one here, because
+    /// for a log panel it is: there is nothing new to show.
+    private func sendMessage(_ data: Data) async -> Data? {
         guard let tunnel else { return nil }
-        return try await withCheckedThrowingContinuation { continuation in
+        return await withCheckedContinuation { (continuation: CheckedContinuation<Data?, Never>) in
+            let resume = SingleResume(continuation)
             do {
                 try tunnel.tunnelProvider.sendProviderMessage(data) { response in
-                    continuation.resume(returning: response)
+                    resume.finish(response)
                 }
             } catch {
-                continuation.resume(throwing: error)
+                resume.finish(nil)
+                return
+            }
+            Task {
+                try? await Task.sleep(for: .seconds(Self.replyBudget))
+                resume.finish(nil)
             }
         }
     }
+
+    private nonisolated static let replyBudget: TimeInterval = 5
 
     private struct RemoteEntry: Codable {
         let timestamp: String
