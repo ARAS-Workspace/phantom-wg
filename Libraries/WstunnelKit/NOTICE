@@ -1,0 +1,25 @@
+WstunnelKit — wstunnel licence and attribution
+
+The static library in this directory is a build of wstunnel, linked into the
+Phantom-WG network extension.
+
+    Project     wstunnel
+    Author      Erèbe - Romain Gerard
+    Upstream    https://github.com/erebe/wstunnel
+    Copyright   (c) 2016-2024, Erèbe - Romain Gerard
+    Licence     BSD 3-Clause
+
+The full licence text is in LICENSE, in this directory, reproduced unchanged
+from the project it is taken from. It is kept here because the BSD 3-Clause
+License asks a binary redistribution to carry the copyright notice, the list
+of conditions and the disclaimer along with it, and the library in this
+directory is exactly that: a binary redistribution.
+
+This build comes from a fork that carries Phantom-specific patches. The fork
+leaves the original licence in place and adds no copyright line of its own;
+the exact release and branch this copy was built from are recorded alongside
+this file.
+
+Phantom-WG is not affiliated with the wstunnel project. Its name appears here
+only to identify the software this library was built from, not to endorse or
+promote Phantom-WG.
