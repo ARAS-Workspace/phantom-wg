@@ -1,67 +1,174 @@
-╔══════════════════════════════════════════════════════════════╗
-║         Phantom-WG Frontmatter — Third-Party Licenses        ║
-╚══════════════════════════════════════════════════════════════╝
+██████╗ ██╗  ██╗ █████╗ ███╗   ██╗████████╗ ██████╗ ███╗   ███╗
+██╔══██╗██║  ██║██╔══██╗████╗  ██║╚══██╔══╝██╔═══██╗████╗ ████║
+██████╔╝███████║███████║██╔██╗ ██║   ██║   ██║   ██║██╔████╔██║
+██╔═══╝ ██╔══██║██╔══██║██║╚██╗██║   ██║   ██║   ██║██║╚██╔╝██║
+██║     ██║  ██║██║  ██║██║ ╚████║   ██║   ╚██████╔╝██║ ╚═╝ ██║
+╚═╝     ╚═╝  ╚═╝╚═╝  ╚═╝╚═╝  ╚═══╝   ╚═╝    ╚═════╝ ╚═╝     ╚═╝
 
-This document lists the third-party components used by the
-Phantom-WG Frontmatter project and their respective licenses.
+THIRD PARTY LICENSES
+================================================================================
 
-Phantom-WG Frontmatter has no direct Python dependencies at this
-time — it relies only on the Python standard library. A runtime
-binary (wstunnel) and standard OS packages are documented below.
+Phantom-WG Frontmatter
+Copyright (c) 2025 Rıza Emre ARAS
+Licensed under AGPL-3.0 - see LICENSE file for details
 
-───────────────────────────────────────────────────────────────
-  Python Dependencies
-───────────────────────────────────────────────────────────────
+This document lists third-party software dependencies and their licenses.
+
+================================================================================
+PYTHON LAYER
+================================================================================
+
+The phantom_frontmatter package has no third-party Python dependencies. It uses
+only the standard library — argparse, json, logging, pathlib, subprocess,
+ipaddress, secrets, dataclasses and the like.
 
   (none)
 
-The Phantom-WG Frontmatter Python package uses only modules from
-the Python 3.11+ standard library (argparse, json, logging,
-pathlib, subprocess, ipaddress, secrets, dataclasses, etc.).
+requirements.txt, which ships with the release, pins no packages; it is compiled
+with hashes from requirements.in, which declares none. The interpreter is the
+distribution's own python3, installed from apt; see SYSTEM PACKAGES below.
 
-───────────────────────────────────────────────────────────────
-  Bundled Binaries
-───────────────────────────────────────────────────────────────
+================================================================================
+BUNDLED BINARIES — WSTUNNEL
+================================================================================
 
-wstunnel (BSD 3-Clause License)
-  Version:   10.5.2
-  Upstream:  https://github.com/erebe/wstunnel
-  Fork:      https://github.com/ARAS-Workspace/wstunnel
-  Purpose:   WebSocket/TLS tunnel server used for Ghost Mode
-             clients — wraps WireGuard UDP traffic inside a
-             WebSocket over TLS to traverse networks that block
-             or filter UDP.
-  License:   BSD-3-Clause
-  Notes:     Linux/amd64 and linux/arm64 builds ship inside this
-             package as
-             phantom_frontmatter/bin/lib/wstunnel_<version>_linux_<arch>.tar.gz
-             and are extracted at `setup init` time. Frontmatter
-             never reaches out to GitHub at runtime.
-             The bundled tarballs are produced by the
-             "Release Linux" workflow on the ARAS-Workspace fork.
+wstunnel is the only third-party binary this package redistributes. It is the
+WebSocket/TLS tunnel server that Ghost Mode clients connect to: it carries
+opaque UDP datagrams inside a WebSocket over TLS, so the tunnel survives
+networks that block or filter UDP.
 
-───────────────────────────────────────────────────────────────
-  System Dependencies (installed via apt)
-───────────────────────────────────────────────────────────────
+| Component | Version                | Language | License      | SPDX         |
+|-----------|------------------------|----------|--------------|--------------|
+| wstunnel  | 10.5.2+Phantom.Patch.1 | Rust     | BSD 3-Clause | BSD-3-Clause |
 
-  - python3         (PSF License)
-  - python3-venv    (PSF License)
-  - python3-pip     (MIT)
-  - socat           (GPL-2.0)
-  - openssl         (Apache-2.0)
-  - ca-certificates (MPL-2.0)
+Copyright:   Copyright (c) 2016-2024, Erèbe - Romain Gerard
+Upstream:    https://github.com/erebe/wstunnel
+Fork:        https://github.com/ARAS-Workspace/wstunnel
+Branch:      linux
+Release:     linux-v10.5.2+Phantom.Patch.1
+CI workflow: https://github.com/ARAS-Workspace/wstunnel/actions/runs/36175403584
 
-These are standard Debian/Ubuntu packages and are governed by
-their respective licenses as distributed by the OS vendor.
+Shipped inside this package, both architectures:
 
-socat is the data-path workhorse for the egress module: it
-listens on 127.0.0.1:51820/udp and forwards every datagram to the
-backend address rendered into the egress systemd unit. socat was
-chosen instead of an in-house Python relay because it is a
-30-year-old, single-binary, well-audited tool with no equivalent
-in the Python standard library.
+  phantom_frontmatter/bin/lib/wstunnel_<VERSION>_linux_amd64.tar.gz
+  phantom_frontmatter/bin/lib/wstunnel_<VERSION>_linux_arm64.tar.gz
+  phantom_frontmatter/bin/lib/checksums.txt   sha256sums from the release
+  phantom_frontmatter/bin/lib/README          provenance for the tarballs
 
-───────────────────────────────────────────────────────────────
-Copyright (c) 2025 Rıza Emre ARAS
-Licensed under AGPL-3.0 - see LICENSE file for details
+VERSION above is the version in the table, pinned in code at
+phantom_frontmatter/modules/setup/lib/binary_utils.py. That module also performs
+the extraction: `frontmatter-api setup init` unpacks the tarball matching the
+host's architecture.
+
+Usage Note:
+Nothing here is fetched at run time. The tarballs travel inside the release, so
+neither installation nor operation reaches out to GitHub. frontmatter-update.sh
+replaces phantom_frontmatter/ from the new release and swaps the wstunnel binary
+only when the bundled version changed; it makes no network request of its own.
+
+License URL:  https://github.com/erebe/wstunnel/blob/main/LICENSE
+Full text:    BSD 3-CLAUSE LICENSE (WSTUNNEL), reproduced below.
+
+================================================================================
+SYSTEM PACKAGES (apt)
+================================================================================
+
+frontmatter-install.sh installs these from the distribution's repositories:
+
+| Package         | License        | SPDX Identifier | Purpose               |
+|-----------------|----------------|-----------------|-----------------------|
+| python3         | PSF-2.0        | PSF-2.0         | interpreter           |
+| python3-venv    | PSF-2.0        | PSF-2.0         | virtual environment   |
+| python3-pip     | MIT            | MIT             | package installer     |
+| socat           | GPL-2.0        | GPL-2.0-only    | egress data path      |
+| openssl         | Apache-2.0     | Apache-2.0      | TLS and key material  |
+| ca-certificates | MPL-2.0        | MPL-2.0         | trust store           |
+| certbot         | Apache-2.0     | Apache-2.0      | ACME certificates     |
+| cron            | GPL-2.0 (note) | GPL-2.0-only    | certbot renewal timer |
+
+Usage Note:
+This package does not redistribute any of the above. apt installs them from the
+distribution's repositories, so the operating-system vendor is the distributor
+and its own copy of each licence governs. They are named here for completeness;
+their texts are not reproduced. Only wstunnel's licence is reproduced below,
+because wstunnel is the one component whose binary travels inside this release.
+
+(note) Debian's cron package combines Paul Vixie's original terms with GPL-2.0
+for the Debian packaging. The vendor's own copyright file is authoritative.
+
+socat is the data-path workhorse for the egress module: it listens on
+127.0.0.1:51820/udp and forwards every datagram to the backend address rendered
+into the egress systemd unit. It was chosen over an in-house Python relay
+because it is a long-standing, single-binary, well-audited tool with no
+equivalent in the standard library.
+
+================================================================================
+TRADEMARK NOTICES
+================================================================================
+
 WireGuard® is a registered trademark of Jason A. Donenfeld.
+https://www.wireguard.com/
+
+================================================================================
+LICENSE COMPATIBILITY
+================================================================================
+
+The one licence reproduced here (BSD-3-Clause) is permissive, is compatible with
+AGPL-3.0, and allows use in this project.
+
+Usage Note:
+GPL-2.0 system packages (socat, cron) are invoked as separate programs through
+their ordinary command-line and systemd interfaces. This constitutes mere
+aggregation, not derivative work.
+
+================================================================================
+FULL LICENSE TEXTS
+================================================================================
+
+Reproduced verbatim from the file the component ships it in. Only wstunnel's
+licence appears here: it is the one third-party component whose binary this
+package redistributes, and BSD-3-Clause asks a binary redistribution to carry
+the copyright notice, the list of conditions and the disclaimer along with it.
+
+--------------------------------------------------------------------------------
+BSD 3-CLAUSE LICENSE (WSTUNNEL)
+--------------------------------------------------------------------------------
+
+Covers:  wstunnel.
+Source:  the fork's linux branch, LICENSE
+
+BSD 3-Clause License
+
+Copyright (c) 2016-2024, Erèbe - Romain Gerard
+
+All rights reserved.
+
+Redistribution and use in source and binary forms, with or without
+modification, are permitted provided that the following conditions are met:
+
+1. Redistributions of source code must retain the above copyright notice, this
+   list of conditions and the following disclaimer.
+
+2. Redistributions in binary form must reproduce the above copyright notice,
+   this list of conditions and the following disclaimer in the documentation
+   and/or other materials provided with the distribution.
+
+3. Neither the name of the copyright holder nor the names of its
+   contributors may be used to endorse or promote products derived from
+   this software without specific prior written permission.
+
+THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
+DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE
+FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
+SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
+CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
+OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+
+================================================================================
+
+Maintained by:  Rıza Emre ARAS
+Project:        Phantom-WG Frontmatter
