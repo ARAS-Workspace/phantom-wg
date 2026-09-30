@@ -25,7 +25,7 @@ Production dependencies (requirements.txt):
 | fastapi            | 0.135.1 | MIT          | MIT             |
 | uvicorn            | 0.41.0  | BSD 3-Clause | BSD-3-Clause    |
 | pydantic           | 2.12.5  | MIT          | MIT             |
-| python-multipart   | 0.0.22  | Apache 2.0   | Apache-2.0      |
+| python-multipart   | 0.0.31  | Apache 2.0   | Apache-2.0      |
 | pyyaml             | 6.0.2   | MIT          | MIT             |
 
 Transitive dependencies:
@@ -33,11 +33,11 @@ Transitive dependencies:
 | Package            | Version | License      | SPDX Identifier | Required By       |
 |--------------------|---------|--------------|-----------------|-------------------|
 | pydantic-core      | 2.41.5  | MIT          | MIT             | pydantic          |
-| starlette          | 0.52.1  | BSD 3-Clause | BSD-3-Clause    | fastapi           |
+| starlette          | 1.3.1   | BSD 3-Clause | BSD-3-Clause    | fastapi           |
 | h11                | 0.16.0  | MIT          | MIT             | uvicorn           |
-| click              | 8.3.1   | BSD 3-Clause | BSD-3-Clause    | uvicorn           |
-| anyio              | 4.12.1  | MIT          | MIT             | starlette         |
-| idna               | 3.11    | BSD 3-Clause | BSD-3-Clause    | anyio             |
+| click              | 8.3.3   | BSD 3-Clause | BSD-3-Clause    | uvicorn           |
+| anyio              | 4.14.2  | MIT          | MIT             | starlette         |
+| idna               | 3.18    | BSD 3-Clause | BSD-3-Clause    | anyio             |
 | typing-extensions  | 4.15.0  | PSF-2.0      | PSF-2.0         | pydantic, fastapi |
 | typing-inspection  | 0.4.2   | MIT          | MIT             | pydantic          |
 | annotated-doc      | 0.0.4   | MIT          | MIT             | fastapi           |
@@ -67,14 +67,14 @@ AUTH SERVICE — ADDITIONAL PYTHON DEPENDENCIES
 
 Transitive dependencies:
 
-| Package            | Version | License      | SPDX Identifier | Required By |
-|--------------------|---------|--------------|-----------------|-------------|
-| httpcore           | 1.0.9   | BSD 3-Clause | BSD-3-Clause    | httpx       |
-| httptools          | 0.7.1   | MIT          | MIT             | uvicorn     |
-| certifi            | 2026.2  | MPL 2.0      | MPL-2.0         | httpx       |
-| pycparser          | 3.0     | BSD 3-Clause | BSD-3-Clause    | cffi        |
-| watchfiles         | 1.1.1   | MIT          | MIT             | uvicorn     |
-| websockets         | 16.0    | BSD 3-Clause | BSD-3-Clause    | uvicorn     |
+| Package            | Version   | License      | SPDX Identifier | Required By |
+|--------------------|-----------|--------------|-----------------|-------------|
+| httpcore           | 1.0.9     | BSD 3-Clause | BSD-3-Clause    | httpx       |
+| httptools          | 0.7.1     | MIT          | MIT             | uvicorn     |
+| certifi            | 2026.2.25 | MPL 2.0      | MPL-2.0         | httpx       |
+| pycparser          | 3.0       | BSD 3-Clause | BSD-3-Clause    | cffi        |
+| watchfiles         | 1.1.1     | MIT          | MIT             | uvicorn     |
+| websockets         | 16.0      | BSD 3-Clause | BSD-3-Clause    | uvicorn     |
 
 License URLs:
 - PyNaCl:            https://github.com/pyca/pynacl/blob/main/LICENSE
@@ -93,7 +93,7 @@ Runtime dependencies:
 |-----------------------|---------|--------------|-----------------|
 | react                 | 19.2.4  | MIT          | MIT             |
 | react-dom             | 19.2.4  | MIT          | MIT             |
-| react-router-dom      | 7.13.1  | MIT          | MIT             |
+| react-router-dom      | 7.18.4  | MIT          | MIT             |
 | @carbon/react         | 1.102.0 | Apache 2.0   | Apache-2.0      |
 | @carbon/icons-react   | 11.76.0 | Apache 2.0   | Apache-2.0      |
 | @carbon/styles        | 1.101.0 | Apache 2.0   | Apache-2.0      |
@@ -110,7 +110,7 @@ Build-time only (not bundled in production):
 | @mdx-js/rollup        | 3.1.1   | MIT          | MIT             |
 | remark-frontmatter    | 5.0.0   | MIT          | MIT             |
 | remark-gfm            | 4.0.1   | MIT          | MIT             |
-| remark-mdx-frontmatter| 5.2.0   | MIT          | MIT             |
+| remark-mdx-frontmatter| 6.0.0   | MIT          | MIT             |
 
 Fonts:
 
@@ -137,9 +137,9 @@ NATIVE BRIDGES (vendor artifacts)
 
 | Component            | Version | Language | License         | Source             |
 |----------------------|---------|----------|-----------------|--------------------|
-| wireguard-go-bridge  | 2.1.1   | Go       | MIT             | Internal (wraps    |
+| wireguard-go-bridge  | 2.1.3   | Go       | MIT             | Internal (wraps    |
 |                      |         |          |                 | wireguard-go)      |
-| firewall-bridge      | 2.1.0   | Rust     | AGPL-3.0        | Internal           |
+| firewall-bridge      | 2.1.7   | Rust     | AGPL-3.0        | Internal           |
 
 Upstream dependency:
 
