@@ -1,0 +1,289 @@
+██████╗ ██╗  ██╗ █████╗ ███╗   ██╗████████╗ ██████╗ ███╗   ███╗
+██╔══██╗██║  ██║██╔══██╗████╗  ██║╚══██╔══╝██╔═══██╗████╗ ████║
+██████╔╝███████║███████║██╔██╗ ██║   ██║   ██║   ██║██╔████╔██║
+██╔═══╝ ██╔══██║██╔══██║██║╚██╗██║   ██║   ██║   ██║██║╚██╔╝██║
+██║     ██║  ██║██║  ██║██║ ╚████║   ██║   ╚██████╔╝██║ ╚═╝ ██║
+╚═╝     ╚═╝  ╚═╝╚═╝  ╚═╝╚═╝  ╚═══╝   ╚═╝    ╚═════╝ ╚═╝     ╚═╝
+
+THIRD PARTY LICENSES
+================================================================================
+
+Phantom-WG Mac
+Copyright (c) 2025 - ARTEK İnovasyon Ar-Ge Sanayi ve Ticaret Limited Şirketi
+Copyright (c) 2025 - Rıza Emre ARAS <r.emrearas@proton.me>
+Licensed under AGPL-3.0 - see LICENSE file for details
+
+This document lists third-party software dependencies and their licenses.
+
+================================================================================
+WIREGUARD LAYER
+================================================================================
+
+Carried as a git submodule at Libraries/WireGuardKit and pinned by the
+gitlink in this repository, so the exact revision in use is recorded by git
+itself. The submodule points at a fork whose master branch is upstream's own
+history, with one commit on top of it.
+
+| Component    | Version              | Language | License | SPDX |
+|--------------|----------------------|----------|---------|------|
+| WireGuardKit | 1.0.16-27-1-g8ec2cfb | Swift    | MIT     | MIT  |
+| wireguard-go | 2023-02-09           | Go       | MIT     | MIT  |
+
+Provenance:
+- Submodule:     https://github.com/ARAS-Workspace/wireguard-apple
+- Branch:        ios/phantom-wg
+- Commit:        8ec2cfb2af0c82b94f575177bec589bf279b17f5
+- Upstream base: 2fec12a6e1f6e3460b6ee483aa00ad29cddadab1
+                 "App: version bump", Jason A. Donenfeld, 2023-02-15;
+                 nearest tag 1.0.16-27
+- Local commits: one — 8ec2cfb, Xcode 16 and iOS Simulator build
+                 compatibility patches. Build compatibility only.
+- wireguard-go:  golang.zx2c4.com/wireguard
+                 v0.0.0-20230209153558-1e2c3e5a3c14, pinned in the
+                 submodule's Sources/WireGuardKitGo/go.mod
+
+Copyright:
+- WireGuardKit:  Copyright © 2018-2023 WireGuard LLC. All Rights Reserved.
+                 (Libraries/WireGuardKit/COPYING)
+- wireguard-go:  Copyright (C) 2017-2023 WireGuard LLC. All Rights Reserved.
+                 Upstream's LICENSE file carries no copyright line; the
+                 notice lives in the per-file SPDX headers, and the line
+                 above is taken from the pinned revision's own sources.
+
+License URLs:
+- WireGuardKit:  https://git.zx2c4.com/wireguard-apple/tree/COPYING
+- wireguard-go:  https://git.zx2c4.com/wireguard-go/tree/LICENSE
+
+Full text:       MIT LICENSE, reproduced below.
+
+================================================================================
+GO RUNTIME AND STANDARD LIBRARY
+================================================================================
+
+wireguard-go is compiled to a static archive and linked into the system
+extension (PhantomTunnel). Its module dependencies, and the Go standard library
+and runtime, are linked in with it.
+
+| Component           | Version | License      | SPDX Identifier | Required By  |
+|---------------------|---------|--------------|-----------------|--------------|
+| golang.org/x/sys    | v0.5.0  | BSD 3-Clause | BSD-3-Clause    | wireguard-go |
+| golang.org/x/crypto | v0.6.0  | BSD 3-Clause | BSD-3-Clause    | wireguard-go |
+| golang.org/x/net    | v0.6.0  | BSD 3-Clause | BSD-3-Clause    | wireguard-go |
+| Go stdlib, runtime  | (note)  | BSD 3-Clause | BSD-3-Clause    | wireguard-go |
+
+Versions are pinned in the submodule's Sources/WireGuardKitGo/go.mod
+(language version: go 1.17) and verified by its go.sum.
+
+The three golang.org/x modules ship byte-identical LICENSE files, so that
+single text is reproduced once below. Each also ships a PATENTS file, which
+grants additional patent rights rather than imposing a condition on
+redistribution; it is referenced by URL and not reproduced.
+
+Usage Note:
+The Go standard library and runtime come from whichever Go toolchain performs
+the build. That toolchain version is not pinned in this repository, so no
+version is stated for it here. The runtime is patched during the build by
+Sources/WireGuardKitGo/goruntime-boottime-over-monotonic.diff, which the
+submodule's Sources/WireGuardKitGo/Makefile applies to GOROOT. The Go
+distribution's own LICENSE is a BSD 3-Clause text that is not identical to
+the golang.org/x one below, so it is referenced by URL rather than
+reproduced: the toolchain that produced any given build is not recorded here,
+and reproducing one version's text would assert a provenance this repository
+does not hold.
+
+License URLs:
+- golang.org/x:  https://cs.opensource.google/go/x/sys/+/master:LICENSE
+- PATENTS:       https://cs.opensource.google/go/x/sys/+/master:PATENTS
+- Go:            https://github.com/golang/go/blob/master/LICENSE
+
+Full text:       BSD 3-CLAUSE LICENSE (THE GO AUTHORS), reproduced below.
+
+================================================================================
+GHOST LAYER — WSTUNNEL
+================================================================================
+
+Ghost mode carries WireGuard traffic inside a WebSocket connection. The library
+below is what carries it, linked into the system extension (PhantomTunnel) as a
+universal static archive (arm64 + x86_64) with headers in include/.
+
+| Component | Version                | Language | License      | SPDX         |
+|-----------|------------------------|----------|--------------|--------------|
+| wstunnel  | 10.5.2+Phantom.Patch.1 | Rust     | BSD 3-Clause | BSD-3-Clause |
+
+Copyright:   Copyright (c) 2016-2024, Erèbe - Romain Gerard
+Upstream:    https://github.com/erebe/wstunnel
+Artifact:    Libraries/WstunnelKit/libwstunnel_apple.a
+Release:     mac-v10.5.2+Phantom.Patch.1
+CI workflow: https://github.com/ARAS-Workspace/wstunnel/actions/runs/36175416088
+Provenance:  Libraries/WstunnelKit/SOURCE
+Attribution: Libraries/WstunnelKit/NOTICE
+License:     Libraries/WstunnelKit/LICENSE
+
+Usage Note:
+This library is built from a fork that carries Phantom-specific patches. The
+fork leaves the original licence in place and adds no copyright line of its own.
+The library's own Rust dependency graph is not vendored into the fork: it is
+pinned in the fork's Cargo.lock — 463 packages at the release this artifact was
+built from — and the release workflow builds with cargo --locked. Those crates
+carry their own licences, accounted for in the wstunnel project rather than
+here; this document names the library, not its transitive graph, and does not
+claim to enumerate it.
+
+Full text:   BSD 3-CLAUSE LICENSE (WSTUNNEL), reproduced below.
+
+================================================================================
+APPLE PLATFORM FRAMEWORKS
+================================================================================
+
+Beyond the components above, the application and its extension link only
+Apple's own SDK frameworks. Those carry no third-party licence obligation and
+are not listed individually.
+
+There are no remote Swift Package Manager dependencies. project.yml declares
+exactly one package, and it is the local submodule listed under WIREGUARD
+LAYER above.
+
+================================================================================
+TRADEMARK NOTICES
+================================================================================
+
+WireGuard is a registered trademark of Jason A. Donenfeld.
+https://www.wireguard.com/
+
+================================================================================
+LICENSE COMPATIBILITY
+================================================================================
+
+All listed licenses (MIT, BSD-3-Clause) are permissive, are compatible with
+AGPL-3.0, and allow use in this project.
+
+No component listed here is under a copyleft license, so none of them imposes
+terms on the rest of this project.
+
+MIT and BSD-3-Clause both require their notice to travel with a binary
+redistribution. That is why the full texts are reproduced below rather than
+only linked: this file is the document provided with the distribution.
+
+================================================================================
+FULL LICENSE TEXTS
+================================================================================
+
+Each text below is reproduced verbatim from the file the component ships it
+in. Where one text covers several components, they are named above it.
+
+--------------------------------------------------------------------------------
+MIT LICENSE
+--------------------------------------------------------------------------------
+
+Covers:  WireGuardKit (Swift) and wireguard-go (Go).
+Source:  Libraries/WireGuardKit/COPYING
+
+The copyright notices this text carries:
+  WireGuardKit  Copyright © 2018-2023 WireGuard LLC. All Rights Reserved.
+  wireguard-go  Copyright (C) 2017-2023 WireGuard LLC. All Rights Reserved.
+
+wireguard-go ships this same MIT body with no copyright line in its own
+LICENSE file; the notice above comes from the per-file SPDX headers of the
+pinned revision. The text below is reproduced from WireGuardKit's COPYING and
+so opens with that component's notice.
+
+Copyright © 2018-2023 WireGuard LLC. All Rights Reserved.
+
+Permission is hereby granted, free of charge, to any person obtaining a copy of
+this software and associated documentation files (the "Software"), to deal in
+the Software without restriction, including without limitation the rights to
+use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies
+of the Software, and to permit persons to whom the Software is furnished to do
+so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+
+--------------------------------------------------------------------------------
+BSD 3-CLAUSE LICENSE (THE GO AUTHORS)
+--------------------------------------------------------------------------------
+
+Covers:  golang.org/x/sys, golang.org/x/crypto, golang.org/x/net — whose
+         LICENSE files are byte-identical — and the Go standard library and
+         runtime, whose own text is referenced above rather than reproduced.
+Source:  golang.org/x/sys v0.5.0, LICENSE
+
+Copyright (c) 2009 The Go Authors. All rights reserved.
+
+Redistribution and use in source and binary forms, with or without
+modification, are permitted provided that the following conditions are
+met:
+
+   * Redistributions of source code must retain the above copyright
+notice, this list of conditions and the following disclaimer.
+   * Redistributions in binary form must reproduce the above
+copyright notice, this list of conditions and the following disclaimer
+in the documentation and/or other materials provided with the
+distribution.
+   * Neither the name of Google Inc. nor the names of its
+contributors may be used to endorse or promote products derived from
+this software without specific prior written permission.
+
+THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
+"AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
+LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR
+A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT
+OWNER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
+SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT
+LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE,
+DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY
+THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+(INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+
+--------------------------------------------------------------------------------
+BSD 3-CLAUSE LICENSE (WSTUNNEL)
+--------------------------------------------------------------------------------
+
+Covers:  wstunnel.
+Source:  Libraries/WstunnelKit/LICENSE
+
+BSD 3-Clause License
+
+Copyright (c) 2016-2024, Erèbe - Romain Gerard
+
+All rights reserved.
+
+Redistribution and use in source and binary forms, with or without
+modification, are permitted provided that the following conditions are met:
+
+1. Redistributions of source code must retain the above copyright notice, this
+   list of conditions and the following disclaimer.
+
+2. Redistributions in binary form must reproduce the above copyright notice,
+   this list of conditions and the following disclaimer in the documentation
+   and/or other materials provided with the distribution.
+
+3. Neither the name of the copyright holder nor the names of its
+   contributors may be used to endorse or promote products derived from
+   this software without specific prior written permission.
+
+THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
+DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE
+FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
+SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
+CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
+OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+
+================================================================================
+
+Published by:   ARTEK İnovasyon Ar-Ge Sanayi ve Ticaret Limited Şirketi
+Maintained by:  Rıza Emre ARAS <r.emrearas@proton.me>
+Project:        Phantom-WG Mac
