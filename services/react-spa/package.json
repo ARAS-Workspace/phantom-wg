@@ -8,8 +8,9 @@
   "license": "AGPL-3.0-or-later",
   "scripts": {
     "dev": "vite",
-    "build": "tsc && vite build",
-    "preview": "vite preview"
+    "build": "tsc && vite build && node tools/copy-licenses.js",
+    "preview": "vite preview",
+    "generate-licenses": "node tools/generate-licenses.js"
   },
   "dependencies": {
     "@carbon/icons-react": "11.76.0",
