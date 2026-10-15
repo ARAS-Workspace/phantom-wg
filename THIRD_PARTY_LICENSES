@@ -5,81 +5,77 @@
 ██║     ██║  ██║██║  ██║██║ ╚████║   ██║   ╚██████╔╝██║ ╚═╝ ██║
 ╚═╝     ╚═╝  ╚═╝╚═╝  ╚═╝╚═╝  ╚═══╝   ╚═╝    ╚═════╝ ╚═╝     ╚═╝
 
-THIRD PARTY LICENSES — wireguard-go-bridge
+THIRD PARTY LICENSES
 ================================================================================
 
 Phantom-WG / wireguard-go-bridge
-Copyright (c) 2025 - Rıza Emre ARAS <r.emrearas@proton.me>
+Copyright (c) 2025 ARTEK İnovasyon Ar-Ge Sanayi ve Ticaret Limited Şirketi
+Copyright (c) 2025 Rıza Emre ARAS <r.emrearas@proton.me>
 Licensed under AGPL-3.0 - see LICENSE file for details
 
-This document lists third-party software dependencies and their licenses.
+Maintained by: Rıza Emre ARAS <r.emrearas@proton.me>
+
+HOW TO READ THIS FILE
+
+  DEPENDENCIES lists every Go library compiled into the built artifact,
+  with the licence go-licenses identified and a link to that licence at
+  the version in use. It is the union over every platform the release
+  builds for, so a library that only one platform pulls in is listed.
+
+  requirements.txt is not covered here. It pins pytest, pytest-cov and
+  docker with their transitive dependencies; those run the test suite and
+  are not part of anything this project ships. The Python package in
+  wireguard_go_bridge/ imports only the standard library.
+
+  wireguard-go, embedded through cgo, is
+  Copyright (C) 2017-2025 WireGuard LLC. All Rights Reserved.
+  WireGuard® is a registered trademark of Jason A. Donenfeld.
+  https://www.wireguard.com/
+
+  licenses/ in this repository holds what each licence requires to travel
+  with the artifact: the licence text, the NOTICE file where one exists,
+  and the source code where the licence calls for it. The tree under
+  licenses mirrors that directory, notices included, and is the union
+  over the same platforms.
+
+  Both sections are generated. Regenerate with:
+
+      python3 generate_licenses.py
+
+  go-licenses determines the licence of each library and what must be
+  kept; this file lays that out.
 
 ================================================================================
-GO MODULE DEPENDENCIES
+DEPENDENCIES
 ================================================================================
 
-Direct dependencies (go.mod):
-
-| Module                         | Version       | License      | SPDX Identifier |
-|--------------------------------|---------------|--------------|-----------------|
-| golang.org/x/crypto            | v0.48.0       | BSD-3-Clause | BSD-3-Clause    |
-| golang.zx2c4.com/wireguard     | v0.0.0        | MIT License  | MIT             |
-
-Indirect dependencies (automatically resolved):
-
-| Module                         | Version       | License      | SPDX Identifier | Required By  |
-|--------------------------------|---------------|--------------|-----------------|--------------|
-| golang.org/x/net               | v0.51.0       | BSD-3-Clause | BSD-3-Clause    | wireguard    |
-| golang.org/x/sys               | v0.41.0       | BSD-3-Clause | BSD-3-Clause    | wireguard    |
-| golang.zx2c4.com/wintun        | v0.0.0        | MIT License  | MIT             | wireguard    |
-
-License URLs:
-- golang.org/x/crypto:    https://github.com/golang/crypto/blob/master/LICENSE
-- wireguard-go:           https://git.zx2c4.com/wireguard-go/tree/LICENSE
-- golang.org/x/net:       https://github.com/golang/net/blob/master/LICENSE
-- golang.org/x/sys:       https://github.com/golang/sys/blob/master/LICENSE
-- wintun:                 https://git.zx2c4.com/wintun-go/tree/LICENSE
+| Library                     | License      | License URL
+|-----------------------------|--------------|-------------
+| github.com/mattn/go-sqlite3 | MIT          | https://github.com/mattn/go-sqlite3/blob/v1.14.34/LICENSE
+| golang.org/x/crypto         | BSD-3-Clause | https://cs.opensource.google/go/x/crypto/+/v0.48.0:LICENSE
+| golang.org/x/net            | BSD-3-Clause | https://cs.opensource.google/go/x/net/+/v0.51.0:LICENSE
+| golang.org/x/sys            | BSD-3-Clause | https://cs.opensource.google/go/x/sys/+/v0.41.0:LICENSE
+| golang.org/x/sys/unix       | BSD-3-Clause | https://cs.opensource.google/go/x/sys/+/v0.41.0:LICENSE
+| golang.zx2c4.com/wireguard  | MIT          | https://git.zx2c4.com/wireguard-go/tree/LICENSE?id=f333402bd9cb
 
 ================================================================================
-SYSTEM COMPONENTS
+licenses
 ================================================================================
 
-| Component       | License          | SPDX Identifier      | URL                                    |
-|-----------------|------------------|----------------------|----------------------------------------|
-| Go (compiler)   | BSD-3-Clause     | BSD-3-Clause         | https://go.dev/LICENSE                 |
-
-Usage Note:
-wireguard-go-bridge embeds the wireguard-go userspace implementation as a
-shared library via CGo. The bridge exposes WireGuard device, peer, and key
-management through C-compatible FFI functions. No kernel module is required;
-all WireGuard operations run in userspace.
-
-================================================================================
-TRADEMARK NOTICES
-================================================================================
-
-WireGuard is a registered trademark of Jason A. Donenfeld.
-https://www.wireguard.com/
-
-================================================================================
-LICENSE COMPATIBILITY
-================================================================================
-
-All dependencies (MIT, BSD-3-Clause) are permissive licenses fully compatible
-with AGPL-3.0 and allow use in this project.
-
-The Go compiler (BSD-3-Clause) is a build tool and does not impose licensing
-obligations on the output binary.
-
-================================================================================
-DOCUMENT INFO
-================================================================================
-
-Maintained by:  Rıza Emre ARAS <r.emrearas@proton.me>
-Project:        Phantom-WG / wireguard-go-bridge
-License:        AGPL-3.0-or-later
-Repository:     https://github.com/ARAS-Workspace/phantom-wg
-Branch:         dev/wireguard-go-bridge
-Last Updated:   2026-02-28
-
-================================================================================
+├── github.com/
+│   └── mattn/
+│       └── go-sqlite3/
+│           └── LICENSE
+├── golang.org/
+│   └── x/
+│       ├── crypto/
+│       │   └── LICENSE
+│       ├── net/
+│       │   └── LICENSE
+│       └── sys/
+│           ├── unix/
+│           │   └── LICENSE
+│           └── LICENSE
+└── golang.zx2c4.com/
+    └── wireguard/
+        └── LICENSE
