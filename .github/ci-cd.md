@@ -6,7 +6,7 @@
 |-------------------------------|--------------------------------------------|------------------------------------------|--------------------------------|
 | `test-firewall-bridge.yml`    | push (`.github/` ignored), `workflow_call` | `test-rust`, `test-python`, `e2e`        | —                              |
 | `build-firewall-bridge.yml`   | push (`.github/` ignored), `workflow_call` | `build-linux-amd64`, `build-linux-arm64` | .so + .h + .sha256 artifacts   |
-| `publish-firewall-bridge.yml` | `workflow_dispatch`                        | `version` → `test` → `build` → `publish` | R2 upload (versioned + latest) |
+| `publish-firewall-bridge.yml` | `workflow_dispatch`                        | `version` → `test` → `build` → `publish` | tagged release + zip assets    |
 
 ## Flow
 
@@ -25,7 +25,7 @@ Publish (workflow_dispatch):
         ├── version   (extract from firewall_bridge/__init__.py)
         ├── test      (workflow_call → test-firewall-bridge.yml)
         ├── build     (workflow_call → build-firewall-bridge.yml)
-        └── publish   (self-hosted, rclone → R2)
+        └── publish   (ubuntu-latest, gh release create)
 ```
 
 ## Version
@@ -69,20 +69,15 @@ No arguments — version is read from source. Triggers
 | `firewall-bridge-linux-amd64` | .so, .h, .sha256, firewall_bridge/*.py, schemas/ | 90 days   |
 | `firewall-bridge-linux-arm64` | .so, .h, .sha256, firewall_bridge/*.py, schemas/ | 90 days   |
 
-## R2 Storage
+## Release
 
-Bucket: `phantom-vendor` — Domain: `vendor.phantom.tc`
+Tag: `vendor-firewall-bridge-v<VERSION>` — target: the commit the run built
+
+Assets:
 
 ```
-firewall-bridge/
-├── v<VERSION>/
-│   ├── linux-amd64.zip
-│   ├── linux-arm64.zip
-│   └── VERSION
-└── latest/
-    ├── linux-amd64.zip
-    ├── linux-arm64.zip
-    └── VERSION
+linux-amd64.zip
+linux-arm64.zip
 ```
 
 Each zip contains:
@@ -102,19 +97,22 @@ firewall_bridge/
 ├── libfirewall_bridge_linux.so
 ├── libfirewall_bridge_linux.so.sha256
 ├── firewall_bridge_linux.h
-└── VERSION
+├── VERSION
+├── LICENSE
+└── THIRD_PARTY_LICENSES
 ```
 
 Download:
 
 ```
-https://vendor.phantom.tc/firewall-bridge/v<VERSION>/linux-amd64.zip
-https://vendor.phantom.tc/firewall-bridge/latest/linux-arm64.zip
+https://github.com/ARAS-Workspace/phantom-wg/releases/download/vendor-firewall-bridge-v<VERSION>/linux-amd64.zip
 ```
 
 ## Notes
 
 - `.github/` changes do not trigger test/build on push (paths-ignore)
-- Publish runs on self-hosted runner (rclone + R2 remote preconfigured)
-- Both versioned and latest paths are updated on each publish
+- Publish runs on ubuntu-latest; its only credential is GITHUB_TOKEN
+- No moving "latest" pointer: this repository holds several components and
+  GitHub's `/releases/latest` answers for the repository, so consumers pin a tag
 - VERSION file inside zip for runtime version verification
+- Release notes link to the CHANGELOG on this branch

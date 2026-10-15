@@ -72,14 +72,21 @@ jobs:
       contents: read
 
   publish:
-    name: Publish to R2
+    name: Publish release
     needs: [version, build]
-    runs-on: self-hosted
+    runs-on: ubuntu-latest
     permissions:
-      contents: write  # CHECKSUMS commit to the branch
+      contents: write  # create the release and upload its assets
     steps:
+      - name: Harden runner
+        uses: step-security/harden-runner@58077d3c7e43986b6b15fba718e8ea69e387dfcc # v2.15.1
+        with:
+          egress-policy: audit
+
       - name: Checkout
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
 
       - name: Download amd64 artifact
         uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
@@ -112,14 +119,15 @@ jobs:
             # VERSION
             echo "${VERSION}" > "staging/${ARCH}/firewall_bridge/VERSION"
 
+            # Licences, alongside the code they cover
+            cp LICENSE "staging/${ARCH}/firewall_bridge/"
+            cp THIRD_PARTY_LICENSES "staging/${ARCH}/firewall_bridge/"
+
             # Zip
             cd "staging/${ARCH}"
             zip -r "../../${ARCH}.zip" firewall_bridge/
             cd ../..
           done
-
-          # Standalone VERSION file
-          echo "${VERSION}" > VERSION
 
       - name: Verify checksums
         run: |
@@ -128,51 +136,26 @@ jobs:
           echo "--- linux/arm64 ---"
           cd staging/linux-arm64/firewall_bridge && sha256sum -c libfirewall_bridge_linux.so.sha256 && cd ../../..
 
-      - name: Upload to R2
+      - name: Create release
         env:
           VERSION: ${{ needs.version.outputs.version }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          R2_PATH="r2:phantom-vendor/firewall-bridge"
+          TAG="vendor-firewall-bridge-${VERSION}"
+          NOTES="What changed in this version: [CHANGELOG](https://github.com/ARAS-Workspace/phantom-wg/blob/dev/firewall-bridge/CHANGELOG)"
 
-          # Versioned
-          rclone copy linux-amd64.zip "${R2_PATH}/${VERSION}/" --progress
-          rclone copy linux-arm64.zip "${R2_PATH}/${VERSION}/" --progress
-          rclone copy VERSION "${R2_PATH}/${VERSION}/" --progress
-
-          # Latest
-          rclone copy linux-amd64.zip "${R2_PATH}/latest/" --progress
-          rclone copy linux-arm64.zip "${R2_PATH}/latest/" --progress
-          rclone copy VERSION "${R2_PATH}/latest/" --progress
-
-          echo "Published: ${VERSION}"
-
-      # Trust root: the hashes of what was just published, committed to
-      # the branch by this workflow only. Consumers verify R2 downloads
-      # against this file — two independent channels, so a tampered zip
-      # cannot re-attest itself.
-      - name: Update CHECKSUMS on branch
-        env:
-          VERSION: ${{ needs.version.outputs.version }}
-        run: |
-          AMD64_SHA=$(sha256sum linux-amd64.zip | cut -d' ' -f1)
-          ARM64_SHA=$(sha256sum linux-arm64.zip | cut -d' ' -f1)
-          {
-            echo "firewall-bridge ${VERSION}"
-            echo ""
-            echo "- linux-amd64.zip/${AMD64_SHA}"
-            echo "- linux-arm64.zip/${ARM64_SHA}"
-          } > CHECKSUMS
-
-          if git diff --quiet -- CHECKSUMS && [ -z "$(git status --porcelain CHECKSUMS)" ]; then
-            echo "CHECKSUMS unchanged, nothing to commit"
-            exit 0
+          # Re-running the same version replaces its assets rather than failing.
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release upload "$TAG" linux-amd64.zip linux-arm64.zip --clobber
+            echo "Updated: $TAG"
+          else
+            gh release create "$TAG" \
+              --target "${GITHUB_SHA}" \
+              --title "firewall-bridge ${VERSION}" \
+              --notes "$NOTES" \
+              linux-amd64.zip linux-arm64.zip
+            echo "Released: $TAG"
           fi
-
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add CHECKSUMS
-          git -c commit.gpgsign=false commit -m "Checksums: ${VERSION}"
-          git push origin HEAD:dev/firewall-bridge
 
       - name: Summary
         env:
@@ -180,7 +163,7 @@ jobs:
         run: |
           AMD64_SHA=$(cut -d' ' -f1 staging/linux-amd64/firewall_bridge/libfirewall_bridge_linux.so.sha256)
           ARM64_SHA=$(cut -d' ' -f1 staging/linux-arm64/firewall_bridge/libfirewall_bridge_linux.so.sha256)
-          echo "## firewall-bridge ${VERSION} → R2" >> "$GITHUB_STEP_SUMMARY"
+          echo "## firewall-bridge ${VERSION} → release" >> "$GITHUB_STEP_SUMMARY"
           echo "" >> "$GITHUB_STEP_SUMMARY"
           echo "| Platform | SHA256 |" >> "$GITHUB_STEP_SUMMARY"
           echo "|----------|--------|" >> "$GITHUB_STEP_SUMMARY"
@@ -188,9 +171,6 @@ jobs:
           echo "| linux/arm64 | \`${ARM64_SHA}\` |" >> "$GITHUB_STEP_SUMMARY"
           echo "" >> "$GITHUB_STEP_SUMMARY"
           echo "**Download:**" >> "$GITHUB_STEP_SUMMARY"
-          echo "- \`https://vendor.phantom.tc/firewall-bridge/${VERSION}/linux-amd64.zip\`" >> "$GITHUB_STEP_SUMMARY"
-          echo "- \`https://vendor.phantom.tc/firewall-bridge/${VERSION}/linux-arm64.zip\`" >> "$GITHUB_STEP_SUMMARY"
-
-      - name: Cleanup
-        if: always()
-        run: rm -rf artifacts staging linux-amd64.zip linux-arm64.zip VERSION
+          BASE="https://github.com/ARAS-Workspace/phantom-wg/releases/download/vendor-firewall-bridge-${VERSION}"
+          echo "- \`${BASE}/linux-amd64.zip\`" >> "$GITHUB_STEP_SUMMARY"
+          echo "- \`${BASE}/linux-arm64.zip\`" >> "$GITHUB_STEP_SUMMARY"

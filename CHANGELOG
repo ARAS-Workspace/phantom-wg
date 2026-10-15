@@ -4,6 +4,35 @@ nftables + netlink routing bridge for Linux. Python owns rules, state,
 and presets; Rust is a kernel-only FFI surface.
 
 
+v2.1.8 - 2026-10-15
+-------------------
+
+  Distribution moves from R2 to a tagged release, and the licence
+  record moves from a hand-written file to cargo-about output. Both
+  put what a consumer needs in order to check a package inside the
+  package itself.
+
+  * Publish creates vendor-firewall-bridge-v<VERSION> with both
+    per-arch zips attached and the CHANGELOG linked from its notes.
+    The rclone upload is gone; R2 keeps serving what is already
+    published there. The job no longer needs the self-hosted runner
+    or its credentials, so it runs on ubuntu-latest.
+  * CHECKSUMS and its bot commit are gone with it. The zip carries
+    libfirewall_bridge_linux.so.sha256 beside the library it
+    describes, and the release records a digest for each asset.
+  * No moving "latest" pointer: this repository holds several
+    components and GitHub's /releases/latest answers for the
+    repository, so consumers pin a tag.
+  * about.toml states which licences are accepted; cargo-about
+    refuses to generate anything for a crate carrying something
+    else, so the policy and the document are one artifact.
+    THIRD_PARTY_LICENSES is generated from it, for both target
+    triples. The hand-written list had drifted — rusqlite and its
+    six dependencies were listed although the tree no longer has
+    them, ryu too, while serde_core and zmij were missing.
+  * LICENSE and THIRD_PARTY_LICENSES ship inside each zip.
+
+
 v2.1.7 - 2026-07-18
 -------------------
 

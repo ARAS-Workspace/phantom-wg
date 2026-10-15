@@ -1,7 +1,7 @@
 DISTRIBUTION
 
 How a firewall-bridge version reaches consumers — from a local
-version bump to a public download from R2.
+version bump to a tagged GitHub release.
 
 
 Pipeline overview
@@ -17,11 +17,11 @@ Pipeline overview
                  operator is satisfied.
   4. Publish     Operator runs publish.sh, which dispatches the publish
                  workflow with no arguments.
-  5. R2 upload   Publish workflow re-runs test + build, validates that
+  5. Release     Publish workflow re-runs test + build, validates that
                  the Python and Cargo version sources agree, then
-                 uploads to R2 under both versioned and latest paths.
-  6. Consumption Downstream consumers fetch a per-arch zip from
-                 vendor.phantom.tc over HTTPS.
+                 creates a tagged release carrying the per-arch zips.
+  6. Consumption Downstream consumers fetch a per-arch zip from the
+                 release over HTTPS.
 
 
 Stage 1 — Bump
@@ -76,7 +76,7 @@ Stage 2 — Push
                                    Each contains .so + .h + .sha256 +
                                    firewall_bridge/*.py + schemas/.
 
-  Neither workflow uploads to R2. They exist to give the operator a
+  Neither workflow publishes. They exist to give the operator a
   pass/fail signal and downloadable artifacts for inspection.
 
 
@@ -117,28 +117,23 @@ Stage 5 — Publish workflow
       build      Re-runs the native amd64 and arm64 builds via
                  workflow_call.
 
-      publish    Self-hosted runner with rclone configured against the
-                 R2 remote. Packages each architecture into a zip,
-                 verifies sha256 checksums, uploads to R2 under both
-                 v<VERSION>/ and latest/ paths.
+      publish    Packages each architecture into a zip, verifies
+                 sha256 checksums, and creates the release with both
+                 zips attached.
 
 
-Stage 6 — R2 storage
---------------------
+Stage 6 — Release
+-----------------
 
-  Bucket : phantom-vendor
-  Domain : vendor.phantom.tc
+  Tag    : vendor-firewall-bridge-v<VERSION>
+  Target : the commit this run built
 
-  Each publish writes to two locations simultaneously:
-
-      firewall-bridge/v<VERSION>/      pinned, immutable
-      firewall-bridge/latest/          moves on every publish
-
-  Both contain the same three files:
+  The release carries two assets:
 
       linux-amd64.zip     Python package + .so + .h for linux/amd64
       linux-arm64.zip     Python package + .so + .h for linux/arm64
-      VERSION             plain-text version string at the path level
+
+  Its notes link to the CHANGELOG on this branch.
 
   Each zip contains a single top-level firewall_bridge/ directory:
 
@@ -157,9 +152,13 @@ Stage 6 — R2 storage
         libfirewall_bridge_linux.so.sha256
         firewall_bridge_linux.h
         VERSION
+        LICENSE
+        THIRD_PARTY_LICENSES
 
-  The VERSION file is duplicated (path-level + inside the zip) so
-  consumers can tell which version they have without unzipping.
+  The package carries what is needed to check it: the .so hash sits
+  beside the .so, and the licence record beside the code it covers.
+  Nothing has to be fetched from a second location to verify or to
+  comply.
 
 
 Stage 7 — Consumption
@@ -167,18 +166,15 @@ Stage 7 — Consumption
 
   Consumers download over HTTPS. Two strategies:
 
-      Pinned to a known version (recommended):
-        https://vendor.phantom.tc/firewall-bridge/v<VERSION>/linux-amd64.zip
-
-      Tracking the moving latest pointer:
-        https://vendor.phantom.tc/firewall-bridge/latest/linux-amd64.zip
+      https://github.com/ARAS-Workspace/phantom-wg/releases/download/\
+        vendor-firewall-bridge-v<VERSION>/linux-amd64.zip
 
   After extraction, the runtime version can be confirmed two ways:
 
       cat firewall_bridge/VERSION
       python -c "from firewall_bridge import __version__; print(__version__)"
 
-  Both should agree with the URL the artifact came from. If they
+  Both should agree with the tag the artifact came from. If they
   disagree, the deployed copy was tampered with or the build pipeline
   has a bug — either way, do not use it.
 
@@ -205,27 +201,25 @@ End-to-end example
   Triggered. Watch: gh run list --repo ARAS-Workspace/phantom-wg --workflow publish-firewall-bridge.yml
 
   # → publish workflow runs version → test → build → publish.
-  #   R2 receives the new artifacts.
+  #   The release is created with both zips attached.
 
   # Consumers can now fetch:
-  #   https://vendor.phantom.tc/firewall-bridge/v2.1.5/linux-amd64.zip
-  #   https://vendor.phantom.tc/firewall-bridge/latest/linux-amd64.zip
+  #   https://github.com/ARAS-Workspace/phantom-wg/releases/download/vendor-firewall-bridge-v2.1.5/linux-amd64.zip
 
 
 Rollback
 --------
 
-  No artifacts are deleted from R2. If a bad version goes out:
+  Releases are not deleted. If a bad version goes out:
 
-  1. Bump again (patch) and publish a new fixed version. The latest/
-     path moves forward to the new build immediately.
+  1. Bump again (patch) and publish a new fixed version.
 
-  2. Pinned consumers stay on the bad version until they update
-     their pin. Communicate the issue out-of-band.
+  2. Consumers stay on the version they pinned until they update it.
+     Communicate the issue out-of-band.
 
-  3. Optionally rewrite latest/ manually to point at the previous
-     known-good v<VERSION>/ contents using rclone — but this leaves
-     the bad bits at v<VERSION>/, so prefer step 1.
+  3. The bad release can be marked as a pre-release so it stops
+     showing as the newest one, but its assets remain downloadable
+     for anyone who already pinned it, so prefer step 1.
 
 
 Notes
@@ -241,9 +235,9 @@ Notes
     compile), so the produced .so is exactly what an arm64 host
     would see.
 
-  * Publish runs on a self-hosted runner because the R2 credentials
-    live there, not in GitHub Secrets.
+  * Publish needs no credentials beyond the workflow's own
+    GITHUB_TOKEN, so it runs on ubuntu-latest.
 
-  * The standalone VERSION file at the R2 path level lets consumers
-    do a HEAD-style check ("what version is at latest/ right now?")
-    without downloading a multi-megabyte zip.
+  * There is no moving "latest" pointer. This repository holds
+    several components and GitHub's /releases/latest answers for the
+    repository, not for one of them, so every consumer pins a tag.
