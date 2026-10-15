@@ -20,6 +20,7 @@ Phantom-WG Modern vX.Y.Z
         ├── wireguard-go-bridge vA.B.C  ← dependency
         ├── firewall-bridge vA.B.C      ← dependency
         ├── react-spa (build artifact)  ← bundled with release
+        ├── vendor/linux-{arch}/        ← the two bridges, bundled with release
         └── nginx config                ← bundled with release
 ```
 
@@ -52,23 +53,43 @@ dependencies — reaches a new release milestone.
 
 ### Dependencies
 
-| Component               | Versioning           | Branch                   |
-|-------------------------|----------------------|--------------------------|
-| **auth-service**        | semver               | dev/auth-service         |
-| **wireguard-go-bridge** | semver               | dev/wireguard-go-bridge  |
-| **firewall-bridge**     | semver               | dev/firewall-bridge      |
-| **compose-bridge**      | semver               | dev/tests/compose-bridge |
-| **react-spa**           | package.json version | dev/daemon (embedded)    |
+| Component               | Versioning           | Branch                  |
+|-------------------------|----------------------|-------------------------|
+| **auth-service**        | semver               | dev/auth-service        |
+| **wireguard-go-bridge** | semver               | dev/wireguard-go-bridge |
+| **firewall-bridge**     | semver               | dev/firewall-bridge     |
+| **react-spa**           | package.json version | dev/daemon (embedded)   |
+
+### Test Dependencies
+
+Not part of the product and not in the release package. compose-bridge
+orchestrates the suites under `e2e_tests/`, which the packager excludes.
+
+| Component            | Versioning | Branch                   |
+|----------------------|------------|--------------------------|
+| **compose-bridge**   | semver     | dev/tests/compose-bridge |
 
 ### Vendor Distribution
 
-Bridge binaries are distributed via `vendor.phantom.tc` (Cloudflare R2).
-Each bridge has its own publish workflow that uploads versioned artifacts.
-The daemon Dockerfile fetches the relevant version or `latest` path at build time.
+Each bridge publishes its own tagged GitHub release, one archive per
+architecture:
 
 ```
-vendor.phantom.tc/
-├── firewall-bridge/{version}/linux-{arch}.zip
-└── wireguard-go-bridge/{version}/linux-{arch}.zip
+github.com/ARAS-Workspace/phantom-wg/releases/download/
+├── vendor-firewall-bridge-v{version}/linux-{arch}.zip
+└── vendor-wireguard-go-bridge-v{version}/linux-{arch}.zip
 ```
+
+There is no `latest` to follow. GitHub's latest-release endpoint answers for
+the repository rather than for a component, so every consumer pins a tag. The
+daemon pins both versions and the SHA-256 of each archive in `Dockerfile` and
+`dev.Dockerfile`; a download that does not match the digest fails the build.
+
+The bridges reach the image two ways:
+
+- **Release package** — the archive carries them under `vendor/linux-{arch}/`,
+  written there by the release workflow. The build uses that tree and makes no
+  network request.
+- **Clone of `main`** — no `vendor/` is present, so the build downloads the
+  pinned releases.
 
