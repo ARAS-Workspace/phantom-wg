@@ -111,14 +111,14 @@ jobs:
           git push origin main --force-with-lease
           git push origin "v${VERSION}" --force
 
+      # Runs after the push to main on purpose: main and the archive are copied
+      # from the same tree, and only the archive carries vendor/. Builds the
+      # Dockerfile's own vendor-fetch stage once per arch, so the pinned
+      # versions and digests live in one place and the remote fetch path a main
+      # clone depends on is exercised on every release.
       - name: Add the vendor bridges to the release archive
         run: |
           set -e
-          # Runs after the push to main on purpose: main and the archive are
-          # copied from the same tree, and only the archive carries vendor/.
-          # Builds the Dockerfile's own vendor-fetch stage once per arch, so
-          # the pinned versions and digests live in one place and the remote
-          # fetch path a main clone depends on is exercised on every release.
           for ARCH in amd64 arm64; do
             echo "── linux-${ARCH}"
             docker build --target vendor-fetch \
@@ -130,9 +130,6 @@ jobs:
               "/tmp/phantom-release/vendor/linux-${ARCH}/"
             docker rm "${ID}" > /dev/null
 
-            # docker cp of an empty source succeeds silently; the archive must
-            # not ship a vendor/ the user's build would prefer and find empty.
-            # The Dockerfile already verified the architecture of each library.
             DEST="/tmp/phantom-release/vendor/linux-${ARCH}"
             for PKG in firewall_bridge wireguard_go_bridge; do
               if [ ! -f "${DEST}/${PKG}/__init__.py" ]; then
