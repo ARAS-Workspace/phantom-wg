@@ -56,3 +56,7 @@ lib/*
 # OS
 .DS_Store
 Thumbs.db
+
+# Vendor bridges — fetched at image build time, or shipped under vendor/
+# in the release package. Never committed either way.
+vendor/

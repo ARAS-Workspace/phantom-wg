@@ -48,10 +48,10 @@ The other four are listed in their own notices:
 - wireguard-go-bridge: https://github.com/ARAS-Workspace/phantom-wg/blob/dev/wireguard-go-bridge/THIRD_PARTY_LICENSES
 - firewall-bridge:     https://github.com/ARAS-Workspace/phantom-wg/blob/dev/firewall-bridge/THIRD_PARTY_LICENSES
 
-auth-service and react-spa carry their notices in the directories named
-above. The bridges do not: the vendor archives the image fetches, at the
-versions pinned in the Dockerfile, hold the shared library and its Python
-wrapper only. For those two the links above are the notice.
+Each notice also travels with its component: auth-service and react-spa in
+the directories named above, and the two bridges inside the vendor archive —
+which the image unpacks into /opt/phantom/vendor, and which the release
+package ships under vendor/linux-<arch>/.
 
 ================================================================================
 DAEMON — PYTHON DEPENDENCIES
