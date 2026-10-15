@@ -100,6 +100,11 @@ jobs:
             # VERSION
             echo "${VERSION}" > "staging/${ARCH}/wireguard_go_bridge/VERSION"
 
+            # Licences, alongside the code they cover
+            cp LICENSE "staging/${ARCH}/wireguard_go_bridge/"
+            cp THIRD_PARTY_LICENSES "staging/${ARCH}/wireguard_go_bridge/"
+            cp -r licenses "staging/${ARCH}/wireguard_go_bridge/"
+
             # Zip
             cd "staging/${ARCH}"
             zip -r "../../${ARCH}.zip" wireguard_go_bridge/
