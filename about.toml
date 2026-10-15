@@ -1,0 +1,33 @@
+# Licence policy for firewall-bridge.
+#
+# cargo-about refuses to generate anything unless every crate in the graph
+# resolves to a licence listed here, so this file is the gate as well as the
+# configuration: a dependency carrying something unlisted fails the run.
+#
+# Order matters. For an `OR` expression cargo-about takes the first entry
+# below that satisfies it, so MIT ahead of Apache-2.0 resolves the nine
+# `MIT OR Apache-2.0` crates to MIT.
+#
+# As declared by the crates currently in Cargo.lock:
+#   MIT OR Apache-2.0                     itoa, libc, proc-macro2, quote,
+#                                         serde, serde_core, serde_derive,
+#                                         serde_json, syn
+#   Unlicense OR MIT                      memchr
+#   (MIT OR Apache-2.0) AND Unicode-3.0   unicode-ident
+#   MIT                                   zmij
+#
+# AGPL-3.0-or-later is this crate's own licence, read from LICENSE.
+
+accepted = [
+    "MIT",
+    "Apache-2.0",
+    "Unicode-3.0",
+    "Unlicense",
+    "AGPL-3.0-or-later",
+]
+
+# The release builds for these two triples; see build-firewall-bridge.yml.
+targets = [
+    "x86_64-unknown-linux-gnu",
+    "aarch64-unknown-linux-gnu",
+]

@@ -5,68 +5,84 @@
 ██║     ██║  ██║██║  ██║██║ ╚████║   ██║   ╚██████╔╝██║ ╚═╝ ██║
 ╚═╝     ╚═╝  ╚═╝╚═╝  ╚═╝╚═╝  ╚═══╝   ╚═╝    ╚═════╝ ╚═╝     ╚═╝
 
-THIRD PARTY LICENSES — firewall-bridge v2
+THIRD PARTY LICENSES
 ================================================================================
 
 Phantom-WG / firewall-bridge
-Copyright (c) 2025 - Rıza Emre ARAS <r.emrearas@proton.me>
+Copyright (c) 2025 ARTEK İnovasyon Ar-Ge Sanayi ve Ticaret Limited Şirketi
+Copyright (c) 2025 Rıza Emre ARAS <r.emrearas@proton.me>
 Licensed under AGPL-3.0 - see LICENSE file for details
 
-This document lists third-party software dependencies and their licenses.
+Maintained by: Rıza Emre ARAS <r.emrearas@proton.me>
+
+HOW TO READ THIS FILE
+
+  DEPENDENCIES lists the Rust crates compiled into the shared library the
+  release ships, resolved for both target triples in about.toml. "Offered"
+  is the licence expression the crate declares; "Taken" is the one that
+  applies here, picked by the order of the accepted list in about.toml.
+
+  Crates that are not compiled for either target do not appear.
+  proc-macro2, quote, syn, unicode-ident, serde and serde_derive are
+  in Cargo.lock only because serde_json and serde_core declare them
+  under [target.'cfg(any())'.dependencies], a condition no target
+  satisfies. None of them is built, so none is redistributed.
+
+  LICENSE TEXTS below carries the text of every licence taken, as shipped
+  by the crate it came from. Crates sharing a byte-identical text share an
+  entry. This project's own AGPL-3.0 is not repeated here; it is in
+  LICENSE.
+
+  DEPENDENCIES and LICENSE TEXTS come from cargo-about. SYSTEM LIBRARIES
+  and LICENSE COMPATIBILITY are written by hand: cargo-about reads Cargo
+  metadata, and a system library linked through build.rs is outside it.
+
+  Two groups of Python dependencies exist and neither ships in the package:
+
+    PyYAML is optional and loaded lazily. firewall_bridge/presets.py
+    imports it inside the function that reads a preset from YAML, and
+    raises a clear ImportError if it is absent. Installing it is the
+    operator's choice and only needed on that path.
+
+    pytest, pytest-cov, coverage, docker and rich run the test suite.
+    requirements.txt pins them and their transitive dependencies.
+
+  This file is generated. Regenerate with:
+
+      python3 generate_licenses.py
+
+  about.toml is the licence policy: cargo-about refuses to produce
+  anything for a crate whose licence is not listed there.
 
 ================================================================================
-RUST CRATE DEPENDENCIES
+DEPENDENCIES — 6 crates
 ================================================================================
 
-Direct dependencies (Cargo.toml):
-
-| Crate       | Version | License            | SPDX Identifier         |
-|-------------|---------|--------------------|-------------------------|
-| libc        | 0.2     | MIT OR Apache-2.0  | MIT OR Apache-2.0       |
-| serde       | 1       | MIT OR Apache-2.0  | MIT OR Apache-2.0       |
-| serde_json  | 1       | MIT OR Apache-2.0  | MIT OR Apache-2.0       |
-| rusqlite    | 0.33    | MIT                | MIT                     |
-
-Transitive dependencies (automatically resolved):
-
-| Crate                   | Version | License            | SPDX Identifier         | Required By       |
-|-------------------------|---------|--------------------|-------------------------|-------------------|
-| serde_derive            | 1       | MIT OR Apache-2.0  | MIT OR Apache-2.0       | serde             |
-| itoa                    | 1       | MIT OR Apache-2.0  | MIT OR Apache-2.0       | serde_json        |
-| ryu                     | 1       | Apache-2.0 OR BSL  | Apache-2.0 OR BSL-1.0   | serde_json        |
-| memchr                  | 2       | MIT OR Unlicense   | MIT OR Unlicense        | serde_json        |
-| libsqlite3-sys          | 0.31    | MIT                | MIT                     | rusqlite (bundled)|
-| hashlink                | 0.10    | MIT OR Apache-2.0  | MIT OR Apache-2.0       | rusqlite          |
-| fallible-iterator       | 0.3     | MIT OR Apache-2.0  | MIT OR Apache-2.0       | rusqlite          |
-| fallible-streaming-iter | 0.1     | MIT OR Apache-2.0  | MIT OR Apache-2.0       | rusqlite          |
-| smallvec                | 1       | MIT OR Apache-2.0  | MIT OR Apache-2.0       | rusqlite          |
-| hashbrown               | 0.15    | MIT OR Apache-2.0  | MIT OR Apache-2.0       | hashlink          |
-
-License URLs:
-- libc:             https://github.com/rust-lang/libc/blob/main/LICENSE-MIT
-- serde:            https://github.com/serde-rs/serde/blob/master/LICENSE-MIT
-- serde_json:       https://github.com/serde-rs/json/blob/master/LICENSE-MIT
-- rusqlite:         https://github.com/rusqlite/rusqlite/blob/master/LICENSE
-- libsqlite3-sys:   https://github.com/rusqlite/rusqlite/blob/master/libsqlite3-sys/LICENSE
-- itoa:             https://github.com/dtolnay/itoa/blob/master/LICENSE-MIT
-- ryu:              https://github.com/dtolnay/ryu/blob/master/LICENSE-APACHE
-- memchr:           https://github.com/BurntSushi/memchr/blob/master/LICENSE-MIT
-
-Note: rusqlite uses the "bundled" feature which statically compiles SQLite
-(public domain) into the shared library. No system libsqlite3 dependency.
+| Crate      | Version | Offered           | Taken | Repository
+|------------|---------|-------------------|-------|------------
+| itoa       | 1.0.17  | MIT OR Apache-2.0 | MIT   | https://github.com/dtolnay/itoa
+| libc       | 0.2.182 | MIT OR Apache-2.0 | MIT   | https://github.com/rust-lang/libc
+| memchr     | 2.8.0   | Unlicense OR MIT  | MIT   | https://github.com/BurntSushi/memchr
+| serde_core | 1.0.228 | MIT OR Apache-2.0 | MIT   | https://github.com/serde-rs/serde
+| serde_json | 1.0.149 | MIT OR Apache-2.0 | MIT   | https://github.com/serde-rs/json
+| zmij       | 1.0.21  | MIT               | MIT   | https://github.com/dtolnay/zmij
 
 ================================================================================
-SYSTEM LIBRARIES (linked at build time)
+SYSTEM LIBRARIES
 ================================================================================
 
-| Library     | License          | SPDX Identifier      | URL                                          |
-|-------------|------------------|----------------------|----------------------------------------------|
-| libnftables | GPL-2.0-only     | GPL-2.0-only         | https://netfilter.org/projects/nftables/      |
-| libmnl      | LGPL-2.1-or-later| LGPL-2.1-or-later    | https://netfilter.org/projects/libmnl/        |
+Resolved from the operating system rather than from Cargo, so
+cargo-about does not see them.
+
+| Library     | License           | SPDX Identifier   | URL                                     |
+|-------------|-------------------|-------------------|-----------------------------------------|
+| libnftables | GPL-2.0-only      | GPL-2.0-only      | https://netfilter.org/projects/nftables/ |
+| libmnl      | LGPL-2.1-or-later | LGPL-2.1-or-later | https://netfilter.org/projects/libmnl/   |
 
 Usage Note:
 firewall-bridge links against libnftables (dynamically) to manage nftables
-rules via the nft_ctx API. All firewall rules are isolated in the "inet phantom"
+rules via the nft_ctx API; build.rs emits the link flag and the build host
+needs libnftables-dev. All firewall rules are isolated in the "inet phantom"
 table, separate from system UFW/iptables rules.
 
 libmnl is a transitive dependency of libnftables for minimal netlink
@@ -77,27 +93,101 @@ via libc, without additional library dependencies.
 LICENSE COMPATIBILITY
 ================================================================================
 
-All Rust crate licenses (MIT, Apache-2.0, BSL-1.0, Unlicense) are compatible
-with AGPL-3.0 and allow use in this project.
+Every licence taken above is permissive and compatible with AGPL-3.0.
 
-SQLite is public domain — no license restrictions.
+libnftables (GPL-2.0-only) is not bundled with firewall-bridge. It is
+installed from the operating system's package repository when the user
+builds the container image, and is loaded dynamically at runtime.
 
-libnftables (GPL-2.0-only) is not bundled with firewall-bridge. It is installed
-from the operating system's package repository when the user builds the
-container image, and is loaded dynamically at runtime.
-
-libmnl (LGPL-2.1-or-later) is dynamically linked, which satisfies LGPL
-requirements without imposing additional obligations.
+libmnl (LGPL-2.1-or-later) is not linked by firewall-bridge. It is a
+dependency of libnftables and comes with it from the operating system's
+package repository.
 
 ================================================================================
-DOCUMENT INFO
+LICENSE TEXTS — 3 texts
 ================================================================================
 
-Maintained by:  Rıza Emre ARAS <r.emrearas@proton.me>
-Project:        Phantom-WG / firewall-bridge
-License:        AGPL-3.0-or-later
-Repository:     https://github.com/ARAS-Workspace/phantom-wg
-Branch:         dev/firewall-bridge
-Last Updated:   2026-03-01
+--------------------------------------------------------------------------------
+MIT — itoa, serde_core, serde_json, zmij
+--------------------------------------------------------------------------------
 
-================================================================================
+Permission is hereby granted, free of charge, to any
+person obtaining a copy of this software and associated
+documentation files (the "Software"), to deal in the
+Software without restriction, including without
+limitation the rights to use, copy, modify, merge,
+publish, distribute, sublicense, and/or sell copies of
+the Software, and to permit persons to whom the Software
+is furnished to do so, subject to the following
+conditions:
+
+The above copyright notice and this permission notice
+shall be included in all copies or substantial portions
+of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF
+ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED
+TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A
+PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT
+SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY
+CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION
+OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR
+IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+DEALINGS IN THE SOFTWARE.
+
+--------------------------------------------------------------------------------
+MIT — libc
+--------------------------------------------------------------------------------
+
+Copyright (c) The Rust Project Developers
+
+Permission is hereby granted, free of charge, to any
+person obtaining a copy of this software and associated
+documentation files (the "Software"), to deal in the
+Software without restriction, including without
+limitation the rights to use, copy, modify, merge,
+publish, distribute, sublicense, and/or sell copies of
+the Software, and to permit persons to whom the Software
+is furnished to do so, subject to the following
+conditions:
+
+The above copyright notice and this permission notice
+shall be included in all copies or substantial portions
+of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF
+ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED
+TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A
+PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT
+SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY
+CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION
+OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR
+IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+DEALINGS IN THE SOFTWARE.
+
+--------------------------------------------------------------------------------
+MIT — memchr
+--------------------------------------------------------------------------------
+
+The MIT License (MIT)
+
+Copyright (c) 2015 Andrew Gallant
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in
+all copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+THE SOFTWARE.
+
