@@ -136,9 +136,9 @@ cmd_fetch_compose_bridge() {
     local zip_file="$tmp_dir/${artifact_name}.zip"
     if [ -f "$zip_file" ]; then
         unzip -o "$zip_file" -d "$tmp_dir/extracted"
-        cp "$tmp_dir/extracted/compose_bridge/"* "$dest/"
+        cp -R "$tmp_dir/extracted/compose_bridge/"* "$dest/"
     else
-        cp "$tmp_dir/"* "$dest/" 2>/dev/null || true
+        cp -R "$tmp_dir/"* "$dest/" 2>/dev/null || true
     fi
 
     rm -rf "$tmp_dir"
