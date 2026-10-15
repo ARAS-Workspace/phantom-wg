@@ -31,6 +31,8 @@ INCLUDE = [
     "docker-compose.yml",
     "requirements.in",
     "requirements.txt",
+    "LICENSE",
+    "THIRD_PARTY_LICENSES",
 ]
 
 # Patterns to exclude from included directories
