@@ -82,8 +82,9 @@ with AGPL-3.0 and allow use in this project.
 
 SQLite is public domain — no license restrictions.
 
-libnftables (GPL-2.0-only) is dynamically linked. AGPL-3.0 is a later version
-of the GPL family and is compatible with GPL-2.0 for combined works.
+libnftables (GPL-2.0-only) is not bundled with firewall-bridge. It is installed
+from the operating system's package repository when the user builds the
+container image, and is loaded dynamically at runtime.
 
 libmnl (LGPL-2.1-or-later) is dynamically linked, which satisfies LGPL
 requirements without imposing additional obligations.
