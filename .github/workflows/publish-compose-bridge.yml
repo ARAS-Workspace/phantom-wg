@@ -226,6 +226,11 @@ jobs:
             cp "artifacts/compose_bridge-${PLATFORM}/compose_bridge.${EXT}" \
               "$PKG/compose_bridge-${PLATFORM}.${EXT}"
 
+            # Licences, alongside the code they cover
+            cp LICENSE "$PKG/"
+            cp THIRD_PARTY_LICENSES "$PKG/"
+            cp -r licenses "$PKG/"
+
             # Create zip
             mkdir -p dist
             cd staging
