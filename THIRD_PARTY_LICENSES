@@ -1,0 +1,574 @@
+██████╗ ██╗  ██╗ █████╗ ███╗   ██╗████████╗ ██████╗ ███╗   ███╗
+██╔══██╗██║  ██║██╔══██╗████╗  ██║╚══██╔══╝██╔═══██╗████╗ ████║
+██████╔╝███████║███████║██╔██╗ ██║   ██║   ██║   ██║██╔████╔██║
+██╔═══╝ ██╔══██║██╔══██║██║╚██╗██║   ██║   ██║   ██║██║╚██╔╝██║
+██║     ██║  ██║██║  ██║██║ ╚████║   ██║   ╚██████╔╝██║ ╚═╝ ██║
+╚═╝     ╚═╝  ╚═╝╚═╝  ╚═╝╚═╝  ╚═══╝   ╚═╝    ╚═════╝ ╚═╝     ╚═╝
+
+THIRD PARTY LICENSES
+================================================================================
+
+Phantom-WG / compose-bridge
+Copyright (c) 2025 ARTEK İnovasyon Ar-Ge Sanayi ve Ticaret Limited Şirketi
+Copyright (c) 2025 Rıza Emre ARAS <r.emrearas@proton.me>
+Licensed under AGPL-3.0 - see LICENSE file for details
+
+Maintained by: Rıza Emre ARAS <r.emrearas@proton.me>
+
+HOW TO READ THIS FILE
+
+  DEPENDENCIES lists every Go library compiled into the built artifact,
+  with the licence go-licenses identified and a link to that licence at
+  the version in use. It is the union over every platform the release
+  builds for, so a library that only one platform pulls in is listed.
+
+  licenses/ in this repository holds what each licence requires to travel
+  with the artifact: the licence text, the NOTICE file where one exists,
+  and the source code where the licence calls for it. The tree under
+  licenses mirrors that directory, notices included, and is the union
+  over the same platforms.
+
+  Both sections are generated. Regenerate with:
+
+      python3 generate_licenses.py
+
+  go-licenses determines the licence of each library and what must be
+  kept; this file lays that out.
+
+================================================================================
+DEPENDENCIES
+================================================================================
+
+| Library                                                                      | License      | License URL
+|------------------------------------------------------------------------------|--------------|-------------
+| github.com/DefangLabs/secret-detector/pkg                                    | Apache-2.0   | https://github.com/DefangLabs/secret-detector/blob/22662109213e/LICENSE
+| github.com/acarl005/stripansi                                                | MIT          | https://github.com/acarl005/stripansi/blob/5a71ef0e047d/LICENSE
+| github.com/buger/goterm                                                      | MIT          | https://github.com/buger/goterm/blob/v1.0.4/LICENSE
+| github.com/cenkalti/backoff/v5                                               | MIT          | https://github.com/cenkalti/backoff/blob/v5.0.3/LICENSE
+| github.com/compose-spec/compose-go/v2                                        | Apache-2.0   | https://github.com/compose-spec/compose-go/blob/v2.10.1/LICENSE
+| github.com/compose-spec/compose-go/v2/dotenv                                 | MIT          | https://github.com/compose-spec/compose-go/blob/v2.10.1/dotenv/LICENSE
+| github.com/containerd/console                                                | Apache-2.0   | https://github.com/containerd/console/blob/v1.0.5/LICENSE
+| github.com/containerd/containerd/api/services/content/v1                     | Apache-2.0   | https://github.com/containerd/containerd/blob/api/v1.10.0/api/LICENSE
+| github.com/containerd/containerd/v2                                          | Apache-2.0   | https://github.com/containerd/containerd/blob/v2.2.1/LICENSE
+| github.com/containerd/continuity                                             | Apache-2.0   | https://github.com/containerd/continuity/blob/v0.4.5/LICENSE
+| github.com/containerd/errdefs                                                | Apache-2.0   | https://github.com/containerd/errdefs/blob/v1.0.0/LICENSE
+| github.com/containerd/errdefs/pkg                                            | Apache-2.0   | https://github.com/containerd/errdefs/blob/pkg/v0.3.0/pkg/LICENSE
+| github.com/containerd/log                                                    | Apache-2.0   | https://github.com/containerd/log/blob/v0.1.0/LICENSE
+| github.com/containerd/platforms                                              | Apache-2.0   | https://github.com/containerd/platforms/blob/v1.0.0-rc.2/LICENSE
+| github.com/containerd/ttrpc                                                  | Apache-2.0   | https://github.com/containerd/ttrpc/blob/v1.2.7/LICENSE
+| github.com/containerd/typeurl/v2                                             | Apache-2.0   | https://github.com/containerd/typeurl/blob/v2.2.3/LICENSE
+| github.com/davecgh/go-spew/spew                                              | ISC          | https://github.com/davecgh/go-spew/blob/d8f796af33cc/LICENSE
+| github.com/distribution/reference                                            | Apache-2.0   | https://github.com/distribution/reference/blob/v0.6.0/LICENSE
+| github.com/docker/buildx                                                     | Apache-2.0   | https://github.com/docker/buildx/blob/v0.31.1/LICENSE
+| github.com/docker/cli                                                        | Apache-2.0   | https://github.com/docker/cli/blob/v29.2.1/LICENSE
+| github.com/docker/cli/cli/connhelper/internal/syntax                         | BSD-3-Clause | https://github.com/docker/cli/blob/v29.2.1/cli/connhelper/internal/syntax/LICENSE
+| github.com/docker/compose/v5                                                 | Apache-2.0   | https://github.com/docker/compose/blob/v5.1.0/LICENSE
+| github.com/docker/docker                                                     | Apache-2.0   | https://github.com/docker/docker/blob/v28.5.2/LICENSE
+| github.com/docker/docker-credential-helpers                                  | MIT          | https://github.com/docker/docker-credential-helpers/blob/v0.9.5/LICENSE
+| github.com/docker/go-connections                                             | Apache-2.0   | https://github.com/docker/go-connections/blob/v0.6.0/LICENSE
+| github.com/docker/go-units                                                   | Apache-2.0   | https://github.com/docker/go-units/blob/v0.5.0/LICENSE
+| github.com/eiannone/keyboard                                                 | MIT          | https://github.com/eiannone/keyboard/blob/0d226195f203/LICENSE
+| github.com/felixge/httpsnoop                                                 | MIT          | https://github.com/felixge/httpsnoop/blob/v1.0.4/LICENSE.txt
+| github.com/fvbommel/sortorder                                                | MIT          | https://github.com/fvbommel/sortorder/blob/v1.1.0/LICENSE
+| github.com/go-logr/logr                                                      | Apache-2.0   | https://github.com/go-logr/logr/blob/v1.4.3/LICENSE
+| github.com/go-logr/stdr                                                      | Apache-2.0   | https://github.com/go-logr/stdr/blob/v1.2.2/LICENSE
+| github.com/go-viper/mapstructure/v2                                          | MIT          | https://github.com/go-viper/mapstructure/blob/v2.5.0/LICENSE
+| github.com/gofrs/flock                                                       | BSD-3-Clause | https://github.com/gofrs/flock/blob/v0.13.0/LICENSE
+| github.com/gogo/protobuf/proto                                               | BSD-3-Clause | https://github.com/gogo/protobuf/blob/v1.3.2/LICENSE
+| github.com/golang-jwt/jwt/v5                                                 | MIT          | https://github.com/golang-jwt/jwt/blob/v5.3.0/LICENSE
+| github.com/golang/protobuf/ptypes                                            | BSD-3-Clause | https://github.com/golang/protobuf/blob/v1.5.4/LICENSE
+| github.com/google/go-cmp/cmp                                                 | BSD-3-Clause | https://github.com/google/go-cmp/blob/v0.7.0/LICENSE
+| github.com/google/shlex                                                      | Apache-2.0   | https://github.com/google/shlex/blob/e7afc7fbc510/COPYING
+| github.com/google/uuid                                                       | BSD-3-Clause | https://github.com/google/uuid/blob/v1.6.0/LICENSE
+| github.com/grpc-ecosystem/grpc-gateway/v2                                    | BSD-3-Clause | https://github.com/grpc-ecosystem/grpc-gateway/blob/v2.27.3/LICENSE
+| github.com/hashicorp/errwrap                                                 | MPL-2.0      | https://github.com/hashicorp/errwrap/blob/v1.1.0/LICENSE
+| github.com/hashicorp/go-multierror                                           | MPL-2.0      | https://github.com/hashicorp/go-multierror/blob/v1.1.1/LICENSE
+| github.com/hashicorp/go-version                                              | MPL-2.0      | https://github.com/hashicorp/go-version/blob/v1.8.0/LICENSE
+| github.com/in-toto/in-toto-golang/in_toto                                    | Apache-2.0   | https://github.com/in-toto/in-toto-golang/blob/v0.9.0/LICENSE
+| github.com/inhies/go-bytesize                                                | BSD-3-Clause | https://github.com/inhies/go-bytesize/blob/4913239db9cf/LICENSE
+| github.com/jonboulle/clockwork                                               | Apache-2.0   | https://github.com/jonboulle/clockwork/blob/v0.5.0/LICENSE
+| github.com/klauspost/compress                                                | Apache-2.0   | https://github.com/klauspost/compress/blob/v1.18.3/LICENSE
+| github.com/klauspost/compress/internal/snapref                               | BSD-3-Clause | https://github.com/klauspost/compress/blob/v1.18.3/internal/snapref/LICENSE
+| github.com/klauspost/compress/zstd/internal/xxhash                           | MIT          | https://github.com/klauspost/compress/blob/v1.18.3/zstd/internal/xxhash/LICENSE.txt
+| github.com/mattn/go-runewidth                                                | MIT          | https://github.com/mattn/go-runewidth/blob/v0.0.16/LICENSE
+| github.com/mattn/go-shellwords                                               | MIT          | https://github.com/mattn/go-shellwords/blob/v1.0.12/LICENSE
+| github.com/mitchellh/hashstructure/v2                                        | MIT          | https://github.com/mitchellh/hashstructure/blob/v2.0.2/LICENSE
+| github.com/moby/buildkit                                                     | Apache-2.0   | https://github.com/moby/buildkit/blob/v0.27.1/LICENSE
+| github.com/moby/docker-image-spec/specs-go/v1                                | Apache-2.0   | https://github.com/moby/docker-image-spec/blob/v1.3.1/LICENSE
+| github.com/moby/go-archive                                                   | Apache-2.0   | https://github.com/moby/go-archive/blob/v0.2.0/LICENSE
+| github.com/moby/locker                                                       | Apache-2.0   | https://github.com/moby/locker/blob/v1.0.1/LICENSE
+| github.com/moby/moby/api                                                     | Apache-2.0   | https://github.com/moby/moby/blob/api/v1.53.0/api/LICENSE
+| github.com/moby/moby/client                                                  | Apache-2.0   | https://github.com/moby/moby/blob/client/v0.2.2/client/LICENSE
+| github.com/moby/patternmatcher                                               | Apache-2.0   | https://github.com/moby/patternmatcher/blob/v0.6.0/LICENSE
+| github.com/moby/sys/atomicwriter                                             | Apache-2.0   | https://github.com/moby/sys/blob/atomicwriter/v0.1.0/atomicwriter/LICENSE
+| github.com/moby/sys/capability                                               | BSD-2-Clause | https://github.com/moby/sys/blob/capability/v0.4.0/capability/LICENSE
+| github.com/moby/sys/sequential                                               | Apache-2.0   | https://github.com/moby/sys/blob/sequential/v0.6.0/sequential/LICENSE
+| github.com/moby/sys/signal                                                   | Apache-2.0   | https://github.com/moby/sys/blob/signal/v0.7.1/signal/LICENSE
+| github.com/moby/sys/symlink                                                  | Apache-2.0   | https://github.com/moby/sys/blob/symlink/v0.3.0/symlink/LICENSE
+| github.com/moby/sys/user                                                     | Apache-2.0   | https://github.com/moby/sys/blob/user/v0.4.0/user/LICENSE
+| github.com/moby/sys/userns                                                   | Apache-2.0   | https://github.com/moby/sys/blob/userns/v0.1.0/userns/LICENSE
+| github.com/moby/term                                                         | Apache-2.0   | https://github.com/moby/term/blob/v0.5.2/LICENSE
+| github.com/morikuni/aec                                                      | MIT          | https://github.com/morikuni/aec/blob/v1.1.0/LICENSE
+| github.com/opencontainers/go-digest                                          | Apache-2.0   | https://github.com/opencontainers/go-digest/blob/v1.0.0/LICENSE
+| github.com/opencontainers/image-spec/specs-go                                | Apache-2.0   | https://github.com/opencontainers/image-spec/blob/v1.1.1/LICENSE
+| github.com/pelletier/go-toml                                                 | Apache-2.0   | https://github.com/pelletier/go-toml/blob/v1.9.5/LICENSE
+| github.com/pkg/errors                                                        | BSD-2-Clause | https://github.com/pkg/errors/blob/v0.9.1/LICENSE
+| github.com/planetscale/vtprotobuf                                            | BSD-3-Clause | https://github.com/planetscale/vtprotobuf/blob/0393e58bdf10/LICENSE
+| github.com/pmezard/go-difflib/difflib                                        | BSD-3-Clause | https://github.com/pmezard/go-difflib/blob/5d4384ee4fb2/LICENSE
+| github.com/rivo/uniseg                                                       | MIT          | https://github.com/rivo/uniseg/blob/v0.4.7/LICENSE.txt
+| github.com/santhosh-tekuri/jsonschema/v6                                     | Apache-2.0   | https://github.com/santhosh-tekuri/jsonschema/blob/v6.0.1/LICENSE
+| github.com/secure-systems-lab/go-securesystemslib                            | MIT          | https://github.com/secure-systems-lab/go-securesystemslib/blob/v0.9.1/LICENSE
+| github.com/shibumi/go-pathspec                                               | Apache-2.0   | https://github.com/shibumi/go-pathspec/blob/v1.3.0/LICENSE
+| github.com/sigstore/sigstore-go/pkg/fulcio/certificate                       | Apache-2.0   | https://github.com/sigstore/sigstore-go/blob/b5fe07a5a7d7/LICENSE
+| github.com/sigstore/sigstore/pkg/cryptoutils                                 | Apache-2.0   | https://github.com/sigstore/sigstore/blob/v1.10.0/LICENSE
+| github.com/sirupsen/logrus                                                   | MIT          | https://github.com/sirupsen/logrus/blob/v1.9.4/LICENSE
+| github.com/skratchdot/open-golang/open                                       | MIT          | https://github.com/skratchdot/open-golang/blob/eef842397966/LICENSE
+| github.com/spf13/cobra                                                       | Apache-2.0   | https://github.com/spf13/cobra/blob/v1.10.2/LICENSE.txt
+| github.com/spf13/pflag                                                       | BSD-3-Clause | https://github.com/spf13/pflag/blob/v1.0.10/LICENSE
+| github.com/stretchr/testify                                                  | MIT          | https://github.com/stretchr/testify/blob/v1.11.1/LICENSE
+| github.com/tilt-dev/fsnotify                                                 | BSD-3-Clause | https://github.com/tilt-dev/fsnotify/blob/fff9c274a375/LICENSE
+| github.com/tonistiigi/dchapes-mode                                           | BSD-2-Clause | https://github.com/tonistiigi/dchapes-mode/blob/73d941a28323/LICENSE
+| github.com/tonistiigi/fsutil                                                 | MIT          | https://github.com/tonistiigi/fsutil/blob/a2aa163d723f/LICENSE
+| github.com/tonistiigi/go-csvvalue                                            | MIT          | https://github.com/tonistiigi/go-csvvalue/blob/030d3b2625d0/LICENSE
+| github.com/tonistiigi/units                                                  | MIT          | https://github.com/tonistiigi/units/blob/6950e57a87ea/LICENSE
+| github.com/tonistiigi/vt100                                                  | MIT          | https://github.com/tonistiigi/vt100/blob/90bafcd6abab/LICENSE
+| github.com/xhit/go-str2duration/v2                                           | BSD-3-Clause | https://github.com/xhit/go-str2duration/blob/v2.1.0/LICENSE
+| go.opentelemetry.io/auto/sdk                                                 | Apache-2.0   | https://github.com/open-telemetry/opentelemetry-go-instrumentation/blob/sdk/v1.2.1/sdk/LICENSE
+| go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc  | Apache-2.0   | https://github.com/open-telemetry/opentelemetry-go-contrib/blob/instrumentation/google.golang.org/grpc/otelgrpc/v0.63.0/instrumentation/google.golang.org/grpc/otelgrpc/LICENSE
+| go.opentelemetry.io/contrib/instrumentation/net/http/httptrace/otelhttptrace | Apache-2.0   | https://github.com/open-telemetry/opentelemetry-go-contrib/blob/instrumentation/net/http/httptrace/otelhttptrace/v0.63.0/instrumentation/net/http/httptrace/otelhttptrace/LICENSE
+| go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp                | Apache-2.0   | https://github.com/open-telemetry/opentelemetry-go-contrib/blob/instrumentation/net/http/otelhttp/v0.63.0/instrumentation/net/http/otelhttp/LICENSE
+| go.opentelemetry.io/otel                                                     | Apache-2.0   | https://github.com/open-telemetry/opentelemetry-go/blob/v1.38.0/LICENSE
+| go.opentelemetry.io/otel/exporters/otlp/otlpmetric/otlpmetricgrpc            | Apache-2.0   | https://github.com/open-telemetry/opentelemetry-go/blob/exporters/otlp/otlpmetric/otlpmetricgrpc/v1.38.0/exporters/otlp/otlpmetric/otlpmetricgrpc/LICENSE
+| go.opentelemetry.io/otel/exporters/otlp/otlpmetric/otlpmetrichttp            | Apache-2.0   | https://github.com/open-telemetry/opentelemetry-go/blob/exporters/otlp/otlpmetric/otlpmetrichttp/v1.38.0/exporters/otlp/otlpmetric/otlpmetrichttp/LICENSE
+| go.opentelemetry.io/otel/exporters/otlp/otlptrace                            | Apache-2.0   | https://github.com/open-telemetry/opentelemetry-go/blob/exporters/otlp/otlptrace/v1.38.0/exporters/otlp/otlptrace/LICENSE
+| go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc              | Apache-2.0   | https://github.com/open-telemetry/opentelemetry-go/blob/exporters/otlp/otlptrace/otlptracegrpc/v1.38.0/exporters/otlp/otlptrace/otlptracegrpc/LICENSE
+| go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracehttp              | Apache-2.0   | https://github.com/open-telemetry/opentelemetry-go/blob/exporters/otlp/otlptrace/otlptracehttp/v1.38.0/exporters/otlp/otlptrace/otlptracehttp/LICENSE
+| go.opentelemetry.io/otel/metric                                              | Apache-2.0   | https://github.com/open-telemetry/opentelemetry-go/blob/metric/v1.38.0/metric/LICENSE
+| go.opentelemetry.io/otel/sdk                                                 | Apache-2.0   | https://github.com/open-telemetry/opentelemetry-go/blob/sdk/v1.38.0/sdk/LICENSE
+| go.opentelemetry.io/otel/sdk/metric                                          | Apache-2.0   | https://github.com/open-telemetry/opentelemetry-go/blob/sdk/metric/v1.38.0/sdk/metric/LICENSE
+| go.opentelemetry.io/otel/trace                                               | Apache-2.0   | https://github.com/open-telemetry/opentelemetry-go/blob/trace/v1.38.0/trace/LICENSE
+| go.opentelemetry.io/proto/otlp                                               | Apache-2.0   | https://github.com/open-telemetry/opentelemetry-proto-go/blob/otlp/v1.7.1/otlp/LICENSE
+| go.yaml.in/yaml/v4                                                           | Apache-2.0   | https://github.com/yaml/go-yaml/blob/v4.0.0-rc.4/LICENSE
+| golang.org/x/crypto                                                          | BSD-3-Clause | https://cs.opensource.google/go/x/crypto/+/v0.46.0:LICENSE
+| golang.org/x/net                                                             | BSD-3-Clause | https://cs.opensource.google/go/x/net/+/v0.48.0:LICENSE
+| golang.org/x/sync                                                            | BSD-3-Clause | https://cs.opensource.google/go/x/sync/+/v0.19.0:LICENSE
+| golang.org/x/sys/unix                                                        | BSD-3-Clause | https://cs.opensource.google/go/x/sys/+/v0.41.0:LICENSE
+| golang.org/x/term                                                            | BSD-3-Clause | https://cs.opensource.google/go/x/term/+/v0.38.0:LICENSE
+| golang.org/x/text                                                            | BSD-3-Clause | https://cs.opensource.google/go/x/text/+/v0.32.0:LICENSE
+| golang.org/x/time/rate                                                       | BSD-3-Clause | https://cs.opensource.google/go/x/time/+/v0.14.0:LICENSE
+| google.golang.org/genproto/googleapis/api/httpbody                           | Apache-2.0   | https://github.com/googleapis/go-genproto/blob/f26f9409b101/googleapis/api/LICENSE
+| google.golang.org/genproto/googleapis/rpc                                    | Apache-2.0   | https://github.com/googleapis/go-genproto/blob/f26f9409b101/googleapis/rpc/LICENSE
+| google.golang.org/grpc                                                       | Apache-2.0   | https://github.com/grpc/grpc-go/blob/v1.78.0/LICENSE
+| google.golang.org/protobuf                                                   | BSD-3-Clause | https://github.com/protocolbuffers/protobuf-go/blob/v1.36.11/LICENSE
+| gopkg.in/ini.v1                                                              | Apache-2.0   | https://github.com/go-ini/ini/blob/v1.67.0/LICENSE
+| gopkg.in/yaml.v3                                                             | MIT          | https://github.com/go-yaml/yaml/blob/v3.0.1/LICENSE
+| tags.cncf.io/container-device-interface/pkg/parser                           | Apache-2.0   | https://github.com/cncf-tags/container-device-interface/blob/v1.1.0/LICENSE
+
+================================================================================
+licenses
+================================================================================
+
+├── github.com/
+│   ├── DefangLabs/
+│   │   └── secret-detector/
+│   │       └── pkg/
+│   │           └── LICENSE
+│   ├── acarl005/
+│   │   └── stripansi/
+│   │       └── LICENSE
+│   ├── buger/
+│   │   └── goterm/
+│   │       └── LICENSE
+│   ├── cenkalti/
+│   │   └── backoff/
+│   │       └── v5/
+│   │           └── LICENSE
+│   ├── compose-spec/
+│   │   └── compose-go/
+│   │       └── v2/
+│   │           ├── dotenv/
+│   │           │   └── LICENSE
+│   │           ├── LICENSE
+│   │           └── NOTICE
+│   ├── containerd/
+│   │   ├── console/
+│   │   │   └── LICENSE
+│   │   ├── containerd/
+│   │   │   ├── api/
+│   │   │   │   └── services/
+│   │   │   │       └── content/
+│   │   │   │           └── v1/
+│   │   │   │               └── LICENSE
+│   │   │   └── v2/
+│   │   │       ├── LICENSE
+│   │   │       └── NOTICE
+│   │   ├── continuity/
+│   │   │   └── LICENSE
+│   │   ├── errdefs/
+│   │   │   ├── pkg/
+│   │   │   │   └── LICENSE
+│   │   │   └── LICENSE
+│   │   ├── log/
+│   │   │   └── LICENSE
+│   │   ├── platforms/
+│   │   │   └── LICENSE
+│   │   ├── ttrpc/
+│   │   │   └── LICENSE
+│   │   └── typeurl/
+│   │       └── v2/
+│   │           └── LICENSE
+│   ├── davecgh/
+│   │   └── go-spew/
+│   │       └── spew/
+│   │           └── LICENSE
+│   ├── distribution/
+│   │   └── reference/
+│   │       └── LICENSE
+│   ├── docker/
+│   │   ├── buildx/
+│   │   │   └── LICENSE
+│   │   ├── cli/
+│   │   │   ├── cli/
+│   │   │   │   └── connhelper/
+│   │   │   │       └── internal/
+│   │   │   │           └── syntax/
+│   │   │   │               └── LICENSE
+│   │   │   ├── LICENSE
+│   │   │   └── NOTICE
+│   │   ├── compose/
+│   │   │   └── v5/
+│   │   │       ├── LICENSE
+│   │   │       └── NOTICE
+│   │   ├── docker/
+│   │   │   ├── LICENSE
+│   │   │   └── NOTICE
+│   │   ├── docker-credential-helpers/
+│   │   │   └── LICENSE
+│   │   ├── go-connections/
+│   │   │   └── LICENSE
+│   │   └── go-units/
+│   │       └── LICENSE
+│   ├── eiannone/
+│   │   └── keyboard/
+│   │       └── LICENSE
+│   ├── felixge/
+│   │   └── httpsnoop/
+│   │       └── LICENSE.txt
+│   ├── fvbommel/
+│   │   └── sortorder/
+│   │       └── LICENSE
+│   ├── go-logr/
+│   │   ├── logr/
+│   │   │   └── LICENSE
+│   │   └── stdr/
+│   │       └── LICENSE
+│   ├── go-viper/
+│   │   └── mapstructure/
+│   │       └── v2/
+│   │           └── LICENSE
+│   ├── gofrs/
+│   │   └── flock/
+│   │       └── LICENSE
+│   ├── gogo/
+│   │   └── protobuf/
+│   │       └── proto/
+│   │           └── LICENSE
+│   ├── golang/
+│   │   └── protobuf/
+│   │       └── ptypes/
+│   │           └── LICENSE
+│   ├── golang-jwt/
+│   │   └── jwt/
+│   │       └── v5/
+│   │           └── LICENSE
+│   ├── google/
+│   │   ├── go-cmp/
+│   │   │   └── cmp/
+│   │   │       └── LICENSE
+│   │   ├── shlex/
+│   │   │   └── COPYING
+│   │   └── uuid/
+│   │       └── LICENSE
+│   ├── grpc-ecosystem/
+│   │   └── grpc-gateway/
+│   │       └── v2/
+│   │           └── LICENSE
+│   ├── hashicorp/
+│   │   ├── errwrap/
+│   │   │   ├── LICENSE
+│   │   │   ├── README.md
+│   │   │   ├── errwrap.go
+│   │   │   ├── errwrap_test.go
+│   │   │   └── go.mod
+│   │   ├── go-multierror/
+│   │   │   ├── .circleci/
+│   │   │   │   └── config.yml
+│   │   │   ├── LICENSE
+│   │   │   ├── Makefile
+│   │   │   ├── README.md
+│   │   │   ├── append.go
+│   │   │   ├── append_test.go
+│   │   │   ├── flatten.go
+│   │   │   ├── flatten_test.go
+│   │   │   ├── format.go
+│   │   │   ├── format_test.go
+│   │   │   ├── go.mod
+│   │   │   ├── go.sum
+│   │   │   ├── group.go
+│   │   │   ├── group_test.go
+│   │   │   ├── multierror.go
+│   │   │   ├── multierror_test.go
+│   │   │   ├── prefix.go
+│   │   │   ├── prefix_test.go
+│   │   │   ├── sort.go
+│   │   │   └── sort_test.go
+│   │   └── go-version/
+│   │       ├── .github/
+│   │       │   ├── workflows/
+│   │       │   │   └── go-tests.yml
+│   │       │   ├── CODEOWNERS
+│   │       │   ├── dependabot.yml
+│   │       │   └── pull_request_template.md
+│   │       ├── CHANGELOG.md
+│   │       ├── LICENSE
+│   │       ├── README.md
+│   │       ├── constraint.go
+│   │       ├── constraint_test.go
+│   │       ├── go.mod
+│   │       ├── version.go
+│   │       ├── version_collection.go
+│   │       ├── version_collection_test.go
+│   │       └── version_test.go
+│   ├── in-toto/
+│   │   └── in-toto-golang/
+│   │       └── in_toto/
+│   │           └── LICENSE
+│   ├── inhies/
+│   │   └── go-bytesize/
+│   │       └── LICENSE
+│   ├── jonboulle/
+│   │   └── clockwork/
+│   │       └── LICENSE
+│   ├── klauspost/
+│   │   └── compress/
+│   │       ├── internal/
+│   │       │   └── snapref/
+│   │       │       └── LICENSE
+│   │       ├── zstd/
+│   │       │   └── internal/
+│   │       │       └── xxhash/
+│   │       │           └── LICENSE.txt
+│   │       └── LICENSE
+│   ├── mattn/
+│   │   ├── go-runewidth/
+│   │   │   └── LICENSE
+│   │   └── go-shellwords/
+│   │       └── LICENSE
+│   ├── mitchellh/
+│   │   └── hashstructure/
+│   │       └── v2/
+│   │           └── LICENSE
+│   ├── moby/
+│   │   ├── buildkit/
+│   │   │   └── LICENSE
+│   │   ├── docker-image-spec/
+│   │   │   └── specs-go/
+│   │   │       └── v1/
+│   │   │           └── LICENSE
+│   │   ├── go-archive/
+│   │   │   └── LICENSE
+│   │   ├── locker/
+│   │   │   └── LICENSE
+│   │   ├── moby/
+│   │   │   ├── api/
+│   │   │   │   └── LICENSE
+│   │   │   └── client/
+│   │   │       └── LICENSE
+│   │   ├── patternmatcher/
+│   │   │   ├── LICENSE
+│   │   │   └── NOTICE
+│   │   ├── sys/
+│   │   │   ├── atomicwriter/
+│   │   │   │   └── LICENSE
+│   │   │   ├── capability/
+│   │   │   │   └── LICENSE
+│   │   │   ├── sequential/
+│   │   │   │   └── LICENSE
+│   │   │   ├── signal/
+│   │   │   │   └── LICENSE
+│   │   │   ├── symlink/
+│   │   │   │   └── LICENSE
+│   │   │   ├── user/
+│   │   │   │   └── LICENSE
+│   │   │   └── userns/
+│   │   │       └── LICENSE
+│   │   └── term/
+│   │       └── LICENSE
+│   ├── morikuni/
+│   │   └── aec/
+│   │       └── LICENSE
+│   ├── opencontainers/
+│   │   ├── go-digest/
+│   │   │   └── LICENSE
+│   │   └── image-spec/
+│   │       └── specs-go/
+│   │           └── LICENSE
+│   ├── pelletier/
+│   │   └── go-toml/
+│   │       └── LICENSE
+│   ├── pkg/
+│   │   └── errors/
+│   │       └── LICENSE
+│   ├── planetscale/
+│   │   └── vtprotobuf/
+│   │       └── LICENSE
+│   ├── pmezard/
+│   │   └── go-difflib/
+│   │       └── difflib/
+│   │           └── LICENSE
+│   ├── rivo/
+│   │   └── uniseg/
+│   │       └── LICENSE.txt
+│   ├── santhosh-tekuri/
+│   │   └── jsonschema/
+│   │       └── v6/
+│   │           └── LICENSE
+│   ├── secure-systems-lab/
+│   │   └── go-securesystemslib/
+│   │       └── LICENSE
+│   ├── shibumi/
+│   │   └── go-pathspec/
+│   │       └── LICENSE
+│   ├── sigstore/
+│   │   ├── sigstore/
+│   │   │   └── pkg/
+│   │   │       └── cryptoutils/
+│   │   │           └── LICENSE
+│   │   └── sigstore-go/
+│   │       └── pkg/
+│   │           └── fulcio/
+│   │               └── certificate/
+│   │                   └── LICENSE
+│   ├── sirupsen/
+│   │   └── logrus/
+│   │       └── LICENSE
+│   ├── skratchdot/
+│   │   └── open-golang/
+│   │       └── open/
+│   │           └── LICENSE
+│   ├── spf13/
+│   │   ├── cobra/
+│   │   │   └── LICENSE.txt
+│   │   └── pflag/
+│   │       └── LICENSE
+│   ├── stretchr/
+│   │   └── testify/
+│   │       └── LICENSE
+│   ├── tilt-dev/
+│   │   └── fsnotify/
+│   │       └── LICENSE
+│   ├── tonistiigi/
+│   │   ├── dchapes-mode/
+│   │   │   └── LICENSE
+│   │   ├── fsutil/
+│   │   │   └── LICENSE
+│   │   ├── go-csvvalue/
+│   │   │   └── LICENSE
+│   │   ├── units/
+│   │   │   └── LICENSE
+│   │   └── vt100/
+│   │       └── LICENSE
+│   └── xhit/
+│       └── go-str2duration/
+│           └── v2/
+│               └── LICENSE
+├── go.opentelemetry.io/
+│   ├── auto/
+│   │   └── sdk/
+│   │       └── LICENSE
+│   ├── contrib/
+│   │   └── instrumentation/
+│   │       ├── google.golang.org/
+│   │       │   └── grpc/
+│   │       │       └── otelgrpc/
+│   │       │           └── LICENSE
+│   │       └── net/
+│   │           └── http/
+│   │               ├── httptrace/
+│   │               │   └── otelhttptrace/
+│   │               │       └── LICENSE
+│   │               └── otelhttp/
+│   │                   └── LICENSE
+│   ├── otel/
+│   │   ├── exporters/
+│   │   │   └── otlp/
+│   │   │       ├── otlpmetric/
+│   │   │       │   ├── otlpmetricgrpc/
+│   │   │       │   │   └── LICENSE
+│   │   │       │   └── otlpmetrichttp/
+│   │   │       │       └── LICENSE
+│   │   │       └── otlptrace/
+│   │   │           ├── otlptracegrpc/
+│   │   │           │   └── LICENSE
+│   │   │           ├── otlptracehttp/
+│   │   │           │   └── LICENSE
+│   │   │           └── LICENSE
+│   │   ├── metric/
+│   │   │   └── LICENSE
+│   │   ├── sdk/
+│   │   │   ├── metric/
+│   │   │   │   └── LICENSE
+│   │   │   └── LICENSE
+│   │   ├── trace/
+│   │   │   └── LICENSE
+│   │   └── LICENSE
+│   └── proto/
+│       └── otlp/
+│           └── LICENSE
+├── go.yaml.in/
+│   └── yaml/
+│       └── v4/
+│           ├── LICENSE
+│           └── NOTICE
+├── golang.org/
+│   └── x/
+│       ├── crypto/
+│       │   └── LICENSE
+│       ├── net/
+│       │   └── LICENSE
+│       ├── sync/
+│       │   └── LICENSE
+│       ├── sys/
+│       │   └── unix/
+│       │       └── LICENSE
+│       ├── term/
+│       │   └── LICENSE
+│       ├── text/
+│       │   └── LICENSE
+│       └── time/
+│           └── rate/
+│               └── LICENSE
+├── google.golang.org/
+│   ├── genproto/
+│   │   └── googleapis/
+│   │       ├── api/
+│   │       │   └── httpbody/
+│   │       │       └── LICENSE
+│   │       └── rpc/
+│   │           └── LICENSE
+│   ├── grpc/
+│   │   ├── LICENSE
+│   │   └── NOTICE.txt
+│   └── protobuf/
+│       └── LICENSE
+├── gopkg.in/
+│   ├── ini.v1/
+│   │   └── LICENSE
+│   └── yaml.v3/
+│       ├── LICENSE
+│       └── NOTICE
+└── tags.cncf.io/
+    └── container-device-interface/
+        └── pkg/
+            └── parser/
+                └── LICENSE
