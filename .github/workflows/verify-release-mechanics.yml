@@ -1,0 +1,182 @@
+name: Verify release mechanics
+
+# Imitates Release Phantom-WG Modern without cutting a release: the packaged
+# tree is uploaded as an artifact instead of being pushed to main and tagged.
+# What it proves, in order:
+#   1. the packager output carries no vendor/, so main never inherits one
+#   2. the vendor step fills the archive for both architectures
+#   3. the daemon image builds from that archive and makes no network request
+#   4. the daemon image builds without a vendor tree, fetching the pinned
+#      releases and matching their published digests
+#   5. the development image builds the same way
+# Steps 3 and 5 run before the artifact is uploaded.
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - dev/daemon
+  workflow_call:
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  verify:
+    name: Imitate the release without cutting one
+    runs-on: ubuntu-latest
+    steps:
+      - name: Harden runner
+        uses: step-security/harden-runner@58077d3c7e43986b6b15fba718e8ea69e387dfcc # v2.15.1
+        with:
+          egress-policy: audit
+
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+
+      - name: Set up Node
+        uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # v6.3.0
+        with:
+          node-version: '24'
+          cache: ''
+
+      - name: Install SPA dependencies
+        run: npm ci
+        working-directory: services/react-spa
+
+      - name: Build SPA
+        run: npm run build
+        working-directory: services/react-spa
+
+      - name: Run packager
+        run: python3 tools/lib/helpers/packager.py --clean
+
+      - name: Stash packager output
+        run: |
+          set -euo pipefail
+          cp -r dist/phantom-wg-modern /tmp/phantom-release
+          ls -la /tmp/phantom-release/
+
+      - name: Assert the packager output carries no vendor tree
+        run: |
+          set -euo pipefail
+          if [ -e /tmp/phantom-release/vendor ]; then
+            echo "::error::the packager output holds a vendor/ — main would inherit it"
+            exit 1
+          fi
+          echo "No vendor/ in the packager output, as expected."
+
+      - name: Add the vendor bridges to the release archive
+        run: |
+          set -euo pipefail
+          for ARCH in amd64 arm64; do
+            echo "── linux-${ARCH}"
+            docker build --target vendor-fetch \
+              --build-arg TARGETARCH="${ARCH}" \
+              -t "phantom-vendor:${ARCH}" .
+            ID=$(docker create "phantom-vendor:${ARCH}")
+            mkdir -p "/tmp/phantom-release/vendor/linux-${ARCH}"
+            docker cp "${ID}:/opt/phantom/vendor/." \
+              "/tmp/phantom-release/vendor/linux-${ARCH}/"
+            docker rm "${ID}" > /dev/null
+
+            DEST="/tmp/phantom-release/vendor/linux-${ARCH}"
+            for PKG in firewall_bridge wireguard_go_bridge; do
+              if [ ! -f "${DEST}/${PKG}/__init__.py" ]; then
+                echo "::error::${PKG} did not reach ${DEST}"
+                exit 1
+              fi
+            done
+          done
+          find /tmp/phantom-release/vendor -maxdepth 2 -type d | sort
+
+      - name: Build the daemon image from the release archive
+        run: |
+          set -euo pipefail
+          for ARCH in amd64 arm64; do
+            echo "── linux-${ARCH}"
+            docker build --no-cache --progress=plain \
+              --target vendor-fetch \
+              --build-arg TARGETARCH="${ARCH}" \
+              -t "phantom-from-archive:${ARCH}" /tmp/phantom-release \
+              2>&1 | tee "/tmp/archive-${ARCH}.log"
+
+            if ! grep -qE "^#[0-9]+ [0-9.]+ Using the vendor tree shipped with this package: vendor/linux-${ARCH}$" "/tmp/archive-${ARCH}.log"; then
+              echo "::error::linux-${ARCH} did not use the vendor tree in the archive"
+              exit 1
+            fi
+            if grep -qE "^#[0-9]+ [0-9.]+ Fetching " "/tmp/archive-${ARCH}.log"; then
+              echo "::error::linux-${ARCH} reached the network although the archive carries the bridges"
+              exit 1
+            fi
+            if ! grep -qE "^#[0-9]+ [0-9.]+ Vendor bridges ready for ${ARCH} " "/tmp/archive-${ARCH}.log"; then
+              echo "::error::linux-${ARCH} did not pass the architecture check"
+              exit 1
+            fi
+          done
+          echo "Both architectures build from the archive without a network request."
+
+      - name: Build the full daemon image from the release archive
+        run: |
+          set -euo pipefail
+          docker build --build-arg TARGETARCH=amd64 \
+            -t phantom-daemon:verify /tmp/phantom-release
+
+      - name: Build the development image
+        run: |
+          set -euo pipefail
+          docker build --no-cache --progress=plain \
+            -f dev.Dockerfile \
+            --build-arg TARGETARCH=amd64 \
+            -t phantom-daemon:dev-verify . 2>&1 | tee /tmp/dev-image.log
+          if ! grep -qE "^#[0-9]+ [0-9.]+ Vendor bridges ready for amd64 " /tmp/dev-image.log; then
+            echo "::error::dev.Dockerfile did not pass the architecture check"
+            exit 1
+          fi
+
+      - name: Create the release archive
+        run: |
+          set -euo pipefail
+          cd /tmp
+          mv phantom-release phantom-wg-modern
+          zip -rq "${GITHUB_WORKSPACE}/phantom-wg-modern-verify.zip" phantom-wg-modern/
+          unzip -l "${GITHUB_WORKSPACE}/phantom-wg-modern-verify.zip" \
+            | grep -E 'vendor/linux-(amd64|arm64)/(firewall_bridge|wireguard_go_bridge)/__init__.py'
+          ls -lh "${GITHUB_WORKSPACE}/phantom-wg-modern-verify.zip"
+
+      - name: Upload the archive as an artifact
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
+        with:
+          name: phantom-wg-modern-verify
+          path: phantom-wg-modern-verify.zip
+          retention-days: 7
+
+      - name: Build the daemon image without a vendor tree
+        run: |
+          set -euo pipefail
+          for ARCH in amd64 arm64; do
+            echo "── linux-${ARCH}"
+            docker build --no-cache --progress=plain \
+              --target vendor-fetch \
+              --build-arg TARGETARCH="${ARCH}" \
+              -t "phantom-from-release:${ARCH}" . 2>&1 | tee "/tmp/remote-${ARCH}.log"
+
+            for BRIDGE in firewall-bridge wireguard-go-bridge; do
+              if ! grep -qE "^#[0-9]+ [0-9.]+ Fetching .*/vendor-${BRIDGE}-v.*/linux-${ARCH}\.zip$" "/tmp/remote-${ARCH}.log"; then
+                echo "::error::linux-${ARCH} did not fetch ${BRIDGE} from its pinned release"
+                exit 1
+              fi
+            done
+            if [ "$(grep -cE "^#[0-9]+ [0-9.]+ /tmp/bridge\.zip: OK$" "/tmp/remote-${ARCH}.log")" -ne 2 ]; then
+              echo "::error::linux-${ARCH} did not verify both archives against their digests"
+              exit 1
+            fi
+            if ! grep -qE "^#[0-9]+ [0-9.]+ Vendor bridges ready for ${ARCH} " "/tmp/remote-${ARCH}.log"; then
+              echo "::error::linux-${ARCH} did not pass the architecture check"
+              exit 1
+            fi
+          done
+          echo "Both architectures fetch the pinned releases and match their digests."
