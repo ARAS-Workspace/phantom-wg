@@ -100,7 +100,7 @@ jobs:
     permissions:
       contents: read
     env:
-      TEAM_ID: 9C5SL5H7CM
+      TEAM_ID: GZUHTM7439
     steps:
       - name: Setup temp paths
         env:
