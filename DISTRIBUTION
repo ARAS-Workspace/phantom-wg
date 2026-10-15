@@ -1,7 +1,7 @@
 DISTRIBUTION
 
 How a wireguard-go-bridge version reaches consumers — from a local
-version bump to a public download from R2.
+version bump to a tagged GitHub release.
 
 
 Pipeline overview
@@ -17,11 +17,11 @@ Pipeline overview
                  operator is satisfied.
   4. Publish     Operator runs publish.sh, which dispatches the publish
                  workflow with no arguments.
-  5. R2 upload   Publish workflow re-runs test + build, validates that
-                 the Python and Go version sources agree, then uploads
-                 to R2 under both versioned and latest paths.
-  6. Consumption Downstream consumers fetch a per-arch zip from
-                 vendor.phantom.tc over HTTPS.
+  5. Release     Publish workflow re-runs test + build, validates that
+                 the Python and Go version sources agree, then creates
+                 a tagged release carrying the per-arch zips.
+  6. Consumption Downstream consumers fetch a per-arch zip from the
+                 release over HTTPS.
 
 
 Stage 1 — Bump
@@ -61,7 +61,7 @@ Stage 2 — Push
                                       wireguard-go-bridge-linux-amd64
                                       and -arm64 (90d).
 
-  Neither workflow uploads to R2. They exist to give the operator a
+  Neither workflow publishes. They exist to give the operator a
   pass/fail signal and downloadable artifacts for inspection.
 
 
@@ -100,28 +100,23 @@ Stage 5 — Publish workflow
       build      Re-runs the linux-amd64 and linux-arm64 builds via
                  workflow_call.
 
-      publish    Self-hosted runner with rclone configured against the
-                 R2 remote. Packages each architecture into a zip,
-                 verifies sha256 checksums, uploads to R2 under both
-                 v<VERSION>/ and latest/ paths.
+      publish    Packages each architecture into a zip, verifies
+                 sha256 checksums, and creates the release with both
+                 zips attached.
 
 
-Stage 6 — R2 storage
---------------------
+Stage 6 — Release
+-----------------
 
-  Bucket : phantom-vendor
-  Domain : vendor.phantom.tc
+  Tag    : vendor-wireguard-go-bridge-v<VERSION>
+  Target : dev/wireguard-go-bridge
 
-  Each publish writes to two locations simultaneously:
-
-      wireguard-go-bridge/v<VERSION>/      pinned, immutable
-      wireguard-go-bridge/latest/          moves on every publish
-
-  Both contain the same three files:
+  The release carries two assets:
 
       linux-amd64.zip     Python package + .so for linux/amd64
       linux-arm64.zip     Python package + .so for linux/arm64
-      VERSION             plain-text version string at the path level
+
+  Its notes link to the CHANGELOG on this branch.
 
   Each zip contains a single top-level wireguard_go_bridge/ directory:
 
@@ -134,88 +129,33 @@ Stage 6 — R2 storage
         wireguard_go_bridge.so
         wireguard_go_bridge.so.sha256
         VERSION
+        LICENSE
+        THIRD_PARTY_LICENSES
+        licenses/
 
-  The VERSION file is duplicated (path-level + inside the zip) so
-  consumers can tell which version they have without unzipping.
+  The package carries what is needed to check it: the .so hash sits
+  beside the .so, and the licence texts beside the code they cover.
+  Nothing has to be fetched from a second location to verify or to
+  comply.
 
 
 Stage 7 — Consumption
 ---------------------
 
-  Consumers download over HTTPS. Two strategies:
+  Consumers download over HTTPS, from the release asset URL:
 
-      Pinned to a known version (recommended):
-        https://vendor.phantom.tc/wireguard-go-bridge/v<VERSION>/linux-amd64.zip
+      https://github.com/ARAS-Workspace/phantom-wg/releases/download/\
+        vendor-wireguard-go-bridge-v<VERSION>/linux-amd64.zip
 
-      Tracking the moving latest pointer:
-        https://vendor.phantom.tc/wireguard-go-bridge/latest/linux-amd64.zip
+  There is no moving "latest" pointer. This repository holds several
+  components and GitHub's /releases/latest answers for the repository,
+  not for one component, so every consumer pins a version.
 
   After extraction, the runtime version can be confirmed two ways:
 
       cat wireguard_go_bridge/VERSION
       python -c "from wireguard_go_bridge import __version__; print(__version__)"
 
-  Both should agree with the URL the artifact came from. If they
+  Both should agree with the tag the artifact came from. If they
   disagree, the deployed copy was tampered with or the build pipeline
   has a bug — either way, do not use it.
-
-
-End-to-end example
-------------------
-
-  $ .github/scripts/bump.sh patch
-  2.1.2 → 2.1.3
-  [dev/wireguard-go-bridge abcdef0] Bump v2.1.3
-
-  $ git push origin dev/wireguard-go-bridge
-  ...
-  # → test + build workflows fire on GitHub Actions, ~5-10 min each.
-
-  # Operator opens the run page, confirms green check on both runs.
-
-  $ .github/scripts/publish.sh
-  Version : v2.1.3
-  Workflow: publish-wireguard-go-bridge.yml
-  Ref     : dev/wireguard-go-bridge
-  Triggered. Watch: gh run list --repo ARAS-Workspace/phantom-wg --workflow publish-wireguard-go-bridge.yml
-
-  # → publish workflow runs version → test → build → publish,
-  #   ~15-25 min total. R2 receives the new artifacts.
-
-  # Consumers can now fetch:
-  #   https://vendor.phantom.tc/wireguard-go-bridge/v2.1.3/linux-amd64.zip
-  #   https://vendor.phantom.tc/wireguard-go-bridge/latest/linux-amd64.zip
-
-
-Rollback
---------
-
-  No artifacts are deleted from R2. If a bad version goes out:
-
-  1. Bump again (patch) and publish a new fixed version. The latest/
-     path moves forward to the new build immediately.
-
-  2. Pinned consumers stay on the bad version until they update
-     their pin. Communicate the issue out-of-band.
-
-  3. Optionally rewrite latest/ manually to point at the previous
-     known-good v<VERSION>/ contents using rclone — but this leaves
-     the bad bits at v<VERSION>/, so prefer step 1.
-
-
-Notes
------
-
-  * Changes under .github/ do not trigger test/build on push
-    (paths-ignore on the workflows).
-
-  * The test workflow runs the same Docker topology used in local
-    development (test_runner.py) — no environment drift between
-    local and CI.
-
-  * Publish runs on a self-hosted runner because the R2 credentials
-    live there, not in GitHub Secrets.
-
-  * The standalone VERSION file at the R2 path level lets consumers
-    do a HEAD-style check ("what version is at latest/ right now?")
-    without downloading a multi-megabyte zip.

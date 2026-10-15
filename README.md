@@ -8,11 +8,11 @@ Userspace WireGuard — Go backend, SQLite IPC state persistence, Python FFI.
 
 ## Download
 
-Latest build:
+Each version is a tagged release. Pick one and take its assets:
 
 ```
-https://vendor.phantom.tc/wireguard-go-bridge/latest/linux-amd64.zip
-https://vendor.phantom.tc/wireguard-go-bridge/latest/linux-arm64.zip
+https://github.com/ARAS-Workspace/phantom-wg/releases/download/vendor-wireguard-go-bridge-v<X.Y.Z>/linux-amd64.zip
+https://github.com/ARAS-Workspace/phantom-wg/releases/download/vendor-wireguard-go-bridge-v<X.Y.Z>/linux-arm64.zip
 ```
 
 Each zip extracts to:
@@ -26,11 +26,15 @@ wireguard_go_bridge/
 ├── types.py
 ├── wireguard_go_bridge.so
 ├── wireguard_go_bridge.so.sha256
-└── VERSION
+├── VERSION
+├── LICENSE
+├── THIRD_PARTY_LICENSES
+└── licenses/
 ```
 
-For a pinned version: replace `latest/` with `v<X.Y.Z>/`. The current
-version is in [`wireguard_go_bridge/__init__.py`](wireguard_go_bridge/__init__.py)
+Releases are listed at [https://github.com/ARAS-Workspace/phantom-wg/releases](https://github.com/ARAS-Workspace/phantom-wg/releases); this component's tags carry the
+`vendor-wireguard-go-bridge-` prefix. The version in this branch is in
+[`wireguard_go_bridge/__init__.py`](wireguard_go_bridge/__init__.py)
 (`__version__`).
 
 ## Architecture
@@ -189,7 +193,7 @@ wireguard-go-bridge/
 ├── tests/                      # Unit + integration tests
 └── .github/
     ├── workflows/              # CI/CD
-    └── scripts/publish.sh      # R2 publish trigger
+    └── scripts/publish.sh      # release publish trigger
 ```
 
 ## Development
@@ -210,38 +214,23 @@ Go side: `src/version.go` → `BridgeVersionStr` (validated to match during publ
 
 ## Package Verification
 
-Vendor packages are served from R2 (`vendor.phantom.tc`). Their trust
-root lives here, on the branch: the publish workflow — and only the
-publish workflow — writes the [CHECKSUMS](CHECKSUMS) file after every
-release. The artifact and its expected hash travel through two
-independent channels, so a tampered download cannot re-attest itself.
+The zip carries its own hash: `wireguard_go_bridge.so.sha256` sits next to
+the library it describes, so the package can be checked after extraction
+without fetching anything.
 
 ```bash
-#!/usr/bin/env bash
-# verify.sh — verify vendor packages against the branch trust root
-set -euo pipefail
-
-BASE="https://vendor.phantom.tc/wireguard-go-bridge"
-TRUST="https://raw.githubusercontent.com/ARAS-Workspace/phantom-wg/refs/heads/dev/wireguard-go-bridge/CHECKSUMS"
-
-VERSION=$(curl -fsSL "${BASE}/latest/VERSION")
-CHECKSUMS=$(curl -fsSL "${TRUST}")
-
-for ARCH in linux-amd64 linux-arm64; do
-  curl -fsSL -o "${ARCH}.zip" "${BASE}/${VERSION}/${ARCH}.zip"
-  EXPECTED=$(printf '%s\n' "${CHECKSUMS}" | grep -- "- ${ARCH}.zip/" | cut -d'/' -f2)
-  ACTUAL=$(sha256sum "${ARCH}.zip" | cut -d' ' -f1)
-  if [ "${EXPECTED}" = "${ACTUAL}" ]; then
-    echo "OK   ${ARCH}.zip ${VERSION} (${ACTUAL})"
-  else
-    echo "FAIL ${ARCH}.zip — expected ${EXPECTED}, got ${ACTUAL}" >&2
-    exit 1
-  fi
-done
+unzip -q linux-amd64.zip
+cd wireguard_go_bridge && sha256sum -c wireguard_go_bridge.so.sha256
 ```
 
-`CHECKSUMS` always describes the current release only; older releases
-remain verifiable through the file's git history.
+The zip itself is attested by the release it came from. GitHub records a
+digest for every asset; `gh` prints it:
+
+```bash
+gh release view vendor-wireguard-go-bridge-v<X.Y.Z> \
+  --repo ARAS-Workspace/phantom-wg --json assets \
+  --jq '.assets[] | "\(.name) \(.digest)"'
+```
 
 ## License
 

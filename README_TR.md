@@ -8,11 +8,11 @@ Userspace WireGuard — Go backend, SQLite IPC state persistence, Python FFI.
 
 ## İndirme
 
-Son sürüm:
+Her sürüm etiketlenmiş bir release'tir. Birini seç, asset'lerini al:
 
 ```
-https://vendor.phantom.tc/wireguard-go-bridge/latest/linux-amd64.zip
-https://vendor.phantom.tc/wireguard-go-bridge/latest/linux-arm64.zip
+https://github.com/ARAS-Workspace/phantom-wg/releases/download/vendor-wireguard-go-bridge-v<X.Y.Z>/linux-amd64.zip
+https://github.com/ARAS-Workspace/phantom-wg/releases/download/vendor-wireguard-go-bridge-v<X.Y.Z>/linux-arm64.zip
 ```
 
 Her zip şu yapıya açılır:
@@ -26,12 +26,16 @@ wireguard_go_bridge/
 ├── types.py
 ├── wireguard_go_bridge.so
 ├── wireguard_go_bridge.so.sha256
-└── VERSION
+├── VERSION
+├── LICENSE
+├── THIRD_PARTY_LICENSES
+└── licenses/
 ```
 
-Belirli bir sürüm için: `latest/` yerine `v<X.Y.Z>/` kullan. Mevcut
-sürüm [`wireguard_go_bridge/__init__.py`](wireguard_go_bridge/__init__.py)
-içinde (`__version__`).
+Release'ler [https://github.com/ARAS-Workspace/phantom-wg/releases](https://github.com/ARAS-Workspace/phantom-wg/releases) adresinde listelenir; bu bileşenin etiketleri
+`vendor-wireguard-go-bridge-` önekini taşır. Bu branch'teki sürüm
+[`wireguard_go_bridge/__init__.py`](wireguard_go_bridge/__init__.py)
+içindedir (`__version__`).
 
 ## Mimari
 
@@ -189,7 +193,7 @@ wireguard-go-bridge/
 ├── tests/                      # Unit + integration tests
 └── .github/
     ├── workflows/              # CI/CD
-    └── scripts/publish.sh      # R2 publish trigger
+    └── scripts/publish.sh      # release publish trigger
 ```
 
 ## Geliştirme
@@ -210,38 +214,23 @@ Go tarafı: `src/version.go` → `BridgeVersionStr` (publish'te eşleşme valida
 
 ## Paket Doğrulama
 
-Vendor paketleri R2'den (`vendor.phantom.tc`) sunulur. Güven kökü ise
-burada, branch üzerindedir: [CHECKSUMS](CHECKSUMS) dosyasını her
-yayından sonra yalnızca publish workflow'u yazar. Artefakt ile
-beklenen hash iki bağımsız kanaldan gelir; kurcalanmış bir indirme
-kendi kendini yeniden onaylayamaz.
+Zip kendi hash'ini taşır: `wireguard_go_bridge.so.sha256`, tarif ettiği
+kütüphanenin yanında durur. Paket, açıldıktan sonra hiçbir şey indirmeden
+kontrol edilebilir.
 
 ```bash
-#!/usr/bin/env bash
-# verify.sh — vendor paketlerini branch'teki güven köküne karşı doğrula
-set -euo pipefail
-
-BASE="https://vendor.phantom.tc/wireguard-go-bridge"
-TRUST="https://raw.githubusercontent.com/ARAS-Workspace/phantom-wg/refs/heads/dev/wireguard-go-bridge/CHECKSUMS"
-
-VERSION=$(curl -fsSL "${BASE}/latest/VERSION")
-CHECKSUMS=$(curl -fsSL "${TRUST}")
-
-for ARCH in linux-amd64 linux-arm64; do
-  curl -fsSL -o "${ARCH}.zip" "${BASE}/${VERSION}/${ARCH}.zip"
-  EXPECTED=$(printf '%s\n' "${CHECKSUMS}" | grep -- "- ${ARCH}.zip/" | cut -d'/' -f2)
-  ACTUAL=$(sha256sum "${ARCH}.zip" | cut -d' ' -f1)
-  if [ "${EXPECTED}" = "${ACTUAL}" ]; then
-    echo "OK   ${ARCH}.zip ${VERSION} (${ACTUAL})"
-  else
-    echo "FAIL ${ARCH}.zip — beklenen ${EXPECTED}, gelen ${ACTUAL}" >&2
-    exit 1
-  fi
-done
+unzip -q linux-amd64.zip
+cd wireguard_go_bridge && sha256sum -c wireguard_go_bridge.so.sha256
 ```
 
-`CHECKSUMS` her zaman yalnızca güncel sürümü tarif eder; eski sürümler
-dosyanın git geçmişi üzerinden doğrulanabilir kalır.
+Zip'in kendisini ise geldiği release doğrular. GitHub her asset için bir
+digest tutar; `gh` bunu yazdırır:
+
+```bash
+gh release view vendor-wireguard-go-bridge-v<X.Y.Z> \
+  --repo ARAS-Workspace/phantom-wg --json assets \
+  --jq '.assets[] | "\(.name) \(.digest)"'
+```
 
 ## Lisans
 
