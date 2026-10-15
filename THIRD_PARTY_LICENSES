@@ -161,14 +161,12 @@ does not see them.
 | Component                      | License          | SPDX Identifier |
 |--------------------------------|------------------|-----------------|
 | python:3.12.13-slim-trixie     | PSF-2.0 + Debian | PSF-2.0         |
-| libsodium23 (Debian trixie)    | ISC              | ISC             |
 
-Usage Note:
-The Dockerfile installs libsodium23 from Debian, but nothing in the image
-links it. PyNaCl's manylinux wheel has libsodium compiled in and declares
-only glibc's own libraries and the loader among its needed objects, so
-cryptographic operations are served by the bundled copy, not by the
-system package.
+The image installs no system library of its own. PyNaCl's manylinux wheel
+has libsodium compiled in and declares only glibc's own libraries and the
+loader among its needed objects, so cryptographic operations are served by
+the bundled copy; its ISC licence travels in the wheel and is listed under
+BUNDLED NATIVE CODE.
 
 CPython itself is PSF-2.0 and arrives with the base image; the Debian
 packages underneath it carry their own licences, which Debian keeps
