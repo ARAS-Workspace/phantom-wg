@@ -74,9 +74,9 @@ gh run download "$RUN_ID" \
 ZIP_FILE="$TMP_DIR/${ARTIFACT_NAME}.zip"
 if [ -f "$ZIP_FILE" ]; then
     unzip -o "$ZIP_FILE" -d "$TMP_DIR/extracted"
-    cp "$TMP_DIR/extracted/compose_bridge/"* "$DEST/"
+    cp -R "$TMP_DIR/extracted/compose_bridge/"* "$DEST/"
 else
-    cp "$TMP_DIR/"* "$DEST/" 2>/dev/null || true
+    cp -R "$TMP_DIR/"* "$DEST/" 2>/dev/null || true
 fi
 
 rm -rf "$TMP_DIR"
