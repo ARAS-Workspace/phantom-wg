@@ -58,6 +58,40 @@ targets:
       - path: Phantom-WG-MacOS/AppIcon.icon
         type: file
         buildPhase: resources
+      # The licence documents ship inside the bundle, so a copy of the
+      # app carries its own attribution without the repository. They
+      # are inert payload: nothing reads them at runtime, and they
+      # enter as single files because the repository root is not a
+      # source directory of this target.
+      - path: LICENSE
+        type: file
+        buildPhase: resources
+      - path: THIRD_PARTY_LICENSES
+        type: file
+        buildPhase: resources
+      # wstunnel's own licence and attribution, which BSD-3-Clause asks
+      # a binary redistribution to carry. Resources already holds a
+      # LICENSE — the project's own — so these go to a subdirectory
+      # named after the directory they come from, which needs a
+      # copyFiles phase rather than the resources one.
+      - path: Libraries/WstunnelKit/LICENSE
+        buildPhase:
+          copyFiles:
+            destination: resources
+            subpath: Licenses/WstunnelKit
+      - path: Libraries/WstunnelKit/NOTICE
+        buildPhase:
+          copyFiles:
+            destination: resources
+            subpath: Licenses/WstunnelKit
+      # WireGuardKit's licence, for the same reason. It comes from the
+      # submodule, so the revision it belongs to is the one the gitlink
+      # pins.
+      - path: Libraries/WireGuardKit/COPYING
+        buildPhase:
+          copyFiles:
+            destination: resources
+            subpath: Licenses/WireGuardKit
     dependencies:
       - target: PhantomTunnel
         embed: true
