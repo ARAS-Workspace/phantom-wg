@@ -9,10 +9,49 @@ THIRD PARTY LICENSES
 ================================================================================
 
 Phantom-WG Modern
-Copyright (c) 2025 - Riza Emre ARAS <r.emrearas@proton.me>
+Copyright (c) 2025 ARTEK İnovasyon Ar-Ge Sanayi ve Ticaret Limited Şirketi
+Copyright (c) 2025 Rıza Emre ARAS <r.emrearas@proton.me>
 Licensed under AGPL-3.0 - see LICENSE file for details
 
-This document lists third-party software dependencies and their licenses.
+HOW TO READ THIS FILE
+
+  Phantom-WG Modern is assembled from components, and each component carries
+  its own third-party notice next to the code it describes. This file binds
+  them together and covers what belongs to the assembly rather than to any
+  single component: the daemon's own Python dependencies, the container base
+  images, the system libraries installed into the containers, and the
+  trademark notices.
+
+  COMPONENTS names every component the package ships and links to its notice.
+  Those lists are not repeated here — each is maintained with its own source
+  and generated from the tooling its ecosystem provides.
+
+  This file is maintained by hand.
+
+================================================================================
+COMPONENTS
+================================================================================
+
+| Component           | Language | License           | Shipped as                |
+|---------------------|----------|-------------------|---------------------------|
+| phantom-daemon      | Python   | AGPL-3.0-or-later | this package              |
+| auth-service        | Python   | AGPL-3.0-or-later | services/auth-service/    |
+| react-spa           | React    | AGPL-3.0-or-later | services/react-spa/dist/  |
+| wireguard-go-bridge | Go       | AGPL-3.0-or-later | fetched into the image    |
+| firewall-bridge     | Rust     | AGPL-3.0-or-later | fetched into the image    |
+
+phantom-daemon's own dependencies are in DAEMON — PYTHON DEPENDENCIES below.
+The other four are listed in their own notices:
+
+- auth-service:        https://github.com/ARAS-Workspace/phantom-wg/blob/dev/auth-service/THIRD_PARTY_LICENSES
+- react-spa:           https://github.com/ARAS-Workspace/phantom-wg/blob/dev/daemon/services/react-spa/THIRD_PARTY_LICENSES
+- wireguard-go-bridge: https://github.com/ARAS-Workspace/phantom-wg/blob/dev/wireguard-go-bridge/THIRD_PARTY_LICENSES
+- firewall-bridge:     https://github.com/ARAS-Workspace/phantom-wg/blob/dev/firewall-bridge/THIRD_PARTY_LICENSES
+
+Each notice also travels with its component: auth-service and react-spa in
+the directories named above, and the two bridges inside the vendor archive —
+which the image unpacks into /opt/phantom/vendor, and which the release
+package ships under vendor/linux-<arch>/.
 
 ================================================================================
 DAEMON — PYTHON DEPENDENCIES
@@ -25,7 +64,7 @@ Production dependencies (requirements.txt):
 | fastapi            | 0.135.1 | MIT          | MIT             |
 | uvicorn            | 0.41.0  | BSD 3-Clause | BSD-3-Clause    |
 | pydantic           | 2.12.5  | MIT          | MIT             |
-| python-multipart   | 0.0.22  | Apache 2.0   | Apache-2.0      |
+| python-multipart   | 0.0.31  | Apache 2.0   | Apache-2.0      |
 | pyyaml             | 6.0.2   | MIT          | MIT             |
 
 Transitive dependencies:
@@ -33,11 +72,11 @@ Transitive dependencies:
 | Package            | Version | License      | SPDX Identifier | Required By       |
 |--------------------|---------|--------------|-----------------|-------------------|
 | pydantic-core      | 2.41.5  | MIT          | MIT             | pydantic          |
-| starlette          | 0.52.1  | BSD 3-Clause | BSD-3-Clause    | fastapi           |
+| starlette          | 1.3.1   | BSD 3-Clause | BSD-3-Clause    | fastapi           |
 | h11                | 0.16.0  | MIT          | MIT             | uvicorn           |
-| click              | 8.3.1   | BSD 3-Clause | BSD-3-Clause    | uvicorn           |
-| anyio              | 4.12.1  | MIT          | MIT             | starlette         |
-| idna               | 3.11    | BSD 3-Clause | BSD-3-Clause    | anyio             |
+| click              | 8.3.3   | BSD 3-Clause | BSD-3-Clause    | uvicorn           |
+| anyio              | 4.14.2  | MIT          | MIT             | starlette         |
+| idna               | 3.18    | BSD 3-Clause | BSD-3-Clause    | anyio             |
 | typing-extensions  | 4.15.0  | PSF-2.0      | PSF-2.0         | pydantic, fastapi |
 | typing-inspection  | 0.4.2   | MIT          | MIT             | pydantic          |
 | annotated-doc      | 0.0.4   | MIT          | MIT             | fastapi           |
@@ -54,92 +93,17 @@ License URLs:
 - AnyIO:             https://github.com/agronholm/anyio/blob/master/LICENSE
 
 ================================================================================
-AUTH SERVICE — ADDITIONAL PYTHON DEPENDENCIES
-================================================================================
-
-| Package            | Version | License      | SPDX Identifier |
-|--------------------|---------|--------------|-----------------|
-| pynacl             | 1.6.2   | Apache 2.0   | Apache-2.0      |
-| httpx              | 0.28.1  | BSD 3-Clause | BSD-3-Clause    |
-| cffi               | 2.0.0   | MIT          | MIT             |
-| python-dotenv      | 1.2.2   | BSD 3-Clause | BSD-3-Clause    |
-| uvloop             | 0.22.1  | MIT / Apache | MIT / Apache-2.0|
-
-Transitive dependencies:
-
-| Package            | Version | License      | SPDX Identifier | Required By |
-|--------------------|---------|--------------|-----------------|-------------|
-| httpcore           | 1.0.9   | BSD 3-Clause | BSD-3-Clause    | httpx       |
-| httptools          | 0.7.1   | MIT          | MIT             | uvicorn     |
-| certifi            | 2026.2  | MPL 2.0      | MPL-2.0         | httpx       |
-| pycparser          | 3.0     | BSD 3-Clause | BSD-3-Clause    | cffi        |
-| watchfiles         | 1.1.1   | MIT          | MIT             | uvicorn     |
-| websockets         | 16.0    | BSD 3-Clause | BSD-3-Clause    | uvicorn     |
-
-License URLs:
-- PyNaCl:            https://github.com/pyca/pynacl/blob/main/LICENSE
-- httpx:             https://github.com/encode/httpx/blob/master/LICENSE.md
-- cffi:              https://github.com/python-cffi/cffi/blob/main/LICENSE
-- python-dotenv:     https://github.com/theskumar/python-dotenv/blob/main/LICENSE
-- uvloop:            https://github.com/MagicStack/uvloop/blob/master/LICENSE-MIT
-
-================================================================================
-DASHBOARD — NPM DEPENDENCIES (pre-built, bundled in SPA)
-================================================================================
-
-Runtime dependencies:
-
-| Package               | Version | License      | SPDX Identifier |
-|-----------------------|---------|--------------|-----------------|
-| react                 | 19.2.4  | MIT          | MIT             |
-| react-dom             | 19.2.4  | MIT          | MIT             |
-| react-router-dom      | 7.13.1  | MIT          | MIT             |
-| @carbon/react         | 1.102.0 | Apache 2.0   | Apache-2.0      |
-| @carbon/icons-react   | 11.76.0 | Apache 2.0   | Apache-2.0      |
-| @carbon/styles        | 1.101.0 | Apache 2.0   | Apache-2.0      |
-| @mdx-js/react         | 3.1.1   | MIT          | MIT             |
-| mermaid               | 11.13.0 | MIT          | MIT             |
-| qrcode.react          | 4.2.0   | ISC          | ISC             |
-| shiki                 | 4.0.2   | MIT          | MIT             |
-| swr                   | 2.4.1   | MIT          | MIT             |
-
-Build-time only (not bundled in production):
-
-| Package               | Version | License      | SPDX Identifier |
-|-----------------------|---------|--------------|-----------------|
-| @mdx-js/rollup        | 3.1.1   | MIT          | MIT             |
-| remark-frontmatter    | 5.0.0   | MIT          | MIT             |
-| remark-gfm            | 4.0.1   | MIT          | MIT             |
-| remark-mdx-frontmatter| 5.2.0   | MIT          | MIT             |
-
-Fonts:
-
-| Package               | Version | License      | SPDX Identifier |
-|-----------------------|---------|--------------|-----------------|
-| @ibm/plex-mono        | 1.1.0   | OFL 1.1      | OFL-1.1         |
-| @ibm/plex-sans        | 1.1.0   | OFL 1.1      | OFL-1.1         |
-| @ibm/plex-serif       | 1.1.0   | OFL 1.1      | OFL-1.1         |
-
-License URLs:
-- React:              https://github.com/facebook/react/blob/main/LICENSE
-- React Router:       https://github.com/remix-run/react-router/blob/main/LICENSE.md
-- Carbon:             https://github.com/carbon-design-system/carbon/blob/main/LICENSE
-- MDX:                https://github.com/mdx-js/mdx/blob/main/license
-- Mermaid:            https://github.com/mermaid-js/mermaid/blob/develop/LICENSE
-- qrcode.react:       https://github.com/zpao/qrcode.react/blob/main/LICENSE
-- Shiki:              https://github.com/shikijs/shiki/blob/main/LICENSE
-- SWR:                https://github.com/vercel/swr/blob/main/LICENSE
-- IBM Plex:           https://github.com/IBM/plex/blob/master/LICENSE.md
-
-================================================================================
 NATIVE BRIDGES (vendor artifacts)
 ================================================================================
 
-| Component            | Version | Language | License         | Source             |
-|----------------------|---------|----------|-----------------|--------------------|
-| wireguard-go-bridge  | 2.1.1   | Go       | MIT             | Internal (wraps    |
-|                      |         |          |                 | wireguard-go)      |
-| firewall-bridge      | 2.1.0   | Rust     | AGPL-3.0        | Internal           |
+Fetched by the Dockerfile at image build time and unpacked into
+/opt/phantom/vendor.
+
+| Component            | Version | Language | License           | Source             |
+|----------------------|---------|----------|-------------------|--------------------|
+| wireguard-go-bridge  | 2.1.4   | Go       | AGPL-3.0-or-later | Internal (wraps    |
+|                      |         |          |                   | wireguard-go)      |
+| firewall-bridge      | 2.1.8   | Rust     | AGPL-3.0-or-later | Internal           |
 
 Upstream dependency:
 
@@ -151,10 +115,14 @@ Upstream dependency:
 DOCKER BASE IMAGES
 ================================================================================
 
-| Image              | License            | URL                                      |
-|--------------------|--------------------|------------------------------------------|
-| python:3.12-slim   | PSF-2.0 + Debian   | https://hub.docker.com/_/python          |
-| nginx:1-alpine     | BSD 2-Clause       | https://hub.docker.com/_/nginx           |
+| Image                      | License          | URL                             |
+|----------------------------|------------------|---------------------------------|
+| python:3.12.13-slim-trixie | PSF-2.0 + Debian | https://hub.docker.com/_/python |
+| nginx:1-alpine             | BSD 2-Clause     | https://hub.docker.com/_/nginx  |
+
+CPython is PSF-2.0. The Debian packages underneath it carry their own
+licences, which Debian keeps inside the image as
+/usr/share/doc/<package>/copyright.
 
 ================================================================================
 SYSTEM LIBRARIES (installed in container)
@@ -168,15 +136,14 @@ Daemon container:
 | nftables           | GPL-2.0      | GPL-2.0-only    | Netfilter management     |
 | iproute2           | GPL-2.0      | GPL-2.0-only    | Network routing          |
 
-Auth service container:
-
-| Library            | License      | SPDX Identifier | Purpose                  |
-|--------------------|--------------|-----------------|--------------------------|
-| libsodium          | ISC          | ISC             | Cryptographic operations |
+The auth-service and nginx containers install no system library of their own.
 
 Usage Note:
-GPL-2.0 system libraries are used at runtime via their standard interfaces.
-This constitutes mere aggregation, not derivative work.
+iproute2 and nftables are installed as separate programs; the daemon
+invokes ip as a subprocess. libnftables1 is the library firewall-bridge
+loads at runtime, and its use is stated in firewall-bridge's own notice.
+All three are installed from Debian's package repository when the user
+builds the image and are not bundled with this project.
 
 ================================================================================
 TRADEMARK NOTICES
@@ -189,15 +156,17 @@ https://www.wireguard.com/
 LICENSE COMPATIBILITY
 ================================================================================
 
-All listed licenses (MIT, BSD-2-Clause, BSD-3-Clause, Apache-2.0, ISC,
-PSF-2.0, MPL-2.0, OFL-1.1) are compatible with AGPL-3.0 and allow use
-in this project.
+The daemon's own dependencies above are MIT, BSD-3-Clause, Apache-2.0 and
+PSF-2.0 — all permissive and compatible with AGPL-3.0. Each component's
+notice states the licences in its own dependency set and whether they are
+compatible with this project.
 
-GPL-2.0 components (nftables, iproute2) are system libraries used via
-standard interfaces, which does not create licensing obligations.
+GPL-2.0 system packages (libnftables1, nftables, iproute2) are installed
+from Debian when the user builds the image and are not bundled with this
+project. iproute2 and nftables run as separate programs; libnftables1 is
+covered in firewall-bridge's notice.
 
 ================================================================================
 
-Maintained by:  Riza Emre ARAS <r.emrearas@proton.me>
+Maintained by:  Rıza Emre ARAS <r.emrearas@proton.me>
 Project:        Phantom-WG Modern
-License:        AGPL-3.0-or-later
