@@ -17,3 +17,7 @@ dist/
 .DS_Store
 *.swp
 *.swo
+
+# Vendor bridges — fetched at image build time, or shipped under vendor/
+# in the release package. Never committed either way.
+vendor/

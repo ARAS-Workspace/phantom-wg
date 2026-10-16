@@ -1,9 +1,5 @@
 FROM python:3.12.13-slim-trixie
 
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    libsodium23 \
-    && rm -rf /var/lib/apt/lists/*
-
 WORKDIR /app
 
 COPY requirements.txt .
