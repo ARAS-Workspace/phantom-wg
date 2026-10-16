@@ -42,6 +42,10 @@ targets:
       - path: Phantom-WG-MacOS
         excludes:
           - "**/.DS_Store"
+          # SwiftLint reads this from the working tree; it is not a
+          # build input. Xcode has no rule for a .yml, so leaving it in
+          # the target shipped it as a loose resource.
+          - "**/.swiftlint.yml"
           - Localization/translations
           - AppIcon.icon
           # wstunnel FFI is extension-side only: the bridge compiles
