@@ -8,7 +8,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 
 ---
 
-## English
+## 🇺🇸
 
 ### Reporting a Vulnerability
 
@@ -21,25 +21,27 @@ If you discover a security vulnerability in Phantom-WG, please report it through
 | Email        | issue@phantom.tc, r.emrearas@proton.me |
 | GitHub Issue | For non-sensitive issues only          |
 
-### Supported Versions
+### Supported Components
 
-| Version                  | Supported        |
-|--------------------------|------------------|
-| Phantom-WG Modern (main) | Yes              |
-| Phantom-WG Retro (retro) | Maintenance only |
+Each component lives on its own branch. Reports are accepted for every component
+marked **Supported**, on either its release branch or its development branch.
 
-### Security Design
-
-- **Phantom Daemon** never exposes a TCP port to the internet
-- Management access is exclusively through Unix Domain Socket (UDS)
-- All external access goes through the auth-service proxy layer (JWT)
-- TLS termination at nginx with TLSv1.2/1.3 only
-- Docker secrets for all cryptographic material
-- SQLite databases with WAL mode for crash recovery
+| Component            | Branch                     | Scope                                       |
+|----------------------|----------------------------|---------------------------------------------|
+| Phantom-WG Modern    | `main`                     | Supported — released server product         |
+| daemon + panel       | `dev/daemon`               | Supported — development branch of Modern    |
+| auth-service         | `dev/auth-service`         | Supported — ships inside Modern             |
+| firewall-bridge      | `dev/firewall-bridge`      | Supported — ships inside Modern             |
+| wireguard-go-bridge  | `dev/wireguard-go-bridge`  | Supported — ships inside Modern             |
+| Phantom-Frontmatter  | `frontmatter`              | Supported — WSS/TLS transport layer         |
+| Phantom-WG Mac       | `app/mac`                  | Supported — macOS client                    |
+| Phantom-WG iOS       | `app/ios`                  | Supported — iOS client                      |
+| Documentation & site | `press-kit`                | Supported — www.phantom.tc and the docs     |
+| compose-bridge       | `dev/tests/compose-bridge` | Out of scope — test dependency, not shipped |
 
 ---
 
-## Türkçe
+## 🇹🇷
 
 ### Güvenlik Açığı Bildirimi
 
@@ -52,21 +54,23 @@ Phantom-WG'de bir güvenlik açığı keşfettiyseniz, aşağıdaki kanallar üz
 | E-posta      | issue@phantom.tc, r.emrearas@proton.me |
 | GitHub Issue | Yalnızca hassas olmayan konular için   |
 
-### Desteklenen Sürümler
+### Desteklenen Bileşenler
 
-| Sürüm                    | Desteklenen     |
-|--------------------------|-----------------|
-| Phantom-WG Modern (main) | Evet            |
-| Phantom-WG Retro (retro) | Yalnızca bakım  |
+Her bileşen kendi dalında yaşar. **Destekleniyor** işaretli her bileşen için,
+yayın dalı ya da geliştirme dalı üzerinden bildirim kabul edilir.
 
-### Güvenlik Tasarımı
-
-- **Phantom Daemon** internet'e hiçbir TCP portu açmaz
-- Yönetim erişimi yalnızca Unix Domain Socket (UDS) üzerinden sağlanır
-- Tüm dış erişim auth-service proxy katmanından geçer (JWT)
-- TLS sonlandırma nginx'te, yalnızca TLSv1.2/1.3
-- Tüm kriptografik materyal Docker secrets ile yönetilir
-- SQLite veritabanları WAL modunda, crash recovery desteği
+| Bileşen              | Dal                        | Kapsam                                        |
+|----------------------|----------------------------|-----------------------------------------------|
+| Phantom-WG Modern    | `main`                     | Destekleniyor — yayındaki sunucu ürünü        |
+| daemon + panel       | `dev/daemon`               | Destekleniyor — Modern'in geliştirme dalı     |
+| auth-service         | `dev/auth-service`         | Destekleniyor — Modern içinde dağıtılır       |
+| firewall-bridge      | `dev/firewall-bridge`      | Destekleniyor — Modern içinde dağıtılır       |
+| wireguard-go-bridge  | `dev/wireguard-go-bridge`  | Destekleniyor — Modern içinde dağıtılır       |
+| Phantom-Frontmatter  | `frontmatter`              | Destekleniyor — WSS/TLS taşıma katmanı        |
+| Phantom-WG Mac       | `app/mac`                  | Destekleniyor — macOS istemcisi               |
+| Phantom-WG iOS       | `app/ios`                  | Destekleniyor — iOS istemcisi                 |
+| Döküman ve site      | `press-kit`                | Destekleniyor — www.phantom.tc ve dökümanlar  |
+| compose-bridge       | `dev/tests/compose-bridge` | Kapsam dışı — test bağımlılığı, dağıtılmaz    |
 
 ---
 
@@ -74,8 +78,8 @@ Phantom-WG'de bir güvenlik açığı keşfettiyseniz, aşağıdaki kanallar üz
 
 **Fingerprint:** `9F27 149D 11B3 651F E276  668E 92C7 9989 BA17 D56B`
 
-The same key signs every commit in this repository — verify authenticity with `git log --show-signature`.  
-Aynı anahtar bu depodaki her commit'i de imzalar — özgünlüğü `git log --show-signature` ile doğrulayabilirsiniz.
+🇺🇸 The same key signs every commit in this repository — verify authenticity with `git log --show-signature`.  
+🇹🇷 Aynı anahtar bu depodaki her commit'i de imzalar — özgünlüğü `git log --show-signature` ile doğrulayabilirsiniz.
 
 ```
 -----BEGIN PGP PUBLIC KEY BLOCK-----
