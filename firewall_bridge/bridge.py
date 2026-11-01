@@ -57,10 +57,11 @@ class FirewallBridge:
     # ---- Lifecycle ----
 
     def start(self) -> None:
-        """Apply all enabled rules from DB to kernel."""
+        """Write the table, then apply all enabled rules from DB to kernel."""
         state = self._db.get_state()
         if state == "started":
             raise AlreadyStartedError("Bridge already started")
+        check_result(self._lib.nft_init())
         self._lib.nft_flush_table()
         self._flush_stale_routing()
         for group in self._db.enabled_groups():

@@ -14,6 +14,7 @@ from firewall_bridge.types import (
     AlreadyStartedError,
     NotStartedError,
     GroupNotFoundError,
+    NftablesError,
 )
 
 
@@ -46,6 +47,13 @@ def bridge(mock_lib, tmp_path):
         return FirewallBridge(str(tmp_path / "test.db"))
 
 
+@pytest.fixture
+def last_error():
+    """The text check_result reads for a refused call."""
+    with patch("firewall_bridge._ffi.get_last_error", return_value="refused"):
+        yield
+
+
 class TestInit:
     def test_nft_init_called(self, bridge, mock_lib):
         mock_lib.nft_init.assert_called_once()
@@ -70,6 +78,23 @@ class TestLifecycle:
         bridge.start()
         bridge.stop()
         assert bridge.get_state() == "stopped"
+
+    def test_start_writes_the_table_before_it_flushes(self, bridge, mock_lib):
+        mock_lib.reset_mock()
+        bridge.start()
+        calls = [c[0] for c in mock_lib.method_calls]
+        assert calls[:2] == ["nft_init", "nft_flush_table"]
+
+    def test_start_raises_when_the_table_cannot_be_written(self, bridge, mock_lib,
+                                                          last_error):
+        bridge.create_group("g1")
+        bridge.add_firewall_rule("g1", "input", "accept")
+        mock_lib.reset_mock()
+        mock_lib.nft_init.return_value = -3
+        with pytest.raises(NftablesError):
+            bridge.start()
+        assert bridge.get_state() == "stopped"
+        assert [c[0] for c in mock_lib.method_calls] == ["nft_init"]
 
     def test_start_twice_raises(self, bridge):
         bridge.start()
