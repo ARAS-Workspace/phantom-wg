@@ -6,6 +6,7 @@
 use std::io;
 use std::mem;
 use std::net::{IpAddr, Ipv4Addr, Ipv6Addr};
+use std::path::Path;
 use std::str::FromStr;
 
 use crate::error::ErrorCode;
@@ -537,9 +538,21 @@ pub fn route_delete(destination: &str, device: &str, table_name: &str, family: u
     sock.send_and_ack(&buf)
 }
 
+/// The file `ip` reads table names from. iproute2 6.x ships its defaults in
+/// `RT_TABLES_DEFAULTS` and stops reading them once this file exists.
+const RT_TABLES: &str = "/etc/iproute2/rt_tables";
+const RT_TABLES_DEFAULTS: &str = "/usr/share/iproute2/rt_tables";
+
 /// Ensure a routing table entry exists in /etc/iproute2/rt_tables.
 pub fn ensure_table(table_id: u32, table_name: &str) -> Result<(), String> {
-    let path = "/etc/iproute2/rt_tables";
+    ensure_table_in(Path::new(RT_TABLES), Path::new(RT_TABLES_DEFAULTS),
+                    table_id, table_name)
+}
+
+fn ensure_table_in(path: &Path, defaults: &Path, table_id: u32, table_name: &str)
+    -> Result<(), String>
+{
+    seed_rt_tables(path, defaults)?;
     let entry = format!("{} {}", table_id, table_name);
 
     let content = std::fs::read_to_string(path)
@@ -563,10 +576,35 @@ pub fn ensure_table(table_id: u32, table_name: &str) -> Result<(), String> {
         .create(true)
         .append(true)
         .open(path)
-        .map_err(|e| format!("Cannot write {}: {}", path, e))?;
+        .map_err(|e| format!("Cannot write {}: {}", path.display(), e))?;
 
     writeln!(file, "{}", entry)
-        .map_err(|e| format!("Cannot write to {}: {}", path, e))
+        .map_err(|e| format!("Cannot write to {}: {}", path.display(), e))
+}
+
+/// A missing file starts as a copy of the defaults, so creating it keeps
+/// `unspec` and any name added there visible to `ip`. With no defaults it
+/// starts empty, as before.
+fn seed_rt_tables(path: &Path, defaults: &Path) -> Result<(), String> {
+    use std::io::Write;
+    if path.exists() {
+        return Ok(());
+    }
+    if let Some(dir) = path.parent() {
+        std::fs::create_dir_all(dir)
+            .map_err(|e| format!("Cannot create {}: {}", dir.display(), e))?;
+    }
+    let mut seed = std::fs::read(defaults).unwrap_or_default();
+    if !seed.is_empty() && !seed.ends_with(b"\n") {
+        seed.push(b'\n');
+    }
+    // create_new: if another caller created the file meanwhile, theirs stands.
+    match std::fs::OpenOptions::new().write(true).create_new(true).open(path) {
+        Ok(mut file) => file.write_all(&seed)
+            .map_err(|e| format!("Cannot write {}: {}", path.display(), e)),
+        Err(e) if e.kind() == io::ErrorKind::AlreadyExists => Ok(()),
+        Err(e) => Err(format!("Cannot write {}: {}", path.display(), e)),
+    }
 }
 
 /// Flush route cache (no-op on Linux >= 3.6, included for compatibility).
@@ -654,6 +692,59 @@ mod tests {
         let bytes = addr_bytes(&addr);
         assert_eq!(bytes.len(), 16);
         assert!(bytes.iter().all(|&b| b == 0));
+    }
+
+    // ── ensure_table ─────────────────────────────────────────────
+
+    /// A fresh directory under target/ for one test.
+    fn rt_dir(name: &str) -> std::path::PathBuf {
+        let dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("target/rt-tests").join(name);
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        dir
+    }
+
+    const DEFAULTS: &str = "255\tlocal\n254\tmain\n253\tdefault\n0\tunspec\n";
+
+    #[test]
+    fn ensure_table_seeds_a_missing_file_from_the_defaults() {
+        let dir = rt_dir("seed");
+        let defaults = dir.join("defaults");
+        std::fs::write(&defaults, DEFAULTS).unwrap();
+        let path = dir.join("etc/iproute2/rt_tables");
+        ensure_table_in(&path, &defaults, 100, "mh").unwrap();
+        assert_eq!(std::fs::read_to_string(&path).unwrap(), format!("{DEFAULTS}100 mh\n"));
+    }
+
+    #[test]
+    fn ensure_table_leaves_an_existing_file_unseeded() {
+        let dir = rt_dir("existing");
+        let defaults = dir.join("defaults");
+        std::fs::write(&defaults, DEFAULTS).unwrap();
+        let path = dir.join("rt_tables");
+        std::fs::write(&path, "100 mh\n").unwrap();
+        ensure_table_in(&path, &defaults, 101, "mh6").unwrap();
+        assert_eq!(std::fs::read_to_string(&path).unwrap(), "100 mh\n101 mh6\n");
+    }
+
+    #[test]
+    fn ensure_table_adds_an_entry_once() {
+        let dir = rt_dir("once");
+        let path = dir.join("rt_tables");
+        let defaults = dir.join("no-defaults");
+        ensure_table_in(&path, &defaults, 100, "mh").unwrap();
+        ensure_table_in(&path, &defaults, 100, "mh").unwrap();
+        assert_eq!(std::fs::read_to_string(&path).unwrap(), "100 mh\n");
+    }
+
+    #[test]
+    fn ensure_table_ends_defaults_without_a_newline() {
+        let dir = rt_dir("no-newline");
+        let defaults = dir.join("defaults");
+        std::fs::write(&defaults, "0\tunspec").unwrap();
+        let path = dir.join("rt_tables");
+        ensure_table_in(&path, &defaults, 100, "mh").unwrap();
+        assert_eq!(std::fs::read_to_string(&path).unwrap(), "0\tunspec\n100 mh\n");
     }
 }
 
