@@ -24,7 +24,6 @@ COPY Cargo.toml Cargo.lock ./
 RUN mkdir -p src && echo "// stub" > src/lib.rs && cargo fetch && rm -rf src
 
 COPY src/ src/
-COPY build.rs ./
 COPY include/ include/
 RUN cargo build --release \
     && cp target/release/libfirewall_bridge_linux.so /workspace/libfirewall_bridge_linux.so

@@ -1,104 +1,93 @@
-//! nftables operations via libnftables C library.
+//! nftables operations through the nft program.
 //!
 //! All firewall rules live in the `inet phantom` table.
 //! This avoids conflicts with UFW, iptables, or any other rulesets.
 //! No DB dependency — pure kernel operations.
 
-use std::ffi::{CStr, CString};
-use std::os::raw::c_char;
-use std::ptr;
+use std::io::Write;
+use std::path::PathBuf;
+use std::process::{Command, Stdio};
 
 // ---------------------------------------------------------------------------
-// libnftables FFI bindings
+// nft program
 // ---------------------------------------------------------------------------
 
-#[allow(non_camel_case_types)]
-enum nft_ctx {}
+/// Where nft is looked for when the environment names no other path.
+const DEFAULT_NFT_PATH: &str = "/usr/sbin/nft";
 
-const NFT_CTX_DEFAULT: u32 = 0;
-const NFT_CTX_OUTPUT_JSON: u32 = 1 << 4;
-const NFT_CTX_OUTPUT_HANDLE: u32 = 1 << 3;
-
-extern "C" {
-    fn nft_ctx_new(flags: u32) -> *mut nft_ctx;
-    fn nft_ctx_free(ctx: *mut nft_ctx);
-    fn nft_ctx_buffer_output(ctx: *mut nft_ctx) -> i32;
-    fn nft_ctx_buffer_error(ctx: *mut nft_ctx) -> i32;
-    fn nft_ctx_get_output_buffer(ctx: *const nft_ctx) -> *const c_char;
-    fn nft_ctx_get_error_buffer(ctx: *const nft_ctx) -> *const c_char;
-    fn nft_run_cmd_from_buffer(ctx: *mut nft_ctx, buf: *const c_char) -> i32;
-    fn nft_ctx_output_set_flags(ctx: *mut nft_ctx, flags: u32);
-}
+/// Overrides `DEFAULT_NFT_PATH`.
+const NFT_PATH_ENV: &str = "FIREWALL_BRIDGE_NFT_PATH";
 
 // ---------------------------------------------------------------------------
-// NftContext — safe wrapper
+// NftContext — one nft process per command
 // ---------------------------------------------------------------------------
 
 pub struct NftContext {
-    ctx: *mut nft_ctx,
+    binary: PathBuf,
 }
 
-unsafe impl Send for NftContext {}
-
 impl NftContext {
+    /// Resolves nft from `FIREWALL_BRIDGE_NFT_PATH`, else `/usr/sbin/nft`.
     pub fn new() -> Result<Self, &'static str> {
-        let ctx = unsafe { nft_ctx_new(NFT_CTX_DEFAULT) };
-        if ctx.is_null() {
-            return Err("Failed to create nftables context");
+        let binary = std::env::var_os(NFT_PATH_ENV)
+            .map(PathBuf::from)
+            .unwrap_or_else(|| PathBuf::from(DEFAULT_NFT_PATH));
+        Self::with_binary(binary)
+    }
+
+    fn with_binary(binary: impl Into<PathBuf>) -> Result<Self, &'static str> {
+        let binary = binary.into();
+        if !binary.is_file() {
+            return Err("nft program not found");
         }
-        unsafe {
-            nft_ctx_buffer_output(ctx);
-            nft_ctx_buffer_error(ctx);
-        }
-        Ok(Self { ctx })
+        Ok(Self { binary })
     }
 
     pub fn run(&self, cmd: &str) -> Result<String, String> {
-        let c_cmd = CString::new(cmd).map_err(|e| e.to_string())?;
-        let rc = unsafe { nft_run_cmd_from_buffer(self.ctx, c_cmd.as_ptr()) };
-        let output = self.get_output();
-        let error = self.get_error();
-        if rc != 0 {
-            Err(if error.is_empty() {
-                format!("nft command failed (rc={}): {}", rc, cmd)
-            } else {
-                error
-            })
-        } else {
-            Ok(output)
-        }
+        self.exec(&[], cmd)
     }
 
     pub fn run_json(&self, cmd: &str) -> Result<String, String> {
-        unsafe { nft_ctx_output_set_flags(self.ctx, NFT_CTX_OUTPUT_JSON | NFT_CTX_OUTPUT_HANDLE); }
-        let result = self.run(cmd);
-        unsafe { nft_ctx_output_set_flags(self.ctx, NFT_CTX_OUTPUT_HANDLE); }
-        result
+        self.exec(&["--json", "--handle"], cmd)
     }
 
-    fn get_output(&self) -> String {
-        unsafe {
-            let ptr = nft_ctx_get_output_buffer(self.ctx);
-            if ptr.is_null() { String::new() }
-            else { CStr::from_ptr(ptr).to_string_lossy().into_owned() }
-        }
-    }
+    /// `nft -f -` takes the command on stdin, the buffer form
+    /// `nft_run_cmd_from_buffer` took. The child gets an empty environment
+    /// apart from `LC_ALL=C`.
+    fn exec(&self, flags: &[&str], cmd: &str) -> Result<String, String> {
+        let mut child = Command::new(&self.binary)
+            .args(flags)
+            .args(["-f", "-"])
+            .env_clear()
+            .env("LC_ALL", "C")
+            .stdin(Stdio::piped())
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped())
+            .spawn()
+            .map_err(|e| format!("nft could not be started: {e}"))?;
 
-    fn get_error(&self) -> String {
-        unsafe {
-            let ptr = nft_ctx_get_error_buffer(self.ctx);
-            if ptr.is_null() { String::new() }
-            else { CStr::from_ptr(ptr).to_string_lossy().into_owned() }
-        }
-    }
-}
+        // The handle drops at the end of the arm, closing stdin, so nft has
+        // its whole input before the output is read.
+        let written = match child.stdin.take() {
+            Some(mut stdin) => stdin.write_all(cmd.as_bytes()),
+            None => Ok(()),
+        };
 
-impl Drop for NftContext {
-    fn drop(&mut self) {
-        if !self.ctx.is_null() {
-            unsafe { nft_ctx_free(self.ctx) };
-            self.ctx = ptr::null_mut();
+        let out = child.wait_with_output()
+            .map_err(|e| format!("nft did not finish: {e}"))?;
+
+        if !out.status.success() {
+            let error = String::from_utf8_lossy(&out.stderr).into_owned();
+            return Err(if error.trim().is_empty() {
+                let rc = out.status.code().unwrap_or(-1);
+                format!("nft command failed (rc={rc}): {cmd}")
+            } else {
+                error
+            });
         }
+        written.map_err(|e| format!("nft input could not be written: {e}"))?;
+
+        Ok(String::from_utf8_lossy(&out.stdout).into_owned())
     }
 }
 
@@ -417,5 +406,105 @@ mod tests {
     fn test_find_max_handle_empty() {
         assert_eq!(find_max_handle("{}"), None);
         assert_eq!(find_max_handle(r#"{"nftables": []}"#), None);
+    }
+
+    // -----------------------------------------------------------------------
+    // NftContext — against a stand-in nft
+    // -----------------------------------------------------------------------
+
+    use std::os::unix::fs::PermissionsExt;
+    use std::path::Path;
+    use std::sync::{Mutex, MutexGuard};
+
+    /// Writing a script while another thread forks can leave the write end
+    /// open in that child, and exec then fails with ETXTBSY. The tests that
+    /// spawn take this lock for their whole body.
+    static SPAWN: Mutex<()> = Mutex::new(());
+
+    fn serial() -> MutexGuard<'static, ()> {
+        SPAWN.lock().unwrap_or_else(|e| e.into_inner())
+    }
+
+    /// A shell script that records its arguments and stdin next to itself,
+    /// then runs `body`.
+    fn fake_nft(name: &str, body: &str) -> PathBuf {
+        let dir = std::env::temp_dir()
+            .join(format!("fwb-nft-{}-{}", std::process::id(), name));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let script = dir.join("nft");
+        std::fs::write(
+            &script,
+            format!("#!/bin/sh\nprintf '%s\\n' \"$@\" > \"$0.args\"\ncat > \"$0.stdin\"\n{body}\n"),
+        ).unwrap();
+        std::fs::set_permissions(&script, std::fs::Permissions::from_mode(0o755)).unwrap();
+        script
+    }
+
+    fn recorded(script: &Path, what: &str) -> String {
+        std::fs::read_to_string(script.with_extension(what)).unwrap()
+    }
+
+    #[test]
+    fn test_nft_missing_program() {
+        assert!(NftContext::with_binary("/nonexistent/nft").is_err());
+    }
+
+    #[test]
+    fn test_nft_run_sends_the_command_on_stdin() {
+        let _serial = serial();
+        let nft = fake_nft("run", "printf 'ok'");
+        let ctx = NftContext::with_binary(&nft).unwrap();
+        assert_eq!(ctx.run("add table inet phantom").unwrap(), "ok");
+        assert_eq!(recorded(&nft, "args"), "-f\n-\n");
+        assert_eq!(recorded(&nft, "stdin"), "add table inet phantom");
+    }
+
+    #[test]
+    fn test_nft_run_json_asks_for_json_with_handles() {
+        let _serial = serial();
+        let nft = fake_nft("run_json", r#"printf '{"nftables": []}'"#);
+        let ctx = NftContext::with_binary(&nft).unwrap();
+        assert_eq!(ctx.run_json("list table inet phantom").unwrap(), r#"{"nftables": []}"#);
+        assert_eq!(recorded(&nft, "args"), "--json\n--handle\n-f\n-\n");
+    }
+
+    #[test]
+    fn test_nft_failure_carries_stderr() {
+        let _serial = serial();
+        let nft = fake_nft("stderr", "printf 'Error: syntax error' >&2; exit 1");
+        let ctx = NftContext::with_binary(&nft).unwrap();
+        assert_eq!(ctx.run("add rule").unwrap_err(), "Error: syntax error");
+    }
+
+    #[test]
+    fn test_nft_failure_without_stderr_names_the_command() {
+        let _serial = serial();
+        let nft = fake_nft("silent", "exit 3");
+        let ctx = NftContext::with_binary(&nft).unwrap();
+        assert_eq!(
+            ctx.run("flush table inet phantom").unwrap_err(),
+            "nft command failed (rc=3): flush table inet phantom"
+        );
+    }
+
+    #[test]
+    fn test_nft_environment_is_cleared() {
+        let _serial = serial();
+        let nft = fake_nft(
+            "env",
+            r#"printf '%s\n' "LC_ALL=${LC_ALL-unset}" "HOME=${HOME-unset}" > "$0.env""#,
+        );
+        let ctx = NftContext::with_binary(&nft).unwrap();
+        ctx.run("list ruleset").unwrap();
+        assert_eq!(recorded(&nft, "env"), "LC_ALL=C\nHOME=unset\n");
+    }
+
+    #[test]
+    fn test_nft_output_larger_than_a_pipe_buffer() {
+        let _serial = serial();
+        let nft = fake_nft("large", r"head -c 300000 /dev/zero | tr '\0' x");
+        let ctx = NftContext::with_binary(&nft).unwrap();
+        assert_eq!(ctx.run_json("list table inet phantom").unwrap().len(), 300_000);
     }
 }

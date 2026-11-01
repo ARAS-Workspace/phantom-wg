@@ -599,8 +599,8 @@ class TestErrorAttributes:
 
 class TestNoCommandInjection:
     """Every field below is formatted straight into an nftables command by
-    build_rule_cmd. libnftables accepts multiple ';'-separated commands per
-    buffer, so a value that can close a quote or start a statement escapes
+    build_rule_cmd. nft -f accepts multiple ';'-separated commands per
+    input, so a value that can close a quote or start a statement escapes
     the `inet phantom` table the whole design relies on for isolation.
     """
 
