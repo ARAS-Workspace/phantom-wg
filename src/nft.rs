@@ -446,16 +446,8 @@ mod tests {
 
     use std::os::unix::fs::PermissionsExt;
     use std::path::Path;
-    use std::sync::{Mutex, MutexGuard};
 
-    /// Writing a script while another thread forks can leave the write end
-    /// open in that child, and exec then fails with ETXTBSY. The tests that
-    /// spawn take this lock for their whole body.
-    static SPAWN: Mutex<()> = Mutex::new(());
-
-    fn serial() -> MutexGuard<'static, ()> {
-        SPAWN.lock().unwrap_or_else(|e| e.into_inner())
-    }
+    use crate::test_support::serial;
 
     /// A shell script that records its arguments and stdin next to itself,
     /// then runs `body`. It lives under target/, not the system temp
@@ -661,7 +653,7 @@ mod tests {
 
     /// Every nft is waited for before the call returns, whether it
     /// succeeded, failed or was killed, so none is left behind as a zombie.
-    /// The SPAWN lock keeps other tests from having children meanwhile.
+    /// The serial lock keeps other tests from having children meanwhile.
     #[test]
     fn test_nft_leaves_no_child_behind() {
         let _serial = serial();

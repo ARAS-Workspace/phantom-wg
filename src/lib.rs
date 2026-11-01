@@ -8,6 +8,22 @@ mod error;
 mod nft;
 mod route;
 
+#[cfg(test)]
+mod test_support {
+    use std::sync::{Mutex, MutexGuard};
+
+    /// One lock for every test that starts a process or touches the
+    /// process-wide state (NFT_CTX, LAST_ERROR, the network namespace).
+    /// Writing a script while another thread forks can leave the write end
+    /// open in that child, and exec then fails with ETXTBSY; the globals
+    /// would otherwise be read by one test while another writes them.
+    static SERIAL: Mutex<()> = Mutex::new(());
+
+    pub fn serial() -> MutexGuard<'static, ()> {
+        SERIAL.lock().unwrap_or_else(|e| e.into_inner())
+    }
+}
+
 use std::ffi::{c_char, CStr, CString};
 use std::ptr;
 use std::sync::Mutex;
@@ -422,6 +438,7 @@ mod tests {
     /// this crate sits behind an FFI boundary and a panic aborts the daemon.
     #[test]
     fn uninitialized_context_returns_code_not_panic() {
+        let _serial = test_support::serial();
         // NFT_CTX is never initialized in the test process (no kernel).
         assert_eq!(nft_flush_table(), ErrorCode::NotInitialized as i32);
         // SAFETY: a null chain is allowed.
@@ -435,6 +452,75 @@ mod tests {
         // SAFETY: the copy NUL-terminated `buf`.
         let msg = unsafe { CStr::from_ptr(buf.as_ptr()) }.to_str().unwrap();
         assert!(msg.contains("not initialized"), "{msg}");
+    }
+
+    /// The last recorded error, read the way a C caller reads it.
+    fn last_error() -> String {
+        let mut buf = [0 as c_char; 1024];
+        // SAFETY: `buf` holds the length passed.
+        let n = unsafe { firewall_bridge_get_last_error_copy(buf.as_mut_ptr(), buf.len() as i32) };
+        if n <= 0 {
+            return String::new();
+        }
+        // SAFETY: the copy NUL-terminated `buf`.
+        unsafe { CStr::from_ptr(buf.as_ptr()) }.to_string_lossy().into_owned()
+    }
+
+    #[test]
+    fn cstr_to_str_reads_null_and_invalid_utf8_as_empty() {
+        // SAFETY: null, and NUL-terminated literals.
+        unsafe {
+            assert_eq!(cstr_to_str(ptr::null()), "");
+            assert_eq!(cstr_to_str(c"".as_ptr()), "");
+            assert_eq!(cstr_to_str(c"inet phantom".as_ptr()), "inet phantom");
+            assert_eq!(cstr_to_str(c"kural-\xc4\x9f".as_ptr()), "kural-ğ");
+            assert_eq!(cstr_to_str(c"\xff\xfe".as_ptr()), "");
+        }
+    }
+
+    /// Every pointer argument takes null; the call returns a code and
+    /// records why, without a panic.
+    #[test]
+    fn null_pointers_give_error_codes() {
+        let _serial = test_support::serial();
+        let null = ptr::null();
+        // SAFETY: null is allowed for every pointer argument.
+        unsafe {
+            assert_eq!(nft_add_rule(null, null, 2, null, 0, null, null, null, null, null, null),
+                       ErrorCode::NotInitialized as i64);
+            assert_eq!(rt_table_ensure(101, null), ErrorCode::NetlinkFailed as i32);
+            assert_eq!(last_error(), "Invalid routing table name: \"\"");
+            for rc in [rt_policy_add(null, null, null, 1, 2), rt_policy_delete(null, null, null, 1, 2),
+                       rt_route_add(null, null, null, 2), rt_route_delete(null, null, null, 2)] {
+                assert_eq!(rc, ErrorCode::NetlinkFailed as i32);
+                assert!(!last_error().is_empty());
+            }
+            firewall_bridge_free_string(ptr::null_mut());
+        }
+    }
+
+    #[test]
+    fn invalid_utf8_reads_as_empty_at_the_boundary() {
+        let _serial = test_support::serial();
+        // SAFETY: a NUL-terminated literal.
+        assert_eq!(unsafe { rt_table_ensure(101, c"\xff".as_ptr()) }, ErrorCode::NetlinkFailed as i32);
+        assert_eq!(last_error(), "Invalid routing table name: \"\"");
+    }
+
+    /// The family is checked before any socket is opened.
+    #[test]
+    fn routing_family_outside_u8_is_refused_at_the_boundary() {
+        let _serial = test_support::serial();
+        let (net, empty, table, dev) = (c"10.0.0.0/24".as_ptr(), c"".as_ptr(), c"main".as_ptr(), c"lo".as_ptr());
+        // SAFETY: NUL-terminated literals.
+        let codes = unsafe {
+            [rt_policy_add(net, empty, table, 1, 266), rt_policy_delete(net, empty, table, 1, 266),
+             rt_route_add(net, dev, table, 266), rt_route_delete(net, dev, table, 266)]
+        };
+        for rc in codes {
+            assert_eq!(rc, ErrorCode::NetlinkFailed as i32);
+        }
+        assert_eq!(last_error(), "Unknown address family: 266");
     }
 
     #[test]
@@ -455,6 +541,7 @@ mod tests {
 
     #[test]
     fn last_error_copy_roundtrip_truncation_and_guards() {
+        let _serial = test_support::serial();
         set_last_error("boundary test message");
 
         // Full copy
