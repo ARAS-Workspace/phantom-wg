@@ -1,0 +1,31 @@
+# phantom_daemon v1.1.5 multihop.yaml, resolved with the rule stage's names,
+# priorities and table.
+name: multihop-exit
+priority: 80
+type: system
+metadata:
+  description: "Multihop exit routing: main VPN to exit tunnel"
+
+table:
+  - ensure: {id: 150, name: r5mh}
+  - policy: {from: 10.8.0.0/24, to: 10.8.0.0/24, table: main, priority: 5099}
+  - policy: {from: 10.8.0.0/24, table: r5mh, priority: 5100}
+  - route: {destination: 10.8.0.0/24, device: r5main, table: r5mh}
+  - route: {destination: default, device: r5exit, table: r5mh}
+
+rules:
+  - chain: forward
+    action: accept
+    in_iface: r5main
+    out_iface: r5exit
+
+  - chain: forward
+    action: accept
+    in_iface: r5exit
+    out_iface: r5main
+    state: "established,related"
+
+  - chain: postrouting
+    action: masquerade
+    source: 10.8.0.0/24
+    out_iface: r5exit

@@ -1,0 +1,12 @@
+# The second of three groups on one port: one peer may not.
+name: layered-deny
+priority: 20
+metadata:
+  description: "SSH refused to 10.8.0.3"
+
+rules:
+  - chain: input
+    action: drop
+    source: 10.8.0.3/32
+    proto: tcp
+    dport: 22

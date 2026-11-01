@@ -1,0 +1,30 @@
+# Forwarding decided per peer, and no forwarding from peer to peer.
+name: per-peer
+priority: 70
+metadata:
+  description: "Per-peer forwarding"
+
+rules:
+  - chain: forward
+    action: accept
+    in_iface: r5main
+    out_iface: r5exit
+    source: 10.8.0.2/32
+
+  - chain: forward
+    action: drop
+    in_iface: r5main
+    out_iface: r5exit
+    source: 10.8.0.3/32
+
+  - chain: forward
+    action: accept
+    family: 10
+    in_iface: r5main
+    out_iface: r5exit
+    source: "fd00:70:68::2/128"
+
+  - chain: forward
+    action: drop
+    in_iface: r5main
+    out_iface: r5main

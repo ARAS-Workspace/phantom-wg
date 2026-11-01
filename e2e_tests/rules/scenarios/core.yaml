@@ -1,0 +1,34 @@
+# phantom_daemon v1.1.5 core.yaml, resolved with the rule stage's names.
+name: core
+priority: 50
+type: system
+metadata:
+  description: "Core VPN firewall: listen port, forwarding, masquerade"
+
+rules:
+  - chain: input
+    action: accept
+    proto: udp
+    dport: 51820
+
+  - chain: input
+    action: accept
+    state: "established,related"
+
+  - chain: forward
+    action: accept
+    in_iface: r5main
+
+  - chain: forward
+    action: accept
+    out_iface: r5main
+    state: "established,related"
+
+  - chain: postrouting
+    action: masquerade
+    source: 10.8.0.0/24
+
+  - chain: postrouting
+    action: masquerade
+    family: 10
+    source: "fd00:70:68::/120"

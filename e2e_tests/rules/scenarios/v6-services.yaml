@@ -1,0 +1,35 @@
+# Services open to the IPv6 VPN network. The last rule has family 10 and
+# no address.
+name: v6-services
+priority: 40
+metadata:
+  description: "IPv6 services"
+
+rules:
+  - chain: input
+    action: accept
+    family: 10
+    source: "fd00:70:68::/120"
+    proto: tcp
+    dport: 22
+
+  - chain: input
+    action: accept
+    family: 10
+    source: "fd00:70:68::/120"
+    proto: udp
+    dport: 53
+
+  - chain: input
+    action: accept
+    family: 10
+    destination: "fd00:70:68::1/128"
+    proto: tcp
+    dport: 443
+    state: new
+
+  - chain: input
+    action: reject
+    family: 10
+    proto: tcp
+    dport: 2222

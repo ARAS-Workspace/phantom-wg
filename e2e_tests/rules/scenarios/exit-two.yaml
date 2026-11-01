@@ -1,0 +1,22 @@
+# Another peer's traffic out of another exit, in another table.
+name: exit-two
+priority: 86
+metadata:
+  description: "Exit for 10.8.0.3"
+
+table:
+  - ensure: {id: 153, name: r5ex2}
+  - policy: {from: 10.8.0.3/32, table: r5ex2, priority: 5201}
+  - route: {destination: default, device: r5exit2, table: r5ex2}
+
+rules:
+  - chain: forward
+    action: accept
+    in_iface: r5main
+    out_iface: r5exit2
+    source: 10.8.0.3/32
+
+  - chain: postrouting
+    action: masquerade
+    out_iface: r5exit2
+    source: 10.8.0.3/32

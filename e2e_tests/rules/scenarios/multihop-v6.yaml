@@ -1,0 +1,34 @@
+# phantom_daemon v1.1.5 multihop-v6.yaml, resolved with the rule stage's
+# names, priorities and table.
+name: multihop-exit-v6
+priority: 80
+type: system
+metadata:
+  description: "Multihop exit routing (IPv6): main VPN to exit tunnel"
+
+table:
+  - ensure: {id: 151, name: r5mh6, family: 10}
+  - policy: {from: "fd00:70:68::/120", to: "fd00:70:68::/120", table: main, priority: 5099, family: 10}
+  - policy: {from: "fd00:70:68::/120", table: r5mh6, priority: 5100, family: 10}
+  - route: {destination: "fd00:70:68::/120", device: r5main, table: r5mh6, family: 10}
+  - route: {destination: default, device: r5exit, table: r5mh6, family: 10}
+
+rules:
+  - chain: forward
+    action: accept
+    family: 10
+    in_iface: r5main
+    out_iface: r5exit
+
+  - chain: forward
+    action: accept
+    family: 10
+    in_iface: r5exit
+    out_iface: r5main
+    state: "established,related"
+
+  - chain: postrouting
+    action: masquerade
+    family: 10
+    source: "fd00:70:68::/120"
+    out_iface: r5exit

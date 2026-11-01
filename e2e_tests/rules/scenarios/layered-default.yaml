@@ -1,0 +1,11 @@
+# The last of three groups on one port: everyone else is rejected.
+name: layered-default
+priority: 90
+metadata:
+  description: "SSH rejected"
+
+rules:
+  - chain: input
+    action: reject
+    proto: tcp
+    dport: 22

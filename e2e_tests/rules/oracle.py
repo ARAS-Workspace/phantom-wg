@@ -29,6 +29,8 @@ import sqlite3
 import subprocess
 from dataclasses import dataclass
 
+from firewall_bridge import presets
+
 NFT = "/usr/sbin/nft"
 IP = "/usr/sbin/ip"
 
@@ -144,11 +146,17 @@ def reference_delete(chain: str, handle: int) -> None:
 
 def ip_rules(lowest: int, highest: int) -> list[dict]:
     """`ip -N -j rule show` for both families, the rules whose priority is
-    in [lowest, highest], each with its family flag. Tables read as ids."""
+    in [lowest, highest], each with its family flag. Tables read as ids; a
+    host's source or destination, which ip prints without its length,
+    reads with it."""
     rules = []
     for family in ("-4", "-6"):
+        host = 128 if family == "-6" else 32
         for r in json.loads(run([IP, "-N", "-j", family, "rule", "show"])):
             if lowest <= r["priority"] <= highest:
+                for end in ("src", "dst"):
+                    if end in r and r[end] != "all":
+                        r.setdefault(f"{end}len", host)
                 rules.append({"family": family, **r})
     return rules
 
@@ -355,6 +363,27 @@ class Ledger:
     def delete_group(self, group: str) -> None:
         gone = {r.id for r in self.bridge.list_firewall_rules(group)}
         self.bridge.delete_group(group)
+        self._forget(gone)
+
+    def apply_preset(self, preset, reference_rules: list[str]):
+        """presets.apply_preset(bridge, preset), its rules paired in their
+        order with reference_rules, then sync(); returns the group."""
+        group = presets.apply_preset(self.bridge, preset)
+        rows = self.bridge.list_firewall_rules(group.name)
+        assert [r.chain for r in rows] == [t.split(" ", 1)[0] for t in reference_rules], (
+            f"{group.name}: chains {[r.chain for r in rows]}, reference {reference_rules}")
+        for row, text in zip(rows, reference_rules):
+            self.texts[row.id] = text
+            self.reference[row.id] = None
+        self.sync()
+        return group
+
+    def remove_preset(self, name: str) -> None:
+        gone = {r.id for r in self.bridge.list_firewall_rules(name)}
+        presets.remove_preset(self.bridge, name)
+        self._forget(gone)
+
+    def _forget(self, gone: set[int]) -> None:
         for rule_id in gone & set(self.texts):
             self.texts.pop(rule_id)
             self.reference.pop(rule_id)

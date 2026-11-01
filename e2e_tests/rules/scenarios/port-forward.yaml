@@ -1,0 +1,44 @@
+# Ports of a public interface forwarded to two peers, IPv4 and IPv6.
+name: port-forward
+priority: 60
+metadata:
+  description: "Port forwarding to peers"
+
+rules:
+  - chain: prerouting
+    action: "dnat to 10.8.0.5:443"
+    in_iface: r5pub
+    proto: tcp
+    dport: 8443
+
+  - chain: prerouting
+    action: "dnat to 10.8.0.6"
+    in_iface: r5pub
+    proto: udp
+    dport: 5353
+
+  - chain: prerouting
+    action: "dnat to [fd00:70:68::5]:443"
+    family: 10
+    in_iface: r5pub
+    proto: tcp
+    dport: 8443
+
+  - chain: forward
+    action: accept
+    in_iface: r5pub
+    out_iface: r5main
+    destination: 10.8.0.5/32
+    proto: tcp
+    dport: 443
+    state: new
+
+  - chain: forward
+    action: accept
+    family: 10
+    in_iface: r5pub
+    out_iface: r5main
+    destination: "fd00:70:68::5/128"
+    proto: tcp
+    dport: 443
+    state: new

@@ -1,0 +1,12 @@
+# The first of three groups on one port: the VPN network may connect.
+name: layered-allow
+priority: 10
+metadata:
+  description: "SSH from the VPN network"
+
+rules:
+  - chain: input
+    action: accept
+    source: 10.8.0.0/24
+    proto: tcp
+    dport: 22

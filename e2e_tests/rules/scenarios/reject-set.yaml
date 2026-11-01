@@ -1,0 +1,30 @@
+# Rejected and dropped ports, networks and ports together, IPv4 and IPv6.
+name: reject-set
+priority: 30
+metadata:
+  description: "Reject set"
+
+rules:
+  - chain: output
+    action: reject
+    proto: tcp
+    dport: 25
+
+  - chain: input
+    action: drop
+    source: 192.0.2.0/24
+    proto: tcp
+    dport: 3389
+
+  - chain: forward
+    action: reject
+    destination: 198.51.100.0/24
+    proto: udp
+    dport: 53
+
+  - chain: input
+    action: drop
+    family: 10
+    source: "2001:db8:bad::/48"
+    proto: tcp
+    dport: 3389
