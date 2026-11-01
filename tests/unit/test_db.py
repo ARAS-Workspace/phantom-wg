@@ -10,7 +10,9 @@ from firewall_bridge.types import GroupNotFoundError, RuleNotFoundError
 
 @pytest.fixture
 def db(tmp_path):
-    return FirewallDB(str(tmp_path / "test.db"))
+    d = FirewallDB(str(tmp_path / "test.db"))
+    yield d
+    d.close()
 
 
 class TestSchema:

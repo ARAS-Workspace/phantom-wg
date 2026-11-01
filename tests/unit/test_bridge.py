@@ -52,7 +52,9 @@ def mock_lib():
 @pytest.fixture
 def bridge(mock_lib, tmp_path):
     with patch("firewall_bridge.bridge.get_lib", return_value=mock_lib):
-        return FirewallBridge(str(tmp_path / "test.db"))
+        b = FirewallBridge(str(tmp_path / "test.db"))
+    yield b
+    b.close()
 
 
 @pytest.fixture
@@ -541,6 +543,8 @@ class TestCrashRecovery:
             mock_lib.rt_policy_add.assert_called_once()
             rules = fw2.list_firewall_rules("vpn")
             assert rules[0].applied is True
+        fw1.close()
+        fw2.close()
 
 
 class TestUtility:
