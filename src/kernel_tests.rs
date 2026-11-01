@@ -1,9 +1,15 @@
-//! Tests against the kernel: the real nft program and netlink, in the
-//! network namespace of the container dev/cargo.sh starts (privileged, nft
-//! installed). They call the exported C functions, as the Python package
-//! does, and read the result back with nft and ip.
+//! Tests against the kernel: the real nft program and netlink. They call the
+//! exported C functions, as the Python package does, and read the result
+//! back with nft and ip.
+//!
+//! Each test first moves its own thread into a new network and mount
+//! namespace (`isolate`), so it starts from an empty ruleset and an empty
+//! /etc/iproute2 and leaves the namespace it was started in as it was. That
+//! needs CAP_SYS_ADMIN and CAP_NET_ADMIN: the privileged container
+//! dev/cargo.sh starts has both, and nft and ip installed.
 
 use std::ffi::{CStr, CString};
+use std::io;
 use std::process::Command;
 
 use super::*;
@@ -29,17 +35,30 @@ fn c(s: &str) -> CString {
     CString::new(s).unwrap()
 }
 
+/// Puts the calling thread in a new network and mount namespace, with lo up
+/// and an empty tmpfs on /etc/iproute2. libtest runs each test on a thread
+/// of its own, so the namespaces end with the test. Programs the test
+/// starts, nft included, are born in them.
+fn isolate() {
+    // SAFETY: unshare takes constant flags and changes only this thread.
+    let rc = unsafe { libc::unshare(libc::CLONE_NEWNS | libc::CLONE_NEWNET) };
+    assert_eq!(rc, 0, "unshare: {}", io::Error::last_os_error());
+    read("mount", &["--make-rprivate", "/"]);
+    read("mount", &["-t", "tmpfs", "fwb-test", "/etc/iproute2"]);
+    read("ip", &["link", "set", "lo", "up"]);
+}
+
 // ---------------------------------------------------------------------------
 // nftables
 // ---------------------------------------------------------------------------
 
-/// nft_init on entry; nft_close and no table on the way out, panic or not,
-/// so the next test, and the ones that expect no context, find none.
+/// nft_init on entry; nft_close on the way out, panic or not, so the tests
+/// that expect no context find none. NFT_CTX is process-wide, unlike the
+/// namespaces.
 struct Nft;
 
 impl Nft {
     fn init() -> Self {
-        let _ = run("nft", &["delete", "table", "inet", "phantom"]);
         assert_eq!(nft_init(), ErrorCode::Ok as i32, "nft_init: {}", last_error());
         Nft
     }
@@ -48,7 +67,6 @@ impl Nft {
 impl Drop for Nft {
     fn drop(&mut self) {
         nft_close();
-        let _ = run("nft", &["delete", "table", "inet", "phantom"]);
     }
 }
 
@@ -74,6 +92,7 @@ fn add_input_rule(port: i32, comment: &str) -> i64 {
 #[test]
 fn kernel_nft_table_rules_and_handles() {
     let _serial = serial();
+    isolate();
     let _nft = Nft::init();
 
     let empty_table = table();
@@ -126,6 +145,7 @@ fn kernel_nft_table_rules_and_handles() {
 #[test]
 fn kernel_nft_errors_reach_the_caller() {
     let _serial = serial();
+    isolate();
     let _nft = Nft::init();
     let empty_table = table();
     let empty = c("");
@@ -153,6 +173,7 @@ fn kernel_nft_errors_reach_the_caller() {
 #[test]
 fn kernel_nft_close_ends_the_context() {
     let _serial = serial();
+    isolate();
     {
         let _nft = Nft::init();
         assert_eq!(nft_flush_table(), ErrorCode::Ok as i32);
@@ -166,41 +187,10 @@ fn kernel_nft_close_ends_the_context() {
 
 const RT_TABLES: &str = "/etc/iproute2/rt_tables";
 
-/// Starts without /etc/iproute2/rt_tables; on the way out, panic or not,
-/// removes the test's rules and routes and puts the file back as it was.
-struct Routing {
-    saved: Option<Vec<u8>>,
-}
-
-impl Routing {
-    fn start() -> Self {
-        let saved = std::fs::read(RT_TABLES).ok();
-        let _ = std::fs::remove_file(RT_TABLES);
-        Routing { saved }
-    }
-}
-
-impl Drop for Routing {
-    fn drop(&mut self) {
-        for priority in ["3333", "3334", "3336"] {
-            let _ = run("ip", &["rule", "del", "priority", priority]);
-            let _ = run("ip", &["-6", "rule", "del", "priority", priority]);
-        }
-        for table in ["100", "1000"] {
-            let _ = run("ip", &["route", "flush", "table", table]);
-            let _ = run("ip", &["-6", "route", "flush", "table", table]);
-        }
-        let _ = match &self.saved {
-            Some(content) => std::fs::write(RT_TABLES, content),
-            None => std::fs::remove_file(RT_TABLES),
-        };
-    }
-}
-
 #[test]
 fn kernel_routing_tables_rules_and_routes() {
     let _serial = serial();
-    let _routing = Routing::start();
+    isolate();
     let ok = ErrorCode::Ok as i32;
     let failed = ErrorCode::NetlinkFailed as i32;
 
@@ -276,10 +266,16 @@ fn kernel_routing_tables_rules_and_routes() {
     }
 }
 
+const IP_FORWARD: &str = "/proc/sys/net/ipv4/ip_forward";
+
 #[test]
 fn kernel_forwarding_and_route_cache() {
     let _serial = serial();
+    isolate();
+    // Off first: a container may start with forwarding on.
+    std::fs::write(IP_FORWARD, "0").unwrap();
+    assert_eq!(std::fs::read_to_string(IP_FORWARD).unwrap().trim(), "0");
     assert_eq!(rt_enable_ip_forward(), ErrorCode::Ok as i32, "{}", last_error());
-    assert_eq!(std::fs::read_to_string("/proc/sys/net/ipv4/ip_forward").unwrap().trim(), "1");
+    assert_eq!(std::fs::read_to_string(IP_FORWARD).unwrap().trim(), "1");
     assert_eq!(rt_flush_cache(), ErrorCode::Ok as i32);
 }
