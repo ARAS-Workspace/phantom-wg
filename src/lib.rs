@@ -56,6 +56,12 @@ fn set_last_error(msg: &str) {
     }
 }
 
+/// A routing family arrives as i32 across the C ABI; a value outside u8 is
+/// refused rather than cut down to its low byte (266 would read as 10).
+fn family_arg(family: i32) -> Result<u8, String> {
+    u8::try_from(family).map_err(|_| format!("Unknown address family: {family}"))
+}
+
 fn to_heap_cstring(s: &str) -> *mut c_char {
     CString::new(s).map(|c| c.into_raw()).unwrap_or(ptr::null_mut())
 }
@@ -229,7 +235,7 @@ pub unsafe extern "C" fn rt_policy_add(
         (cstr_to_str(from_network), cstr_to_str(to_network), cstr_to_str(table_name))
     };
 
-    match route::policy_add(frm, to, tn, priority, family as u8) {
+    match family_arg(family).and_then(|f| route::policy_add(frm, to, tn, priority, f)) {
         Ok(()) => ErrorCode::Ok as i32,
         Err(msg) => { set_last_error(&msg); ErrorCode::NetlinkFailed as i32 }
     }
@@ -254,7 +260,7 @@ pub unsafe extern "C" fn rt_policy_delete(
         (cstr_to_str(from_network), cstr_to_str(to_network), cstr_to_str(table_name))
     };
 
-    match route::policy_delete(frm, to, tn, priority, family as u8) {
+    match family_arg(family).and_then(|f| route::policy_delete(frm, to, tn, priority, f)) {
         Ok(()) => ErrorCode::Ok as i32,
         Err(msg) => { set_last_error(&msg); ErrorCode::NetlinkFailed as i32 }
     }
@@ -279,7 +285,7 @@ pub unsafe extern "C" fn rt_route_add(
         (cstr_to_str(destination), cstr_to_str(device), cstr_to_str(table_name))
     };
 
-    match route::route_add(dst, dev, tn, family as u8) {
+    match family_arg(family).and_then(|f| route::route_add(dst, dev, tn, f)) {
         Ok(()) => ErrorCode::Ok as i32,
         Err(msg) => { set_last_error(&msg); ErrorCode::NetlinkFailed as i32 }
     }
@@ -303,7 +309,7 @@ pub unsafe extern "C" fn rt_route_delete(
         (cstr_to_str(destination), cstr_to_str(device), cstr_to_str(table_name))
     };
 
-    match route::route_delete(dst, dev, tn, family as u8) {
+    match family_arg(family).and_then(|f| route::route_delete(dst, dev, tn, f)) {
         Ok(()) => ErrorCode::Ok as i32,
         Err(msg) => { set_last_error(&msg); ErrorCode::NetlinkFailed as i32 }
     }
@@ -429,6 +435,13 @@ mod tests {
         // SAFETY: the copy NUL-terminated `buf`.
         let msg = unsafe { CStr::from_ptr(buf.as_ptr()) }.to_str().unwrap();
         assert!(msg.contains("not initialized"), "{msg}");
+    }
+
+    #[test]
+    fn routing_family_outside_u8_is_refused() {
+        assert_eq!(family_arg(10), Ok(10));
+        assert_eq!(family_arg(266), Err("Unknown address family: 266".into()));
+        assert_eq!(family_arg(-1), Err("Unknown address family: -1".into()));
     }
 
     #[test]

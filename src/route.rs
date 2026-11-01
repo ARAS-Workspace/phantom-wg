@@ -375,7 +375,9 @@ fn write_header(buf: &mut [u8], req: Request) {
 /// RTM_NEWRULE / RTM_DELRULE: from <from> [to <to>] table <table> priority <prio>.
 fn policy_msg(req: Request, from_network: &str, to_network: &str, table_id: u32,
               priority: u32, family: u8) -> Result<Vec<u8>, String> {
-    let (from_addr, from_prefix, _) = parse_network(from_network)?;
+    known_family(family)?;
+    let (from_addr, from_prefix, from_family) = parse_network(from_network)?;
+    check_family(from_network, from_family, family)?;
 
     let mut buf = Vec::with_capacity(256);
     buf.extend_from_slice(&[0u8; mem::size_of::<NlMsgHdr>()]);
@@ -396,7 +398,8 @@ fn policy_msg(req: Request, from_network: &str, to_network: &str, table_id: u32,
     push_attr(&mut buf, FRA_SRC, &addr_bytes(&from_addr));
 
     if !to_network.is_empty() {
-        let (to_addr, to_prefix, _) = parse_network(to_network)?;
+        let (to_addr, to_prefix, to_family) = parse_network(to_network)?;
+        check_family(to_network, to_family, family)?;
         push_attr(&mut buf, FRA_DST, &addr_bytes(&to_addr));
         let dst_len_offset = mem::size_of::<NlMsgHdr>() + 1;
         buf[dst_len_offset] = to_prefix;
@@ -413,18 +416,21 @@ fn policy_msg(req: Request, from_network: &str, to_network: &str, table_id: u32,
 }
 
 /// RTM_NEWROUTE / RTM_DELROUTE: <destination> dev <ifindex> table <table>.
-/// "default", "0.0.0.0/0" and "::/0" mean the default route of `family`.
+/// "default" is the default route of `family`; "0.0.0.0/0" and "::/0" spell
+/// that route out, so like any other destination they have to match `family`.
 fn route_msg(req: Request, destination: &str, ifindex: u32, table_id: u32, family: u8)
     -> Result<Vec<u8>, String>
 {
-    let (dst_addr, dst_prefix) = if destination == "default" || destination == "0.0.0.0/0" || destination == "::/0" {
+    known_family(family)?;
+    let (dst_addr, dst_prefix) = if destination == "default" {
         if family == libc::AF_INET6 as u8 {
             (IpAddr::V6(Ipv6Addr::UNSPECIFIED), 0u8)
         } else {
             (IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)), 0u8)
         }
     } else {
-        let (addr, prefix, _) = parse_network(destination)?;
+        let (addr, prefix, dst_family) = parse_network(destination)?;
+        check_family(destination, dst_family, family)?;
         (addr, prefix)
     };
 
@@ -456,6 +462,25 @@ fn route_msg(req: Request, destination: &str, ifindex: u32, table_id: u32, famil
 
     write_header(&mut buf, req);
     Ok(buf)
+}
+
+fn known_family(family: u8) -> Result<(), String> {
+    if family == libc::AF_INET as u8 || family == libc::AF_INET6 as u8 {
+        Ok(())
+    } else {
+        Err(format!("Unknown address family: {family}"))
+    }
+}
+
+/// Every address in a request has to be of the request's family. Without
+/// this check the kernel refuses a mismatch with a bare EINVAL, and takes
+/// `0.0.0.0/0` sent as AF_INET6 for an IPv6 default route.
+fn check_family(network: &str, network_family: u8, family: u8) -> Result<(), String> {
+    if network_family == family {
+        Ok(())
+    } else {
+        Err(format!("Address family {family} does not match {network}"))
+    }
 }
 
 fn send_policy(kind: u16, flags: u16, from_network: &str, to_network: &str,
@@ -814,6 +839,38 @@ mod tests {
         assert!(policy_msg(req, "10.0.1.0", "", 100, 1, 2).is_err());
         assert!(policy_msg(req, "10.0.1.0/24", "nope/8", 100, 1, 2).is_err());
         assert!(route_msg(req, "10.0.0.0/x", 1, 100, 2).is_err());
+    }
+
+    #[test]
+    fn policy_messages_refuse_an_address_of_another_family() {
+        let req = Request { kind: RTM_NEWRULE, flags: CREATE_FLAGS, seq: 1 };
+        for (from, to, family, want) in [
+            ("fd00::/64", "", 2, "Address family 2 does not match fd00::/64"),
+            ("10.0.0.0/24", "", 10, "Address family 10 does not match 10.0.0.0/24"),
+            ("10.0.0.0/24", "fd00::/64", 2, "Address family 2 does not match fd00::/64"),
+            ("10.0.0.0/24", "", 0, "Unknown address family: 0"),
+        ] {
+            assert_eq!(policy_msg(req, from, to, 100, 1, family), Err(want.into()),
+                       "from {from} to {to} family {family}");
+        }
+    }
+
+    #[test]
+    fn route_messages_refuse_an_address_of_another_family() {
+        let req = Request { kind: RTM_NEWROUTE, flags: CREATE_FLAGS, seq: 1 };
+        for (destination, family, want) in [
+            ("fd00::/64", 2, "Address family 2 does not match fd00::/64"),
+            ("10.98.0.0/16", 10, "Address family 10 does not match 10.98.0.0/16"),
+            ("0.0.0.0/0", 10, "Address family 10 does not match 0.0.0.0/0"),
+            ("::/0", 2, "Address family 2 does not match ::/0"),
+            ("default", 0, "Unknown address family: 0"),
+        ] {
+            assert_eq!(route_msg(req, destination, 1, 100, family), Err(want.into()),
+                       "destination {destination} family {family}");
+        }
+        // "default" takes either family.
+        assert!(route_msg(req, "default", 1, 100, 2).is_ok());
+        assert!(route_msg(req, "default", 1, 100, 10).is_ok());
     }
 
     #[test]
