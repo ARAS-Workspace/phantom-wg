@@ -516,6 +516,11 @@ pub fn ensure_table(table_id: u32, table_name: &str) -> Result<(), String> {
 fn ensure_table_in(path: &Path, defaults: &Path, table_id: u32, table_name: &str)
     -> Result<(), String>
 {
+    // An entry is `<id> <name>`; an empty name or one with whitespace would
+    // write a line that reads back as another name, or as none.
+    if table_name.is_empty() || table_name.chars().any(char::is_whitespace) {
+        return Err(format!("Invalid routing table name: {table_name:?}"));
+    }
     seed_rt_tables(path, defaults)?;
     let entry = format!("{} {}", table_id, table_name);
 
@@ -896,6 +901,19 @@ mod tests {
         ensure_table_in(&path, &defaults, 100, "mh").unwrap();
         ensure_table_in(&path, &defaults, 100, "mh").unwrap();
         assert_eq!(std::fs::read_to_string(&path).unwrap(), "100 mh\n");
+    }
+
+    #[test]
+    fn ensure_table_refuses_a_name_that_is_empty_or_has_whitespace() {
+        let dir = rt_dir("bad-name");
+        let path = dir.join("etc/iproute2/rt_tables");
+        let defaults = dir.join("defaults");
+        std::fs::write(&defaults, DEFAULTS).unwrap();
+        for name in ["", "a b", "tab\tname", " lead", "trail\n"] {
+            assert_eq!(ensure_table_in(&path, &defaults, 101, name),
+                       Err(format!("Invalid routing table name: {name:?}")), "name {name:?}");
+        }
+        assert!(!path.exists(), "a refused name created the file");
     }
 
     #[test]
