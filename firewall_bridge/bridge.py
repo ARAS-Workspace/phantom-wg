@@ -134,15 +134,24 @@ class FirewallBridge:
                           in_iface: str = "", out_iface: str = "",
                           state_match: str = "", comment: str = "",
                           position: int = 0) -> int:
+        """Store a rule; when started and its group enabled, apply it too.
+
+        A rule the kernel refuses is deleted from the DB again and the
+        error is raised.
+        """
         rule_id = self._db.add_firewall_rule(
             group_name, chain, action, family, proto, dport, source,
             destination, in_iface, out_iface, state_match, comment, position,
         )
         if self._db.get_state() == "started" and self._db.is_group_enabled(group_name):
-            handle = self._kernel_add_fw_rule(
-                chain, action, family, proto, dport, source, destination,
-                in_iface, out_iface, state_match, comment,
-            )
+            try:
+                handle = self._kernel_add_fw_rule(
+                    chain, action, family, proto, dport, source, destination,
+                    in_iface, out_iface, state_match, comment,
+                )
+            except BaseException:
+                self._db.remove_firewall_rule(rule_id)
+                raise
             self._db.update_fw_applied(rule_id, True, handle)
         return rule_id
 
@@ -164,12 +173,22 @@ class FirewallBridge:
                          table_name: str = "", table_id: int = 0,
                          priority: int = 0, destination: str = "",
                          device: str = "") -> int:
+        """Store a routing rule; when started and its group enabled, apply
+        it too.
+
+        A rule the kernel refuses is deleted from the DB again and the
+        error is raised.
+        """
         rule_id = self._db.add_routing_rule(
             group_name, rule_type, family, from_network, to_network,
             table_name, table_id, priority, destination, device,
         )
         if self._db.get_state() == "started" and self._db.is_group_enabled(group_name):
-            self._kernel_apply_routing(self._db.get_routing_rule(rule_id))
+            try:
+                self._kernel_apply_routing(self._db.get_routing_rule(rule_id))
+            except BaseException:
+                self._db.remove_routing_rule(rule_id)
+                raise
             self._db.update_rt_applied(rule_id, True)
         return rule_id
 

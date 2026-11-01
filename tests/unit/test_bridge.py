@@ -14,6 +14,7 @@ from firewall_bridge.types import (
     AlreadyStartedError,
     NotStartedError,
     GroupNotFoundError,
+    NetlinkError,
     NftablesError,
 )
 
@@ -277,6 +278,25 @@ class TestRefusedByKernel:
         bridge.start()
         assert bridge.get_state() == "started"
         assert bridge.list_firewall_rules()[0].nft_handle == 42
+
+    def test_add_rule_while_started_stores_nothing(self, bridge, mock_lib, last_error):
+        bridge.create_group("g1")
+        bridge.start()
+        bridge.add_firewall_rule("g1", "input", "accept")
+        mock_lib.nft_add_rule.return_value = -3
+        with pytest.raises(NftablesError):
+            bridge.add_firewall_rule("g1", "input", "masquerade")
+        assert [r.action for r in bridge.list_firewall_rules()] == ["accept"]
+
+    def test_add_routing_rule_while_started_stores_nothing(self, bridge, mock_lib,
+                                                           last_error):
+        bridge.create_group("g1")
+        bridge.start()
+        mock_lib.rt_policy_add.return_value = -4
+        with pytest.raises(NetlinkError):
+            bridge.add_routing_rule("g1", "policy", from_network="10.0.0.0/24",
+                                    table_name="mh", priority=100)
+        assert bridge.list_routing_rules() == []
 
 
 class TestRoutingRules:
