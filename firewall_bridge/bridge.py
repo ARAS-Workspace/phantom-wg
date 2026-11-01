@@ -255,7 +255,7 @@ class FirewallBridge:
             rc = self._lib.rt_policy_add(
                 _encode(rule.from_network),
                 _encode(rule.to_network),
-                _encode(rule.table_name),
+                _encode(self._table_for(rule)),
                 rule.priority,
                 rule.family,
             )
@@ -264,7 +264,7 @@ class FirewallBridge:
             rc = self._lib.rt_route_add(
                 _encode(rule.destination),
                 _encode(rule.device),
-                _encode(rule.table_name),
+                _encode(self._table_for(rule)),
                 rule.family,
             )
             check_result(rc)
@@ -275,7 +275,7 @@ class FirewallBridge:
             self._lib.rt_policy_delete(
                 _encode(rule.from_network),
                 _encode(rule.to_network),
-                _encode(rule.table_name),
+                _encode(self._table_for(rule)),
                 rule.priority,
                 rule.family,
             )
@@ -283,9 +283,17 @@ class FirewallBridge:
             self._lib.rt_route_delete(
                 _encode(rule.destination),
                 _encode(rule.device),
-                _encode(rule.table_name),
+                _encode(self._table_for(rule)),
                 rule.family,
             )
+
+    def _table_for(self, rule: RoutingRule) -> str:
+        """The table a policy or route row is sent to: the id of its own
+        group's ensure row for that name, else the name as written."""
+        for other in self._db.routing_rules_for_group(rule.group_id):
+            if other.rule_type == "ensure" and other.table_name == rule.table_name:
+                return str(other.table_id)
+        return rule.table_name
 
     def _apply_group(self, group: Group) -> None:
         """Apply all rules in a group to kernel."""

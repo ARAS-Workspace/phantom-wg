@@ -389,6 +389,35 @@ class TestRoutingRules:
         assert call_args[0][-1] == 10
 
 
+class TestTableOfAGroup:
+    """Policy and route rows go to the id of their group's own ensure row."""
+
+    def test_policy_and_route_use_the_group_ensure_id(self, bridge, mock_lib):
+        bridge.create_group("g1")
+        bridge.add_routing_rule("g1", "ensure", table_name="mh", table_id=200)
+        bridge.add_routing_rule("g1", "policy", from_network="10.0.0.0/24",
+                                table_name="mh", priority=100)
+        bridge.add_routing_rule("g1", "route", destination="default",
+                                device="wg_exit", table_name="mh")
+        bridge.start()
+        assert mock_lib.rt_policy_add.call_args[0][2] == b"200"
+        assert mock_lib.rt_route_add.call_args[0][2] == b"200"
+        bridge.delete_group("g1")
+        assert mock_lib.rt_policy_delete.call_args[0][2] == b"200"
+        assert mock_lib.rt_route_delete.call_args[0][2] == b"200"
+
+    def test_another_group_ensure_is_not_used(self, bridge, mock_lib):
+        bridge.create_group("a")
+        bridge.add_routing_rule("a", "ensure", table_name="mh", table_id=200)
+        bridge.create_group("b")
+        bridge.add_routing_rule("b", "policy", from_network="10.0.0.0/24",
+                                table_name="mh", priority=100)
+        bridge.add_routing_rule("b", "policy", from_network="10.0.0.0/24",
+                                to_network="10.0.0.0/24", table_name="main", priority=99)
+        bridge.start()
+        assert [c[0][2] for c in mock_lib.rt_policy_add.call_args_list] == [b"mh", b"main"]
+
+
 class TestCrashRecovery:
     """Simulate crash: new instance with same DB recovers state."""
 
