@@ -462,6 +462,7 @@ pub unsafe extern "C" fn rt_policy_delete(
 /// family: 2 = AF_INET, 10 = AF_INET6.
 ///
 /// @witness kernel_tests::kernel_routing_tables_rules_and_routes
+/// @witness kernel_tests::kernel_route_delete_takes_a_route_of_any_scope
 /// @witness tests::null_pointers_give_error_codes
 /// @witness tests::routing_family_outside_u8_is_refused_at_the_boundary
 ///
@@ -490,6 +491,7 @@ pub unsafe extern "C" fn rt_route_add(
 /// Delete a route.
 ///
 /// @witness kernel_tests::kernel_routing_tables_rules_and_routes
+/// @witness kernel_tests::kernel_route_delete_takes_a_route_of_any_scope
 /// @witness tests::null_pointers_give_error_codes
 /// @witness tests::routing_family_outside_u8_is_refused_at_the_boundary
 ///

@@ -6,8 +6,9 @@ Drives: add_routing_rule for ensure, policy (from, from and to) and route
 above 255, named through the group's own ensure row or given as numbers;
 the multihop shape of policy and route rows; started then added and
 added then started; stop() and start(); disable_group and enable_group;
-remove_routing_rule; delete_group; and a new FirewallBridge on the same
-database while the kernel still holds the last one's rules. After every
+remove_routing_rule; delete_group; a new FirewallBridge on the same
+database while the kernel still holds the last one's rules, and while it
+holds a v4 default route of universe scope in its place. After every
 step the database's routing rows are the kernel's policy rules and
 routes (oracle.assert_routing_matches_db) and the meter is flat. Each
 case's state, as `ip -N -j` prints it, equals the state its ip commands
@@ -27,9 +28,7 @@ from firewall_bridge import FirewallBridge
 
 from e2e_tests.rules import oracle
 
-# (id, add_routing_rule rows, the same state made with ip). A v4 default
-# route of the bridge has universe scope, so its ip command says scope
-# global; ip gives a device route link scope.
+# (id, add_routing_rule rows, the same state made with ip).
 CASES = [
     ("policy-v4-from",
      [dict(rule_type="policy", from_network="10.40.0.0/24", table_name="150", priority=5001)],
@@ -63,8 +62,7 @@ CASES = [
      [["route", "add", "10.43.0.1/32", "dev", "lo", "table", "150", "proto", "static"]]),
     ("route-v4-default",
      [dict(rule_type="route", destination="default", device="lo", table_name="1000")],
-     [["route", "add", "default", "dev", "lo", "table", "1000", "proto", "static",
-       "scope", "global"]]),
+     [["route", "add", "default", "dev", "lo", "table", "1000", "proto", "static"]]),
     ("route-v6-network",
      [dict(rule_type="route", family=10, destination="fd00:43::/64", device="lo",
            table_name="152")],
@@ -87,8 +85,7 @@ CASES = [
        "priority", "5007"],
       ["rule", "add", "from", "10.45.0.0/24", "lookup", "157", "priority", "5008"],
       ["route", "add", "10.45.0.0/24", "dev", "lo", "table", "157", "proto", "static"],
-      ["route", "add", "default", "dev", "lo", "table", "157", "proto", "static",
-       "scope", "global"]]),
+      ["route", "add", "default", "dev", "lo", "table", "157", "proto", "static"]]),
     ("multihop-v6",
      [dict(rule_type="ensure", family=10, table_name="r4mh6", table_id=158),
       dict(rule_type="policy", family=10, from_network="fd00:45::/64", to_network="fd00:45::/64",
@@ -193,6 +190,29 @@ def test_a_new_bridge_finds_the_last_ones_routing(bridge, db_path, meter):
         second.start()
         _check(second, db_path, meter)
         assert oracle.routing_state() == left
+    finally:
+        second.close()
+
+
+def test_a_new_bridge_takes_a_default_route_of_universe_scope(bridge, db_path, meter):
+    """The first bridge's process ends without stop(), and its v4 default
+    route is in the kernel with universe scope, as bridge 2.1.8 made it:
+    the new bridge's start() puts its own in its place."""
+    bridge.create_group("r4")
+    for row in dict((c[0], c[1]) for c in CASES)["multihop-v4"]:
+        bridge.add_routing_rule("r4", **row)
+    bridge.start()
+    made = oracle.routing_state()
+    oracle.run([oracle.IP, "route", "del", "default", "dev", "lo", "table", "157"])
+    oracle.run([oracle.IP, "route", "add", "default", "dev", "lo", "table", "157", "proto",
+                "static", "scope", "global"])
+    assert oracle.routing_state() != made, "the route of universe scope reads as the bridge's"
+
+    second = FirewallBridge(db_path)
+    try:
+        second.start()
+        _check(second, db_path, meter)
+        assert oracle.routing_state() == made
     finally:
         second.close()
 

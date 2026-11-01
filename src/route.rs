@@ -43,8 +43,8 @@ const RTN_UNICAST: u8 = 1;
 const RTPROT_STATIC: u8 = 4;
 
 // Route scope
-const RT_SCOPE_UNIVERSE: u8 = 0;
 const RT_SCOPE_LINK: u8 = 253;
+const RT_SCOPE_NOWHERE: u8 = 255;
 
 // FIB rule action
 const FR_ACT_TO_TBL: u8 = 1;
@@ -480,10 +480,13 @@ fn policy_msg(req: Request, from_network: &str, to_network: &str, table_id: u32,
 }
 
 /// RTM_NEWROUTE / RTM_DELROUTE: <destination> dev <ifindex> table <table>;
-/// "default" is the default route of `family`.
+/// "default" is the default route of `family`. A new route has link scope,
+/// a delete RT_SCOPE_NOWHERE.
 ///
 /// @witness route::tests::route_message_v4_link_scope
+/// @witness route::tests::route_message_v4_delete_has_no_scope
 /// @witness route::tests::route_message_v6_default_delete
+/// @witness kernel_tests::kernel_route_delete_takes_a_route_of_any_scope
 /// @witness route::tests::route_message_v4_default_table_above_255
 /// @witness route::tests::route_messages_refuse_an_address_of_another_family
 /// @witness route::tests::messages_refuse_a_malformed_network
@@ -513,7 +516,7 @@ fn route_msg(req: Request, destination: &str, ifindex: u32, table_id: u32, famil
         rtm_tos: 0,
         rtm_table: if table_id <= 255 { table_id as u8 } else { 0 },
         rtm_protocol: RTPROT_STATIC,
-        rtm_scope: if dst_prefix == 0 { RT_SCOPE_UNIVERSE } else { RT_SCOPE_LINK },
+        rtm_scope: if req.kind == RTM_DELROUTE { RT_SCOPE_NOWHERE } else { RT_SCOPE_LINK },
         rtm_type: RTN_UNICAST,
         rtm_flags: 0,
     };
@@ -853,13 +856,25 @@ mod tests {
     }
 
     #[test]
+    fn route_message_v4_delete_has_no_scope() {
+        let req = Request { kind: RTM_DELROUTE, flags: DELETE_FLAGS, seq: 6 };
+        let msg = route_msg(req, "10.98.0.0/16", 3, 100, 2).unwrap();
+        let body = cat(&[
+            &[2, 16, 0, 0, 100, 4, 255, 1], &0u32.to_ne_bytes(),
+            &attr(1, &[10, 98, 0, 0]),                   // RTA_DST
+            &attr(4, &3u32.to_ne_bytes()),               // RTA_OIF
+        ]);
+        assert_eq!(msg, cat(&[&nlhdr(16 + body.len() as u32, 25, REQUEST_ACK, 6), &body]));
+    }
+
+    #[test]
     fn route_message_v6_default_delete() {
         for destination in ["default", "::/0"] {
             let req = Request { kind: RTM_DELROUTE, flags: DELETE_FLAGS, seq: 9 };
             let msg = route_msg(req, destination, 1, 201, 10).unwrap();
             let body = cat(&[
-                // A default route has no RTA_DST and universe scope.
-                &[10, 0, 0, 0, 201, 4, 0, 1], &0u32.to_ne_bytes(),
+                // A default route has no RTA_DST.
+                &[10, 0, 0, 0, 201, 4, 255, 1], &0u32.to_ne_bytes(),
                 &attr(4, &1u32.to_ne_bytes()),           // RTA_OIF
             ]);
             assert_eq!(msg, cat(&[&nlhdr(16 + body.len() as u32, 25, REQUEST_ACK, 9), &body]),
@@ -872,7 +887,7 @@ mod tests {
         let req = Request { kind: RTM_NEWROUTE, flags: CREATE_FLAGS, seq: 2 };
         let msg = route_msg(req, "0.0.0.0/0", 4, 300, 2).unwrap();
         let body = cat(&[
-            &[2, 0, 0, 0, 0, 4, 0, 1], &0u32.to_ne_bytes(),
+            &[2, 0, 0, 0, 0, 4, 253, 1], &0u32.to_ne_bytes(),
             &attr(4, &4u32.to_ne_bytes()),               // RTA_OIF
             &attr(15, &300u32.to_ne_bytes()),            // RTA_TABLE
         ]);

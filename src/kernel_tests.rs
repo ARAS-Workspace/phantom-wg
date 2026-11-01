@@ -496,6 +496,33 @@ fn kernel_routing_tables_rules_and_routes() {
     }
 }
 
+/// Routes of universe scope, the scope bridge 2.1.8 gave a v4 default route,
+/// put there with ip: rt_route_delete takes them, and rt_route_add puts the
+/// default route back with link scope.
+#[test]
+fn kernel_route_delete_takes_a_route_of_any_scope() {
+    let _serial = serial();
+    isolate();
+    let ok = ErrorCode::Ok as i32;
+    for dst in ["default", "10.127.0.0/16"] {
+        read("ip", &["route", "add", dst, "dev", "lo", "table", "100", "proto", "static",
+                     "scope", "global"]);
+    }
+
+    // SAFETY: every pointer passed below is a NUL-terminated literal.
+    unsafe {
+        for dst in [c"default", c"10.127.0.0/16"] {
+            assert_eq!(rt_route_delete(dst.as_ptr(), c"lo".as_ptr(), c"100".as_ptr(), 2),
+                       ok, "{}", last_error());
+        }
+        assert_eq!(run("ip", &["route", "show", "table", "100"]).1, "");
+        assert_eq!(rt_route_add(c"default".as_ptr(), c"lo".as_ptr(), c"100".as_ptr(), 2),
+                   ok, "{}", last_error());
+    }
+    assert_eq!(read("ip", &["route", "show", "table", "100"]).trim_end(),
+               "default dev lo proto static scope link");
+}
+
 /// The bridge's limit on an rt_tables line is the one ip reads: an entry of
 /// 511 characters resolves, and the same entry one character longer, put
 /// there by hand, makes ip refuse the file.
