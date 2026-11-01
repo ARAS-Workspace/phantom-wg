@@ -21,7 +21,7 @@ from __future__ import annotations
 import ipaddress
 import re
 
-from .types import PresetValidationError
+from .types import InvalidParamError, PresetValidationError
 
 
 # ---- CIDR validation ----
@@ -44,6 +44,30 @@ def _is_cidr(value: str) -> bool:
     except ValueError:
         return False
     return True
+
+
+def _is_address_or_cidr(value: str) -> bool:
+    """An IPv4 or IPv6 address, or a network in CIDR notation."""
+    if "/" in value:
+        return _is_cidr(value)
+    try:
+        ipaddress.ip_address(value)
+    except ValueError:
+        return False
+    return True
+
+
+# The longest rule comment nft keeps, in bytes.
+_COMMENT_MAX_BYTES = 128
+
+
+def _check_comment(path: str, value: str) -> None:
+    """At most _COMMENT_MAX_BYTES bytes, with no double quote, backslash or
+    control character."""
+    if len(value.encode("utf-8")) > _COMMENT_MAX_BYTES:
+        _fail(path, f"longer than {_COMMENT_MAX_BYTES} bytes", value)
+    if any(c in '"\\' or not c.isprintable() for c in value):
+        _fail(path, "must not hold a double quote, a backslash or a control character", value)
 
 
 # ---- Interface / state / action validation ----
@@ -140,6 +164,16 @@ RULE_FIELDS = {
     "state":       {"type": str, "required": False, "default": "", "format": "ct_state_or_empty"},
 }
 
+# FirewallBridge.add_firewall_rule: RULE_FIELDS, with addresses as well as
+# networks, a comment and a position.
+DIRECT_RULE_FIELDS = {
+    **RULE_FIELDS,
+    "source":      {"type": str, "required": False, "default": "", "format": "address_or_cidr_or_empty"},
+    "destination": {"type": str, "required": False, "default": "", "format": "address_or_cidr_or_empty"},
+    "comment":     {"type": str, "required": False, "default": "", "format": "comment"},
+    "position":    {"type": int, "required": False, "default": 0},
+}
+
 PRESET_FIELDS = {
     "name":     {"type": str, "required": True},
     "priority": {"type": int, "required": False, "default": 100, "min": 0, "max": 999},
@@ -209,6 +243,11 @@ def _check_format(path: str, value: str, fmt: str) -> None:
     elif fmt == "cidr_or_empty":
         if value and not _is_cidr(value):
             _fail(path, "must be empty or valid CIDR", value)
+    elif fmt == "address_or_cidr_or_empty":
+        if value and not _is_address_or_cidr(value):
+            _fail(path, "must be empty, an IP address or valid CIDR", value)
+    elif fmt == "comment":
+        _check_comment(path, value)
     elif fmt == "iface_or_empty":
         if value and not _IFACE_RE.match(value):
             _fail(path, "must be empty or a valid interface name "
@@ -284,3 +323,14 @@ def validate_preset(spec: object) -> dict:
         result["rules"] = validated_rules
 
     return result
+
+
+def validate_firewall_rule(rule: dict) -> None:
+    """Validate the fields of FirewallBridge.add_firewall_rule.
+
+    Raises InvalidParamError naming the field and the reason.
+    """
+    try:
+        _validate_fields("rule", rule, DIRECT_RULE_FIELDS)
+    except PresetValidationError as e:
+        raise InvalidParamError(e.message) from None

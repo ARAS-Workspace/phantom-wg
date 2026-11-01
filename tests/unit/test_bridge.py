@@ -14,6 +14,7 @@ from firewall_bridge.types import (
     AlreadyStartedError,
     NotStartedError,
     GroupNotFoundError,
+    InvalidParamError,
     NetlinkError,
     NftablesError,
 )
@@ -387,6 +388,57 @@ class TestRoutingRules:
         mock_lib.rt_route_add.assert_called()
         call_args = mock_lib.rt_route_add.call_args
         assert call_args[0][-1] == 10
+
+
+class TestDirectRuleFields:
+    """add_firewall_rule checks its fields before the DB or the kernel."""
+
+    def test_a_hostile_interface_reaches_neither(self, bridge, mock_lib):
+        bridge.create_group("g1")
+        bridge.start()
+        mock_lib.reset_mock()
+        with pytest.raises(InvalidParamError, match="rule.in_iface"):
+            bridge.add_firewall_rule("g1", "input", "accept",
+                                     in_iface='wg0" accept; flush ruleset; #')
+        assert mock_lib.method_calls == []
+        assert bridge.list_firewall_rules() == []
+
+    @pytest.mark.parametrize("field, value", [
+        ("comment", 'a"b'),
+        ("comment", "a\\b"),
+        ("comment", "a\nb"),
+        ("comment", "\u011f" * 65),
+        ("source", "example.com"),
+        ("destination", "10.0.0.0/33"),
+        ("chain", "nochain"),
+        ("action", "accept; flush ruleset"),
+        ("state_match", "established; drop"),
+        ("proto", "tcp; drop"),
+        ("dport", 70000),
+        ("family", 3),
+    ])
+    def test_each_field_is_checked(self, bridge, field, value):
+        bridge.create_group("g1")
+        fields = {"chain": "input", "action": "accept", field: value}
+        name = {"state_match": "state"}.get(field, field)
+        with pytest.raises(InvalidParamError, match=f"rule.{name}"):
+            bridge.add_firewall_rule("g1", **fields)
+        assert bridge.list_firewall_rules() == []
+
+    @pytest.mark.parametrize("fields", [
+        {"destination": "192.0.2.1"},
+        {"family": 10, "source": "2001:db8::1"},
+        {"source": "10.0.0.0/24"},
+        {"comment": "\u011f" * 64},
+        {"comment": "kural 42: wg0 \u2192 eth0"},
+        {"state_match": "NEW"},
+        {"action": "dnat to [2001:db8::1]:443", "family": 10, "proto": "tcp", "dport": 443},
+    ])
+    def test_values_taken_before_are_taken(self, bridge, fields):
+        bridge.create_group("g1")
+        bridge.add_firewall_rule("g1", fields.pop("chain", "input"), fields.pop("action", "accept"),
+                                 **fields)
+        assert len(bridge.list_firewall_rules()) == 1
 
 
 class TestTableOfAGroup:

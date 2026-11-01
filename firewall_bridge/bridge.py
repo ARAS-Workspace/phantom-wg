@@ -25,6 +25,7 @@ from typing import Optional, Type
 from ._ffi import get_lib, _read_and_free
 from .db import FirewallDB
 from .models import Group, FirewallRule, RoutingRule
+from .schema import validate_firewall_rule
 from .types import (
     BridgeError,
     AlreadyStartedError,
@@ -149,9 +150,16 @@ class FirewallBridge:
                           position: int = 0) -> int:
         """Store a rule; when started and its group enabled, apply it too.
 
-        A rule the kernel refuses is deleted from the DB again and the
-        error is raised.
+        Fields that fail validate_firewall_rule raise InvalidParamError
+        before anything is stored. A rule the kernel refuses is deleted from
+        the DB again and the error is raised.
         """
+        validate_firewall_rule({
+            "chain": chain, "action": action, "family": family, "proto": proto,
+            "dport": dport, "source": source, "destination": destination,
+            "in_iface": in_iface, "out_iface": out_iface, "state": state_match,
+            "comment": comment, "position": position,
+        })
         rule_id = self._db.add_firewall_rule(
             group_name, chain, action, family, proto, dport, source,
             destination, in_iface, out_iface, state_match, comment, position,
