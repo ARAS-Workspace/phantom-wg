@@ -14,12 +14,15 @@ The three invariants:
                               kernel's rules, handle for handle, each one is
                               the rule its reference counterpart is, and the
                               bridge reports the file as it is
-  3. ProcessMeter             no child, no nft process, no new zombie;
+     assert_routing_matches_db the same for the routing rows, against
+                              the policy rules and routes ip lists
+  3. ProcessMeter            no child, no nft process, no new zombie;
                               descriptors and threads back at the start
 """
 
 from __future__ import annotations
 
+import ipaddress
 import json
 import os
 import sqlite3
@@ -140,23 +143,23 @@ def reference_delete(chain: str, handle: int) -> None:
 # ── ip rules and routes ───────────────────────────────────────────
 
 def ip_rules(lowest: int, highest: int) -> list[dict]:
-    """`ip -j rule show` for both families, the rules whose priority is
-    in [lowest, highest], each with its family flag."""
+    """`ip -N -j rule show` for both families, the rules whose priority is
+    in [lowest, highest], each with its family flag. Tables read as ids."""
     rules = []
     for family in ("-4", "-6"):
-        for r in json.loads(run([IP, "-j", family, "rule", "show"])):
+        for r in json.loads(run([IP, "-N", "-j", family, "rule", "show"])):
             if lowest <= r["priority"] <= highest:
                 rules.append({"family": family, **r})
     return rules
 
 
 def ip_routes(table: str) -> list[dict]:
-    """`ip -j route show table` for both families, each route with its
+    """`ip -N -j route show table` for both families, each route with its
     family flag. A table the kernel does not have reads as empty."""
     routes = []
     for family in ("-4", "-6"):
         r = subprocess.run(
-            [IP, "-j", family, "route", "show", "table", table],
+            [IP, "-N", "-j", family, "route", "show", "table", table],
             capture_output=True, text=True, check=False,
         )
         if r.returncode != 0:
@@ -165,6 +168,111 @@ def ip_routes(table: str) -> list[dict]:
             raise RuntimeError(f"ip {family} route show table {table}: {r.stderr.strip()}")
         routes += [{"family": family, **route} for route in json.loads(r.stdout)]
     return routes
+
+
+# The policy rule priorities and route tables the rule stage owns.
+RULE_PRIORITIES = (5000, 5999)
+ROUTE_TABLES = tuple(range(150, 160)) + tuple(range(1000, 1010))
+
+_BUILTIN_TABLES = {"default": 253, "main": 254, "local": 255}
+
+# The bridge's own file of table names.
+DROP_IN = "/etc/iproute2/rt_tables.d/phantom.conf"
+
+
+def routing_state() -> tuple[list[dict], dict[int, list[dict]]]:
+    """The kernel's policy rules in RULE_PRIORITIES and the routes of each
+    ROUTE_TABLES table that has any."""
+    routes = {t: ip_routes(str(t)) for t in ROUTE_TABLES}
+    return ip_rules(*RULE_PRIORITIES), {t: r for t, r in routes.items() if r}
+
+
+def clear_routing() -> None:
+    """Deletes the rule stage's policy rules and flushes its route tables."""
+    for r in ip_rules(*RULE_PRIORITIES):
+        subprocess.run([IP, r["family"], "rule", "del", "priority", str(r["priority"])],
+                       capture_output=True, check=False)
+    for family in ("-4", "-6"):
+        for t in ROUTE_TABLES:
+            subprocess.run([IP, family, "route", "flush", "table", str(t)],
+                           capture_output=True, check=False)
+
+
+def _ip_net(text: str) -> tuple[str, int]:
+    net = ipaddress.ip_network(text, strict=False)
+    return str(net.network_address), net.prefixlen
+
+
+def _route_dst(text: str) -> str:
+    """A route destination as `ip -j` prints it."""
+    if text == "default":
+        return text
+    net = ipaddress.ip_network(text, strict=False)
+    return str(net.network_address) if net.prefixlen == net.max_prefixlen else str(net)
+
+
+def assert_routing_matches_db(db_path: str) -> None:
+    """Invariant 2 for routing: the database file's applied policy and
+    route rows are the kernel's policy rules in RULE_PRIORITIES and its
+    routes in ROUTE_TABLES, no more and no fewer. DROP_IN holds no id or
+    name twice, and for each applied ensure row a line with its id or its
+    name that is one of the applied ensure rows. A row's table is the id
+    of its group's ensure row for that name, else the name as a number or
+    a built-in name."""
+    db = sqlite3.connect(db_path)
+    try:
+        rows = db.execute(
+            "SELECT id, group_id, rule_type, family, from_network, to_network, table_name, "
+            "table_id, priority, destination, device, applied FROM routing_rules").fetchall()
+    finally:
+        db.close()
+    ensures = {(g, name): tid for _, g, kind, _, _, _, name, tid, _, _, _, _ in rows
+               if kind == "ensure"}
+
+    def table(group_id: int, name: str) -> int:
+        if (group_id, name) in ensures:
+            return ensures[(group_id, name)]
+        return _BUILTIN_TABLES[name] if name in _BUILTIN_TABLES else int(name)
+
+    want_rules, want_routes = [], {}
+    for _, g, kind, fam, frm, to, name, _, prio, dst, dev, applied in rows:
+        if not applied:
+            continue
+        flag = "-6" if fam == 10 else "-4"
+        if kind == "policy":
+            rule = {"family": flag, "priority": prio}
+            rule["src"], rule["srclen"] = _ip_net(frm)
+            if to:
+                rule["dst"], rule["dstlen"] = _ip_net(to)
+            rule["table"] = str(table(g, name))
+            want_rules.append(rule)
+        elif kind == "route":
+            want_routes.setdefault(table(g, name), []).append(
+                {"family": flag, "dst": _route_dst(dst), "dev": dev})
+
+    lines = open(DROP_IN).read().split() if os.path.exists(DROP_IN) else []
+    named = list(zip(map(int, lines[0::2]), lines[1::2]))
+    assert len({i for i, _ in named}) == len(named) == len({n for _, n in named}), (
+        f"an id or a name twice in {DROP_IN}: {named}")
+    ensured = {(tid, name) for _, _, kind, _, _, _, name, tid, _, _, _, applied in rows
+               if kind == "ensure" and applied}
+    for tid, name in ensured:
+        line = [pair for pair in named if tid == pair[0] or name == pair[1]]
+        assert line and line[0] in ensured, (
+            f"{tid} {name}: {DROP_IN} holds {line or 'neither its id nor its name'}")
+
+    rules, routes = routing_state()
+    got_rules = [{k: v for k, v in r.items() if k in ("family", "priority", "src", "srclen",
+                                                      "dst", "dstlen", "table")} for r in rules]
+    key = lambda d: json.dumps(d, sort_keys=True)
+    assert sorted(got_rules, key=key) == sorted(want_rules, key=key), (
+        f"policy rules differ\n  kernel   {sorted(got_rules, key=key)}\n"
+        f"  database {sorted(want_rules, key=key)}")
+    got_routes = {t: sorted(({"family": r["family"], "dst": r["dst"], "dev": r["dev"]} for r in rs),
+                            key=key) for t, rs in routes.items()}
+    want_routes = {t: sorted(rs, key=key) for t, rs in want_routes.items()}
+    assert got_routes == want_routes, (
+        f"routes differ\n  kernel   {got_routes}\n  database {want_routes}")
 
 
 # ── Invariant 1: the two tables ───────────────────────────────────
