@@ -96,24 +96,18 @@ impl NftContext {
 
 const TABLE: &str = "inet phantom";
 
+/// One nft run is one transaction: the table and its five chains are
+/// created together or not at all. `add` leaves what already exists alone.
 pub fn ensure_table(nft: &NftContext) -> Result<(), String> {
-    nft.run(&format!("add table {TABLE}")).map(|_| ())?;
-    nft.run(&format!(
-        "add chain {TABLE} input {{ type filter hook input priority 0; policy accept; }}"
-    )).map(|_| ())?;
-    nft.run(&format!(
-        "add chain {TABLE} output {{ type filter hook output priority 0; policy accept; }}"
-    )).map(|_| ())?;
-    nft.run(&format!(
-        "add chain {TABLE} forward {{ type filter hook forward priority 0; policy accept; }}"
-    )).map(|_| ())?;
-    nft.run(&format!(
-        "add chain {TABLE} prerouting {{ type nat hook prerouting priority -100; policy accept; }}"
-    )).map(|_| ())?;
-    nft.run(&format!(
-        "add chain {TABLE} postrouting {{ type nat hook postrouting priority 100; policy accept; }}"
-    )).map(|_| ())?;
-    Ok(())
+    let cmd = [
+        format!("add table {TABLE}"),
+        format!("add chain {TABLE} input {{ type filter hook input priority 0; policy accept; }}"),
+        format!("add chain {TABLE} output {{ type filter hook output priority 0; policy accept; }}"),
+        format!("add chain {TABLE} forward {{ type filter hook forward priority 0; policy accept; }}"),
+        format!("add chain {TABLE} prerouting {{ type nat hook prerouting priority -100; policy accept; }}"),
+        format!("add chain {TABLE} postrouting {{ type nat hook postrouting priority 100; policy accept; }}"),
+    ].join("\n");
+    nft.run(&cmd).map(|_| ())
 }
 
 pub fn flush_table(nft: &NftContext) -> Result<(), String> {
@@ -403,6 +397,24 @@ mod tests {
         let ctx = NftContext::with_binary(&nft).unwrap();
         assert_eq!(ctx.run_json("list table inet phantom").unwrap(), r#"{"nftables": []}"#);
         assert_eq!(recorded(&nft, "args"), "--json\n--handle\n--\nlist table inet phantom\n");
+    }
+
+    #[test]
+    fn test_ensure_table_is_one_run() {
+        let _serial = serial();
+        let nft = fake_nft("ensure_table", "printf 'x\\n' >> \"$0.calls\"");
+        let ctx = NftContext::with_binary(&nft).unwrap();
+        ensure_table(&ctx).unwrap();
+        assert_eq!(recorded(&nft, "calls"), "x\n");
+        let args = recorded(&nft, "args");
+        let lines: Vec<&str> = args.lines().collect();
+        assert_eq!(lines[0], "--");
+        assert_eq!(lines[1], "add table inet phantom");
+        assert_eq!(lines.len(), 7, "got: {args}");
+        for (line, chain) in lines[2..].iter()
+            .zip(["input", "output", "forward", "prerouting", "postrouting"]) {
+            assert!(line.starts_with(&format!("add chain inet phantom {chain} {{")), "got: {line}");
+        }
     }
 
     #[test]
