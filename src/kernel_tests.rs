@@ -13,7 +13,7 @@ use std::io;
 use std::process::Command;
 
 use super::*;
-use crate::test_support::{last_error, serial};
+use crate::test_support::{children, last_error, serial};
 
 /// Runs a program; returns whether it succeeded, and its stdout.
 fn run(program: &str, args: &[&str]) -> (bool, String) {
@@ -229,6 +229,64 @@ fn kernel_nft_ensure_table_is_all_or_nothing() {
     assert!((start..end).contains(&caret), "caret {caret} outside {start}..{end}:\n{err}");
 
     assert_eq!(table(), before, "the failed batch created something");
+}
+
+/// Rules added, removed, refused and flushed with the real nft: every nft
+/// is waited for, so this process has no child left afterwards.
+#[test]
+fn kernel_nft_leaves_no_child_behind() {
+    let _serial = serial();
+    isolate();
+    let _nft = Nft::init();
+    for port in 1..=20 {
+        let handle = add_input_rule(port, "");
+        assert!(handle > 0, "{}", last_error());
+        // SAFETY: NUL-terminated literals.
+        unsafe {
+            assert_eq!(nft_remove_rule(c"input".as_ptr(), handle as u64), ErrorCode::Ok as i32);
+            assert_eq!(nft_remove_rule(c"input".as_ptr(), handle as u64),
+                       ErrorCode::NftablesFailed as i32);
+        }
+    }
+    assert_eq!(nft_flush_table(), ErrorCode::Ok as i32);
+    assert_eq!(children(), Vec::<String>::new());
+}
+
+/// SIGCHLD set to SIG_IGN while it lives, back to SIG_DFL when dropped. The
+/// disposition is process-wide; the serial lock keeps every other test that
+/// starts a process out meanwhile.
+struct SigchldIgnored;
+
+impl SigchldIgnored {
+    fn set() -> Self {
+        // SAFETY: signal with a constant disposition and no handler code.
+        unsafe { libc::signal(libc::SIGCHLD, libc::SIG_IGN) };
+        SigchldIgnored
+    }
+}
+
+impl Drop for SigchldIgnored {
+    fn drop(&mut self) {
+        // SAFETY: signal with a constant disposition and no handler code.
+        unsafe { libc::signal(libc::SIGCHLD, libc::SIG_DFL) };
+    }
+}
+
+/// With SIGCHLD ignored the kernel reaps nft before the bridge waits for it:
+/// the call returns an error, the rule is in the kernel all the same, and
+/// no child is left.
+#[test]
+fn kernel_nft_with_sigchld_ignored() {
+    let _serial = serial();
+    isolate();
+    let _nft = Nft::init();
+    {
+        let _ignored = SigchldIgnored::set();
+        assert_eq!(add_input_rule(5353, ""), ErrorCode::NftablesFailed as i64);
+        assert_eq!(last_error(), "nft did not finish: No child processes (os error 10)");
+    }
+    assert!(chain("input").contains("tcp dport 5353 accept"), "the rule was not applied");
+    assert_eq!(children(), Vec::<String>::new());
 }
 
 #[test]

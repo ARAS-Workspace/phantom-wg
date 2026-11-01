@@ -333,7 +333,7 @@ pub(crate) mod tests {
     use std::os::unix::fs::PermissionsExt;
     use std::path::Path;
 
-    use crate::test_support::serial;
+    use crate::test_support::{children, serial};
 
     /// A shell script that records its arguments and stdin next to itself,
     /// then runs `body`. It lives under target/, not the system temp
@@ -523,21 +523,6 @@ pub(crate) mod tests {
         let ctx = NftContext::with_binary(&nft).unwrap();
         ctx.run("list ruleset").unwrap();
         assert_eq!(recorded(&nft, "env"), "LC_ALL=C\n");
-    }
-
-    /// Processes whose parent is this one, as "pid state".
-    fn children() -> Vec<String> {
-        let me = std::process::id().to_string();
-        std::fs::read_dir("/proc").unwrap()
-            .filter_map(|e| std::fs::read_to_string(e.ok()?.path().join("stat")).ok())
-            .filter_map(|stat| {
-                // pid (comm) state ppid …; comm may hold spaces and parens.
-                let (pid, rest) = stat.split_once(' ')?;
-                let mut fields = rest.rsplit_once(')')?.1.split_whitespace();
-                let state = fields.next()?;
-                (fields.next()? == me).then(|| format!("{pid} {state}"))
-            })
-            .collect()
     }
 
     /// Every nft is waited for before the call returns, whether it

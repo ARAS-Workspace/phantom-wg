@@ -23,6 +23,21 @@ mod test_support {
         SERIAL.lock().unwrap_or_else(|e| e.into_inner())
     }
 
+    /// Processes whose parent is this one, as "pid state".
+    pub fn children() -> Vec<String> {
+        let me = std::process::id().to_string();
+        std::fs::read_dir("/proc").unwrap()
+            .filter_map(|e| std::fs::read_to_string(e.ok()?.path().join("stat")).ok())
+            .filter_map(|stat| {
+                // pid (comm) state ppid …; comm may hold spaces and parens.
+                let (pid, rest) = stat.split_once(' ')?;
+                let mut fields = rest.rsplit_once(')')?.1.split_whitespace();
+                let state = fields.next()?;
+                (fields.next()? == me).then(|| format!("{pid} {state}"))
+            })
+            .collect()
+    }
+
     /// The last recorded error, read the way a C caller reads it.
     pub fn last_error() -> String {
         use std::ffi::{c_char, CStr};
