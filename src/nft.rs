@@ -4,7 +4,6 @@
 //! This avoids conflicts with UFW, iptables, or any other rulesets.
 //! No DB dependency — pure kernel operations.
 
-use std::io::Write;
 use std::path::PathBuf;
 use std::process::{Command, Stdio};
 
@@ -51,27 +50,22 @@ impl NftContext {
         self.exec(&["--json", "--handle"], cmd)
     }
 
-    /// `nft -f -` takes the command on stdin, the buffer form
-    /// `nft_run_cmd_from_buffer` took. The child gets an empty environment
-    /// apart from `LC_ALL=C`.
+    /// The command goes to nft as one argument after `--`, the buffer form
+    /// `nft_run_cmd_from_buffer` took. stdin is closed: nothing is written
+    /// to the child, so an nft that exits early cannot raise SIGPIPE in the
+    /// host. The child gets an empty environment apart from `LC_ALL=C`.
     fn exec(&self, flags: &[&str], cmd: &str) -> Result<String, String> {
-        let mut child = Command::new(&self.binary)
+        let child = Command::new(&self.binary)
             .args(flags)
-            .args(["-f", "-"])
+            .arg("--")
+            .arg(cmd)
             .env_clear()
             .env("LC_ALL", "C")
-            .stdin(Stdio::piped())
+            .stdin(Stdio::null())
             .stdout(Stdio::piped())
             .stderr(Stdio::piped())
             .spawn()
             .map_err(|e| format!("nft could not be started: {e}"))?;
-
-        // The handle drops at the end of the arm, closing stdin, so nft has
-        // its whole input before the output is read.
-        let written = match child.stdin.take() {
-            Some(mut stdin) => stdin.write_all(cmd.as_bytes()),
-            None => Ok(()),
-        };
 
         let out = child.wait_with_output()
             .map_err(|e| format!("nft did not finish: {e}"))?;
@@ -85,7 +79,6 @@ impl NftContext {
                 error
             });
         }
-        written.map_err(|e| format!("nft input could not be written: {e}"))?;
 
         Ok(String::from_utf8_lossy(&out.stdout).into_owned())
     }
@@ -426,10 +419,12 @@ mod tests {
     }
 
     /// A shell script that records its arguments and stdin next to itself,
-    /// then runs `body`.
+    /// then runs `body`. It lives under target/, not the system temp
+    /// directory, which may be mounted noexec.
     fn fake_nft(name: &str, body: &str) -> PathBuf {
-        let dir = std::env::temp_dir()
-            .join(format!("fwb-nft-{}-{}", std::process::id(), name));
+        let dir = Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("target/nft-tests")
+            .join(name);
         let _ = std::fs::remove_dir_all(&dir);
         std::fs::create_dir_all(&dir).unwrap();
         let script = dir.join("nft");
@@ -451,13 +446,13 @@ mod tests {
     }
 
     #[test]
-    fn test_nft_run_sends_the_command_on_stdin() {
+    fn test_nft_run_passes_the_command_as_one_argument() {
         let _serial = serial();
         let nft = fake_nft("run", "printf 'ok'");
         let ctx = NftContext::with_binary(&nft).unwrap();
         assert_eq!(ctx.run("add table inet phantom").unwrap(), "ok");
-        assert_eq!(recorded(&nft, "args"), "-f\n-\n");
-        assert_eq!(recorded(&nft, "stdin"), "add table inet phantom");
+        assert_eq!(recorded(&nft, "args"), "--\nadd table inet phantom\n");
+        assert_eq!(recorded(&nft, "stdin"), "");
     }
 
     #[test]
@@ -466,7 +461,7 @@ mod tests {
         let nft = fake_nft("run_json", r#"printf '{"nftables": []}'"#);
         let ctx = NftContext::with_binary(&nft).unwrap();
         assert_eq!(ctx.run_json("list table inet phantom").unwrap(), r#"{"nftables": []}"#);
-        assert_eq!(recorded(&nft, "args"), "--json\n--handle\n-f\n-\n");
+        assert_eq!(recorded(&nft, "args"), "--json\n--handle\n--\nlist table inet phantom\n");
     }
 
     #[test]
@@ -488,16 +483,49 @@ mod tests {
         );
     }
 
+    /// /proc/$$/environ holds the environment the script was started with,
+    /// before the shell adds anything, so the check does not depend on what
+    /// the test process itself inherited.
     #[test]
     fn test_nft_environment_is_cleared() {
         let _serial = serial();
-        let nft = fake_nft(
-            "env",
-            r#"printf '%s\n' "LC_ALL=${LC_ALL-unset}" "HOME=${HOME-unset}" > "$0.env""#,
-        );
+        let nft = fake_nft("env", r#"tr '\0' '\n' < /proc/$$/environ > "$0.env""#);
         let ctx = NftContext::with_binary(&nft).unwrap();
         ctx.run("list ruleset").unwrap();
-        assert_eq!(recorded(&nft, "env"), "LC_ALL=C\nHOME=unset\n");
+        assert_eq!(recorded(&nft, "env"), "LC_ALL=C\n");
+    }
+
+    /// Processes whose parent is this one, as "pid state".
+    fn children() -> Vec<String> {
+        let me = std::process::id().to_string();
+        std::fs::read_dir("/proc").unwrap()
+            .filter_map(|e| std::fs::read_to_string(e.ok()?.path().join("stat")).ok())
+            .filter_map(|stat| {
+                // pid (comm) state ppid …; comm may hold spaces and parens.
+                let (pid, rest) = stat.split_once(' ')?;
+                let mut fields = rest.rsplit_once(')')?.1.split_whitespace();
+                let state = fields.next()?;
+                (fields.next()? == me).then(|| format!("{pid} {state}"))
+            })
+            .collect()
+    }
+
+    /// Every nft is waited for before the call returns, whether it
+    /// succeeded, failed or was killed, so none is left behind as a zombie.
+    /// The SPAWN lock keeps other tests from having children meanwhile.
+    #[test]
+    fn test_nft_leaves_no_child_behind() {
+        let _serial = serial();
+        let ok = NftContext::with_binary(fake_nft("reap-ok", "printf 'ok'")).unwrap();
+        let failed = NftContext::with_binary(
+            fake_nft("reap-failed", "printf 'Error' >&2; exit 1")).unwrap();
+        let killed = NftContext::with_binary(fake_nft("reap-killed", "kill -9 $$")).unwrap();
+        for _ in 0..20 {
+            ok.run("list ruleset").unwrap();
+            failed.run("list ruleset").unwrap_err();
+            killed.run("list ruleset").unwrap_err();
+        }
+        assert_eq!(children(), Vec::<String>::new());
     }
 
     #[test]
