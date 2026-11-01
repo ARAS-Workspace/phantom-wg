@@ -2,11 +2,12 @@
 """
 Firewall Bridge E2E test runner — host-side orchestration via compose-bridge.
 
-Starts the full topology (bridge, exit-server, client), runs pytest
-inside the bridge container in two stages, then tears down:
+Starts the full topology (bridge, exit-server, client, rules-caps), runs
+pytest in three stages, then tears down:
 
-    topology  e2e_tests/tests/  tunnels, presets, crash recovery, traffic
-    rules     e2e_tests/rules/  the bridge's rules against nft and the database
+    topology    bridge      e2e_tests/tests/  tunnels, presets, crash recovery, traffic
+    rules       bridge      e2e_tests/rules/  the bridge's rules against nft and the database
+    rules-caps  rules-caps  e2e_tests/rules/  the same, with the daemon's capabilities
 
 Usage:
     python e2e_tests/runner.py
@@ -37,9 +38,11 @@ log = logging.getLogger("e2e.firewall-bridge")
 
 COMPOSE_PATH = str(RUNNER_DIR / "docker-compose.yml")
 
+# stage: (service, test path)
 STAGES = {
-    "topology": "e2e_tests/tests/",
-    "rules": "e2e_tests/rules/",
+    "topology": ("bridge", "e2e_tests/tests/"),
+    "rules": ("bridge", "e2e_tests/rules/"),
+    "rules-caps": ("rules-caps", "e2e_tests/rules/"),
 }
 
 
@@ -51,7 +54,7 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument(
         "--stage", choices=["all", *STAGES], default="all",
-        help="Stage to run (default: both, topology first)",
+        help="Stage to run (default: all, in the order above)",
     )
     parser.add_argument(
         "pytest_args", nargs="*",
@@ -60,8 +63,9 @@ def parse_args() -> argparse.Namespace:
     return parser.parse_args()
 
 
-def run_stage(env: E2ETestEnvironment, path: str, pytest_args: list[str]) -> int:
-    """Runs pytest on `path` in the bridge container; returns its exit code."""
+def run_stage(env: E2ETestEnvironment, service: str, path: str,
+              pytest_args: list[str]) -> int:
+    """Runs pytest on `path` in `service`; returns its exit code."""
     pytest_cmd = [
         "python3", "-m", "pytest",
         path,
@@ -76,7 +80,7 @@ def run_stage(env: E2ETestEnvironment, path: str, pytest_args: list[str]) -> int
         "-p", env.project_name,
         "exec",
         "-e", f"COMPOSE_PROJECT_NAME={env.project_name}",
-        "-T", "bridge",
+        "-T", service,
         *pytest_cmd,
     ]
 
@@ -107,10 +111,12 @@ def main() -> None:
 
         env.wait_for_log("exit-server", "EXIT_READY", timeout=30)
         env.wait_for_ready("bridge", timeout=30)
+        env.wait_for_ready("rules-caps", timeout=30)
 
         for stage in stages:
-            step(f"Running E2E tests in bridge container: {stage} stage")
-            results[stage] = run_stage(env, STAGES[stage], args.pytest_args)
+            service, path = STAGES[stage]
+            step(f"Running E2E tests in {service} container: {stage} stage")
+            results[stage] = run_stage(env, service, path, args.pytest_args)
             log.info("  %s stage: %s", stage,
                      "PASSED" if results[stage] == 0 else f"FAILED (rc={results[stage]})")
         rc = 0 if all(r == 0 for r in results.values()) else 1

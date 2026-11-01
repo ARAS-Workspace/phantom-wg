@@ -5,6 +5,8 @@
 # bridge       — .so built in image, source mounted, pytest runner
 # exit-server  — WireGuard exit (dual-stack)
 # client       — WireGuard client (wg-quick)
+# rules-caps   — the bridge image with the daemon's capabilities and no
+#                network, for the rules stage
 # ──────────────────────────────────────────────────────────────────
 
 networks:
@@ -70,3 +72,13 @@ services:
         ipv4_address: 172.30.0.30
         ipv6_address: fd00:30::30
     command: ["sleep", "infinity"]
+
+  rules-caps:
+    build:
+      context: ..
+      dockerfile: e2e_tests/bridge.Dockerfile
+    cap_add: [NET_ADMIN, NET_RAW]
+    network_mode: none
+    volumes:
+      - ../e2e_tests:/workspace/e2e_tests:ro
+      - ../pytest.ini:/workspace/pytest.ini:ro
