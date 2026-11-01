@@ -500,6 +500,17 @@ class TestDirectRuleFields:
             bridge.add_firewall_rule("g1", **fields)
         assert bridge.list_firewall_rules() == []
 
+    @pytest.mark.parametrize("fields, field", [
+        ({"dport": 80}, "dport"),
+        ({"proto": "udp"}, "proto"),
+        ({"proto": "icmp", "dport": 80}, "proto"),
+    ])
+    def test_a_port_and_its_protocol_go_together(self, bridge, fields, field):
+        bridge.create_group("g1")
+        with pytest.raises(InvalidParamError, match=f"rule.{field}"):
+            bridge.add_firewall_rule("g1", "input", "accept", **fields)
+        assert bridge.list_firewall_rules() == []
+
     def test_an_address_of_the_other_family_is_refused_for_ipv6_too(self, bridge):
         bridge.create_group("g1")
         with pytest.raises(InvalidParamError, match="not an address of family 10"):

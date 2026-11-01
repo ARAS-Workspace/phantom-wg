@@ -127,7 +127,7 @@ def _check_ct_state(path: str, value: str) -> None:
 VALID_CHAINS = ("input", "output", "forward", "postrouting", "prerouting")
 VALID_ACTIONS = ("accept", "drop", "reject", "masquerade", "dnat")
 VALID_FAMILIES = (2, 10)
-VALID_PROTOS = ("", "tcp", "udp", "icmp")
+VALID_PROTOS = ("", "tcp", "udp")
 VALID_TABLE_ENTRY_KEYS = ("ensure", "policy", "route")
 
 ENSURE_FIELDS = {
@@ -196,6 +196,14 @@ def _check_rule_family(path: str, rule: dict) -> None:
     if m and ipaddress.ip_address(m.group(1) or m.group(2)).version != version:
         _fail(f"{path}.action", f"dnat target is not an address of family {rule['family']}",
               rule["action"])
+
+
+def _check_port_match(path: str, rule: dict) -> None:
+    """A validated rule names a protocol and a port together, or neither."""
+    if rule["dport"] and not rule["proto"]:
+        _fail(f"{path}.dport", "needs proto tcp or udp", rule["dport"])
+    if rule["proto"] and not rule["dport"]:
+        _fail(f"{path}.proto", "needs a dport above 0", rule["proto"])
 
 
 # ---- Validation helpers ----
@@ -333,6 +341,7 @@ def validate_preset(spec: object) -> dict:
         for i, rule in enumerate(result["rules"]):
             validated = _validate_fields(f"preset.rules[{i}]", rule, RULE_FIELDS)
             _check_rule_family(f"preset.rules[{i}]", validated)
+            _check_port_match(f"preset.rules[{i}]", validated)
             validated_rules.append(validated)
         result["rules"] = validated_rules
 
@@ -345,6 +354,8 @@ def validate_firewall_rule(rule: dict) -> None:
     Raises InvalidParamError naming the field and the reason.
     """
     try:
-        _check_rule_family("rule", _validate_fields("rule", rule, DIRECT_RULE_FIELDS))
+        validated = _validate_fields("rule", rule, DIRECT_RULE_FIELDS)
+        _check_rule_family("rule", validated)
+        _check_port_match("rule", validated)
     except PresetValidationError as e:
         raise InvalidParamError(e.message) from None

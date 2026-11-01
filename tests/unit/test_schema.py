@@ -116,10 +116,10 @@ class TestValidPresets:
             assert result["rules"][0]["action"] == action
 
     def test_all_valid_protos(self):
-        for proto in ("", "tcp", "udp", "icmp"):
+        for proto, dport in (("", 0), ("tcp", 443), ("udp", 53)):
             spec = {
                 "name": f"proto-{proto or 'empty'}",
-                "rules": [{"chain": "input", "action": "accept", "proto": proto}],
+                "rules": [{"chain": "input", "action": "accept", "proto": proto, "dport": dport}],
             }
             result = validate_preset(spec)
             assert result["rules"][0]["proto"] == proto
@@ -127,7 +127,7 @@ class TestValidPresets:
     def test_dport_range(self):
         spec = {
             "name": "dport",
-            "rules": [{"chain": "input", "action": "accept", "dport": 51820}],
+            "rules": [{"chain": "input", "action": "accept", "proto": "udp", "dport": 51820}],
         }
         result = validate_preset(spec)
         assert result["rules"][0]["dport"] == 51820
@@ -171,7 +171,7 @@ class TestValidPresets:
     def test_dport_max(self):
         spec = {
             "name": "dport-max",
-            "rules": [{"chain": "input", "action": "accept", "dport": 65535}],
+            "rules": [{"chain": "input", "action": "accept", "proto": "tcp", "dport": 65535}],
         }
         result = validate_preset(spec)
         assert result["rules"][0]["dport"] == 65535
@@ -716,6 +716,27 @@ class TestRuleFamily:
             {"chain": "postrouting", "action": "masquerade", "source": "10.0.1.0/24"},
         ]})
         assert [r["family"] for r in result["rules"]] == [10, 2]
+
+
+class TestPortMatch:
+    """A rule names tcp or udp and a port together, or neither."""
+
+    def test_a_port_without_a_protocol_is_refused(self):
+        with pytest.raises(PresetValidationError, match=r"rules\[0\]\.dport: needs proto tcp or udp"):
+            validate_preset({"name": "p", "rules": [
+                {"chain": "input", "action": "accept", "dport": 80}]})
+
+    @pytest.mark.parametrize("proto", ["tcp", "udp"])
+    def test_a_protocol_without_a_port_is_refused(self, proto):
+        with pytest.raises(PresetValidationError, match=r"rules\[0\]\.proto: needs a dport above 0"):
+            validate_preset({"name": "p", "rules": [
+                {"chain": "input", "action": "drop", "proto": proto}]})
+
+    @pytest.mark.parametrize("dport", [0, 80])
+    def test_icmp_is_refused(self, dport):
+        with pytest.raises(PresetValidationError, match=r"rules\[0\]\.proto: must be one of"):
+            validate_preset({"name": "p", "rules": [
+                {"chain": "input", "action": "accept", "proto": "icmp", "dport": dport}]})
 
 
 class TestCidrIsNotDecorative:
