@@ -170,6 +170,45 @@ fn kernel_nft_errors_reach_the_caller() {
     assert_eq!(table(), empty_table, "a failed call changed the table");
 }
 
+/// The two commands of the build_rule_cmd table nft refuses: build_rule_cmd
+/// checks nothing, schema.py checks the fields before they get here.
+const REFUSED_BY_NFT: [&str; 2] = [
+    "add rule inet phantom prerouting dnat",
+    "add rule inet phantom  ",
+];
+
+/// Every rule of the build_rule_cmd table, through the C ABI: nft takes each
+/// one, and lists it under the handle the call returned, except the two in
+/// REFUSED_BY_NFT, which it refuses.
+#[test]
+fn kernel_nft_accepts_every_built_rule() {
+    let _serial = serial();
+    isolate();
+    let _nft = Nft::init();
+    let mut taken = 0;
+    for (rule, command) in crate::nft::tests::rule_cases() {
+        let fields = [rule.chain, rule.action, rule.proto, rule.source, rule.destination,
+                      rule.in_iface, rule.out_iface, rule.state_match, rule.comment].map(c);
+        let [chain_c, action, proto, source, destination, in_iface, out_iface, state_match, comment] =
+            &fields;
+        // SAFETY: NUL-terminated strings that outlive the call.
+        let handle = unsafe {
+            nft_add_rule(chain_c.as_ptr(), action.as_ptr(), rule.family, proto.as_ptr(), rule.dport,
+                         source.as_ptr(), destination.as_ptr(), in_iface.as_ptr(),
+                         out_iface.as_ptr(), state_match.as_ptr(), comment.as_ptr())
+        };
+        if REFUSED_BY_NFT.contains(&command) {
+            assert_eq!(handle, ErrorCode::NftablesFailed as i64, "nft took: {command}");
+            continue;
+        }
+        assert!(handle > 0, "nft refused: {command}\n{}", last_error());
+        let listing = chain(rule.chain);
+        assert!(listing.contains(&format!("# handle {handle}\n")), "{command}\n{listing}");
+        taken += 1;
+    }
+    assert_eq!(taken, crate::nft::tests::rule_cases().len() - REFUSED_BY_NFT.len());
+}
+
 /// A table that already holds `output` with another priority: the batch
 /// fails as a whole, and nft's caret points at the `output` command.
 #[test]

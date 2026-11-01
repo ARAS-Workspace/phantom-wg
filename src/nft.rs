@@ -232,80 +232,79 @@ fn find_added_handle(json: &str) -> Option<u64> {
 // ---------------------------------------------------------------------------
 
 #[cfg(test)]
-mod tests {
+pub(crate) mod tests {
     use super::*;
 
     // -----------------------------------------------------------------------
     // build_rule_cmd — the whole command for every branch
     // -----------------------------------------------------------------------
 
-    type Case<'a> = RuleSpec<'a>;
-
-    fn build(c: &Case) -> String {
-        build_rule_cmd(c).unwrap()
+    /// Every branch of build_rule_cmd, with the whole command it writes.
+    /// kernel_tests sends the same rules to nft.
+    pub(crate) fn rule_cases() -> Vec<(RuleSpec<'static>, &'static str)> {
+        vec![
+            (RuleSpec { chain: "input", action: "accept", family: 2, ..Default::default() },
+             "add rule inet phantom input accept"),
+            (RuleSpec { chain: "input", action: "accept", family: 2, proto: "tcp", dport: 443,
+                        ..Default::default() },
+             "add rule inet phantom input tcp dport 443 accept"),
+            // A port match needs both a protocol and a port above 0.
+            (RuleSpec { chain: "input", action: "drop", family: 2, proto: "udp", ..Default::default() },
+             "add rule inet phantom input drop"),
+            (RuleSpec { chain: "input", action: "drop", family: 2, dport: 53, ..Default::default() },
+             "add rule inet phantom input drop"),
+            (RuleSpec { chain: "input", action: "drop", family: 2, proto: "tcp", dport: -1,
+                        ..Default::default() },
+             "add rule inet phantom input drop"),
+            (RuleSpec { chain: "forward", action: "accept", family: 2, in_iface: "wg0",
+                        out_iface: "eth0", ..Default::default() },
+             "add rule inet phantom forward iifname \"wg0\" oifname \"eth0\" accept"),
+            (RuleSpec { chain: "output", action: "drop", family: 2, proto: "tcp", dport: 53,
+                        source: "192.168.1.0/24", destination: "8.8.8.8", ..Default::default() },
+             "add rule inet phantom output ip saddr 192.168.1.0/24 ip daddr 8.8.8.8 tcp dport 53 drop"),
+            (RuleSpec { chain: "input", action: "accept", family: 10, source: "2001:db8::/32",
+                        destination: "2001:db8::1", ..Default::default() },
+             "add rule inet phantom input ip6 saddr 2001:db8::/32 ip6 daddr 2001:db8::1 accept"),
+            // Any family other than AF_INET6 (10) reads as IPv4.
+            (RuleSpec { chain: "input", action: "accept", family: 0, source: "10.0.0.0/8",
+                        ..Default::default() },
+             "add rule inet phantom input ip saddr 10.0.0.0/8 accept"),
+            (RuleSpec { chain: "forward", action: "accept", family: 2,
+                        state_match: "ESTABLISHED,Related", ..Default::default() },
+             "add rule inet phantom forward ct state established,related accept"),
+            (RuleSpec { chain: "postrouting", action: "masquerade", family: 2,
+                        source: "10.0.1.0/24", out_iface: "eth0", ..Default::default() },
+             "add rule inet phantom postrouting oifname \"eth0\" ip saddr 10.0.1.0/24 masquerade"),
+            (RuleSpec { chain: "prerouting", action: "dnat to 172.28.0.4:443", family: 2,
+                        proto: "tcp", dport: 443, ..Default::default() },
+             "add rule inet phantom prerouting tcp dport 443 dnat ip to 172.28.0.4:443"),
+            (RuleSpec { chain: "prerouting", action: "dnat to [2001:db8::1]:443", family: 10,
+                        proto: "tcp", dport: 443, ..Default::default() },
+             "add rule inet phantom prerouting tcp dport 443 dnat ip6 to [2001:db8::1]:443"),
+            // Only "dnat to " gets a family; other actions pass through.
+            (RuleSpec { chain: "prerouting", action: "dnat", family: 2, ..Default::default() },
+             "add rule inet phantom prerouting dnat"),
+            (RuleSpec { chain: "input", action: "reject", family: 10, ..Default::default() },
+             "add rule inet phantom input reject"),
+            (RuleSpec { chain: "input", action: "accept", family: 2, proto: "udp", dport: 51820,
+                        comment: "phantom-rule-42", ..Default::default() },
+             "add rule inet phantom input udp dport 51820 accept comment \"phantom-rule-42\""),
+            (RuleSpec { chain: "forward", action: "accept", family: 2, proto: "tcp", dport: 8080,
+                        source: "10.0.0.0/24", destination: "10.0.1.5", in_iface: "wg0",
+                        out_iface: "eth0", state_match: "NEW", comment: "c" },
+             "add rule inet phantom forward iifname \"wg0\" oifname \"eth0\" ip saddr 10.0.0.0/24 \
+              ip daddr 10.0.1.5 tcp dport 8080 ct state new accept comment \"c\""),
+            // Nothing is validated here; schema.py checks the fields first.
+            (RuleSpec::default(), "add rule inet phantom  "),
+        ]
     }
 
     /// Compares the whole command, so a change in wording or field order
     /// shows up, not only a missing fragment.
     #[test]
     fn test_build_rule_cmd_exact_output() {
-        let cases: &[(Case, &str)] = &[
-            (Case { chain: "input", action: "accept", family: 2, ..Default::default() },
-             "add rule inet phantom input accept"),
-            (Case { chain: "input", action: "accept", family: 2, proto: "tcp", dport: 443,
-                    ..Default::default() },
-             "add rule inet phantom input tcp dport 443 accept"),
-            // A port match needs both a protocol and a port above 0.
-            (Case { chain: "input", action: "drop", family: 2, proto: "udp", ..Default::default() },
-             "add rule inet phantom input drop"),
-            (Case { chain: "input", action: "drop", family: 2, dport: 53, ..Default::default() },
-             "add rule inet phantom input drop"),
-            (Case { chain: "input", action: "drop", family: 2, proto: "tcp", dport: -1,
-                    ..Default::default() },
-             "add rule inet phantom input drop"),
-            (Case { chain: "forward", action: "accept", family: 2, in_iface: "wg0",
-                    out_iface: "eth0", ..Default::default() },
-             "add rule inet phantom forward iifname \"wg0\" oifname \"eth0\" accept"),
-            (Case { chain: "output", action: "drop", family: 2, proto: "tcp", dport: 53,
-                    source: "192.168.1.0/24", destination: "8.8.8.8", ..Default::default() },
-             "add rule inet phantom output ip saddr 192.168.1.0/24 ip daddr 8.8.8.8 tcp dport 53 drop"),
-            (Case { chain: "input", action: "accept", family: 10, source: "2001:db8::/32",
-                    destination: "2001:db8::1", ..Default::default() },
-             "add rule inet phantom input ip6 saddr 2001:db8::/32 ip6 daddr 2001:db8::1 accept"),
-            // Any family other than AF_INET6 (10) reads as IPv4.
-            (Case { chain: "input", action: "accept", family: 0, source: "10.0.0.0/8",
-                    ..Default::default() },
-             "add rule inet phantom input ip saddr 10.0.0.0/8 accept"),
-            (Case { chain: "forward", action: "accept", family: 2,
-                    state_match: "ESTABLISHED,Related", ..Default::default() },
-             "add rule inet phantom forward ct state established,related accept"),
-            (Case { chain: "postrouting", action: "masquerade", family: 2,
-                    source: "10.0.1.0/24", out_iface: "eth0", ..Default::default() },
-             "add rule inet phantom postrouting oifname \"eth0\" ip saddr 10.0.1.0/24 masquerade"),
-            (Case { chain: "prerouting", action: "dnat to 172.28.0.4:443", family: 2,
-                    proto: "tcp", dport: 443, ..Default::default() },
-             "add rule inet phantom prerouting tcp dport 443 dnat ip to 172.28.0.4:443"),
-            (Case { chain: "prerouting", action: "dnat to [2001:db8::1]:443", family: 10,
-                    proto: "tcp", dport: 443, ..Default::default() },
-             "add rule inet phantom prerouting tcp dport 443 dnat ip6 to [2001:db8::1]:443"),
-            // Only "dnat to " gets a family; other actions pass through.
-            (Case { chain: "prerouting", action: "dnat", family: 2, ..Default::default() },
-             "add rule inet phantom prerouting dnat"),
-            (Case { chain: "input", action: "reject", family: 10, ..Default::default() },
-             "add rule inet phantom input reject"),
-            (Case { chain: "input", action: "accept", family: 2, proto: "udp", dport: 51820,
-                    comment: "phantom-rule-42", ..Default::default() },
-             "add rule inet phantom input udp dport 51820 accept comment \"phantom-rule-42\""),
-            (Case { chain: "forward", action: "accept", family: 2, proto: "tcp", dport: 8080,
-                    source: "10.0.0.0/24", destination: "10.0.1.5", in_iface: "wg0",
-                    out_iface: "eth0", state_match: "NEW", comment: "c" },
-             "add rule inet phantom forward iifname \"wg0\" oifname \"eth0\" ip saddr 10.0.0.0/24 \
-              ip daddr 10.0.1.5 tcp dport 8080 ct state new accept comment \"c\""),
-            // Nothing is validated here; schema.py checks the fields first.
-            (Case::default(), "add rule inet phantom  "),
-        ];
-        for (i, (case, want)) in cases.iter().enumerate() {
-            assert_eq!(build(case), *want, "case {i}");
+        for (i, (rule, want)) in rule_cases().iter().enumerate() {
+            assert_eq!(build_rule_cmd(rule).unwrap(), *want, "case {i}");
         }
     }
 
