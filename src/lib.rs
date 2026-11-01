@@ -496,10 +496,19 @@ mod tests {
                        ErrorCode::NotInitialized as i64);
             assert_eq!(rt_table_ensure(101, null), ErrorCode::NetlinkFailed as i32);
             assert_eq!(last_error(), "Invalid routing table name: \"\"");
-            for rc in [rt_policy_add(null, null, null, 1, 2), rt_policy_delete(null, null, null, 1, 2),
-                       rt_route_add(null, null, null, 2), rt_route_delete(null, null, null, 2)] {
-                assert_eq!(rc, ErrorCode::NetlinkFailed as i32);
-                assert!(!last_error().is_empty());
+            type NamedCall = (&'static str, fn() -> i32);
+            let calls: [NamedCall; 4] = [
+                ("rt_policy_add", || rt_policy_add(ptr::null(), ptr::null(), ptr::null(), 1, 2)),
+                ("rt_policy_delete", || rt_policy_delete(ptr::null(), ptr::null(), ptr::null(), 1, 2)),
+                ("rt_route_add", || rt_route_add(ptr::null(), ptr::null(), ptr::null(), 2)),
+                ("rt_route_delete", || rt_route_delete(ptr::null(), ptr::null(), ptr::null(), 2)),
+            ];
+            for (name, call) in calls {
+                // A message left by the call before would pass for this one's.
+                set_last_error("sentinel");
+                assert_eq!(call(), ErrorCode::NetlinkFailed as i32, "{name}");
+                let msg = last_error();
+                assert!(!msg.is_empty() && msg != "sentinel", "{name} recorded no error: {msg:?}");
             }
             firewall_bridge_free_string(ptr::null_mut());
         }
