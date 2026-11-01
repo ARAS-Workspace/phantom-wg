@@ -50,6 +50,12 @@ impl NftContext {
         self.exec(&["--json", "--handle"], cmd)
     }
 
+    /// Runs an `add` command; nft prints what it added as JSON, handles
+    /// included.
+    pub fn run_echo(&self, cmd: &str) -> Result<String, String> {
+        self.exec(&["--echo", "--json", "--handle"], cmd)
+    }
+
     /// The command goes to nft as one argument after `--`, the buffer form
     /// `nft_run_cmd_from_buffer` took. stdin is closed: nothing is written
     /// to the child, so an nft that exits early cannot raise SIGPIPE in the
@@ -141,18 +147,11 @@ pub fn add_rule(
     let cmd = build_rule_cmd(chain, action, family, proto, dport,
                               source, destination, in_iface, out_iface,
                               state_match, comment)?;
-    nft.run(&cmd)?;
 
-    // Find the handle of the newly added rule
-    let chain_json = nft.run_json(&format!("list chain {TABLE} {chain}"))?;
-
-    if !comment.is_empty() {
-        if let Some(h) = find_handle_by_comment(&chain_json, comment) {
-            return Ok(h);
-        }
-    }
-
-    find_max_handle(&chain_json).ok_or_else(|| "Rule applied but handle not found".to_string())
+    // The handle comes from the run that added the rule, so no second run
+    // can fail after the rule is already in the kernel.
+    let echo = nft.run_echo(&cmd)?;
+    find_added_handle(&echo).ok_or_else(|| "Rule applied but handle not found".to_string())
 }
 
 /// Remove a rule by chain + nft handle.
@@ -222,45 +221,12 @@ fn build_rule_cmd(
 // Handle lookup (JSON parsing)
 // ---------------------------------------------------------------------------
 
-fn find_handle_by_comment(json: &str, comment: &str) -> Option<u64> {
+/// The handle in nft's echo of an `add rule`:
+/// `{"nftables": [{"add": {"rule": {…, "handle": N, …}}}]}`.
+fn find_added_handle(json: &str) -> Option<u64> {
     let parsed: serde_json::Value = serde_json::from_str(json).ok()?;
-    let nftables = parsed.get("nftables")?.as_array()?;
-
-    for item in nftables {
-        if let Some(rule) = item.get("rule") {
-            let handle = rule.get("handle")?.as_u64()?;
-
-            if let Some(c) = rule.get("comment").and_then(|c| c.as_str()) {
-                if c == comment { return Some(handle); }
-            }
-
-            if let Some(expr) = rule.get("expr").and_then(|e| e.as_array()) {
-                for e in expr {
-                    if let Some(c) = e.get("comment").and_then(|c| c.as_str()) {
-                        if c == comment { return Some(handle); }
-                    }
-                }
-            }
-        }
-    }
-    None
-}
-
-fn find_max_handle(json: &str) -> Option<u64> {
-    let parsed: serde_json::Value = serde_json::from_str(json).ok()?;
-    let nftables = parsed.get("nftables")?.as_array()?;
-    let mut max_handle = 0u64;
-    let mut found = false;
-
-    for item in nftables {
-        if let Some(rule) = item.get("rule") {
-            if let Some(h) = rule.get("handle").and_then(|h| h.as_u64()) {
-                if h > max_handle { max_handle = h; found = true; }
-            }
-        }
-    }
-
-    if found { Some(max_handle) } else { None }
+    parsed.get("nftables")?.as_array()?.iter()
+        .find_map(|item| item.get("add")?.get("rule")?.get("handle")?.as_u64())
 }
 
 // ---------------------------------------------------------------------------
@@ -358,47 +324,22 @@ mod tests {
         assert!(cmd.contains("drop"));
     }
 
+    /// nft 1.1.3's echo of `add rule inet phantom input tcp dport 22 accept
+    /// comment "kural-ğüş"`.
+    const ECHO: &str = r#"{"nftables": [{"add": {"rule": {"family": "inet", "table": "phantom", "chain": "input", "handle": 2, "comment": "kural-ğüş", "expr": [{"match": {"op": "==", "left": {"payload": {"protocol": "tcp", "field": "dport"}}, "right": 22}}, {"accept": null}]}}}]}"#;
+
     #[test]
-    fn test_find_handle_by_comment_rule_level() {
-        let json = r#"{"nftables": [
-            {"rule": {"chain": "input", "handle": 42, "comment": "phantom-rule-7", "expr": []}}
-        ]}"#;
-        assert_eq!(find_handle_by_comment(json, "phantom-rule-7"), Some(42));
+    fn test_find_added_handle() {
+        assert_eq!(find_added_handle(ECHO), Some(2));
     }
 
     #[test]
-    fn test_find_handle_by_comment_expr_level() {
-        let json = r#"{"nftables": [
-            {"rule": {"chain": "input", "handle": 99, "expr": [
-                {"comment": "phantom-rule-13"},
-                {"accept": null}
-            ]}}
-        ]}"#;
-        assert_eq!(find_handle_by_comment(json, "phantom-rule-13"), Some(99));
-    }
-
-    #[test]
-    fn test_find_handle_not_found() {
-        let json = r#"{"nftables": [
-            {"rule": {"chain": "input", "handle": 5, "expr": [{"accept": null}]}}
-        ]}"#;
-        assert_eq!(find_handle_by_comment(json, "phantom-rule-1"), None);
-    }
-
-    #[test]
-    fn test_find_max_handle() {
-        let json = r#"{"nftables": [
-            {"rule": {"chain": "input", "handle": 3}},
-            {"rule": {"chain": "input", "handle": 17}},
-            {"rule": {"chain": "input", "handle": 9}}
-        ]}"#;
-        assert_eq!(find_max_handle(json), Some(17));
-    }
-
-    #[test]
-    fn test_find_max_handle_empty() {
-        assert_eq!(find_max_handle("{}"), None);
-        assert_eq!(find_max_handle(r#"{"nftables": []}"#), None);
+    fn test_find_added_handle_absent() {
+        assert_eq!(find_added_handle("{}"), None);
+        assert_eq!(find_added_handle(r#"{"nftables": []}"#), None);
+        // A listing names rules without "add"; only an echo counts.
+        assert_eq!(find_added_handle(r#"{"nftables": [{"rule": {"handle": 5}}]}"#), None);
+        assert_eq!(find_added_handle("not json"), None);
     }
 
     // -----------------------------------------------------------------------
@@ -462,6 +403,20 @@ mod tests {
         let ctx = NftContext::with_binary(&nft).unwrap();
         assert_eq!(ctx.run_json("list table inet phantom").unwrap(), r#"{"nftables": []}"#);
         assert_eq!(recorded(&nft, "args"), "--json\n--handle\n--\nlist table inet phantom\n");
+    }
+
+    #[test]
+    fn test_add_rule_takes_the_handle_from_one_run() {
+        let _serial = serial();
+        let nft = fake_nft("add_rule", &format!(
+            "printf 'x\\n' >> \"$0.calls\"\nprintf '%s' '{ECHO}'"));
+        let ctx = NftContext::with_binary(&nft).unwrap();
+        let handle = add_rule(&ctx, "input", "accept", 2, "tcp", 443,
+                              "", "", "", "", "", "").unwrap();
+        assert_eq!(handle, 2);
+        assert_eq!(recorded(&nft, "calls"), "x\n");
+        assert_eq!(recorded(&nft, "args"),
+                   "--echo\n--json\n--handle\n--\nadd rule inet phantom input tcp dport 443 accept\n");
     }
 
     #[test]
