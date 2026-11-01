@@ -242,6 +242,43 @@ class TestAutoApply:
         mock_lib.nft_remove_rule.assert_called()
 
 
+class TestRefusedByKernel:
+    """The kernel refuses one rule: what the call applied is removed again."""
+
+    def test_start_undoes_what_it_applied(self, bridge, mock_lib, last_error):
+        bridge.create_group("routing", priority=10)
+        bridge.add_routing_rule("routing", "policy", from_network="10.0.0.0/24",
+                                table_name="mh", priority=100)
+        bridge.create_group("rules", priority=20)
+        bridge.add_firewall_rule("rules", "input", "accept")
+        bridge.add_firewall_rule("rules", "input", "masquerade")
+        mock_lib.reset_mock()
+        mock_lib.nft_add_rule.side_effect = [42, -3]
+        with pytest.raises(NftablesError):
+            bridge.start()
+        assert bridge.get_state() == "stopped"
+        assert [c[0] for c in mock_lib.method_calls] == [
+            "nft_init", "nft_flush_table", "rt_policy_delete",
+            "rt_policy_add", "nft_add_rule", "nft_add_rule",
+            "nft_flush_table", "rt_policy_delete",
+        ]
+        assert not any(r.applied or r.nft_handle for r in bridge.list_firewall_rules())
+        assert not any(r.applied for r in bridge.list_routing_rules())
+
+    def test_start_after_an_undone_start_tries_again(self, bridge, mock_lib, last_error):
+        bridge.create_group("g1")
+        bridge.add_firewall_rule("g1", "input", "accept")
+        mock_lib.nft_add_rule.return_value = -3
+        with pytest.raises(NftablesError):
+            bridge.start()
+        with pytest.raises(NotStartedError):
+            bridge.stop()
+        mock_lib.nft_add_rule.return_value = 42
+        bridge.start()
+        assert bridge.get_state() == "started"
+        assert bridge.list_firewall_rules()[0].nft_handle == 42
+
+
 class TestRoutingRules:
     def test_add_routing_rule(self, bridge):
         bridge.create_group("g1")
