@@ -10,7 +10,7 @@ permissions:
 jobs:
   version:
     name: Extract version
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-26.04
     outputs:
       version: ${{ steps.extract.outputs.version }}
     steps:
@@ -74,7 +74,7 @@ jobs:
   publish:
     name: Publish release
     needs: [version, build]
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-26.04
     permissions:
       contents: write  # create the release and upload its assets
     steps:

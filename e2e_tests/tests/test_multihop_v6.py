@@ -26,6 +26,9 @@ class TestMultihopV6:
 
     def test_full_lifecycle(self, exit_conf_v6, client_exec, client_write_file):
         workdir = tempfile.mkdtemp(prefix="fw-e2e-v6-")
+        # Ubuntu's AppArmor profile for /usr/bin/wg (26.04 and later) lets wg
+        # open key files only under /etc/wireguard.
+        keydir = tempfile.mkdtemp(prefix="fw-e2e-v6-", dir="/etc/wireguard")
         db_path = os.path.join(workdir, "firewall.db")
         exit_cfg = parse_exit_config(exit_conf_v6)
 
@@ -40,8 +43,8 @@ class TestMultihopV6:
         print("  PHASE 1 — Tunnel Setup + Firewall Preset (IPv6)", flush=True)
         print("=" * 60, flush=True)
 
-        main_keys = setup_wg_main(workdir, "fd00:10:1::1/64")
-        setup_wg_exit(workdir, exit_cfg)
+        main_keys = setup_wg_main(keydir, "fd00:10:1::1/64")
+        setup_wg_exit(keydir, exit_cfg)
         sh("sysctl -w net.ipv6.conf.all.forwarding=1")
         time.sleep(5)
 
@@ -104,7 +107,7 @@ class TestMultihopV6:
         client_priv, client_pub = wg_genkey()
         client_psk = wg_genpsk()
 
-        psk_file = os.path.join(workdir, "client.psk")
+        psk_file = os.path.join(keydir, "client.psk")
         with open(psk_file, "w") as f:
             f.write(client_psk)
         sh(f"wg set wg_main peer {client_pub} "

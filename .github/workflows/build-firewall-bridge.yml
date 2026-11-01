@@ -17,7 +17,7 @@ permissions:
 jobs:
   build-linux-amd64:
     name: Build linux/amd64
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-26.04
     steps:
       - name: Harden runner
         uses: step-security/harden-runner@cb605e52c26070c328afc4562f0b4ada7618a84e # v2.10.4
@@ -29,19 +29,13 @@ jobs:
         with:
           persist-credentials: false
 
-      - name: Install Rust toolchain
-        uses: dtolnay/rust-toolchain@631a55b12751854ce901bb631d5902ceb48146f7 # stable
-        with:
-          toolchain: ${{ env.RUST_VERSION }}
-          targets: x86_64-unknown-linux-gnu
-
-      - name: Rust cache
-        uses: Swatinem/rust-cache@779680da715d629ac1d338a641029a2f4372abb5 # v2
-        with:
-          key: linux-amd64
-
       - name: Build shared library
-        run: cargo build --release --target x86_64-unknown-linux-gnu
+        # Built in the trixie image the daemon runs on, so the .so links
+        # against the glibc it is loaded with.
+        run: |
+          docker run --rm -v "$PWD:/workspace" -w /workspace \
+            "rust:${RUST_VERSION}-trixie" \
+            cargo build --release --target x86_64-unknown-linux-gnu
 
       - name: Prepare artifact
         run: |
@@ -65,7 +59,7 @@ jobs:
 
   build-linux-arm64:
     name: Build linux/arm64
-    runs-on: ubuntu-24.04-arm
+    runs-on: ubuntu-26.04-arm
     steps:
       - name: Harden runner
         uses: step-security/harden-runner@cb605e52c26070c328afc4562f0b4ada7618a84e # v2.10.4
@@ -77,19 +71,13 @@ jobs:
         with:
           persist-credentials: false
 
-      - name: Install Rust toolchain
-        uses: dtolnay/rust-toolchain@631a55b12751854ce901bb631d5902ceb48146f7 # stable
-        with:
-          toolchain: ${{ env.RUST_VERSION }}
-          targets: aarch64-unknown-linux-gnu
-
-      - name: Rust cache
-        uses: Swatinem/rust-cache@779680da715d629ac1d338a641029a2f4372abb5 # v2
-        with:
-          key: linux-arm64
-
       - name: Build shared library
-        run: cargo build --release --target aarch64-unknown-linux-gnu
+        # Built in the trixie image the daemon runs on, so the .so links
+        # against the glibc it is loaded with.
+        run: |
+          docker run --rm -v "$PWD:/workspace" -w /workspace \
+            "rust:${RUST_VERSION}-trixie" \
+            cargo build --release --target aarch64-unknown-linux-gnu
 
       - name: Prepare artifact
         run: |

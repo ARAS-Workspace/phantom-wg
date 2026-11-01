@@ -17,15 +17,15 @@ Branch push (dev/firewall-bridge, .github/ ignored):
   │     ├── test-python    (Docker SDK unit runner)
   │     └── e2e            (compose-bridge multihop v4/v6)
   └── build-firewall-bridge.yml
-        ├── build-linux-amd64  (ubuntu-latest)
-        └── build-linux-arm64  (ubuntu-24.04-arm)
+        ├── build-linux-amd64  (ubuntu-26.04, rust trixie image)
+        └── build-linux-arm64  (ubuntu-26.04-arm, rust trixie image)
 
 Publish (workflow_dispatch):
   └── publish-firewall-bridge.yml
         ├── version   (extract from firewall_bridge/__init__.py)
         ├── test      (workflow_call → test-firewall-bridge.yml)
         ├── build     (workflow_call → build-firewall-bridge.yml)
-        └── publish   (ubuntu-latest, gh release create)
+        └── publish   (ubuntu-26.04, gh release create)
 ```
 
 ## Version
@@ -111,7 +111,7 @@ https://github.com/ARAS-Workspace/phantom-wg/releases/download/vendor-firewall-b
 ## Notes
 
 - `.github/` changes do not trigger test/build on push (paths-ignore)
-- Publish runs on ubuntu-latest; its only credential is GITHUB_TOKEN
+- Publish runs on ubuntu-26.04; its only credential is GITHUB_TOKEN
 - No moving "latest" pointer: this repository holds several components and
   GitHub's `/releases/latest` answers for the repository, so consumers pin a tag
 - VERSION file inside zip for runtime version verification

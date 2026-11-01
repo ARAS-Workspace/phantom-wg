@@ -67,9 +67,10 @@ Stage 2 — Push
                                                   IPv4 and IPv6 (2 e2e
                                                   tests).
 
-      build-firewall-bridge.yml    Two native builds (no cross-compile):
-                                     build-linux-amd64   ubuntu-latest
-                                     build-linux-arm64   ubuntu-24.04-arm
+      build-firewall-bridge.yml    Two native builds (no cross-compile),
+                                   each inside the rust trixie image:
+                                     build-linux-amd64   ubuntu-26.04
+                                     build-linux-arm64   ubuntu-26.04-arm
                                    Artifacts:
                                      firewall-bridge-linux-amd64 (90d)
                                      firewall-bridge-linux-arm64 (90d)
@@ -231,12 +232,13 @@ Notes
   * The test workflow runs the same Docker topology used in local
     development — no environment drift between local and CI.
 
-  * arm64 builds on a native ubuntu-24.04-arm runner (no cross-
+  * arm64 builds on a native ubuntu-26.04-arm runner (no cross-
     compile), so the produced .so is exactly what an arm64 host
-    would see.
+    would see. Both builds run inside the rust trixie image, so the
+    .so links against the glibc of the trixie image it is loaded in.
 
   * Publish needs no credentials beyond the workflow's own
-    GITHUB_TOKEN, so it runs on ubuntu-latest.
+    GITHUB_TOKEN, so it runs on ubuntu-26.04.
 
   * There is no moving "latest" pointer. This repository holds
     several components and GitHub's /releases/latest answers for the
