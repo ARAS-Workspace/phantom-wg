@@ -14,7 +14,7 @@ use std::process::{Command, Stdio};
 /// Where nft is looked for when the environment names no other path.
 const DEFAULT_NFT_PATH: &str = "/usr/sbin/nft";
 
-/// Overrides `DEFAULT_NFT_PATH`.
+/// Overrides `DEFAULT_NFT_PATH`; must be an absolute path.
 const NFT_PATH_ENV: &str = "FIREWALL_BRIDGE_NFT_PATH";
 
 // ---------------------------------------------------------------------------
@@ -36,6 +36,11 @@ impl NftContext {
 
     fn with_binary(binary: impl Into<PathBuf>) -> Result<Self, &'static str> {
         let binary = binary.into();
+        // A relative path would be checked against the working directory
+        // but looked up on the default PATH when run.
+        if !binary.is_absolute() {
+            return Err("nft path must be absolute");
+        }
         if !binary.is_file() {
             return Err("nft program not found");
         }
@@ -378,6 +383,14 @@ mod tests {
     #[test]
     fn test_nft_missing_program() {
         assert!(NftContext::with_binary("/nonexistent/nft").is_err());
+    }
+
+    #[test]
+    fn test_nft_relative_path_is_refused() {
+        for path in ["nft", "./nft", "sbin/nft"] {
+            assert_eq!(NftContext::with_binary(path).err(),
+                       Some("nft path must be absolute"), "path: {path}");
+        }
     }
 
     #[test]
