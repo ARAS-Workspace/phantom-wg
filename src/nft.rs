@@ -1,8 +1,11 @@
 //! nftables through the nft program, in the `inet phantom` table.
 
 use std::ffi::OsString;
+use std::net::IpAddr;
 use std::path::PathBuf;
 use std::process::{Command, Stdio};
+
+use serde_json::{json, Value};
 
 // ---------------------------------------------------------------------------
 // nft program
@@ -119,6 +122,8 @@ impl NftContext {
 // ---------------------------------------------------------------------------
 
 const TABLE: &str = "inet phantom";
+const TABLE_FAMILY: &str = "inet";
+const TABLE_NAME: &str = "phantom";
 
 /// The `inet phantom` table with its input, output, forward, prerouting and
 /// postrouting chains, in one nft run.
@@ -157,7 +162,7 @@ pub fn list_table(nft: &NftContext) -> Result<String, String> {
 /// One rule, field for field as `nft_add_rule` takes it across the C ABI;
 /// unused strings are empty and unused numbers 0.
 ///
-/// @witness nft::tests::test_build_rule_cmd_exact_output
+/// @witness nft::tests::test_build_rule_exact_output
 #[derive(Default)]
 pub struct RuleSpec<'a> {
     pub chain: &'a str,
@@ -173,15 +178,14 @@ pub struct RuleSpec<'a> {
     pub comment: &'a str,
 }
 
-/// Add a firewall rule; returns its nft handle.
+/// Add a rule `build_rule` made; returns its nft handle.
 ///
 /// @witness nft::tests::test_add_rule_takes_the_handle_from_one_run
 /// @witness nft::tests::test_add_rule_reports_a_failure_and_a_missing_handle
 /// @witness kernel_tests::kernel_nft_table_rules_and_handles
-/// @witness kernel_tests::kernel_nft_accepts_every_built_rule
-pub fn add_rule(nft: &NftContext, rule: &RuleSpec) -> Result<u64, String> {
-    let cmd = build_rule_cmd(rule)?;
-    let echo = nft.run_echo(&cmd)?;
+/// @witness kernel_tests::kernel_nft_builds_what_nft_builds_from_text
+pub fn add_rule(nft: &NftContext, rule: &str) -> Result<u64, String> {
+    let echo = nft.run_echo(rule)?;
     find_added_handle(&echo).ok_or_else(|| "Rule applied but handle not found".to_string())
 }
 
@@ -191,53 +195,123 @@ pub fn add_rule(nft: &NftContext, rule: &RuleSpec) -> Result<u64, String> {
 /// @witness kernel_tests::kernel_nft_table_rules_and_handles
 /// @witness kernel_tests::kernel_nft_errors_reach_the_caller
 pub fn remove_rule(nft: &NftContext, chain: &str, handle: u64) -> Result<(), String> {
-    nft.run(&format!("delete rule {TABLE} {chain} handle {handle}")).map(|_| ())
+    let cmd = json!({"nftables": [{"delete": {"rule": {
+        "family": TABLE_FAMILY, "table": TABLE_NAME, "chain": chain, "handle": handle,
+    }}}]});
+    nft.run_json(&cmd.to_string()).map(|_| ())
 }
 
 // ---------------------------------------------------------------------------
-// Rule command builder
+// Rule builder
 // ---------------------------------------------------------------------------
 
-/// @witness nft::tests::test_build_rule_cmd_exact_output
-/// @witness kernel_tests::kernel_nft_accepts_every_built_rule
-fn build_rule_cmd(rule: &RuleSpec) -> Result<String, String> {
+/// The `add rule` command for `rule`, in nft's JSON input format.
+///
+/// @witness nft::tests::test_build_rule_exact_output
+/// @witness kernel_tests::kernel_nft_builds_what_nft_builds_from_text
+pub fn build_rule(rule: &RuleSpec) -> Result<String, String> {
     let RuleSpec { chain, action, family, proto, dport, source, destination,
                    in_iface, out_iface, state_match, comment } = *rule;
-    let mut parts = Vec::new();
-
+    if chain.is_empty() {
+        return Err("Rule chain is empty".to_string());
+    }
     let fam = if family == libc::AF_INET6 { "ip6" } else { "ip" };
+    let equals = |left: Value, right: Value| json!({"match": {"op": "==", "left": left, "right": right}});
 
+    let mut expr = Vec::new();
     if !in_iface.is_empty() {
-        parts.push(format!("iifname \"{}\"", in_iface));
+        expr.push(equals(json!({"meta": {"key": "iifname"}}), json!(in_iface)));
     }
     if !out_iface.is_empty() {
-        parts.push(format!("oifname \"{}\"", out_iface));
+        expr.push(equals(json!({"meta": {"key": "oifname"}}), json!(out_iface)));
     }
-    if !source.is_empty() {
-        parts.push(format!("{fam} saddr {}", source));
-    }
-    if !destination.is_empty() {
-        parts.push(format!("{fam} daddr {}", destination));
+    for (field, value) in [("saddr", source), ("daddr", destination)] {
+        if !value.is_empty() {
+            expr.push(equals(json!({"payload": {"protocol": fam, "field": field}}),
+                             address(value, family)?));
+        }
     }
     if !proto.is_empty() && dport > 0 {
-        parts.push(format!("{} dport {}", proto, dport));
+        expr.push(equals(json!({"payload": {"protocol": proto, "field": "dport"}}), json!(dport)));
     }
     if !state_match.is_empty() {
-        parts.push(format!("ct state {}", state_match.to_lowercase()));
+        let states: Vec<String> = state_match.to_lowercase().split(',')
+            .map(|s| s.trim().to_string()).collect();
+        expr.push(json!({"match": {"op": "in", "left": {"ct": {"key": "state"}}, "right": states}}));
     }
+    expr.push(statement(action, family)?);
 
-    if let Some(target) = action.strip_prefix("dnat to ") {
-        parts.push(format!("dnat {fam} to {}", target));
-    } else {
-        parts.push(action.to_string());
-    }
-
+    let mut body = json!({"family": TABLE_FAMILY, "table": TABLE_NAME, "chain": chain, "expr": expr});
     if !comment.is_empty() {
-        parts.push(format!("comment \"{}\"", comment));
+        body["comment"] = json!(comment);
     }
+    Ok(json!({"nftables": [{"add": {"rule": body}}]}).to_string())
+}
 
-    let match_expr = parts.join(" ");
-    Ok(format!("add rule {TABLE} {} {}", chain, match_expr))
+/// Any family other than AF_INET6 reads as IPv4.
+fn is_v6(family: i32) -> bool {
+    family == libc::AF_INET6
+}
+
+/// An address, or a network as nft's prefix, of the rule's family.
+///
+/// @witness nft::tests::test_build_rule_exact_output
+fn address(value: &str, family: i32) -> Result<Value, String> {
+    let (addr, len) = match value.split_once('/') {
+        Some((addr, len)) => (addr, Some(len)),
+        None => (value, None),
+    };
+    let ip: IpAddr = addr.parse().map_err(|_| format!("Invalid address: {value:?}"))?;
+    if ip.is_ipv6() != is_v6(family) {
+        return Err(format!("Address family {family} does not match {value}"));
+    }
+    let Some(len) = len else { return Ok(json!(addr)) };
+    let max = if ip.is_ipv6() { 128 } else { 32 };
+    match len.parse::<u8>() {
+        Ok(len) if len <= max => Ok(json!({"prefix": {"addr": addr, "len": len}})),
+        _ => Err(format!("Invalid prefix length: {value:?}")),
+    }
+}
+
+/// The verdict or nat statement `action` names: accept, drop, reject,
+/// masquerade, or `dnat to <address>[:<port>]` with an IPv6 address in
+/// brackets.
+///
+/// @witness nft::tests::test_build_rule_exact_output
+fn statement(action: &str, family: i32) -> Result<Value, String> {
+    if let "accept" | "drop" | "reject" | "masquerade" = action {
+        let mut verdict = serde_json::Map::new();
+        verdict.insert(action.to_string(), Value::Null);
+        return Ok(Value::Object(verdict));
+    }
+    let bad = || format!("Unknown action: {action:?}");
+    let target = action.strip_prefix("dnat to ").ok_or_else(bad)?;
+    let (addr, port) = match target.strip_prefix('[') {
+        Some(rest) => {
+            let (addr, after) = rest.split_once(']').ok_or_else(bad)?;
+            match after {
+                "" => (addr, None),
+                _ => (addr, Some(after.strip_prefix(':').ok_or_else(bad)?)),
+            }
+        }
+        None => match target.split_once(':') {
+            Some((addr, port)) => (addr, Some(port)),
+            None => (target, None),
+        },
+    };
+    let ip: IpAddr = addr.parse().map_err(|_| bad())?;
+    if ip.is_ipv6() != is_v6(family) || (ip.is_ipv6() && !target.starts_with('[')) {
+        return Err(bad());
+    }
+    let fam = if is_v6(family) { "ip6" } else { "ip" };
+    let mut dnat = json!({"family": fam, "addr": addr});
+    if let Some(port) = port {
+        match port.parse::<u16>() {
+            Ok(port) if port > 0 => dnat["port"] = json!(port),
+            _ => return Err(bad()),
+        }
+    }
+    Ok(json!({"dnat": dnat}))
 }
 
 // ---------------------------------------------------------------------------
@@ -266,75 +340,142 @@ pub(crate) mod tests {
     use super::*;
 
     // -----------------------------------------------------------------------
-    // build_rule_cmd — the whole command for every branch
+    // build_rule — the whole command for every branch
     // -----------------------------------------------------------------------
 
-    /// Every branch of build_rule_cmd, with the whole command it writes.
-    /// kernel_tests sends the same rules to nft.
-    pub(crate) fn rule_cases() -> Vec<(RuleSpec<'static>, &'static str)> {
+    /// What build_rule makes of a rule: the rule object without its family
+    /// and table, or the error.
+    pub(crate) type Built = Result<&'static str, &'static str>;
+
+    /// Every branch of build_rule, with the rule it writes and, where the
+    /// rule has one, the same rule in nft's text syntax after `add rule
+    /// inet <table> `. kernel_tests sends the rules to nft and checks each
+    /// against its text form.
+    pub(crate) fn rule_cases() -> Vec<(RuleSpec<'static>, Built, Option<&'static str>)> {
         vec![
             (RuleSpec { chain: "input", action: "accept", family: 2, ..Default::default() },
-             "add rule inet phantom input accept"),
+             Ok(r#"{"chain":"input","expr":[{"accept":null}]}"#),
+             Some("input accept")),
             (RuleSpec { chain: "input", action: "accept", family: 2, proto: "tcp", dport: 443,
                         ..Default::default() },
-             "add rule inet phantom input tcp dport 443 accept"),
+             Ok(r#"{"chain":"input","expr":[{"match":{"op":"==","left":{"payload":{"protocol":"tcp","field":"dport"}},"right":443}},{"accept":null}]}"#),
+             Some("input tcp dport 443 accept")),
             // A port match needs both a protocol and a port above 0.
             (RuleSpec { chain: "input", action: "drop", family: 2, proto: "udp", ..Default::default() },
-             "add rule inet phantom input drop"),
+             Ok(r#"{"chain":"input","expr":[{"drop":null}]}"#),
+             Some("input drop")),
             (RuleSpec { chain: "input", action: "drop", family: 2, dport: 53, ..Default::default() },
-             "add rule inet phantom input drop"),
+             Ok(r#"{"chain":"input","expr":[{"drop":null}]}"#),
+             Some("input drop")),
             (RuleSpec { chain: "input", action: "drop", family: 2, proto: "tcp", dport: -1,
                         ..Default::default() },
-             "add rule inet phantom input drop"),
+             Ok(r#"{"chain":"input","expr":[{"drop":null}]}"#),
+             Some("input drop")),
             (RuleSpec { chain: "forward", action: "accept", family: 2, in_iface: "wg0",
                         out_iface: "eth0", ..Default::default() },
-             "add rule inet phantom forward iifname \"wg0\" oifname \"eth0\" accept"),
+             Ok(r#"{"chain":"forward","expr":[{"match":{"op":"==","left":{"meta":{"key":"iifname"}},"right":"wg0"}},{"match":{"op":"==","left":{"meta":{"key":"oifname"}},"right":"eth0"}},{"accept":null}]}"#),
+             Some(r#"forward iifname "wg0" oifname "eth0" accept"#)),
             (RuleSpec { chain: "output", action: "drop", family: 2, proto: "tcp", dport: 53,
                         source: "192.168.1.0/24", destination: "8.8.8.8", ..Default::default() },
-             "add rule inet phantom output ip saddr 192.168.1.0/24 ip daddr 8.8.8.8 tcp dport 53 drop"),
+             Ok(r#"{"chain":"output","expr":[{"match":{"op":"==","left":{"payload":{"protocol":"ip","field":"saddr"}},"right":{"prefix":{"addr":"192.168.1.0","len":24}}}},{"match":{"op":"==","left":{"payload":{"protocol":"ip","field":"daddr"}},"right":"8.8.8.8"}},{"match":{"op":"==","left":{"payload":{"protocol":"tcp","field":"dport"}},"right":53}},{"drop":null}]}"#),
+             Some("output ip saddr 192.168.1.0/24 ip daddr 8.8.8.8 tcp dport 53 drop")),
             (RuleSpec { chain: "input", action: "accept", family: 10, source: "2001:db8::/32",
                         destination: "2001:db8::1", ..Default::default() },
-             "add rule inet phantom input ip6 saddr 2001:db8::/32 ip6 daddr 2001:db8::1 accept"),
+             Ok(r#"{"chain":"input","expr":[{"match":{"op":"==","left":{"payload":{"protocol":"ip6","field":"saddr"}},"right":{"prefix":{"addr":"2001:db8::","len":32}}}},{"match":{"op":"==","left":{"payload":{"protocol":"ip6","field":"daddr"}},"right":"2001:db8::1"}},{"accept":null}]}"#),
+             Some("input ip6 saddr 2001:db8::/32 ip6 daddr 2001:db8::1 accept")),
             // Any family other than AF_INET6 (10) reads as IPv4.
             (RuleSpec { chain: "input", action: "accept", family: 0, source: "10.0.0.0/8",
                         ..Default::default() },
-             "add rule inet phantom input ip saddr 10.0.0.0/8 accept"),
+             Ok(r#"{"chain":"input","expr":[{"match":{"op":"==","left":{"payload":{"protocol":"ip","field":"saddr"}},"right":{"prefix":{"addr":"10.0.0.0","len":8}}}},{"accept":null}]}"#),
+             Some("input ip saddr 10.0.0.0/8 accept")),
             (RuleSpec { chain: "forward", action: "accept", family: 2,
                         state_match: "ESTABLISHED,Related", ..Default::default() },
-             "add rule inet phantom forward ct state established,related accept"),
+             Ok(r#"{"chain":"forward","expr":[{"match":{"op":"in","left":{"ct":{"key":"state"}},"right":["established","related"]}},{"accept":null}]}"#),
+             Some("forward ct state established,related accept")),
+            (RuleSpec { chain: "forward", action: "accept", family: 2,
+                        state_match: "established, related", ..Default::default() },
+             Ok(r#"{"chain":"forward","expr":[{"match":{"op":"in","left":{"ct":{"key":"state"}},"right":["established","related"]}},{"accept":null}]}"#),
+             Some("forward ct state established,related accept")),
             (RuleSpec { chain: "postrouting", action: "masquerade", family: 2,
                         source: "10.0.1.0/24", out_iface: "eth0", ..Default::default() },
-             "add rule inet phantom postrouting oifname \"eth0\" ip saddr 10.0.1.0/24 masquerade"),
+             Ok(r#"{"chain":"postrouting","expr":[{"match":{"op":"==","left":{"meta":{"key":"oifname"}},"right":"eth0"}},{"match":{"op":"==","left":{"payload":{"protocol":"ip","field":"saddr"}},"right":{"prefix":{"addr":"10.0.1.0","len":24}}}},{"masquerade":null}]}"#),
+             Some(r#"postrouting oifname "eth0" ip saddr 10.0.1.0/24 masquerade"#)),
             (RuleSpec { chain: "prerouting", action: "dnat to 172.28.0.4:443", family: 2,
                         proto: "tcp", dport: 443, ..Default::default() },
-             "add rule inet phantom prerouting tcp dport 443 dnat ip to 172.28.0.4:443"),
+             Ok(r#"{"chain":"prerouting","expr":[{"match":{"op":"==","left":{"payload":{"protocol":"tcp","field":"dport"}},"right":443}},{"dnat":{"family":"ip","addr":"172.28.0.4","port":443}}]}"#),
+             Some("prerouting tcp dport 443 dnat ip to 172.28.0.4:443")),
             (RuleSpec { chain: "prerouting", action: "dnat to [2001:db8::1]:443", family: 10,
                         proto: "tcp", dport: 443, ..Default::default() },
-             "add rule inet phantom prerouting tcp dport 443 dnat ip6 to [2001:db8::1]:443"),
-            // Only "dnat to " gets a family; other actions pass through.
-            (RuleSpec { chain: "prerouting", action: "dnat", family: 2, ..Default::default() },
-             "add rule inet phantom prerouting dnat"),
+             Ok(r#"{"chain":"prerouting","expr":[{"match":{"op":"==","left":{"payload":{"protocol":"tcp","field":"dport"}},"right":443}},{"dnat":{"family":"ip6","addr":"2001:db8::1","port":443}}]}"#),
+             Some("prerouting tcp dport 443 dnat ip6 to [2001:db8::1]:443")),
+            (RuleSpec { chain: "prerouting", action: "dnat to 192.0.2.10", family: 2,
+                        destination: "192.0.2.1", ..Default::default() },
+             Ok(r#"{"chain":"prerouting","expr":[{"match":{"op":"==","left":{"payload":{"protocol":"ip","field":"daddr"}},"right":"192.0.2.1"}},{"dnat":{"family":"ip","addr":"192.0.2.10"}}]}"#),
+             Some("prerouting ip daddr 192.0.2.1 dnat ip to 192.0.2.10")),
             (RuleSpec { chain: "input", action: "reject", family: 10, ..Default::default() },
-             "add rule inet phantom input reject"),
+             Ok(r#"{"chain":"input","expr":[{"reject":null}]}"#),
+             Some("input reject")),
             (RuleSpec { chain: "input", action: "accept", family: 2, proto: "udp", dport: 51820,
                         comment: "phantom-rule-42", ..Default::default() },
-             "add rule inet phantom input udp dport 51820 accept comment \"phantom-rule-42\""),
+             Ok(r#"{"chain":"input","expr":[{"match":{"op":"==","left":{"payload":{"protocol":"udp","field":"dport"}},"right":51820}},{"accept":null}],"comment":"phantom-rule-42"}"#),
+             Some(r#"input udp dport 51820 accept comment "phantom-rule-42""#)),
             (RuleSpec { chain: "forward", action: "accept", family: 2, proto: "tcp", dport: 8080,
                         source: "10.0.0.0/24", destination: "10.0.1.5", in_iface: "wg0",
                         out_iface: "eth0", state_match: "NEW", comment: "c" },
-             "add rule inet phantom forward iifname \"wg0\" oifname \"eth0\" ip saddr 10.0.0.0/24 \
-              ip daddr 10.0.1.5 tcp dport 8080 ct state new accept comment \"c\""),
-            // Nothing is validated here; schema.py checks the fields first.
-            (RuleSpec::default(), "add rule inet phantom  "),
+             Ok(r#"{"chain":"forward","expr":[{"match":{"op":"==","left":{"meta":{"key":"iifname"}},"right":"wg0"}},{"match":{"op":"==","left":{"meta":{"key":"oifname"}},"right":"eth0"}},{"match":{"op":"==","left":{"payload":{"protocol":"ip","field":"saddr"}},"right":{"prefix":{"addr":"10.0.0.0","len":24}}}},{"match":{"op":"==","left":{"payload":{"protocol":"ip","field":"daddr"}},"right":"10.0.1.5"}},{"match":{"op":"==","left":{"payload":{"protocol":"tcp","field":"dport"}},"right":8080}},{"match":{"op":"in","left":{"ct":{"key":"state"}},"right":["new"]}},{"accept":null}],"comment":"c"}"#),
+             Some(r#"forward iifname "wg0" oifname "eth0" ip saddr 10.0.0.0/24 ip daddr 10.0.1.5 tcp dport 8080 ct state new accept comment "c""#)),
+            // A host prefix and host bits under a prefix: nft keeps what its text parser keeps.
+            (RuleSpec { chain: "input", action: "accept", family: 2, source: "10.0.0.1/32",
+                        destination: "10.0.0.5/24", ..Default::default() },
+             Ok(r#"{"chain":"input","expr":[{"match":{"op":"==","left":{"payload":{"protocol":"ip","field":"saddr"}},"right":{"prefix":{"addr":"10.0.0.1","len":32}}}},{"match":{"op":"==","left":{"payload":{"protocol":"ip","field":"daddr"}},"right":{"prefix":{"addr":"10.0.0.5","len":24}}}},{"accept":null}]}"#),
+             Some("input ip saddr 10.0.0.1/32 ip daddr 10.0.0.5/24 accept")),
+            // Quotes and semicolons stay inside the value.
+            (RuleSpec { chain: "input", action: "accept", family: 2, in_iface: "a\";b", ..Default::default() },
+             Ok(r#"{"chain":"input","expr":[{"match":{"op":"==","left":{"meta":{"key":"iifname"}},"right":"a\";b"}},{"accept":null}]}"#),
+             None),
+            (RuleSpec { chain: "prerouting", action: "dnat", family: 2, ..Default::default() },
+             Err("Unknown action: \"dnat\""), None),
+            (RuleSpec { chain: "input", action: "accept; flush ruleset", family: 2, ..Default::default() },
+             Err("Unknown action: \"accept; flush ruleset\""), None),
+            // An IPv6 target needs brackets.
+            (RuleSpec { chain: "prerouting", action: "dnat to 2001:db8::1", family: 10, ..Default::default() },
+             Err("Unknown action: \"dnat to 2001:db8::1\""), None),
+            (RuleSpec { chain: "prerouting", action: "dnat to 192.0.2.1:70000", family: 2, ..Default::default() },
+             Err("Unknown action: \"dnat to 192.0.2.1:70000\""), None),
+            (RuleSpec { chain: "prerouting", action: "dnat to 192.0.2.1", family: 10, ..Default::default() },
+             Err("Unknown action: \"dnat to 192.0.2.1\""), None),
+            // A name is not looked up.
+            (RuleSpec { chain: "input", action: "accept", family: 2, source: "example.com",
+                        ..Default::default() },
+             Err("Invalid address: \"example.com\""), None),
+            (RuleSpec { chain: "input", action: "accept", family: 2, source: "fd00::/64",
+                        ..Default::default() },
+             Err("Address family 2 does not match fd00::/64"), None),
+            (RuleSpec { chain: "input", action: "accept", family: 2, destination: "10.0.0.0/33",
+                        ..Default::default() },
+             Err("Invalid prefix length: \"10.0.0.0/33\""), None),
+            (RuleSpec::default(),
+             Err("Rule chain is empty"), None),
         ]
     }
 
-    /// Compares the whole command, so a change in wording or field order
-    /// shows up, not only a missing fragment.
+    /// Compares the whole rule, so a change in a field, its order or its
+    /// form shows up, not only a missing fragment.
     #[test]
-    fn test_build_rule_cmd_exact_output() {
-        for (i, (rule, want)) in rule_cases().iter().enumerate() {
-            assert_eq!(build_rule_cmd(rule).unwrap(), *want, "case {i}");
+    fn test_build_rule_exact_output() {
+        for (i, (rule, want, _)) in rule_cases().into_iter().enumerate() {
+            let got = build_rule(&rule).map(|cmd| {
+                let mut parsed: Value = serde_json::from_str(&cmd).unwrap();
+                let body = parsed["nftables"][0]["add"]["rule"].take();
+                let Value::Object(mut body) = body else { panic!("case {i}: {cmd}") };
+                assert_eq!(body.remove("family"), Some(json!("inet")), "case {i}");
+                assert_eq!(body.remove("table"), Some(json!("phantom")), "case {i}");
+                Value::Object(body)
+            });
+            match want {
+                Ok(json) => assert_eq!(got, Ok(serde_json::from_str(json).unwrap()), "case {i}"),
+                Err(msg) => assert_eq!(got, Err(msg.to_string()), "case {i}"),
+            }
         }
     }
 
@@ -450,7 +591,9 @@ pub(crate) mod tests {
         flush_table(&ctx).unwrap();
         assert_eq!(recorded(&nft, "args"), "--\nflush table inet phantom\n");
         remove_rule(&ctx, "forward", 42).unwrap();
-        assert_eq!(recorded(&nft, "args"), "--\ndelete rule inet phantom forward handle 42\n");
+        assert_eq!(recorded(&nft, "args"), "--json\n--handle\n--\n\
+            {\"nftables\":[{\"delete\":{\"rule\":{\"chain\":\"forward\",\"family\":\"inet\",\
+            \"handle\":42,\"table\":\"phantom\"}}}]}\n");
         assert_eq!(list_table(&ctx).unwrap(), r#"{"nftables": []}"#);
         assert_eq!(recorded(&nft, "args"), "--json\n--handle\n--\nlist table inet phantom\n");
     }
@@ -458,7 +601,8 @@ pub(crate) mod tests {
     #[test]
     fn test_add_rule_reports_a_failure_and_a_missing_handle() {
         let _serial = serial();
-        let rule = RuleSpec { chain: "input", action: "accept", family: 2, ..Default::default() };
+        let rule = build_rule(&RuleSpec { chain: "input", action: "accept", family: 2,
+                                          ..Default::default() }).unwrap();
         let failing = fake_nft("add_rule-fails", "printf 'Error: no such chain' >&2; exit 1");
         assert_eq!(add_rule(&NftContext::with_binary(&failing).unwrap(), &rule).unwrap_err(),
                    "Error: no such chain");
@@ -514,14 +658,14 @@ pub(crate) mod tests {
         let nft = fake_nft("add_rule", &format!(
             "printf 'x\\n' >> \"$0.calls\"\nprintf '%s' '{ECHO}'"));
         let ctx = NftContext::with_binary(&nft).unwrap();
-        let handle = add_rule(&ctx, &RuleSpec {
+        let rule = build_rule(&RuleSpec {
             chain: "input", action: "accept", family: 2, proto: "tcp", dport: 443,
             ..Default::default()
         }).unwrap();
+        let handle = add_rule(&ctx, &rule).unwrap();
         assert_eq!(handle, 2);
         assert_eq!(recorded(&nft, "calls"), "x\n");
-        assert_eq!(recorded(&nft, "args"),
-                   "--echo\n--json\n--handle\n--\nadd rule inet phantom input tcp dport 443 accept\n");
+        assert_eq!(recorded(&nft, "args"), format!("--echo\n--json\n--handle\n--\n{rule}\n"));
     }
 
     #[test]

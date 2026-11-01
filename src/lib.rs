@@ -196,7 +196,7 @@ pub extern "C" fn nft_close() {
 /// Add a firewall rule to the phantom table. Returns nft handle (>0) or negative error.
 ///
 /// @witness kernel_tests::kernel_nft_table_rules_and_handles
-/// @witness kernel_tests::kernel_nft_accepts_every_built_rule
+/// @witness kernel_tests::kernel_nft_builds_what_nft_builds_from_text
 /// @witness kernel_tests::kernel_nft_errors_reach_the_caller
 /// @witness tests::null_pointers_give_error_codes
 ///
@@ -236,7 +236,11 @@ pub unsafe extern "C" fn nft_add_rule(
     };
 
     with_nft(ErrorCode::NotInitialized as i64, |ctx| {
-        match nft::add_rule(ctx, &rule) {
+        let cmd = match nft::build_rule(&rule) {
+            Ok(cmd) => cmd,
+            Err(msg) => { set_last_error(&msg); return ErrorCode::InvalidParam as i64; }
+        };
+        match nft::add_rule(ctx, &cmd) {
             Ok(handle) => handle as i64,
             Err(msg) => { set_last_error(&msg); ErrorCode::NftablesFailed as i64 }
         }

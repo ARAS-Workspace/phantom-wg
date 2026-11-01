@@ -160,37 +160,54 @@ fn kernel_nft_errors_reach_the_caller() {
                      empty.as_ptr(), empty.as_ptr(), empty.as_ptr(), empty.as_ptr(),
                      empty.as_ptr(), empty.as_ptr())
     };
+    // nft names JSON input "internal" and gives no position in it.
+    let refused = "internal:0:0-0: Error: Could not process rule: No such file or directory\n";
     assert_eq!(rc, ErrorCode::NftablesFailed as i64);
-    assert!(last_error().starts_with(
-        "Error: Could not process rule: No such file or directory\nadd rule inet phantom nochain accept"),
-        "{}", last_error());
+    assert!(last_error().starts_with(refused), "{}", last_error());
 
     // SAFETY: a NUL-terminated literal.
     assert_eq!(unsafe { nft_remove_rule(c"input".as_ptr(), 999_999) },
                ErrorCode::NftablesFailed as i32);
-    assert!(last_error().starts_with("Error: Could not process rule: No such file or directory"),
-            "{}", last_error());
+    assert!(last_error().starts_with(refused), "{}", last_error());
 
     assert_eq!(table(), empty_table, "a failed call changed the table");
 }
 
-/// The two commands of the build_rule_cmd table nft refuses: build_rule_cmd
-/// checks nothing, schema.py checks the fields before they get here.
-const REFUSED_BY_NFT: [&str; 2] = [
-    "add rule inet phantom prerouting dnat",
-    "add rule inet phantom  ",
-];
+/// The rule `handle` of inet `table` as nft lists it in JSON, without the
+/// fields that name where it is.
+fn rule_body(table: &str, handle: u64) -> serde_json::Value {
+    let listing: serde_json::Value =
+        serde_json::from_str(&read("nft", &["-j", "list", "table", "inet", table])).unwrap();
+    let mut rule = listing["nftables"].as_array().unwrap().iter()
+        .filter_map(|item| item.get("rule"))
+        .find(|rule| rule["handle"] == handle)
+        .unwrap_or_else(|| panic!("no rule {handle} in {table}"))
+        .clone();
+    for key in ["family", "table", "handle"] {
+        rule.as_object_mut().unwrap().remove(key);
+    }
+    rule
+}
 
-/// Every rule of the build_rule_cmd table, through the C ABI: nft takes each
-/// one, and lists it under the handle the call returned, except the two in
-/// REFUSED_BY_NFT, which it refuses.
+/// Every rule of nft::tests::rule_cases, through the C ABI. One that
+/// build_rule refuses comes back as InvalidParam with its error. One that
+/// it builds is taken by nft, and where the case has a text form, nft lists
+/// it as it lists that text added to a table of the same chains.
 #[test]
-fn kernel_nft_accepts_every_built_rule() {
+fn kernel_nft_builds_what_nft_builds_from_text() {
     let _serial = serial();
     isolate();
     let _nft = Nft::init();
-    let mut taken = 0;
-    for (rule, command) in crate::nft::tests::rule_cases() {
+    read("nft", &["add table inet reference"]);
+    for chain in ["input { type filter hook input priority 0; policy accept; }",
+                  "output { type filter hook output priority 0; policy accept; }",
+                  "forward { type filter hook forward priority 0; policy accept; }",
+                  "prerouting { type nat hook prerouting priority -100; policy accept; }",
+                  "postrouting { type nat hook postrouting priority 100; policy accept; }"] {
+        read("nft", &[&format!("add chain inet reference {chain}")]);
+    }
+    let (mut compared, mut refused) = (0, 0);
+    for (i, (rule, built, text)) in crate::nft::tests::rule_cases().into_iter().enumerate() {
         let fields = [rule.chain, rule.action, rule.proto, rule.source, rule.destination,
                       rule.in_iface, rule.out_iface, rule.state_match, rule.comment].map(c);
         let [chain_c, action, proto, source, destination, in_iface, out_iface, state_match, comment] =
@@ -201,16 +218,27 @@ fn kernel_nft_accepts_every_built_rule() {
                          source.as_ptr(), destination.as_ptr(), in_iface.as_ptr(),
                          out_iface.as_ptr(), state_match.as_ptr(), comment.as_ptr())
         };
-        if REFUSED_BY_NFT.contains(&command) {
-            assert_eq!(handle, ErrorCode::NftablesFailed as i64, "nft took: {command}");
+        if let Err(msg) = built {
+            assert_eq!(handle, ErrorCode::InvalidParam as i64, "case {i}");
+            assert_eq!(last_error(), msg, "case {i}");
+            refused += 1;
             continue;
         }
-        assert!(handle > 0, "nft refused: {command}\n{}", last_error());
-        let listing = chain(rule.chain);
-        assert!(listing.contains(&format!("# handle {handle}\n")), "{command}\n{listing}");
-        taken += 1;
+        assert!(handle > 0, "case {i}: nft refused it: {}", last_error());
+        let Some(text) = text else { continue };
+        let echo = read("nft", &["--echo", "--json", "--handle",
+                                 &format!("add rule inet reference {text}")]);
+        let echoed: serde_json::Value = serde_json::from_str(&echo).unwrap();
+        let reference = echoed["nftables"][0]["add"]["rule"]["handle"].as_u64().unwrap();
+        assert_eq!(rule_body("phantom", handle as u64), rule_body("reference", reference),
+                   "case {i}: {text}");
+        compared += 1;
     }
-    assert_eq!(taken, crate::nft::tests::rule_cases().len() - REFUSED_BY_NFT.len());
+    let cases = crate::nft::tests::rule_cases();
+    assert_eq!(refused, cases.iter().filter(|(_, built, _)| built.is_err()).count());
+    assert_eq!(compared, cases.iter().filter(|(_, built, text)| built.is_ok() && text.is_some()).count());
+    let tables = read("nft", &["list", "tables"]);
+    assert_eq!(tables, "table inet phantom\ntable inet reference\n");
 }
 
 /// A table that already holds `output` with another priority: the batch
