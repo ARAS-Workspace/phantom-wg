@@ -1,8 +1,33 @@
-//! firewall-bridge-linux — Kernel operations backend.
+//! firewall-bridge-linux: the kernel side of firewall-bridge, behind a C ABI.
+//! nftables goes through the nft program, routing through netlink.
 //!
-//! Pure nftables + netlink operations. No database, no state machine.
-//! State management, persistence, presets → Python side.
-//! This is the kernel backend, like iptables-restore is to ufw.
+//! ─── HOW TO READ THIS CRATE ──────────────────────────────────────────
+//!
+//! A comment names what an item is, or what a caller has to hold. It does
+//! not explain, argue or promise what the code does: the code is the only
+//! authority on its own behaviour. Where a behaviour is claimed, the
+//! comment points at the test that asserts it:
+//!
+//!     /// @witness nft::tests::test_ensure_table_is_one_run
+//!
+//! The path is the test's path in `cargo test` output, so
+//! `dev/cargo.sh test --lib -- --exact <path>` runs exactly that test, and
+//! grepping the name finds its assertions. An item with several markers is
+//! asserted from several angles. `tests::witness_markers_name_tests` fails
+//! when a marker names a test that does not exist.
+//!
+//! Rust asks for two kinds of prose, and they stay: a `# Safety` section on
+//! every `unsafe fn`, saying what its caller has to hold, and a
+//! `// SAFETY:` comment on every `unsafe` block, saying why that holds
+//! there.
+//!
+//! The markers are not exhaustive. An item without one is not annotated;
+//! that does not make it untested.
+//!
+//! Test modules open with a header naming what they drive and, where it
+//! matters, what they cannot show.
+//!
+//! ──────────────────────────────────────────────────────────────────────
 
 mod error;
 mod nft;
@@ -62,8 +87,9 @@ use std::sync::Mutex;
 use error::ErrorCode;
 use nft::NftContext;
 
-/// The crate version as a C string, built at compile time; a NUL inside
-/// the version stops the build.
+/// The crate version as a C string.
+///
+/// @witness tests::version_is_the_crate_version_at_one_address
 static VERSION: &CStr = match CStr::from_bytes_with_nul(
     concat!(env!("CARGO_PKG_VERSION"), "\0").as_bytes()
 ) {
@@ -72,7 +98,7 @@ static VERSION: &CStr = match CStr::from_bytes_with_nul(
 };
 
 // ---------------------------------------------------------------------------
-// Global nft context — serialized via Mutex
+// Global nft context
 // ---------------------------------------------------------------------------
 
 static NFT_CTX: Mutex<Option<NftContext>> = Mutex::new(None);
@@ -80,9 +106,8 @@ static LAST_ERROR: Mutex<Option<CString>> = Mutex::new(None);
 
 /// Run `f` against the initialized nft context, or return `uninit`.
 ///
-/// This is an FFI boundary: a panic here aborts the host process (the
-/// daemon), so an uninitialized context must surface as an error code,
-/// never as `expect`.
+/// @witness tests::uninitialized_context_returns_code_not_panic
+/// @witness kernel_tests::kernel_nft_close_ends_the_context
 fn with_nft<F, R>(uninit: R, f: F) -> R
 where
     F: FnOnce(&NftContext) -> R,
@@ -103,8 +128,10 @@ fn set_last_error(msg: &str) {
     }
 }
 
-/// A routing family arrives as i32 across the C ABI; a value outside u8 is
-/// refused rather than cut down to its low byte (266 would read as 10).
+/// A routing family from the C ABI, as the u8 the routing code takes.
+///
+/// @witness tests::routing_family_outside_u8_is_refused
+/// @witness tests::routing_family_outside_u8_is_refused_at_the_boundary
 fn family_arg(family: i32) -> Result<u8, String> {
     u8::try_from(family).map_err(|_| format!("Unknown address family: {family}"))
 }
@@ -113,7 +140,9 @@ fn to_heap_cstring(s: &str) -> *mut c_char {
     CString::new(s).map(|c| c.into_raw()).unwrap_or(ptr::null_mut())
 }
 
-/// Borrow a C string as `&str`; null and invalid UTF-8 both read as "".
+/// Borrow a C string as `&str`.
+///
+/// @witness tests::cstr_to_str_reads_null_and_invalid_utf8_as_empty
 ///
 /// # Safety
 ///
@@ -131,6 +160,10 @@ unsafe fn cstr_to_str<'a>(ptr: *const c_char) -> &'a str {
 
 /// Initialize nft context and ensure phantom table + chains exist.
 /// Must be called before any other nft_* function.
+///
+/// @witness kernel_tests::kernel_nft_table_rules_and_handles
+/// @witness kernel_tests::kernel_nft_ensure_table_is_all_or_nothing
+/// @witness tests::uninitialized_context_returns_code_not_panic
 #[unsafe(no_mangle)]
 pub extern "C" fn nft_init() -> i32 {
     let ctx = match NftContext::new() {
@@ -152,6 +185,8 @@ pub extern "C" fn nft_init() -> i32 {
 }
 
 /// Close nft context and release resources.
+///
+/// @witness kernel_tests::kernel_nft_close_ends_the_context
 #[unsafe(no_mangle)]
 pub extern "C" fn nft_close() {
     let mut guard = NFT_CTX.lock().unwrap_or_else(|e| e.into_inner());
@@ -159,6 +194,11 @@ pub extern "C" fn nft_close() {
 }
 
 /// Add a firewall rule to the phantom table. Returns nft handle (>0) or negative error.
+///
+/// @witness kernel_tests::kernel_nft_table_rules_and_handles
+/// @witness kernel_tests::kernel_nft_accepts_every_built_rule
+/// @witness kernel_tests::kernel_nft_errors_reach_the_caller
+/// @witness tests::null_pointers_give_error_codes
 ///
 /// # Safety
 ///
@@ -205,6 +245,9 @@ pub unsafe extern "C" fn nft_add_rule(
 
 /// Remove a firewall rule by chain + nft handle.
 ///
+/// @witness kernel_tests::kernel_nft_table_rules_and_handles
+/// @witness kernel_tests::kernel_nft_errors_reach_the_caller
+///
 /// # Safety
 ///
 /// `chain` is null or a NUL-terminated string that stays valid and
@@ -221,7 +264,9 @@ pub unsafe extern "C" fn nft_remove_rule(chain: *const c_char, handle: u64) -> i
     })
 }
 
-/// Flush all rules in the phantom table (keeps chains).
+/// Flush all rules in the phantom table.
+///
+/// @witness kernel_tests::kernel_nft_table_rules_and_handles
 #[unsafe(no_mangle)]
 pub extern "C" fn nft_flush_table() -> i32 {
     with_nft(ErrorCode::NotInitialized as i32, |ctx| {
@@ -233,6 +278,8 @@ pub extern "C" fn nft_flush_table() -> i32 {
 }
 
 /// List phantom table as JSON. Caller must free with firewall_bridge_free_string.
+///
+/// @witness kernel_tests::kernel_nft_table_rules_and_handles
 #[unsafe(no_mangle)]
 pub extern "C" fn nft_list_table() -> *mut c_char {
     with_nft(ptr::null_mut(), |ctx| {
@@ -248,6 +295,11 @@ pub extern "C" fn nft_list_table() -> *mut c_char {
 // ---------------------------------------------------------------------------
 
 /// Ensure routing table entry in /etc/iproute2/rt_tables.
+///
+/// @witness kernel_tests::kernel_routing_tables_rules_and_routes
+/// @witness kernel_tests::kernel_rt_tables_line_limit_matches_ip
+/// @witness tests::null_pointers_give_error_codes
+/// @witness tests::invalid_utf8_reads_as_empty_at_the_boundary
 ///
 /// # Safety
 ///
@@ -265,6 +317,10 @@ pub unsafe extern "C" fn rt_table_ensure(table_id: u32, table_name: *const c_cha
 
 /// Add a policy rule (ip rule add from ... table ... priority ...).
 /// family: 2 = AF_INET, 10 = AF_INET6.
+///
+/// @witness kernel_tests::kernel_routing_tables_rules_and_routes
+/// @witness tests::null_pointers_give_error_codes
+/// @witness tests::routing_family_outside_u8_is_refused_at_the_boundary
 ///
 /// # Safety
 ///
@@ -290,6 +346,10 @@ pub unsafe extern "C" fn rt_policy_add(
 }
 
 /// Delete a policy rule.
+///
+/// @witness kernel_tests::kernel_routing_tables_rules_and_routes
+/// @witness tests::null_pointers_give_error_codes
+/// @witness tests::routing_family_outside_u8_is_refused_at_the_boundary
 ///
 /// # Safety
 ///
@@ -317,6 +377,10 @@ pub unsafe extern "C" fn rt_policy_delete(
 /// Add a route (ip route add ... dev ... table ...).
 /// family: 2 = AF_INET, 10 = AF_INET6.
 ///
+/// @witness kernel_tests::kernel_routing_tables_rules_and_routes
+/// @witness tests::null_pointers_give_error_codes
+/// @witness tests::routing_family_outside_u8_is_refused_at_the_boundary
+///
 /// # Safety
 ///
 /// Each string pointer is null or a NUL-terminated string that stays valid
@@ -341,6 +405,10 @@ pub unsafe extern "C" fn rt_route_add(
 
 /// Delete a route.
 ///
+/// @witness kernel_tests::kernel_routing_tables_rules_and_routes
+/// @witness tests::null_pointers_give_error_codes
+/// @witness tests::routing_family_outside_u8_is_refused_at_the_boundary
+///
 /// # Safety
 ///
 /// Each string pointer is null or a NUL-terminated string that stays valid
@@ -364,6 +432,8 @@ pub unsafe extern "C" fn rt_route_delete(
 }
 
 /// Enable IPv4 forwarding.
+///
+/// @witness kernel_tests::kernel_forwarding_and_route_cache
 #[unsafe(no_mangle)]
 pub extern "C" fn rt_enable_ip_forward() -> i32 {
     match route::enable_ip_forward() {
@@ -373,6 +443,8 @@ pub extern "C" fn rt_enable_ip_forward() -> i32 {
 }
 
 /// Flush route cache.
+///
+/// @witness kernel_tests::kernel_forwarding_and_route_cache
 #[unsafe(no_mangle)]
 pub extern "C" fn rt_flush_cache() -> i32 {
     match route::flush_cache() {
@@ -386,6 +458,8 @@ pub extern "C" fn rt_flush_cache() -> i32 {
 // ---------------------------------------------------------------------------
 
 /// Return version string (static, do NOT free).
+///
+/// @witness tests::version_is_the_crate_version_at_one_address
 #[unsafe(no_mangle)]
 pub extern "C" fn firewall_bridge_get_version() -> *const c_char {
     VERSION.as_ptr()
@@ -393,10 +467,8 @@ pub extern "C" fn firewall_bridge_get_version() -> *const c_char {
 
 /// Return last error message (do NOT free).
 ///
-/// Deprecated: the returned pointer aliases the internal buffer and is
-/// invalidated the moment a newer error is recorded — a reader racing a
-/// writer dereferences freed memory. Prefer
-/// firewall_bridge_get_last_error_copy, which copies under the lock.
+/// Deprecated: the pointer is invalidated by the next recorded error.
+/// Prefer firewall_bridge_get_last_error_copy.
 #[unsafe(no_mangle)]
 pub extern "C" fn firewall_bridge_get_last_error() -> *const c_char {
     if let Ok(guard) = LAST_ERROR.lock() {
@@ -408,11 +480,13 @@ pub extern "C" fn firewall_bridge_get_last_error() -> *const c_char {
 
 /// Copy the last error message into a caller-provided buffer.
 ///
-/// Copies at most len-1 bytes plus a NUL terminator, entirely under the
-/// error lock, so the result can never dangle. Returns the number of
-/// bytes copied, or FW_ERR_INVALID_PARAM for a null buffer / non-positive
-/// len. 0 means nothing was copied: no error is recorded, or `len` is 1 and
-/// holds the NUL alone.
+/// Copies at most len-1 bytes plus a NUL terminator, under the error lock.
+/// Returns the number of bytes copied, or FW_ERR_INVALID_PARAM for a null
+/// buffer / non-positive len. 0 means nothing was copied: no error is
+/// recorded, or `len` is 1 and holds the NUL alone.
+///
+/// @witness tests::last_error_copy_roundtrip_truncation_and_guards
+/// @witness tests::uninitialized_context_returns_code_not_panic
 ///
 /// # Safety
 ///
@@ -446,6 +520,9 @@ pub unsafe extern "C" fn firewall_bridge_get_last_error_copy(buf: *mut c_char, l
 }
 
 /// Free a heap-allocated string returned by nft_list_table.
+///
+/// @witness kernel_tests::kernel_nft_table_rules_and_handles
+/// @witness tests::null_pointers_give_error_codes
 ///
 /// # Safety
 ///
@@ -562,6 +639,38 @@ mod tests {
         assert_eq!(family_arg(266), Err("Unknown address family: 266".into()));
         assert_eq!(family_arg(-1), Err("Unknown address family: -1".into()));
     }
+
+    /// Every `@witness` marker in the sources names a test that exists: the
+    /// path's module picks the file, and its last segment has to be a
+    /// function right under `#[test]` in that file.
+    #[test]
+    fn witness_markers_name_tests() {
+        let sources = [
+            ("tests", include_str!("lib.rs")),
+            ("nft::tests", include_str!("nft.rs")),
+            ("route::tests", include_str!("route.rs")),
+            ("kernel_tests", include_str!("kernel_tests.rs")),
+        ];
+        let mut markers = 0;
+        for (_, text) in sources {
+            for path in text.lines().filter_map(|l| l.trim().strip_prefix("/// @witness ")) {
+                markers += 1;
+                let (module, name) = path.rsplit_once("::")
+                    .unwrap_or_else(|| panic!("@witness {path}: no module"));
+                let (_, file) = sources.iter().find(|(m, _)| *m == module)
+                    .unwrap_or_else(|| panic!("@witness {path}: unknown module {module}"));
+                let lines: Vec<&str> = file.lines().map(str::trim).collect();
+                let test = format!("fn {name}() {{");
+                assert!(lines.windows(2).any(|w| w[0] == "#[test]" && w[1] == test),
+                        "@witness {path} names no test");
+            }
+        }
+        assert!(markers >= MARKERS_AT_LEAST, "only {markers} markers found");
+    }
+
+    /// The markers counted when this check was written; fewer means the
+    /// check stopped seeing them.
+    const MARKERS_AT_LEAST: usize = 132;
 
     #[test]
     fn version_is_the_crate_version_at_one_address() {

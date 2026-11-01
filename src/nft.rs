@@ -1,8 +1,4 @@
-//! nftables operations through the nft program.
-//!
-//! All firewall rules live in the `inet phantom` table.
-//! This avoids conflicts with UFW, iptables, or any other rulesets.
-//! No DB dependency — pure kernel operations.
+//! nftables through the nft program, in the `inet phantom` table.
 
 use std::ffi::OsString;
 use std::path::PathBuf;
@@ -13,13 +9,17 @@ use std::process::{Command, Stdio};
 // ---------------------------------------------------------------------------
 
 /// Where nft is looked for when the environment names no other path.
+///
+/// @witness nft::tests::test_nft_from_env_defaults_to_usr_sbin
 const DEFAULT_NFT_PATH: &str = "/usr/sbin/nft";
 
-/// Overrides `DEFAULT_NFT_PATH`; must be an absolute path.
+/// Overrides `DEFAULT_NFT_PATH`; takes an absolute path.
+///
+/// @witness nft::tests::test_nft_from_env_takes_the_variable
 const NFT_PATH_ENV: &str = "FIREWALL_BRIDGE_NFT_PATH";
 
 // ---------------------------------------------------------------------------
-// NftContext — one nft process per command
+// NftContext
 // ---------------------------------------------------------------------------
 
 pub struct NftContext {
@@ -28,11 +28,14 @@ pub struct NftContext {
 
 impl NftContext {
     /// Resolves nft from `FIREWALL_BRIDGE_NFT_PATH`, else `/usr/sbin/nft`.
+    ///
+    /// @witness nft::tests::test_nft_from_env_takes_the_variable
+    /// @witness nft::tests::test_nft_from_env_defaults_to_usr_sbin
     pub fn new() -> Result<Self, &'static str> {
         Self::from_env(std::env::var_os(NFT_PATH_ENV))
     }
 
-    /// `new` with the variable's value passed in, so tests need not set it.
+    /// `new`, with the variable's value passed in.
     fn from_env(value: Option<OsString>) -> Result<Self, &'static str> {
         let binary = value
             .map(PathBuf::from)
@@ -40,10 +43,10 @@ impl NftContext {
         Self::with_binary(binary)
     }
 
+    /// @witness nft::tests::test_nft_relative_path_is_refused
+    /// @witness nft::tests::test_nft_missing_program
     fn with_binary(binary: impl Into<PathBuf>) -> Result<Self, &'static str> {
         let binary = binary.into();
-        // A relative path would be checked against the working directory
-        // but looked up on the default PATH when run.
         if !binary.is_absolute() {
             return Err("nft path must be absolute");
         }
@@ -53,24 +56,34 @@ impl NftContext {
         Ok(Self { binary })
     }
 
+    /// @witness nft::tests::test_nft_run_passes_the_command_as_one_argument
     pub fn run(&self, cmd: &str) -> Result<String, String> {
         self.exec(&[], cmd)
     }
 
+    /// @witness nft::tests::test_nft_run_json_asks_for_json_with_handles
     pub fn run_json(&self, cmd: &str) -> Result<String, String> {
         self.exec(&["--json", "--handle"], cmd)
     }
 
-    /// Runs an `add` command; nft prints what it added as JSON, handles
-    /// included.
+    /// Runs an `add` command with `--echo --json --handle`.
+    ///
+    /// @witness nft::tests::test_add_rule_takes_the_handle_from_one_run
+    /// @witness nft::tests::test_find_added_handle
     pub fn run_echo(&self, cmd: &str) -> Result<String, String> {
         self.exec(&["--echo", "--json", "--handle"], cmd)
     }
 
-    /// The command goes to nft as one argument after `--`, the buffer form
-    /// `nft_run_cmd_from_buffer` took. stdin is closed: nothing is written
-    /// to the child, so an nft that exits early cannot raise SIGPIPE in the
-    /// host. The child gets an empty environment apart from `LC_ALL=C`.
+    /// @witness nft::tests::test_nft_run_passes_the_command_as_one_argument
+    /// @witness nft::tests::test_nft_environment_is_cleared
+    /// @witness nft::tests::test_nft_failure_carries_stderr
+    /// @witness nft::tests::test_nft_failure_without_stderr_names_the_command
+    /// @witness nft::tests::test_nft_that_cannot_start_or_is_killed
+    /// @witness nft::tests::test_nft_output_that_is_not_utf8
+    /// @witness nft::tests::test_nft_output_larger_than_a_pipe_buffer
+    /// @witness nft::tests::test_nft_leaves_no_child_behind
+    /// @witness kernel_tests::kernel_nft_leaves_no_child_behind
+    /// @witness kernel_tests::kernel_nft_with_sigchld_ignored
     fn exec(&self, flags: &[&str], cmd: &str) -> Result<String, String> {
         let child = Command::new(&self.binary)
             .args(flags)
@@ -107,8 +120,12 @@ impl NftContext {
 
 const TABLE: &str = "inet phantom";
 
-/// One nft run is one transaction: the table and its five chains are
-/// created together or not at all. `add` leaves what already exists alone.
+/// The `inet phantom` table with its input, output, forward, prerouting and
+/// postrouting chains, in one nft run.
+///
+/// @witness nft::tests::test_ensure_table_is_one_run
+/// @witness kernel_tests::kernel_nft_ensure_table_is_all_or_nothing
+/// @witness kernel_tests::kernel_nft_table_rules_and_handles
 pub fn ensure_table(nft: &NftContext) -> Result<(), String> {
     let cmd = [
         format!("add table {TABLE}"),
@@ -121,21 +138,26 @@ pub fn ensure_table(nft: &NftContext) -> Result<(), String> {
     nft.run(&cmd).map(|_| ())
 }
 
+/// @witness nft::tests::test_table_and_rule_commands
+/// @witness kernel_tests::kernel_nft_table_rules_and_handles
 pub fn flush_table(nft: &NftContext) -> Result<(), String> {
     nft.run(&format!("flush table {TABLE}")).map(|_| ())
 }
 
+/// @witness nft::tests::test_table_and_rule_commands
+/// @witness kernel_tests::kernel_nft_table_rules_and_handles
 pub fn list_table(nft: &NftContext) -> Result<String, String> {
     nft.run_json(&format!("list table {TABLE}"))
 }
 
 // ---------------------------------------------------------------------------
-// Rule operations — parametric, no DB dependency
+// Rule operations
 // ---------------------------------------------------------------------------
 
-/// One rule, field for field as `nft_add_rule` takes it across the C ABI.
-/// Unused strings are empty and unused numbers 0; `family` is AF_INET6 (10)
-/// for IPv6, anything else reads as IPv4.
+/// One rule, field for field as `nft_add_rule` takes it across the C ABI;
+/// unused strings are empty and unused numbers 0.
+///
+/// @witness nft::tests::test_build_rule_cmd_exact_output
 #[derive(Default)]
 pub struct RuleSpec<'a> {
     pub chain: &'a str,
@@ -151,18 +173,23 @@ pub struct RuleSpec<'a> {
     pub comment: &'a str,
 }
 
-/// Add a firewall rule. Returns nft handle on success.
-/// The fields map directly to nft rule expression components.
+/// Add a firewall rule; returns its nft handle.
+///
+/// @witness nft::tests::test_add_rule_takes_the_handle_from_one_run
+/// @witness nft::tests::test_add_rule_reports_a_failure_and_a_missing_handle
+/// @witness kernel_tests::kernel_nft_table_rules_and_handles
+/// @witness kernel_tests::kernel_nft_accepts_every_built_rule
 pub fn add_rule(nft: &NftContext, rule: &RuleSpec) -> Result<u64, String> {
     let cmd = build_rule_cmd(rule)?;
-
-    // The handle comes from the run that added the rule, so no second run
-    // can fail after the rule is already in the kernel.
     let echo = nft.run_echo(&cmd)?;
     find_added_handle(&echo).ok_or_else(|| "Rule applied but handle not found".to_string())
 }
 
 /// Remove a rule by chain + nft handle.
+///
+/// @witness nft::tests::test_table_and_rule_commands
+/// @witness kernel_tests::kernel_nft_table_rules_and_handles
+/// @witness kernel_tests::kernel_nft_errors_reach_the_caller
 pub fn remove_rule(nft: &NftContext, chain: &str, handle: u64) -> Result<(), String> {
     nft.run(&format!("delete rule {TABLE} {chain} handle {handle}")).map(|_| ())
 }
@@ -171,6 +198,8 @@ pub fn remove_rule(nft: &NftContext, chain: &str, handle: u64) -> Result<(), Str
 // Rule command builder
 // ---------------------------------------------------------------------------
 
+/// @witness nft::tests::test_build_rule_cmd_exact_output
+/// @witness kernel_tests::kernel_nft_accepts_every_built_rule
 fn build_rule_cmd(rule: &RuleSpec) -> Result<String, String> {
     let RuleSpec { chain, action, family, proto, dport, source, destination,
                    in_iface, out_iface, state_match, comment } = *rule;
@@ -197,10 +226,6 @@ fn build_rule_cmd(rule: &RuleSpec) -> Result<String, String> {
         parts.push(format!("ct state {}", state_match.to_lowercase()));
     }
 
-    // `dnat to <addr>` is rejected in an inet table — it carries both families,
-    // so nftables cannot infer which one the address belongs to and demands an
-    // explicit `ip` / `ip6`. The preset declares the intent; the family field
-    // already resolved above is what makes it expressible here.
     if let Some(target) = action.strip_prefix("dnat to ") {
         parts.push(format!("dnat {fam} to {}", target));
     } else {
@@ -219,8 +244,10 @@ fn build_rule_cmd(rule: &RuleSpec) -> Result<String, String> {
 // Handle lookup (JSON parsing)
 // ---------------------------------------------------------------------------
 
-/// The handle in nft's echo of an `add rule`:
-/// `{"nftables": [{"add": {"rule": {…, "handle": N, …}}}]}`.
+/// The handle in nft's echo of an `add rule`.
+///
+/// @witness nft::tests::test_find_added_handle
+/// @witness nft::tests::test_find_added_handle_absent
 fn find_added_handle(json: &str) -> Option<u64> {
     let parsed: serde_json::Value = serde_json::from_str(json).ok()?;
     parsed.get("nftables")?.as_array()?.iter()
@@ -233,6 +260,9 @@ fn find_added_handle(json: &str) -> Option<u64> {
 
 #[cfg(test)]
 pub(crate) mod tests {
+    //! The command text and a stand-in nft script. Whether nft accepts the
+    //! commands is kernel_tests' part.
+
     use super::*;
 
     // -----------------------------------------------------------------------

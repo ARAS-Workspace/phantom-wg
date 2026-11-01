@@ -1,9 +1,6 @@
 /**
  * firewall_bridge_linux.h — Kernel operations backend
  *
- * Pure nftables + netlink operations. No database, no state machine.
- * State management, persistence, presets → Python side (ufw pattern).
- *
  * Functions returning char* (JSON) must be freed with firewall_bridge_free_string().
  * Functions returning const char* are static and must NOT be freed.
  * All other functions return 0 on success, negative on error.

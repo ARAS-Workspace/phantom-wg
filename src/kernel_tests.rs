@@ -7,6 +7,10 @@
 //! /etc/iproute2 and leaves the namespace it was started in as it was. That
 //! needs CAP_SYS_ADMIN and CAP_NET_ADMIN: the privileged container
 //! dev/cargo.sh starts has both, and nft and ip installed.
+//!
+//! They show the nft and iproute2 of the image they run in (the dev image:
+//! nft 1.1.3, iproute2 6.15), not other versions, and a root process, not
+//! one whose capability comes from `setcap`.
 
 use std::ffi::{CStr, CString};
 use std::io;

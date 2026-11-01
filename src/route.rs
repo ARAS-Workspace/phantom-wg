@@ -1,7 +1,5 @@
-//! Routing operations via raw netlink sockets.
-//!
-//! Handles policy rules (ip rule add/del) and routes (ip route add/del)
-//! without any subprocess calls — direct kernel communication.
+//! Policy rules and routes over a NETLINK_ROUTE socket, and the table names
+//! in /etc/iproute2/rt_tables.
 
 use std::io;
 use std::mem;
@@ -96,7 +94,6 @@ struct RtAttr {
     rta_type: u16,
 }
 
-// The byte forms below have the kernel's sizes; offsets elsewhere use size_of.
 const _: () = assert!(mem::size_of::<NlMsgHdr>() == 16);
 const _: () = assert!(mem::size_of::<RtMsg>() == 12);
 const _: () = assert!(mem::size_of::<FibRuleHdr>() == 12);
@@ -192,6 +189,8 @@ impl NetlinkSocket {
     }
 
     /// Send a netlink message and wait for ACK.
+    ///
+    /// @witness kernel_tests::kernel_routing_tables_rules_and_routes
     fn send_and_ack(&mut self, buf: &[u8]) -> Result<(), String> {
         // SAFETY: the pointer and length describe `buf`, which outlives the call.
         let sent = unsafe {
@@ -215,11 +214,12 @@ impl NetlinkSocket {
     }
 }
 
-/// Read the kernel's answer to a request sent with NLM_F_ACK. An
-/// NLMSG_ERROR whose code (the i32 after the header) is not 0 is an error;
-/// anything else, a short reply included, counts as accepted.
+/// The kernel's answer to a request sent with NLM_F_ACK.
 ///
-/// The fields are read from bytes, so the buffer's alignment does not matter.
+/// @witness route::tests::ack_with_code_zero_is_accepted
+/// @witness route::tests::ack_with_an_errno_is_an_error
+/// @witness route::tests::ack_that_is_short_or_not_an_error_is_accepted
+/// @witness kernel_tests::kernel_routing_tables_rules_and_routes
 fn check_ack(reply: &[u8]) -> Result<(), String> {
     let hdr_len = mem::size_of::<NlMsgHdr>();
     // nlmsghdr: len u32 at 0, type u16 at 4.
@@ -248,10 +248,12 @@ impl Drop for NetlinkSocket {
 // Message builder helpers
 // ---------------------------------------------------------------------------
 
+/// @witness route::tests::attributes_pad_to_four_bytes
 fn align4(len: usize) -> usize {
     (len + 3) & !3
 }
 
+/// @witness route::tests::attributes_pad_to_four_bytes
 fn push_attr(buf: &mut Vec<u8>, rta_type: u16, data: &[u8]) {
     let rta_len = (mem::size_of::<RtAttr>() + data.len()) as u16;
     buf.extend_from_slice(&rta_len.to_ne_bytes());
@@ -269,6 +271,13 @@ fn push_attr_u32(buf: &mut Vec<u8>, rta_type: u16, val: u32) {
 }
 
 /// Parse "10.66.66.0/24" or "fd00:d0ce::/64" into (IpAddr, prefix_len, family).
+///
+/// @witness route::tests::parse_ipv4_network
+/// @witness route::tests::parse_ipv6_network
+/// @witness route::tests::parse_ipv6_full
+/// @witness route::tests::parse_ipv4_host
+/// @witness route::tests::parse_invalid_no_prefix
+/// @witness route::tests::parse_invalid_addr
 fn parse_network(network: &str) -> Result<(IpAddr, u8, u8), String> {
     let parts: Vec<&str> = network.split('/').collect();
     if parts.len() != 2 {
@@ -286,6 +295,10 @@ fn parse_network(network: &str) -> Result<(IpAddr, u8, u8), String> {
 }
 
 /// Get raw address bytes (4 for IPv4, 16 for IPv6).
+///
+/// @witness route::tests::addr_bytes_ipv4
+/// @witness route::tests::addr_bytes_ipv6
+/// @witness route::tests::addr_bytes_ipv6_unspecified
 fn addr_bytes(addr: &IpAddr) -> Vec<u8> {
     match addr {
         IpAddr::V4(v4) => v4.octets().to_vec(),
@@ -294,6 +307,8 @@ fn addr_bytes(addr: &IpAddr) -> Vec<u8> {
 }
 
 /// Resolve interface name to ifindex.
+///
+/// @witness kernel_tests::kernel_routing_tables_rules_and_routes
 fn if_nametoindex(name: &str) -> Result<u32, String> {
     let c_name = std::ffi::CString::new(name).map_err(|e| e.to_string())?;
     // SAFETY: `c_name` is a NUL-terminated string that outlives the call.
@@ -305,12 +320,16 @@ fn if_nametoindex(name: &str) -> Result<u32, String> {
     }
 }
 
-/// Resolve named routing table to numeric ID.
-/// Reads /etc/iproute2/rt_tables for name→id mapping.
+/// Resolve named routing table to numeric ID through /etc/iproute2/rt_tables.
+///
+/// @witness kernel_tests::kernel_routing_tables_rules_and_routes
 fn resolve_table(table_name: &str) -> Result<u32, String> {
     resolve_table_in(Path::new(RT_TABLES), table_name)
 }
 
+/// @witness route::tests::resolve_table_builtins_and_numbers_need_no_file
+/// @witness route::tests::resolve_table_reads_names_from_the_file
+/// @witness route::tests::resolve_table_reports_a_bad_id_and_a_missing_file
 fn resolve_table_in(path: &Path, table_name: &str) -> Result<u32, String> {
     // Built-in tables
     match table_name {
@@ -346,7 +365,7 @@ fn resolve_table_in(path: &Path, table_name: &str) -> Result<u32, String> {
 }
 
 // ---------------------------------------------------------------------------
-// Netlink requests — built apart from the socket so the bytes can be tested
+// Netlink requests
 // ---------------------------------------------------------------------------
 
 /// What the netlink header carries besides the length.
@@ -373,6 +392,12 @@ fn write_header(buf: &mut [u8], req: Request) {
 }
 
 /// RTM_NEWRULE / RTM_DELRULE: from <from> [to <to>] table <table> priority <prio>.
+///
+/// @witness route::tests::policy_message_v4_from_only
+/// @witness route::tests::policy_message_v4_from_and_to_delete
+/// @witness route::tests::policy_message_v6_table_above_255
+/// @witness route::tests::policy_messages_refuse_an_address_of_another_family
+/// @witness route::tests::messages_refuse_a_malformed_network
 fn policy_msg(req: Request, from_network: &str, to_network: &str, table_id: u32,
               priority: u32, family: u8) -> Result<Vec<u8>, String> {
     known_family(family)?;
@@ -415,9 +440,14 @@ fn policy_msg(req: Request, from_network: &str, to_network: &str, table_id: u32,
     Ok(buf)
 }
 
-/// RTM_NEWROUTE / RTM_DELROUTE: <destination> dev <ifindex> table <table>.
-/// "default" is the default route of `family`; "0.0.0.0/0" and "::/0" spell
-/// that route out, so like any other destination they have to match `family`.
+/// RTM_NEWROUTE / RTM_DELROUTE: <destination> dev <ifindex> table <table>;
+/// "default" is the default route of `family`.
+///
+/// @witness route::tests::route_message_v4_link_scope
+/// @witness route::tests::route_message_v6_default_delete
+/// @witness route::tests::route_message_v4_default_table_above_255
+/// @witness route::tests::route_messages_refuse_an_address_of_another_family
+/// @witness route::tests::messages_refuse_a_malformed_network
 fn route_msg(req: Request, destination: &str, ifindex: u32, table_id: u32, family: u8)
     -> Result<Vec<u8>, String>
 {
@@ -464,6 +494,8 @@ fn route_msg(req: Request, destination: &str, ifindex: u32, table_id: u32, famil
     Ok(buf)
 }
 
+/// @witness route::tests::policy_messages_refuse_an_address_of_another_family
+/// @witness route::tests::route_messages_refuse_an_address_of_another_family
 fn known_family(family: u8) -> Result<(), String> {
     if family == libc::AF_INET as u8 || family == libc::AF_INET6 as u8 {
         Ok(())
@@ -472,9 +504,8 @@ fn known_family(family: u8) -> Result<(), String> {
     }
 }
 
-/// Every address in a request has to be of the request's family. Without
-/// this check the kernel refuses a mismatch with a bare EINVAL, and takes
-/// `0.0.0.0/0` sent as AF_INET6 for an IPv6 default route.
+/// @witness route::tests::policy_messages_refuse_an_address_of_another_family
+/// @witness route::tests::route_messages_refuse_an_address_of_another_family
 fn check_family(network: &str, network_family: u8, family: u8) -> Result<(), String> {
     if network_family == family {
         Ok(())
@@ -507,45 +538,63 @@ fn send_route(kind: u16, flags: u16, destination: &str, device: &str, table_name
 // ---------------------------------------------------------------------------
 
 /// Add a policy rule: ip rule add from <from> [to <to>] table <table> priority <prio>
+///
+/// @witness kernel_tests::kernel_routing_tables_rules_and_routes
 pub fn policy_add(from_network: &str, to_network: &str, table_name: &str, priority: u32, family: u8) -> Result<(), String> {
     send_policy(RTM_NEWRULE, CREATE_FLAGS, from_network, to_network, table_name, priority, family)
 }
 
 /// Delete a policy rule.
+///
+/// @witness kernel_tests::kernel_routing_tables_rules_and_routes
 pub fn policy_delete(from_network: &str, to_network: &str, table_name: &str, priority: u32, family: u8) -> Result<(), String> {
     send_policy(RTM_DELRULE, DELETE_FLAGS, from_network, to_network, table_name, priority, family)
 }
 
-/// Add a route: ip route add <destination> dev <device> table <table>
-/// Use "default" as destination for default route (0.0.0.0/0).
+/// Add a route: ip route add <destination> dev <device> table <table>;
+/// "default" is the default route of `family`.
+///
+/// @witness kernel_tests::kernel_routing_tables_rules_and_routes
 pub fn route_add(destination: &str, device: &str, table_name: &str, family: u8) -> Result<(), String> {
     send_route(RTM_NEWROUTE, CREATE_FLAGS, destination, device, table_name, family)
 }
 
 /// Delete a route.
+///
+/// @witness kernel_tests::kernel_routing_tables_rules_and_routes
 pub fn route_delete(destination: &str, device: &str, table_name: &str, family: u8) -> Result<(), String> {
     send_route(RTM_DELROUTE, DELETE_FLAGS, destination, device, table_name, family)
 }
 
-/// The file `ip` reads table names from. iproute2 6.x ships its defaults in
-/// `RT_TABLES_DEFAULTS` and stops reading them once this file exists.
+/// The file `ip` reads table names from.
+///
+/// @witness kernel_tests::kernel_routing_tables_rules_and_routes
 const RT_TABLES: &str = "/etc/iproute2/rt_tables";
+
+/// Where iproute2 keeps its own table names.
 const RT_TABLES_DEFAULTS: &str = "/usr/share/iproute2/rt_tables";
 
-/// The longest `<id> <name>` line iproute2 6.15 reads back from RT_TABLES.
+/// The longest `<id> <name>` line written to RT_TABLES.
+///
+/// @witness kernel_tests::kernel_rt_tables_line_limit_matches_ip
 const MAX_RT_TABLES_LINE: usize = 511;
 
 /// Ensure a routing table entry exists in /etc/iproute2/rt_tables.
+///
+/// @witness kernel_tests::kernel_routing_tables_rules_and_routes
+/// @witness kernel_tests::kernel_rt_tables_line_limit_matches_ip
 pub fn ensure_table(table_id: u32, table_name: &str) -> Result<(), String> {
     ensure_table_in(Path::new(RT_TABLES), Path::new(RT_TABLES_DEFAULTS),
                     table_id, table_name)
 }
 
+/// @witness route::tests::ensure_table_adds_an_entry_once
+/// @witness route::tests::ensure_table_leaves_an_existing_file_unseeded
+/// @witness route::tests::ensure_table_refuses_an_empty_spaced_or_numeric_name
+/// @witness route::tests::ensure_table_refuses_an_entry_longer_than_iproute2_reads
 fn ensure_table_in(path: &Path, defaults: &Path, table_id: u32, table_name: &str)
     -> Result<(), String>
 {
-    // An entry is `<id> <name>`; an empty name or one with whitespace would
-    // write a line that reads back as another name, or as none.
     if table_name.is_empty() || table_name.chars().any(char::is_whitespace)
         || table_name.bytes().all(|b| b.is_ascii_digit()) {
         return Err(format!("Invalid routing table name: {table_name:?}"));
@@ -583,9 +632,11 @@ fn ensure_table_in(path: &Path, defaults: &Path, table_id: u32, table_name: &str
         .map_err(|e| format!("Cannot write to {}: {}", path.display(), e))
 }
 
-/// A missing file starts as a copy of the defaults, so creating it keeps
-/// `unspec` and any name added there visible to `ip`. With no defaults it
-/// starts empty, as before.
+/// Starts a missing `path` as a copy of `defaults`, or empty without them.
+///
+/// @witness route::tests::ensure_table_seeds_a_missing_file_from_the_defaults
+/// @witness route::tests::ensure_table_ends_defaults_without_a_newline
+/// @witness kernel_tests::kernel_routing_tables_rules_and_routes
 fn seed_rt_tables(path: &Path, defaults: &Path) -> Result<(), String> {
     use std::io::Write;
     if path.exists() {
@@ -599,7 +650,6 @@ fn seed_rt_tables(path: &Path, defaults: &Path) -> Result<(), String> {
     if !seed.is_empty() && !seed.ends_with(b"\n") {
         seed.push(b'\n');
     }
-    // create_new: if another caller created the file meanwhile, theirs stands.
     match std::fs::OpenOptions::new().write(true).create_new(true).open(path) {
         Ok(mut file) => file.write_all(&seed)
             .map_err(|e| format!("Cannot write {}: {}", path.display(), e)),
@@ -608,14 +658,17 @@ fn seed_rt_tables(path: &Path, defaults: &Path) -> Result<(), String> {
     }
 }
 
-/// Flush route cache (no-op on Linux >= 3.6, included for compatibility).
+/// Flush the IPv4 route cache through /proc.
+///
+/// @witness kernel_tests::kernel_forwarding_and_route_cache
 pub fn flush_cache() -> Result<(), String> {
-    // Modern kernels removed the route cache. Write to proc for older kernels.
     let _ = std::fs::write("/proc/sys/net/ipv4/route/flush", "1");
     Ok(())
 }
 
 /// Enable IP forwarding.
+///
+/// @witness kernel_tests::kernel_forwarding_and_route_cache
 pub fn enable_ip_forward() -> Result<(), String> {
     std::fs::write("/proc/sys/net/ipv4/ip_forward", "1")
         .map_err(|e| format!("Cannot enable ip_forward: {}", e))
@@ -623,6 +676,9 @@ pub fn enable_ip_forward() -> Result<(), String> {
 
 #[cfg(test)]
 mod tests {
+    //! Message bytes, reply parsing and the rt_tables file, without a socket.
+    //! Whether the kernel takes the messages is kernel_tests' part.
+
     use super::*;
 
     // ── parse_network ────────────────────────────────────────────
