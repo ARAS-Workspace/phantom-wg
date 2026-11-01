@@ -166,23 +166,26 @@ impl NetlinkSocket {
             return Err(format!("netlink recv failed: {}", io::Error::last_os_error()));
         }
 
-        // Parse ACK — check for NLMSG_ERROR
-        if len >= mem::size_of::<NlMsgHdr>() as isize {
-            let hdr = unsafe { &*(recv_buf.as_ptr() as *const NlMsgHdr) };
-            if hdr.nlmsg_type == libc::NLMSG_ERROR as u16 {
-                // Error payload: i32 error code after nlmsghdr
-                if len >= (mem::size_of::<NlMsgHdr>() + 4) as isize {
-                    let err = unsafe {
-                        *(recv_buf.as_ptr().add(mem::size_of::<NlMsgHdr>()) as *const i32)
-                    };
-                    if err != 0 {
-                        return Err(format!("netlink error: {}", io::Error::from_raw_os_error(-err)));
-                    }
-                }
-            }
-        }
+        check_ack(&recv_buf[..len as usize])
+    }
+}
 
-        Ok(())
+/// Read the kernel's answer to a request sent with NLM_F_ACK. An
+/// NLMSG_ERROR whose code (the i32 after the header) is not 0 is an error;
+/// anything else, a short reply included, counts as accepted.
+///
+/// The fields are read from bytes, so the buffer's alignment does not matter.
+fn check_ack(reply: &[u8]) -> Result<(), String> {
+    let hdr_len = mem::size_of::<NlMsgHdr>();
+    // nlmsghdr: len u32 at 0, type u16 at 4.
+    let Some(&[t0, t1]) = reply.get(4..6) else { return Ok(()) };
+    if reply.len() < hdr_len || u16::from_ne_bytes([t0, t1]) != libc::NLMSG_ERROR as u16 {
+        return Ok(());
+    }
+    let Some(&[e0, e1, e2, e3]) = reply.get(hdr_len..hdr_len + 4) else { return Ok(()) };
+    match i32::from_ne_bytes([e0, e1, e2, e3]) {
+        0 => Ok(()),
+        err => Err(format!("netlink error: {}", io::Error::from_raw_os_error(-err))),
     }
 }
 
@@ -719,6 +722,43 @@ mod tests {
             &attr(15, &300u32.to_ne_bytes()),            // RTA_TABLE
         ]);
         assert_eq!(msg, cat(&[&nlhdr(16 + body.len() as u32, 24, REQUEST_ACK_CREATE_EXCL, 2), &body]));
+    }
+
+    /// An NLMSG_ERROR reply (type 2) carrying `code`, after one leading byte;
+    /// the tests pass it from offset 1, so it is not 4-byte aligned.
+    fn error_reply(code: i32) -> Vec<u8> {
+        let mut out = vec![0xAA];
+        out.extend(nlhdr(36, 2, 0, 1));
+        out.extend(code.to_ne_bytes());
+        out.extend([0u8; 16]); // the echoed request header
+        out
+    }
+
+    #[test]
+    fn ack_with_code_zero_is_accepted() {
+        assert_eq!(check_ack(&error_reply(0)[1..]), Ok(()));
+    }
+
+    #[test]
+    fn ack_with_an_errno_is_an_error() {
+        for (errno, text) in [(libc::EEXIST, "File exists"), (libc::ENOENT, "No such file"),
+                              (libc::EPERM, "Operation not permitted")] {
+            let err = check_ack(&error_reply(-errno)[1..]).unwrap_err();
+            assert!(err.starts_with("netlink error: ") && err.contains(text), "got: {err}");
+        }
+    }
+
+    #[test]
+    fn ack_that_is_short_or_not_an_error_is_accepted() {
+        let reply = error_reply(-libc::EEXIST);
+        // Too short for a header, or for the error code after it.
+        for len in [0, 5, 15, 16, 19] {
+            assert_eq!(check_ack(&reply[1..1 + len]), Ok(()), "len {len}");
+        }
+        // NLMSG_DONE (3) instead of NLMSG_ERROR.
+        let mut done = reply[1..].to_vec();
+        done[4..6].copy_from_slice(&3u16.to_ne_bytes());
+        assert_eq!(check_ack(&done), Ok(()));
     }
 
     #[test]
