@@ -73,8 +73,10 @@ const char* firewall_bridge_get_version(void);      /* static, do NOT free */
 const char* firewall_bridge_get_last_error(void);
 
 /* Copy last error into buf (at most len-1 bytes + NUL), under the
- * error lock. Returns bytes copied (0 = no error), or
- * FW_ERR_INVALID_PARAM for null buf / len <= 0. */
+ * error lock. Returns bytes copied, or FW_ERR_INVALID_PARAM for null
+ * buf / len <= 0. 0 = nothing copied: no error recorded, or len == 1.
+ * buf must not point into the string firewall_bridge_get_last_error
+ * returned. */
 int32_t     firewall_bridge_get_last_error_copy(char* buf, int32_t len);
 
 void        firewall_bridge_free_string(char* ptr);

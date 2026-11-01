@@ -148,7 +148,7 @@ pub extern "C" fn nft_close() {
 /// # Safety
 ///
 /// Each string pointer is null or a NUL-terminated string that stays valid
-/// for the call. Null reads as an empty string.
+/// and unchanged for the call. Null reads as an empty string.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn nft_add_rule(
     chain: *const c_char,
@@ -192,7 +192,8 @@ pub unsafe extern "C" fn nft_add_rule(
 ///
 /// # Safety
 ///
-/// `chain` is null or a NUL-terminated string that stays valid for the call.
+/// `chain` is null or a NUL-terminated string that stays valid and
+/// unchanged for the call.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn nft_remove_rule(chain: *const c_char, handle: u64) -> i32 {
     // SAFETY: `chain` meets this function's contract.
@@ -235,8 +236,8 @@ pub extern "C" fn nft_list_table() -> *mut c_char {
 ///
 /// # Safety
 ///
-/// `table_name` is null or a NUL-terminated string that stays valid for
-/// the call.
+/// `table_name` is null or a NUL-terminated string that stays valid and
+/// unchanged for the call.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn rt_table_ensure(table_id: u32, table_name: *const c_char) -> i32 {
     // SAFETY: `table_name` meets this function's contract.
@@ -253,7 +254,7 @@ pub unsafe extern "C" fn rt_table_ensure(table_id: u32, table_name: *const c_cha
 /// # Safety
 ///
 /// Each string pointer is null or a NUL-terminated string that stays valid
-/// for the call. Null reads as an empty string.
+/// and unchanged for the call. Null reads as an empty string.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn rt_policy_add(
     from_network: *const c_char,
@@ -278,7 +279,7 @@ pub unsafe extern "C" fn rt_policy_add(
 /// # Safety
 ///
 /// Each string pointer is null or a NUL-terminated string that stays valid
-/// for the call. Null reads as an empty string.
+/// and unchanged for the call. Null reads as an empty string.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn rt_policy_delete(
     from_network: *const c_char,
@@ -304,7 +305,7 @@ pub unsafe extern "C" fn rt_policy_delete(
 /// # Safety
 ///
 /// Each string pointer is null or a NUL-terminated string that stays valid
-/// for the call. Null reads as an empty string.
+/// and unchanged for the call. Null reads as an empty string.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn rt_route_add(
     destination: *const c_char,
@@ -328,7 +329,7 @@ pub unsafe extern "C" fn rt_route_add(
 /// # Safety
 ///
 /// Each string pointer is null or a NUL-terminated string that stays valid
-/// for the call. Null reads as an empty string.
+/// and unchanged for the call. Null reads as an empty string.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn rt_route_delete(
     destination: *const c_char,
@@ -394,12 +395,14 @@ pub extern "C" fn firewall_bridge_get_last_error() -> *const c_char {
 ///
 /// Copies at most len-1 bytes plus a NUL terminator, entirely under the
 /// error lock, so the result can never dangle. Returns the number of
-/// bytes copied (0 = no error recorded), or FW_ERR_INVALID_PARAM for a
-/// null buffer / non-positive len.
+/// bytes copied, or FW_ERR_INVALID_PARAM for a null buffer / non-positive
+/// len. 0 means nothing was copied: no error is recorded, or `len` is 1 and
+/// holds the NUL alone.
 ///
 /// # Safety
 ///
-/// `buf` is null or valid for writes of `len` bytes.
+/// `buf` is null or valid for writes of `len` bytes, and does not point into
+/// the string `firewall_bridge_get_last_error` returned.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn firewall_bridge_get_last_error_copy(buf: *mut c_char, len: i32) -> i32 {
     if buf.is_null() || len <= 0 {
@@ -577,6 +580,12 @@ mod tests {
         let msg = unsafe { CStr::from_ptr(small.as_ptr()) }.to_str().unwrap();
         assert_eq!(msg, "boundar");
         assert_eq!(small[8], 0x7f as c_char, "wrote past len");
+
+        // A len of 1 holds the NUL alone: 0 copied although an error is recorded.
+        let mut one = [0x7f as c_char; 2];
+        // SAFETY: `one` holds 2 bytes, more than the 1 passed.
+        assert_eq!(unsafe { firewall_bridge_get_last_error_copy(one.as_mut_ptr(), 1) }, 0);
+        assert_eq!(one, [0, 0x7f as c_char]);
 
         // Guards
         assert_eq!(
