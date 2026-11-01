@@ -11,7 +11,9 @@ These tests are the consumer the header never had.
 
 from __future__ import annotations
 
+import os
 import re
+import subprocess
 from pathlib import Path
 
 import pytest
@@ -51,13 +53,17 @@ def _header_functions() -> dict[str, int]:
 
 
 def _rust_exports() -> dict[str, int]:
-    """Map exported name -> parameter count, parsed from src/lib.rs."""
+    """Map exported name -> parameter count, parsed from src/lib.rs.
+
+    Only an attribute at the start of a line counts, so a commented-out
+    export and a function inside an indented test module do not register.
+    """
     text = LIB_RS.read_text()
     out: dict[str, int] = {}
     for m in re.finditer(
-        r'#\[(?:no_mangle|unsafe\(no_mangle\))\]\s*pub (?:unsafe )?extern "C" fn\s+(\w+)\s*\((.*?)\)\s*(?:->|\{)',
+        r'^#\[(?:no_mangle|unsafe\(no_mangle\))\]\s*pub (?:unsafe )?extern "C" fn\s+(\w+)\s*\((.*?)\)\s*(?:->|\{)',
         text,
-        flags=re.S,
+        flags=re.M | re.S,
     ):
         name, params = m.group(1), m.group(2).strip()
         out[name] = len([p for p in params.split(",") if p.strip()])
@@ -77,8 +83,8 @@ def rust() -> dict[str, int]:
 class TestHeaderMatchesRust:
     def test_parsers_found_something(self, header, rust):
         """Guard the guard — a broken regex must not pass silently."""
-        assert len(rust) >= 15, f"only parsed {len(rust)} Rust exports"
-        assert len(header) >= 15, f"only parsed {len(header)} header decls"
+        assert len(rust) >= 17, f"only parsed {len(rust)} Rust exports"
+        assert len(header) >= 17, f"only parsed {len(header)} header decls"
 
     def test_no_export_missing_from_header(self, header, rust):
         missing = set(rust) - set(header)
@@ -97,6 +103,25 @@ class TestHeaderMatchesRust:
         assert not mismatched, (
             "arity drift (name: rust vs header): "
             + ", ".join(f"{n}: {r} vs {h}" for n, (r, h) in sorted(mismatched.items()))
+        )
+
+
+class TestHeaderMatchesLibrary:
+    """The built .so is what a C caller links against: its dynamic symbols
+    with the bridge's prefixes are the header's functions, no more, no less."""
+
+    def test_exported_symbols_are_the_header_functions(self, header):
+        lib = os.environ.get("FIREWALL_BRIDGE_LIB_PATH", "")
+        assert os.path.isfile(lib), f"FIREWALL_BRIDGE_LIB_PATH names no built library: {lib!r}"
+        out = subprocess.run(["nm", "-D", "--defined-only", lib],
+                             capture_output=True, text=True, check=True).stdout
+        exported = {
+            line.split()[-1] for line in out.splitlines()
+            if line.split() and line.split()[-1].startswith(("nft_", "rt_", "firewall_bridge_"))
+        }
+        assert exported == set(header), (
+            f"only in the .so: {sorted(exported - set(header))}, "
+            f"only in the header: {sorted(set(header) - exported)}"
         )
 
 
