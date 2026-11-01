@@ -119,14 +119,24 @@ pub unsafe extern "C" fn nft_add_rule(
     comment: *const c_char,
 ) -> i64 {
     // SAFETY: every pointer meets this function's contract.
-    let (ch, act, pr, sr, ds, ii, oi, sm, cm) = unsafe {
-        (cstr_to_str(chain), cstr_to_str(action), cstr_to_str(proto),
-         cstr_to_str(source), cstr_to_str(destination), cstr_to_str(in_iface),
-         cstr_to_str(out_iface), cstr_to_str(state_match), cstr_to_str(comment))
+    let rule = unsafe {
+        nft::RuleSpec {
+            chain: cstr_to_str(chain),
+            action: cstr_to_str(action),
+            family,
+            proto: cstr_to_str(proto),
+            dport,
+            source: cstr_to_str(source),
+            destination: cstr_to_str(destination),
+            in_iface: cstr_to_str(in_iface),
+            out_iface: cstr_to_str(out_iface),
+            state_match: cstr_to_str(state_match),
+            comment: cstr_to_str(comment),
+        }
     };
 
     with_nft(ErrorCode::NotInitialized as i64, |ctx| {
-        match nft::add_rule(ctx, ch, act, family, pr, dport, sr, ds, ii, oi, sm, cm) {
+        match nft::add_rule(ctx, &rule) {
             Ok(handle) => handle as i64,
             Err(msg) => { set_last_error(&msg); ErrorCode::NftablesFailed as i64 }
         }

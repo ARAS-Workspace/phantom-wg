@@ -127,25 +127,28 @@ pub fn list_table(nft: &NftContext) -> Result<String, String> {
 // Rule operations — parametric, no DB dependency
 // ---------------------------------------------------------------------------
 
+/// One rule, field for field as `nft_add_rule` takes it across the C ABI.
+/// Unused strings are empty and unused numbers 0; `family` is AF_INET6 (10)
+/// for IPv6, anything else reads as IPv4.
+#[derive(Default)]
+pub struct RuleSpec<'a> {
+    pub chain: &'a str,
+    pub action: &'a str,
+    pub family: i32,
+    pub proto: &'a str,
+    pub dport: i32,
+    pub source: &'a str,
+    pub destination: &'a str,
+    pub in_iface: &'a str,
+    pub out_iface: &'a str,
+    pub state_match: &'a str,
+    pub comment: &'a str,
+}
+
 /// Add a firewall rule. Returns nft handle on success.
-/// Parameters map directly to nft rule expression components.
-pub fn add_rule(
-    nft: &NftContext,
-    chain: &str,
-    action: &str,
-    family: i32,
-    proto: &str,
-    dport: i32,
-    source: &str,
-    destination: &str,
-    in_iface: &str,
-    out_iface: &str,
-    state_match: &str,
-    comment: &str,
-) -> Result<u64, String> {
-    let cmd = build_rule_cmd(chain, action, family, proto, dport,
-                              source, destination, in_iface, out_iface,
-                              state_match, comment)?;
+/// The fields map directly to nft rule expression components.
+pub fn add_rule(nft: &NftContext, rule: &RuleSpec) -> Result<u64, String> {
+    let cmd = build_rule_cmd(rule)?;
 
     // The handle comes from the run that added the rule, so no second run
     // can fail after the rule is already in the kernel.
@@ -162,22 +165,12 @@ pub fn remove_rule(nft: &NftContext, chain: &str, handle: u64) -> Result<(), Str
 // Rule command builder
 // ---------------------------------------------------------------------------
 
-fn build_rule_cmd(
-    chain: &str,
-    action: &str,
-    family: i32,
-    proto: &str,
-    dport: i32,
-    source: &str,
-    destination: &str,
-    in_iface: &str,
-    out_iface: &str,
-    state_match: &str,
-    comment: &str,
-) -> Result<String, String> {
+fn build_rule_cmd(rule: &RuleSpec) -> Result<String, String> {
+    let RuleSpec { chain, action, family, proto, dport, source, destination,
+                   in_iface, out_iface, state_match, comment } = *rule;
     let mut parts = Vec::new();
 
-    let fam = if family == libc::AF_INET6 as i32 { "ip6" } else { "ip" };
+    let fam = if family == libc::AF_INET6 { "ip6" } else { "ip" };
 
     if !in_iface.is_empty() {
         parts.push(format!("iifname \"{}\"", in_iface));
@@ -238,8 +231,10 @@ mod tests {
 
     #[test]
     fn test_build_basic_accept() {
-        let cmd = build_rule_cmd("input", "accept", 2, "tcp", 443,
-                                  "", "", "", "", "", "").unwrap();
+        let cmd = build_rule_cmd(&RuleSpec {
+            chain: "input", action: "accept", family: 2, proto: "tcp", dport: 443,
+            ..Default::default()
+        }).unwrap();
         assert!(cmd.contains("inet phantom"));
         assert!(cmd.contains("input"));
         assert!(cmd.contains("tcp dport 443"));
@@ -248,8 +243,11 @@ mod tests {
 
     #[test]
     fn test_build_forward_with_ifaces() {
-        let cmd = build_rule_cmd("forward", "accept", 2, "", 0,
-                                  "", "", "wg0", "eth0", "", "").unwrap();
+        let cmd = build_rule_cmd(&RuleSpec {
+            chain: "forward", action: "accept", family: 2, in_iface: "wg0",
+            out_iface: "eth0",
+            ..Default::default()
+        }).unwrap();
         assert!(cmd.contains("iifname \"wg0\""));
         assert!(cmd.contains("oifname \"eth0\""));
         assert!(cmd.contains("accept"));
@@ -258,16 +256,21 @@ mod tests {
 
     #[test]
     fn test_build_forward_with_state() {
-        let cmd = build_rule_cmd("forward", "accept", 2, "", 0,
-                                  "", "", "eth0", "wg0",
-                                  "established,related", "").unwrap();
+        let cmd = build_rule_cmd(&RuleSpec {
+            chain: "forward", action: "accept", family: 2, in_iface: "eth0",
+            out_iface: "wg0", state_match: "established,related",
+            ..Default::default()
+        }).unwrap();
         assert!(cmd.contains("ct state established,related"));
     }
 
     #[test]
     fn test_build_masquerade() {
-        let cmd = build_rule_cmd("postrouting", "masquerade", 2, "", 0,
-                                  "10.0.1.0/24", "", "", "eth0", "", "").unwrap();
+        let cmd = build_rule_cmd(&RuleSpec {
+            chain: "postrouting", action: "masquerade", family: 2, source: "10.0.1.0/24",
+            out_iface: "eth0",
+            ..Default::default()
+        }).unwrap();
         assert!(cmd.contains("ip saddr 10.0.1.0/24"));
         assert!(cmd.contains("oifname \"eth0\""));
         assert!(cmd.contains("masquerade"));
@@ -275,8 +278,10 @@ mod tests {
 
     #[test]
     fn test_build_ipv6_drop() {
-        let cmd = build_rule_cmd("input", "drop", 10, "", 0,
-                                  "", "", "", "", "", "").unwrap();
+        let cmd = build_rule_cmd(&RuleSpec {
+            chain: "input", action: "drop", family: 10,
+            ..Default::default()
+        }).unwrap();
         assert!(cmd.contains("drop"));
         // family=10 (AF_INET6) affects source/dest prefix, no src/dst → no ip6 in cmd
     }
@@ -285,38 +290,52 @@ mod tests {
     fn test_build_dnat_v4_gets_explicit_family() {
         // inet tables reject a bare `dnat to <addr>`: "ip or ip6 must be
         // specified with address for inet tables".
-        let cmd = build_rule_cmd("prerouting", "dnat to 172.28.0.4:443", 2,
-                                  "tcp", 443, "", "", "", "", "", "").unwrap();
+        let cmd = build_rule_cmd(&RuleSpec {
+            chain: "prerouting", action: "dnat to 172.28.0.4:443", family: 2, proto: "tcp",
+            dport: 443,
+            ..Default::default()
+        }).unwrap();
         assert!(cmd.contains("dnat ip to 172.28.0.4:443"), "got: {cmd}");
     }
 
     #[test]
     fn test_build_dnat_v6_gets_explicit_family() {
-        let cmd = build_rule_cmd("prerouting", "dnat to [2001:db8::1]:443", 10,
-                                  "tcp", 443, "", "", "", "", "", "").unwrap();
+        let cmd = build_rule_cmd(&RuleSpec {
+            chain: "prerouting", action: "dnat to [2001:db8::1]:443", family: 10,
+            proto: "tcp", dport: 443,
+            ..Default::default()
+        }).unwrap();
         assert!(cmd.contains("dnat ip6 to [2001:db8::1]:443"), "got: {cmd}");
     }
 
     #[test]
     fn test_build_non_dnat_action_untouched() {
         for action in ["accept", "drop", "reject", "masquerade"] {
-            let cmd = build_rule_cmd("forward", action, 2,
-                                      "", 0, "", "", "", "", "", "").unwrap();
+            let cmd = build_rule_cmd(&RuleSpec {
+                chain: "forward", action, family: 2,
+                ..Default::default()
+            }).unwrap();
             assert!(cmd.ends_with(action), "got: {cmd}");
         }
     }
 
     #[test]
     fn test_build_with_comment() {
-        let cmd = build_rule_cmd("input", "accept", 2, "udp", 51820,
-                                  "", "", "", "", "", "phantom-rule-42").unwrap();
+        let cmd = build_rule_cmd(&RuleSpec {
+            chain: "input", action: "accept", family: 2, proto: "udp", dport: 51820,
+            comment: "phantom-rule-42",
+            ..Default::default()
+        }).unwrap();
         assert!(cmd.contains("comment \"phantom-rule-42\""));
     }
 
     #[test]
     fn test_build_source_dest() {
-        let cmd = build_rule_cmd("output", "drop", 2, "tcp", 53,
-                                  "192.168.1.0/24", "8.8.8.8", "", "", "", "").unwrap();
+        let cmd = build_rule_cmd(&RuleSpec {
+            chain: "output", action: "drop", family: 2, proto: "tcp", dport: 53,
+            source: "192.168.1.0/24", destination: "8.8.8.8",
+            ..Default::default()
+        }).unwrap();
         assert!(cmd.contains("ip saddr 192.168.1.0/24"));
         assert!(cmd.contains("ip daddr 8.8.8.8"));
         assert!(cmd.contains("tcp dport 53"));
@@ -327,26 +346,10 @@ mod tests {
     // build_rule_cmd — the whole command for every branch
     // -----------------------------------------------------------------------
 
-    /// One rule's inputs, the C ABI's fields by name.
-    #[derive(Default)]
-    struct Case<'a> {
-        chain: &'a str,
-        action: &'a str,
-        family: i32,
-        proto: &'a str,
-        dport: i32,
-        source: &'a str,
-        destination: &'a str,
-        in_iface: &'a str,
-        out_iface: &'a str,
-        state_match: &'a str,
-        comment: &'a str,
-    }
+    type Case<'a> = RuleSpec<'a>;
 
     fn build(c: &Case) -> String {
-        build_rule_cmd(c.chain, c.action, c.family, c.proto, c.dport, c.source,
-                       c.destination, c.in_iface, c.out_iface, c.state_match,
-                       c.comment).unwrap()
+        build_rule_cmd(c).unwrap()
     }
 
     /// Compares the whole command, so a change in wording or field order
@@ -526,8 +529,10 @@ mod tests {
         let nft = fake_nft("add_rule", &format!(
             "printf 'x\\n' >> \"$0.calls\"\nprintf '%s' '{ECHO}'"));
         let ctx = NftContext::with_binary(&nft).unwrap();
-        let handle = add_rule(&ctx, "input", "accept", 2, "tcp", 443,
-                              "", "", "", "", "", "").unwrap();
+        let handle = add_rule(&ctx, &RuleSpec {
+            chain: "input", action: "accept", family: 2, proto: "tcp", dport: 443,
+            ..Default::default()
+        }).unwrap();
         assert_eq!(handle, 2);
         assert_eq!(recorded(&nft, "calls"), "x\n");
         assert_eq!(recorded(&nft, "args"),
