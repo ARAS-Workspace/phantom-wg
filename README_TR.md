@@ -215,7 +215,8 @@ firewall-bridge/
 ## Geliştirme
 
 ```bash
-# Rust testleri
+# Rust testleri: birim testleri ve dev/cargo.sh'nin başlattığı ayrıcalıklı
+# dev konteynerini gerektiren çekirdek testleri (nft, netlink)
 dev/build.sh && dev/cargo.sh test --lib
 
 # Python unit testleri

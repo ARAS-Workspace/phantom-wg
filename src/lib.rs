@@ -22,7 +22,23 @@ mod test_support {
     pub fn serial() -> MutexGuard<'static, ()> {
         SERIAL.lock().unwrap_or_else(|e| e.into_inner())
     }
+
+    /// The last recorded error, read the way a C caller reads it.
+    pub fn last_error() -> String {
+        use std::ffi::{c_char, CStr};
+        let mut buf = [0 as c_char; 1024];
+        // SAFETY: `buf` holds the length passed.
+        let n = unsafe { super::firewall_bridge_get_last_error_copy(buf.as_mut_ptr(), buf.len() as i32) };
+        if n <= 0 {
+            return String::new();
+        }
+        // SAFETY: the copy NUL-terminated `buf`.
+        unsafe { CStr::from_ptr(buf.as_ptr()) }.to_string_lossy().into_owned()
+    }
 }
+
+#[cfg(test)]
+mod kernel_tests;
 
 use std::ffi::{c_char, CStr, CString};
 use std::ptr;
@@ -433,13 +449,15 @@ pub unsafe extern "C" fn firewall_bridge_free_string(ptr: *mut c_char) {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::test_support::last_error;
 
     /// Uninitialized context must surface as an error code, never a panic:
     /// this crate sits behind an FFI boundary and a panic aborts the daemon.
     #[test]
     fn uninitialized_context_returns_code_not_panic() {
         let _serial = test_support::serial();
-        // NFT_CTX is never initialized in the test process (no kernel).
+        // The kernel tests close the context they open, and the serial lock
+        // keeps them apart from this test, so it finds none.
         assert_eq!(nft_flush_table(), ErrorCode::NotInitialized as i32);
         // SAFETY: a null chain is allowed.
         assert_eq!(unsafe { nft_remove_rule(ptr::null(), 1) }, ErrorCode::NotInitialized as i32);
@@ -452,18 +470,6 @@ mod tests {
         // SAFETY: the copy NUL-terminated `buf`.
         let msg = unsafe { CStr::from_ptr(buf.as_ptr()) }.to_str().unwrap();
         assert!(msg.contains("not initialized"), "{msg}");
-    }
-
-    /// The last recorded error, read the way a C caller reads it.
-    fn last_error() -> String {
-        let mut buf = [0 as c_char; 1024];
-        // SAFETY: `buf` holds the length passed.
-        let n = unsafe { firewall_bridge_get_last_error_copy(buf.as_mut_ptr(), buf.len() as i32) };
-        if n <= 0 {
-            return String::new();
-        }
-        // SAFETY: the copy NUL-terminated `buf`.
-        unsafe { CStr::from_ptr(buf.as_ptr()) }.to_string_lossy().into_owned()
     }
 
     #[test]

@@ -214,7 +214,8 @@ firewall-bridge/
 ## Development
 
 ```bash
-# Rust tests
+# Rust tests: unit tests, and kernel tests (nft, netlink) that need the
+# privileged dev container dev/cargo.sh starts
 dev/build.sh && dev/cargo.sh test --lib
 
 # Python unit tests
