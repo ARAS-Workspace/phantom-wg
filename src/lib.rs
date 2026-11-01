@@ -15,7 +15,14 @@ use std::sync::Mutex;
 use error::ErrorCode;
 use nft::NftContext;
 
-const VERSION: &str = env!("CARGO_PKG_VERSION");
+/// The crate version as a C string, built at compile time; a NUL inside
+/// the version stops the build.
+static VERSION: &CStr = match CStr::from_bytes_with_nul(
+    concat!(env!("CARGO_PKG_VERSION"), "\0").as_bytes()
+) {
+    Ok(v) => v,
+    Err(_) => panic!("CARGO_PKG_VERSION holds a NUL byte"),
+};
 
 // ---------------------------------------------------------------------------
 // Global nft context — serialized via Mutex
@@ -327,11 +334,7 @@ pub extern "C" fn rt_flush_cache() -> i32 {
 /// Return version string (static, do NOT free).
 #[unsafe(no_mangle)]
 pub extern "C" fn firewall_bridge_get_version() -> *const c_char {
-    use std::sync::OnceLock;
-    static VERSION_CSTR: OnceLock<CString> = OnceLock::new();
-    VERSION_CSTR
-        .get_or_init(|| CString::new(VERSION).unwrap_or_default())
-        .as_ptr()
+    VERSION.as_ptr()
 }
 
 /// Return last error message (do NOT free).
@@ -426,6 +429,15 @@ mod tests {
         // SAFETY: the copy NUL-terminated `buf`.
         let msg = unsafe { CStr::from_ptr(buf.as_ptr()) }.to_str().unwrap();
         assert!(msg.contains("not initialized"), "{msg}");
+    }
+
+    #[test]
+    fn version_is_the_crate_version_at_one_address() {
+        let p = firewall_bridge_get_version();
+        assert_eq!(p, firewall_bridge_get_version());
+        // SAFETY: the pointer is a static NUL-terminated string.
+        let v = unsafe { CStr::from_ptr(p) }.to_str().unwrap();
+        assert_eq!(v, env!("CARGO_PKG_VERSION"));
     }
 
     #[test]
