@@ -598,11 +598,8 @@ class TestErrorAttributes:
 
 
 class TestNoCommandInjection:
-    """Every field below is formatted straight into an nftables command by
-    build_rule_cmd. nft accepts multiple ';'-separated commands in one
-    call, so a value that can close a quote or start a statement escapes
-    the `inet phantom` table the whole design relies on for isolation.
-    """
+    """Values that carry nft syntax of their own are refused before they
+    reach build_rule."""
 
     @pytest.mark.parametrize("field", ["in_iface", "out_iface"])
     def test_iface_cannot_close_the_quote(self, field):
@@ -688,13 +685,37 @@ class TestLegitimateValuesStillPass:
         assert result["rules"][0]["state"] == "established,related"
 
     def test_dnat_v4_and_v6(self):
-        for target in ("dnat to 172.28.0.4:443", "dnat to 10.0.0.1",
-                       "dnat to [2001:db8::1]:443"):
+        for target, family in (("dnat to 172.28.0.4:443", 2), ("dnat to 10.0.0.1", 2),
+                               ("dnat to [2001:db8::1]:443", 10)):
             result = validate_preset({
                 "name": "ok",
-                "rules": [{"chain": "prerouting", "action": target}],
+                "rules": [{"chain": "prerouting", "action": target, "family": family}],
             })
             assert result["rules"][0]["action"] == target
+
+
+class TestRuleFamily:
+    """A rule's addresses and dnat target are of the rule's family."""
+
+    @pytest.mark.parametrize("rule, field", [
+        ({"family": 2, "source": "fd00::/64"}, "source"),
+        ({"source": "fd00::/64"}, "source"),
+        ({"family": 10, "destination": "10.0.0.0/8"}, "destination"),
+        ({"family": 10, "action": "dnat to 10.0.0.1"}, "action"),
+        ({"family": 2, "action": "dnat to [2001:db8::1]:443"}, "action"),
+    ])
+    def test_the_other_family_is_refused(self, rule, field):
+        with pytest.raises(PresetValidationError, match=rf"rules\[0\]\.{field}: .*family"):
+            validate_preset({"name": "f", "rules": [
+                {"chain": "prerouting", "action": "accept", **rule}]})
+
+    def test_the_same_family_passes(self):
+        result = validate_preset({"name": "f", "rules": [
+            {"chain": "prerouting", "family": 10, "source": "fd00::/64",
+             "destination": "2001:db8::/32", "action": "dnat to [2001:db8::1]:443"},
+            {"chain": "postrouting", "action": "masquerade", "source": "10.0.1.0/24"},
+        ]})
+        assert [r["family"] for r in result["rules"]] == [10, 2]
 
 
 class TestCidrIsNotDecorative:

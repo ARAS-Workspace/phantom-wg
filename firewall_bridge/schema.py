@@ -184,6 +184,20 @@ PRESET_FIELDS = {
 }
 
 
+def _check_rule_family(path: str, rule: dict) -> None:
+    """The addresses of a validated rule, and its dnat target, are of the
+    rule's family: IPv6 for 10, IPv4 for 2."""
+    version = 6 if rule["family"] == 10 else 4
+    for key in ("source", "destination"):
+        value = rule.get(key, "")
+        if value and ipaddress.ip_network(value, strict=False).version != version:
+            _fail(f"{path}.{key}", f"not an address of family {rule['family']}", value)
+    m = _DNAT_RE.match(rule["action"])
+    if m and ipaddress.ip_address(m.group(1) or m.group(2)).version != version:
+        _fail(f"{path}.action", f"dnat target is not an address of family {rule['family']}",
+              rule["action"])
+
+
 # ---- Validation helpers ----
 
 def _fail(path: str, reason: str, value: object = None) -> None:
@@ -317,9 +331,9 @@ def validate_preset(spec: object) -> dict:
     if "rules" in result:
         validated_rules = []
         for i, rule in enumerate(result["rules"]):
-            validated_rules.append(
-                _validate_fields(f"preset.rules[{i}]", rule, RULE_FIELDS)
-            )
+            validated = _validate_fields(f"preset.rules[{i}]", rule, RULE_FIELDS)
+            _check_rule_family(f"preset.rules[{i}]", validated)
+            validated_rules.append(validated)
         result["rules"] = validated_rules
 
     return result
@@ -331,6 +345,6 @@ def validate_firewall_rule(rule: dict) -> None:
     Raises InvalidParamError naming the field and the reason.
     """
     try:
-        _validate_fields("rule", rule, DIRECT_RULE_FIELDS)
+        _check_rule_family("rule", _validate_fields("rule", rule, DIRECT_RULE_FIELDS))
     except PresetValidationError as e:
         raise InvalidParamError(e.message) from None

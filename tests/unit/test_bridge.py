@@ -444,6 +444,9 @@ class TestDirectRuleFields:
         ("proto", "tcp; drop"),
         ("dport", 70000),
         ("family", 3),
+        ("source", "fd00::/64"),
+        ("destination", "2001:db8::1"),
+        ("action", "dnat to [2001:db8::1]:443"),
     ])
     def test_each_field_is_checked(self, bridge, field, value):
         bridge.create_group("g1")
@@ -452,6 +455,11 @@ class TestDirectRuleFields:
         with pytest.raises(InvalidParamError, match=f"rule.{name}"):
             bridge.add_firewall_rule("g1", **fields)
         assert bridge.list_firewall_rules() == []
+
+    def test_an_address_of_the_other_family_is_refused_for_ipv6_too(self, bridge):
+        bridge.create_group("g1")
+        with pytest.raises(InvalidParamError, match="not an address of family 10"):
+            bridge.add_firewall_rule("g1", "input", "accept", family=10, source="10.0.0.0/8")
 
     @pytest.mark.parametrize("fields", [
         {"destination": "192.0.2.1"},
