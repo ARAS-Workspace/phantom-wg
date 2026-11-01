@@ -103,32 +103,32 @@ def _started(bridge):
 
 
 @pytest.mark.parametrize("fields, rule", [c[1:] for c in CASES], ids=[c[0] for c in CASES])
-def test_one_rule(bridge, meter, fields, rule):
+def test_one_rule(bridge, db_path, meter, fields, rule):
     ledger = _started(bridge)
-    oracle.check(bridge, meter, ledger)
+    oracle.check(bridge, db_path, meter, ledger)
 
     rule_id = ledger.add("r1", rule, **fields)
-    oracle.check(bridge, meter, ledger)
+    oracle.check(bridge, db_path, meter, ledger)
 
     ledger.remove(rule_id)
-    oracle.check(bridge, meter, ledger)
+    oracle.check(bridge, db_path, meter, ledger)
 
     bridge.stop()
-    oracle.check(bridge, meter, ledger)
+    oracle.check(bridge, db_path, meter, ledger)
 
 
-def test_every_rule_in_one_table(bridge, meter):
+def test_every_rule_in_one_table(bridge, db_path, meter):
     """All cases added one after another, then removed odd positions
     first, then even ones."""
     ledger = _started(bridge)
     ids = []
     for _, fields, rule in CASES:
         ids.append(ledger.add("r1", rule, **fields))
-        oracle.check(bridge, meter, ledger)
+        oracle.check(bridge, db_path, meter, ledger)
 
     for rule_id in ids[1::2] + ids[::2]:
         ledger.remove(rule_id)
-        oracle.check(bridge, meter, ledger)
+        oracle.check(bridge, db_path, meter, ledger)
 
     bridge.stop()
-    oracle.check(bridge, meter, ledger)
+    oracle.check(bridge, db_path, meter, ledger)

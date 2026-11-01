@@ -10,9 +10,10 @@ and table names, so the two compare rule for rule.
 The three invariants:
   1. assert_same_rules        phantom and reference hold the same chains
                               and, in each chain, the same rules in order
-  2. assert_db_matches_kernel the database's applied rules are the kernel's
-                              rules, handle for handle, and each one is the
-                              rule its reference counterpart is
+  2. assert_db_matches_kernel the database file's applied rules are the
+                              kernel's rules, handle for handle, each one is
+                              the rule its reference counterpart is, and the
+                              bridge reports the file as it is
   3. ProcessMeter             no child, no nft process, no new zombie;
                               descriptors and threads back at the start
 """
@@ -21,6 +22,7 @@ from __future__ import annotations
 
 import json
 import os
+import sqlite3
 import subprocess
 from dataclasses import dataclass
 
@@ -181,36 +183,90 @@ def assert_same_rules(phantom: Table, reference: Table) -> None:
 
 # ── Invariant 2: database and kernel ──────────────────────────────
 
+@dataclass(frozen=True)
+class Row:
+    """A firewall_rules row, as far as the kernel is concerned."""
+
+    id: int
+    group_id: int
+    chain: str
+    applied: bool
+    nft_handle: int
+
+
+def read_db(path: str) -> tuple[str, set[int], list[Row]]:
+    """(state, ids of the enabled groups, firewall rule rows ordered by
+    group, position and id), read with sqlite3 from the file."""
+    db = sqlite3.connect(path)
+    try:
+        state = db.execute("SELECT state FROM config WHERE id=1").fetchone()[0]
+        enabled = {gid for (gid,) in db.execute("SELECT id FROM rule_groups WHERE enabled=1")}
+        rows = [Row(i, g, c, bool(a), h) for i, g, c, a, h in db.execute(
+            "SELECT id, group_id, chain, applied, nft_handle FROM firewall_rules "
+            "ORDER BY group_id, position, id")]
+    finally:
+        db.close()
+    return state, enabled, rows
+
+
 class Ledger:
-    """The rules a test gave both tables: bridge rule id → the chain and
-    handle of the same rule in inet reference."""
+    """The rules a test gave the bridge and, with the same rule in nft's
+    text syntax, inet reference: bridge rule id → the chain and handle of
+    its reference rule, or None while the bridge has it unapplied."""
 
     def __init__(self, bridge) -> None:
         self.bridge = bridge
-        self.reference: dict[int, tuple[str, int]] = {}
+        self.reference: dict[int, tuple[str, int] | None] = {}
+        self.texts: dict[int, str] = {}
 
     def add(self, group: str, reference_rule: str, **fields) -> int:
-        """add_firewall_rule(group, **fields) on the bridge, and
-        `reference_rule` on inet reference; returns the bridge's rule id."""
+        """add_firewall_rule(group, **fields) on the bridge; when the bridge
+        is started and the group enabled, `reference_rule` on inet
+        reference too. Returns the bridge's rule id."""
         chain = fields["chain"]
         assert reference_rule.split(" ", 1)[0] == chain, (chain, reference_rule)
         rule_id = self.bridge.add_firewall_rule(group, **fields)
-        self.reference[rule_id] = (chain, reference_add(reference_rule))
+        self.texts[rule_id] = reference_rule
+        self.reference[rule_id] = None
+        if self.bridge.get_state() == "started" and self.bridge.get_group(group).enabled:
+            self.reference[rule_id] = (chain, reference_add(reference_rule))
         return rule_id
 
     def remove(self, rule_id: int) -> None:
         self.bridge.remove_firewall_rule(rule_id)
-        chain, handle = self.reference.pop(rule_id)
-        reference_delete(chain, handle)
+        self.texts.pop(rule_id)
+        entry = self.reference.pop(rule_id)
+        if entry:
+            reference_delete(*entry)
+
+    def stopped(self) -> None:
+        """After bridge.stop(): inet reference is flushed the same way."""
+        nft(f"flush table inet {REFERENCE}")
+        self.reference = dict.fromkeys(self.reference)
+
+    def started(self) -> None:
+        """After bridge.start(): inet reference gets the rules of the
+        enabled groups, by group priority, then position and id."""
+        for group in self.bridge.list_groups():
+            if not group.enabled:
+                continue
+            for row in self.bridge.list_firewall_rules(group.name):
+                text = self.texts[row.id]
+                self.reference[row.id] = (text.split(" ", 1)[0], reference_add(text))
 
 
-def assert_db_matches_kernel(bridge, phantom: Table, ledger: Ledger | None = None,
+def assert_db_matches_kernel(bridge, db_path: str, phantom: Table, ledger: Ledger | None = None,
                              reference: Table | None = None) -> None:
-    """With a ledger, also each applied rule against its reference rule;
-    `reference` is read when not given."""
-    state = bridge.get_state()
-    enabled = {g.id for g in bridge.list_groups() if g.enabled}
-    rows = bridge.list_firewall_rules()
+    """The database file against the kernel, and the bridge's own report of
+    the file against the file. With a ledger, also each applied rule
+    against its reference rule; `reference` is read when not given."""
+    state, enabled, rows = read_db(db_path)
+    reported = [Row(r.id, r.group_id, r.chain, r.applied, r.nft_handle)
+                for r in bridge.list_firewall_rules()]
+    assert (bridge.get_state(), reported) == (state, rows), (
+        f"the bridge reports {bridge.get_state()} {reported}\n"
+        f"  the database holds {state} {rows}"
+    )
 
     for row in rows:
         expected = state == "started" and row.group_id in enabled
@@ -239,13 +295,16 @@ def assert_db_matches_kernel(bridge, phantom: Table, ledger: Ledger | None = Non
         f"test's rules {sorted(ledger.reference)}"
     )
     for row in rows:
-        if row.applied:
-            chain, handle = ledger.reference[row.id]
-            assert phantom.body(row.chain, row.nft_handle) == reference.body(chain, handle), (
-                f"rule {row.id} (handle {row.nft_handle}) is not its reference rule\n"
-                f"  phantom   {json.dumps(phantom.body(row.chain, row.nft_handle))}\n"
-                f"  reference {json.dumps(reference.body(chain, handle))}"
-            )
+        if not row.applied:
+            continue
+        assert ledger.reference[row.id] is not None, (
+            f"rule {row.id} is applied, the test has it unapplied")
+        chain, handle = ledger.reference[row.id]
+        assert phantom.body(row.chain, row.nft_handle) == reference.body(chain, handle), (
+            f"rule {row.id} (handle {row.nft_handle}) is not its reference rule\n"
+            f"  phantom   {json.dumps(phantom.body(row.chain, row.nft_handle))}\n"
+            f"  reference {json.dumps(reference.body(chain, handle))}"
+        )
 
 
 # ── Invariant 3: processes ────────────────────────────────────────
@@ -328,11 +387,11 @@ class ProcessMeter:
 
 # ── All three ─────────────────────────────────────────────────────
 
-def check(bridge, meter: ProcessMeter, ledger: Ledger | None = None) -> Table:
+def check(bridge, db_path: str, meter: ProcessMeter, ledger: Ledger | None = None) -> Table:
     """The three invariants; returns inet phantom as read."""
     phantom = read_table(PHANTOM)
     reference = read_table(REFERENCE)
     assert_same_rules(phantom, reference)
-    assert_db_matches_kernel(bridge, phantom, ledger, reference)
+    assert_db_matches_kernel(bridge, db_path, phantom, ledger, reference)
     meter.check_processes()
     return phantom

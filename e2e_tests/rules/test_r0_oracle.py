@@ -4,9 +4,9 @@ R0: the oracle, before it judges the bridge.
 Drives: normalize and assert_same_rules on one rule written through the
 bridge and through nft, and on rules that differ from it in one respect;
 assert_db_matches_kernel on a bridge whose kernel rules or database rows
-are changed from outside it; ProcessMeter on a child, a zombie, an open
-file and a thread made here; the ip readers on rules and routes written
-with ip.
+are changed from outside it, and on one whose report of its rows is
+changed; ProcessMeter on a child, a zombie, an open file and a thread
+made here; the ip readers on rules and routes written with ip.
 
 Does not show: that the bridge writes correct rules (R1 onward); the
 zombie count on a zombie that is not pytest's own child. Resident memory
@@ -66,11 +66,11 @@ def _wait_for_state(pid: int, state: str) -> None:
 
 # ── Invariant 1 ───────────────────────────────────────────────────
 
-def test_one_rule_two_ways_is_equal(bridge, meter):
+def test_one_rule_two_ways_is_equal(bridge, db_path, meter):
     ledger = oracle.Ledger(_started(bridge))
-    oracle.check(bridge, meter, ledger)
+    oracle.check(bridge, db_path, meter, ledger)
     ledger.add("r0", RULE_NFT, **RULE)
-    oracle.check(bridge, meter, ledger)
+    oracle.check(bridge, db_path, meter, ledger)
 
 
 # Each differs from RULE_NFT in one respect.
@@ -129,19 +129,19 @@ def test_an_object_other_than_a_chain_or_rule_is_refused(bridge):
 
 # ── Invariant 2 ───────────────────────────────────────────────────
 
-def test_a_rule_gone_from_the_kernel_is_found(bridge):
+def test_a_rule_gone_from_the_kernel_is_found(bridge, db_path):
     _started(bridge).add_firewall_rule("r0", **RULE)
     handle = bridge.list_firewall_rules()[0].nft_handle
     oracle.nft(f"delete rule inet {PHANTOM} input handle {handle}")
     with pytest.raises(AssertionError, match="only in the database"):
-        oracle.assert_db_matches_kernel(bridge, oracle.read_table(PHANTOM))
+        oracle.assert_db_matches_kernel(bridge, db_path, oracle.read_table(PHANTOM))
 
 
-def test_a_rule_the_database_does_not_have_is_found(bridge):
+def test_a_rule_the_database_does_not_have_is_found(bridge, db_path):
     _started(bridge)
     oracle.nft(f"add rule inet {PHANTOM} {RULE_NFT}")
     with pytest.raises(AssertionError, match="only in the kernel"):
-        oracle.assert_db_matches_kernel(bridge, oracle.read_table(PHANTOM))
+        oracle.assert_db_matches_kernel(bridge, db_path, oracle.read_table(PHANTOM))
 
 
 def test_a_rule_left_unapplied_is_found(bridge, db_path):
@@ -149,7 +149,7 @@ def test_a_rule_left_unapplied_is_found(bridge, db_path):
     with _db(db_path) as db:
         db.execute("UPDATE firewall_rules SET applied=0, nft_handle=0")
     with pytest.raises(AssertionError, match="applied=False"):
-        oracle.assert_db_matches_kernel(bridge, oracle.read_table(PHANTOM))
+        oracle.assert_db_matches_kernel(bridge, db_path, oracle.read_table(PHANTOM))
 
 
 def test_a_rule_applied_while_stopped_is_found(bridge, db_path):
@@ -157,14 +157,14 @@ def test_a_rule_applied_while_stopped_is_found(bridge, db_path):
     with _db(db_path) as db:
         db.execute("UPDATE config SET state='stopped'")
     with pytest.raises(AssertionError, match="state=stopped"):
-        oracle.assert_db_matches_kernel(bridge, oracle.read_table(PHANTOM))
+        oracle.assert_db_matches_kernel(bridge, db_path, oracle.read_table(PHANTOM))
 
 
 def test_two_rules_with_swapped_handles_are_found(bridge, meter, db_path):
     ledger = oracle.Ledger(_started(bridge))
     first = ledger.add("r0", RULE_NFT, **RULE)
     second = ledger.add("r0", "input drop", chain="input", action="drop")
-    oracle.check(bridge, meter, ledger)
+    oracle.check(bridge, db_path, meter, ledger)
     with _db(db_path) as db:
         (h1,), (h2,) = db.execute(
             "SELECT nft_handle FROM firewall_rules WHERE id IN (?, ?) ORDER BY id",
@@ -173,18 +173,33 @@ def test_two_rules_with_swapped_handles_are_found(bridge, meter, db_path):
         db.execute("UPDATE firewall_rules SET nft_handle=? WHERE id=?", (h2, first))
         db.execute("UPDATE firewall_rules SET nft_handle=? WHERE id=?", (h1, second))
     phantom = oracle.read_table(PHANTOM)
-    oracle.assert_db_matches_kernel(bridge, phantom)
+    oracle.assert_db_matches_kernel(bridge, db_path, phantom)
     with pytest.raises(AssertionError, match="is not its reference rule"):
-        oracle.assert_db_matches_kernel(bridge, phantom, ledger)
+        oracle.assert_db_matches_kernel(bridge, db_path, phantom, ledger)
 
 
-def test_a_database_row_the_test_did_not_make_is_found(bridge):
+def test_a_database_row_the_test_did_not_make_is_found(bridge, db_path):
     ledger = oracle.Ledger(_started(bridge))
     ledger.add("r0", RULE_NFT, **RULE)
     bridge.add_firewall_rule("r0", "input", "drop")
     oracle.reference_add("input drop")
     with pytest.raises(AssertionError, match="test's rules"):
-        oracle.assert_db_matches_kernel(bridge, oracle.read_table(PHANTOM), ledger)
+        oracle.assert_db_matches_kernel(bridge, db_path, oracle.read_table(PHANTOM), ledger)
+
+
+def test_the_bridge_reporting_a_row_unlike_the_file_is_found(bridge, db_path, monkeypatch):
+    from firewall_bridge.db import FirewallDB
+    _started(bridge).add_firewall_rule("r0", **RULE)
+    oracle.assert_db_matches_kernel(bridge, db_path, oracle.read_table(PHANTOM))
+    row_to_rule = FirewallDB._row_to_fw_rule
+
+    def misreported(row):
+        rule = row_to_rule(row)
+        rule.nft_handle += 1
+        return rule
+    monkeypatch.setattr(FirewallDB, "_row_to_fw_rule", staticmethod(misreported))
+    with pytest.raises(AssertionError, match="the bridge reports"):
+        oracle.assert_db_matches_kernel(bridge, db_path, oracle.read_table(PHANTOM))
 
 
 # ── Invariant 3 ───────────────────────────────────────────────────
