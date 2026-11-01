@@ -43,22 +43,36 @@ Release'ler [https://github.com/ARAS-Workspace/phantom-wg/releases](https://gith
 
 ## Gereksinimler
 
-- **glibc 2.39 ya da üstü.** Release `.so`'su `rust:<sürüm>-trixie` imajında (glibc 2.41)
-  derlenir ve `GLIBC_2.39` ister. Daha eski glibc'li bir sistem, örneğin Debian bookworm
-  (2.36), onu yüklemez.
-- **`nft` programı**, `nftables` paketinden, `/usr/sbin/nft` konumunda.
-  `FIREWALL_BRIDGE_NFT_PATH` başka bir konum verir ve yalnız mutlak yol kabul eder.
-- **Çocuk süreçlere ulaşan `CAP_NET_ADMIN`.** nft ayrı bir program olarak çalışır; bu
-  yüzden köprüyü yükleyen süreç root'tur ya da `CAP_NET_ADMIN`'i ambient yetki olarak
-  taşır. Yalnız o süreçte etkin olan bir yetki, örneğin yorumlayıcıya `setcap` ile
-  verilmiş olanı, nft'ye ulaşmaz. Phantom-WG'nin daemon konteyneri root olarak,
-  `cap_add: [NET_ADMIN, NET_RAW]` ile çalışır.
-- **Varsayılan ayarında SIGCHLD.** Her nft, başarılı da olsa hata da verse, öldürülse
-  de çağrı dönmeden beklenir; böylece hiçbiri zombi olarak kalmaz, host init'siz bir
-  konteynerde PID 1 olduğunda da. SIGCHLD `SIG_IGN` yapılırsa çekirdek çocuğu önce
-  toplar ve komut çalışmış olsa da çağrı hata döner.
-- **Yazılabilir `/etc/iproute2`.** `/etc/iproute2/rt_tables` yoksa, köprünün tablo adları
-  eklenmeden önce `/usr/share/iproute2/rt_tables`'ın kopyası olarak oluşturulur.
+- glibc 2.39 veya daha yeni bir sürüm
+- `nftables` paketindeki `nft` programı (`/usr/sbin/nft`)
+- Alt süreçlere aktarılabilen `CAP_NET_ADMIN` yetkisi
+- Varsayılan davranışında bırakılmış `SIGCHLD` sinyali
+- Yazılabilir bir `/etc/iproute2` dizini
+
+**glibc.** Yayınlanan `.so` dosyası `rust:<sürüm>-trixie` imajında (glibc 2.41) derlenir ve
+`GLIBC_2.39` sürümünü gerektirir. Bu nedenle daha eski bir glibc'ye sahip sistemler, örneğin
+Debian bookworm (glibc 2.36), kütüphaneyi yükleyemez.
+
+**nft programı.** Köprü, nftables kurallarını varsayılan olarak `/usr/sbin/nft` programıyla
+uygular. Program başka bir konumdaysa bu konum `FIREWALL_BRIDGE_NFT_PATH` ortam değişkeniyle
+belirtilir; değişken yalnızca mutlak yol kabul eder.
+
+**CAP_NET_ADMIN.** nft ayrı bir süreç olarak çalıştığı için, yetkinin köprüyü yükleyen süreçten
+bu alt sürece aktarılabilmesi gerekir. Bunun için süreç ya root olarak çalışmalı ya da
+`CAP_NET_ADMIN` yetkisini ambient yetki olarak taşımalıdır. Yalnızca yükleyen süreçte geçerli
+olan bir yetki, örneğin yorumlayıcıya `setcap` ile verilmiş bir yetki, nft'ye aktarılmaz.
+Phantom-WG'nin daemon konteyneri root olarak ve `cap_add: [NET_ADMIN, NET_RAW]` ayarıyla
+çalışır.
+
+**SIGCHLD.** Köprü, başlattığı her nft sürecinin sona ermesini çağrı dönmeden önce bekler; süreç
+başarıyla bitse de, hata verse de, bir sinyalle sonlandırılsa da bu böyledir. Böylece hiçbir
+süreç zombi olarak kalmaz; köprüyü yükleyen süreç init'i olmayan bir konteynerde PID 1 olarak
+çalıştığında da bu geçerlidir. `SIGCHLD` sinyali `SIG_IGN` olarak ayarlanırsa çekirdek alt
+süreci kendisi toplar; bu durumda komut uygulanmış olsa bile çağrı hata döndürür.
+
+**/etc/iproute2.** Köprü, yönlendirme tablolarının adlarını `/etc/iproute2/rt_tables` dosyasına
+yazar. Dosya yoksa, köprünün tablo adları eklenmeden önce `/usr/share/iproute2/rt_tables`
+dosyasının bir kopyası olarak oluşturulur.
 
 ## Mimari
 

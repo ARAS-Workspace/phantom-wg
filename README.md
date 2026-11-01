@@ -42,22 +42,35 @@ Releases are listed at [https://github.com/ARAS-Workspace/phantom-wg/releases](h
 
 ## Requirements
 
-- **glibc 2.39 or later.** The release `.so` is built in the `rust:<version>-trixie`
-  image (glibc 2.41) and asks for `GLIBC_2.39`. A system with an older glibc, such as
-  Debian bookworm (2.36), does not load it.
-- **The `nft` program** from the `nftables` package at `/usr/sbin/nft`.
-  `FIREWALL_BRIDGE_NFT_PATH` names another location and takes an absolute path only.
-- **`CAP_NET_ADMIN` that reaches child processes.** nft runs as a separate program, so
-  the process loading the bridge is root or holds `CAP_NET_ADMIN` as an ambient
-  capability. A capability effective only in that process, for example from `setcap`
-  on the interpreter, does not reach nft. Phantom-WG's daemon container runs as root
-  with `cap_add: [NET_ADMIN, NET_RAW]`.
-- **SIGCHLD at its default.** Every nft is waited for before the call returns, whether
-  it succeeded, failed or was killed, so none is left behind as a zombie, also when
-  the host is PID 1 in a container without an init. With SIGCHLD set to `SIG_IGN` the
-  kernel reaps the child first and the call fails although the command ran.
-- **A writable `/etc/iproute2`.** A missing `/etc/iproute2/rt_tables` is created as a
-  copy of `/usr/share/iproute2/rt_tables` before the bridge's table names are added.
+- glibc 2.39 or later
+- The `nft` program from the `nftables` package (`/usr/sbin/nft`)
+- `CAP_NET_ADMIN` that child processes inherit
+- `SIGCHLD` left at its default disposition
+- A writable `/etc/iproute2` directory
+
+**glibc.** The release `.so` is built in the `rust:<version>-trixie` image (glibc 2.41) and
+requires `GLIBC_2.39`. Systems with an older glibc, such as Debian bookworm (glibc 2.36),
+therefore cannot load the library.
+
+**The nft program.** By default the bridge applies nftables rules through `/usr/sbin/nft`. If
+the program is elsewhere, its location is given in the `FIREWALL_BRIDGE_NFT_PATH` environment
+variable; the variable accepts an absolute path only.
+
+**CAP_NET_ADMIN.** nft runs as a separate process, so the capability has to pass from the
+process that loads the bridge to this child process. For that, the process either runs as root
+or holds `CAP_NET_ADMIN` as an ambient capability. A capability that is effective only in the
+loading process, for example one given to the interpreter with `setcap`, does not reach nft.
+Phantom-WG's daemon container runs as root with `cap_add: [NET_ADMIN, NET_RAW]`.
+
+**SIGCHLD.** The bridge waits for every nft process it starts to finish before the call
+returns, whether the process succeeds, fails or is ended by a signal. No process is therefore
+left behind as a zombie, also when the process that loads the bridge runs as PID 1 in a
+container without an init. If `SIGCHLD` is set to `SIG_IGN`, the kernel reaps the child itself;
+the call then returns an error even though the command was applied.
+
+**/etc/iproute2.** The bridge writes routing table names to `/etc/iproute2/rt_tables`. If the
+file does not exist, it is created as a copy of `/usr/share/iproute2/rt_tables` before the
+bridge's table names are added.
 
 ## Architecture
 
