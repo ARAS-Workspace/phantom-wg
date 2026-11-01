@@ -62,7 +62,7 @@ HEADER = textwrap.dedent("""\
       entry. This project's own AGPL-3.0 is not repeated here; it is in
       LICENSE.
 
-      DEPENDENCIES and LICENSE TEXTS come from cargo-about. SYSTEM LIBRARIES
+      DEPENDENCIES and LICENSE TEXTS come from cargo-about. SYSTEM PROGRAMS
       and LICENSE COMPATIBILITY are written by hand: cargo-about reads Cargo
       metadata, and a program run from the operating system is outside it.
 
@@ -95,10 +95,11 @@ SYSTEM = textwrap.dedent("""\
 
     Usage Note:
     firewall-bridge does not link against libnftables. It runs the nft
-    program from the operating system as a separate process, writes each
-    command to its standard input and reads its standard output and exit
-    status. All firewall rules are isolated in the "inet phantom" table,
-    separate from system UFW/iptables rules.
+    program from the operating system as a separate process for each
+    command, passes the command as a command-line argument and reads its
+    standard output, standard error and exit status. All firewall rules are
+    isolated in the "inet phantom" table, separate from system UFW/iptables
+    rules.
 
     Routing operations use raw NETLINK_ROUTE sockets directly via libc,
     without additional library dependencies.
@@ -108,8 +109,8 @@ COMPATIBILITY = textwrap.dedent("""\
     Every licence taken above is permissive and compatible with AGPL-3.0.
 
     nft (nftables, GPL-2.0-only) is a separate program. firewall-bridge and
-    nft communicate only through nft's command language on standard input
-    and its output on standard output; they share no address space. nft is
+    nft communicate only through nft's command line, its standard output and
+    standard error, and its exit status; they share no address space. nft is
     installed from the operating system's package repository together with
     libnftables1, libnftnl11 and libmnl0, which it depends on.
     """)
@@ -176,7 +177,7 @@ def build(root: pathlib.Path) -> str:
 
     out = [HEADER, *section(f"DEPENDENCIES — {plural(len(crates), 'crate')}"),
            *table(crates), "",
-           *section("SYSTEM LIBRARIES"), SYSTEM,
+           *section("SYSTEM PROGRAMS"), SYSTEM,
            *section("LICENSE COMPATIBILITY"), COMPATIBILITY,
            *section(f"LICENSE TEXTS — {plural(len(texts), 'text')}")]
     for lic in texts:

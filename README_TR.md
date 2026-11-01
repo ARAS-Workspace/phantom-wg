@@ -41,6 +41,25 @@ Release'ler [https://github.com/ARAS-Workspace/phantom-wg/releases](https://gith
 [`firewall_bridge/__init__.py`](firewall_bridge/__init__.py) içindedir
 (`__version__`).
 
+## Gereksinimler
+
+- **glibc 2.39 ya da üstü.** Release `.so`'su `rust:<sürüm>-trixie` imajında (glibc 2.41)
+  derlenir ve `GLIBC_2.39` ister. Daha eski glibc'li bir sistem, örneğin Debian bookworm
+  (2.36), onu yüklemez.
+- **`nft` programı**, `nftables` paketinden, `/usr/sbin/nft` konumunda.
+  `FIREWALL_BRIDGE_NFT_PATH` başka bir konum verir ve yalnız mutlak yol kabul eder.
+- **Çocuk süreçlere ulaşan `CAP_NET_ADMIN`.** nft ayrı bir program olarak çalışır; bu
+  yüzden köprüyü yükleyen süreç root'tur ya da `CAP_NET_ADMIN`'i ambient yetki olarak
+  taşır. Yalnız o süreçte etkin olan bir yetki, örneğin yorumlayıcıya `setcap` ile
+  verilmiş olanı, nft'ye ulaşmaz. Phantom-WG'nin daemon konteyneri root olarak,
+  `cap_add: [NET_ADMIN, NET_RAW]` ile çalışır.
+- **Varsayılan ayarında SIGCHLD.** Her nft, başarılı da olsa hata da verse, öldürülse
+  de çağrı dönmeden beklenir; böylece hiçbiri zombi olarak kalmaz, host init'siz bir
+  konteynerde PID 1 olduğunda da. SIGCHLD `SIG_IGN` yapılırsa çekirdek çocuğu önce
+  toplar ve komut çalışmış olsa da çağrı hata döner.
+- **Yazılabilir `/etc/iproute2`.** `/etc/iproute2/rt_tables` yoksa, köprünün tablo adları
+  eklenmeden önce `/usr/share/iproute2/rt_tables`'ın kopyası olarak oluşturulur.
+
 ## Mimari
 
 ```mermaid
@@ -88,7 +107,7 @@ sequenceDiagram
     App->>Bridge: apply_preset(yaml)
     Bridge->>DB: create group + rules
     Bridge->>Rust: nft_add_rule(chain, expr)
-    Rust->>Kernel: nft -f -
+    Rust->>Kernel: nft --echo -- add rule
     Bridge->>Rust: rt_policy_add(from, table, family)
     Rust->>Kernel: netlink socket
     Bridge->>DB: mark applied=true

@@ -40,6 +40,25 @@ Releases are listed at [https://github.com/ARAS-Workspace/phantom-wg/releases](h
 `vendor-firewall-bridge-` prefix. The version in this branch is in
 [`firewall_bridge/__init__.py`](firewall_bridge/__init__.py) (`__version__`).
 
+## Requirements
+
+- **glibc 2.39 or later.** The release `.so` is built in the `rust:<version>-trixie`
+  image (glibc 2.41) and asks for `GLIBC_2.39`. A system with an older glibc, such as
+  Debian bookworm (2.36), does not load it.
+- **The `nft` program** from the `nftables` package at `/usr/sbin/nft`.
+  `FIREWALL_BRIDGE_NFT_PATH` names another location and takes an absolute path only.
+- **`CAP_NET_ADMIN` that reaches child processes.** nft runs as a separate program, so
+  the process loading the bridge is root or holds `CAP_NET_ADMIN` as an ambient
+  capability. A capability effective only in that process, for example from `setcap`
+  on the interpreter, does not reach nft. Phantom-WG's daemon container runs as root
+  with `cap_add: [NET_ADMIN, NET_RAW]`.
+- **SIGCHLD at its default.** Every nft is waited for before the call returns, whether
+  it succeeded, failed or was killed, so none is left behind as a zombie, also when
+  the host is PID 1 in a container without an init. With SIGCHLD set to `SIG_IGN` the
+  kernel reaps the child first and the call fails although the command ran.
+- **A writable `/etc/iproute2`.** A missing `/etc/iproute2/rt_tables` is created as a
+  copy of `/usr/share/iproute2/rt_tables` before the bridge's table names are added.
+
 ## Architecture
 
 ```mermaid
@@ -87,7 +106,7 @@ sequenceDiagram
     App->>Bridge: apply_preset(yaml)
     Bridge->>DB: create group + rules
     Bridge->>Rust: nft_add_rule(chain, expr)
-    Rust->>Kernel: nft -f -
+    Rust->>Kernel: nft --echo -- add rule
     Bridge->>Rust: rt_policy_add(from, table, family)
     Rust->>Kernel: netlink socket
     Bridge->>DB: mark applied=true
