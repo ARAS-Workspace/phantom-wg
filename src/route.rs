@@ -292,250 +292,169 @@ fn resolve_table(table_name: &str) -> Result<u32, String> {
 }
 
 // ---------------------------------------------------------------------------
+// Netlink requests — built apart from the socket so the bytes can be tested
+// ---------------------------------------------------------------------------
+
+/// What the netlink header carries besides the length.
+#[derive(Clone, Copy)]
+struct Request {
+    kind: u16,
+    flags: u16,
+    seq: u32,
+}
+
+const CREATE_FLAGS: u16 = NLM_F_REQUEST | NLM_F_ACK | NLM_F_CREATE | NLM_F_EXCL;
+const DELETE_FLAGS: u16 = NLM_F_REQUEST | NLM_F_ACK;
+
+/// Fill the header reserved at the start of `buf` once the length is known.
+fn write_header(buf: &mut [u8], req: Request) {
+    let hdr = NlMsgHdr {
+        nlmsg_len: buf.len() as u32,
+        nlmsg_type: req.kind,
+        nlmsg_flags: req.flags,
+        nlmsg_seq: req.seq,
+        nlmsg_pid: 0,
+    };
+    let hdr_bytes = unsafe {
+        std::slice::from_raw_parts(&hdr as *const NlMsgHdr as *const u8, mem::size_of::<NlMsgHdr>())
+    };
+    buf[..mem::size_of::<NlMsgHdr>()].copy_from_slice(hdr_bytes);
+}
+
+/// RTM_NEWRULE / RTM_DELRULE: from <from> [to <to>] table <table> priority <prio>.
+fn policy_msg(req: Request, from_network: &str, to_network: &str, table_id: u32,
+              priority: u32, family: u8) -> Result<Vec<u8>, String> {
+    let (from_addr, from_prefix, _) = parse_network(from_network)?;
+
+    let mut buf = Vec::with_capacity(256);
+    buf.extend_from_slice(&[0u8; mem::size_of::<NlMsgHdr>()]);
+
+    let fib = FibRuleHdr {
+        family,
+        dst_len: 0,
+        src_len: from_prefix,
+        tos: 0,
+        table: if table_id <= 255 { table_id as u8 } else { 0 },
+        res1: 0,
+        res2: 0,
+        action: FR_ACT_TO_TBL,
+        flags: 0,
+    };
+    let fib_bytes = unsafe {
+        std::slice::from_raw_parts(&fib as *const FibRuleHdr as *const u8, mem::size_of::<FibRuleHdr>())
+    };
+    buf.extend_from_slice(fib_bytes);
+
+    push_attr(&mut buf, FRA_SRC, &addr_bytes(&from_addr));
+
+    if !to_network.is_empty() {
+        let (to_addr, to_prefix, _) = parse_network(to_network)?;
+        push_attr(&mut buf, FRA_DST, &addr_bytes(&to_addr));
+        let dst_len_offset = mem::size_of::<NlMsgHdr>() + 1;
+        buf[dst_len_offset] = to_prefix;
+    }
+
+    if table_id > 255 {
+        push_attr_u32(&mut buf, FRA_TABLE, table_id);
+    }
+
+    push_attr_u32(&mut buf, FRA_PRIORITY, priority);
+
+    write_header(&mut buf, req);
+    Ok(buf)
+}
+
+/// RTM_NEWROUTE / RTM_DELROUTE: <destination> dev <ifindex> table <table>.
+/// "default", "0.0.0.0/0" and "::/0" mean the default route of `family`.
+fn route_msg(req: Request, destination: &str, ifindex: u32, table_id: u32, family: u8)
+    -> Result<Vec<u8>, String>
+{
+    let (dst_addr, dst_prefix) = if destination == "default" || destination == "0.0.0.0/0" || destination == "::/0" {
+        if family == libc::AF_INET6 as u8 {
+            (IpAddr::V6(Ipv6Addr::UNSPECIFIED), 0u8)
+        } else {
+            (IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)), 0u8)
+        }
+    } else {
+        let (addr, prefix, _) = parse_network(destination)?;
+        (addr, prefix)
+    };
+
+    let mut buf = Vec::with_capacity(256);
+    buf.extend_from_slice(&[0u8; mem::size_of::<NlMsgHdr>()]);
+
+    let rtm = RtMsg {
+        rtm_family: family,
+        rtm_dst_len: dst_prefix,
+        rtm_src_len: 0,
+        rtm_tos: 0,
+        rtm_table: if table_id <= 255 { table_id as u8 } else { 0 },
+        rtm_protocol: RTPROT_STATIC,
+        rtm_scope: if dst_prefix == 0 { RT_SCOPE_UNIVERSE } else { RT_SCOPE_LINK },
+        rtm_type: RTN_UNICAST,
+        rtm_flags: 0,
+    };
+    let rtm_bytes = unsafe {
+        std::slice::from_raw_parts(&rtm as *const RtMsg as *const u8, mem::size_of::<RtMsg>())
+    };
+    buf.extend_from_slice(rtm_bytes);
+
+    if dst_prefix > 0 {
+        push_attr(&mut buf, RTA_DST, &addr_bytes(&dst_addr));
+    }
+
+    push_attr_u32(&mut buf, RTA_OIF, ifindex);
+
+    if table_id > 255 {
+        push_attr_u32(&mut buf, RTA_TABLE, table_id);
+    }
+
+    write_header(&mut buf, req);
+    Ok(buf)
+}
+
+fn send_policy(kind: u16, flags: u16, from_network: &str, to_network: &str,
+               table_name: &str, priority: u32, family: u8) -> Result<(), String> {
+    let mut sock = NetlinkSocket::open().map_err(|e| e.to_string())?;
+    let req = Request { kind, flags, seq: sock.next_seq() };
+    let table_id = resolve_table(table_name)?;
+    let msg = policy_msg(req, from_network, to_network, table_id, priority, family)?;
+    sock.send_and_ack(&msg)
+}
+
+fn send_route(kind: u16, flags: u16, destination: &str, device: &str, table_name: &str,
+              family: u8) -> Result<(), String> {
+    let mut sock = NetlinkSocket::open().map_err(|e| e.to_string())?;
+    let req = Request { kind, flags, seq: sock.next_seq() };
+    let table_id = resolve_table(table_name)?;
+    let ifindex = if_nametoindex(device)?;
+    let msg = route_msg(req, destination, ifindex, table_id, family)?;
+    sock.send_and_ack(&msg)
+}
+
+// ---------------------------------------------------------------------------
 // Public routing operations
 // ---------------------------------------------------------------------------
 
 /// Add a policy rule: ip rule add from <from> [to <to>] table <table> priority <prio>
 pub fn policy_add(from_network: &str, to_network: &str, table_name: &str, priority: u32, family: u8) -> Result<(), String> {
-    let mut sock = NetlinkSocket::open().map_err(|e| e.to_string())?;
-    let seq = sock.next_seq();
-    let table_id = resolve_table(table_name)?;
-
-    let (from_addr, from_prefix, _) = parse_network(from_network)?;
-
-    let mut buf = Vec::with_capacity(256);
-    buf.extend_from_slice(&[0u8; mem::size_of::<NlMsgHdr>()]);
-
-    let fib = FibRuleHdr {
-        family,
-        dst_len: 0,
-        src_len: from_prefix,
-        tos: 0,
-        table: if table_id <= 255 { table_id as u8 } else { 0 },
-        res1: 0,
-        res2: 0,
-        action: FR_ACT_TO_TBL,
-        flags: 0,
-    };
-    let fib_bytes = unsafe {
-        std::slice::from_raw_parts(&fib as *const FibRuleHdr as *const u8, mem::size_of::<FibRuleHdr>())
-    };
-    buf.extend_from_slice(fib_bytes);
-
-    push_attr(&mut buf, FRA_SRC, &addr_bytes(&from_addr));
-
-    if !to_network.is_empty() {
-        let (to_addr, to_prefix, _) = parse_network(to_network)?;
-        push_attr(&mut buf, FRA_DST, &addr_bytes(&to_addr));
-        let dst_len_offset = mem::size_of::<NlMsgHdr>() + 1;
-        buf[dst_len_offset] = to_prefix;
-    }
-
-    if table_id > 255 {
-        push_attr_u32(&mut buf, FRA_TABLE, table_id);
-    }
-
-    push_attr_u32(&mut buf, FRA_PRIORITY, priority);
-
-    let total_len = buf.len() as u32;
-    let hdr = NlMsgHdr {
-        nlmsg_len: total_len,
-        nlmsg_type: RTM_NEWRULE,
-        nlmsg_flags: NLM_F_REQUEST | NLM_F_ACK | NLM_F_CREATE | NLM_F_EXCL,
-        nlmsg_seq: seq,
-        nlmsg_pid: 0,
-    };
-    let hdr_bytes = unsafe {
-        std::slice::from_raw_parts(&hdr as *const NlMsgHdr as *const u8, mem::size_of::<NlMsgHdr>())
-    };
-    buf[..mem::size_of::<NlMsgHdr>()].copy_from_slice(hdr_bytes);
-
-    sock.send_and_ack(&buf)
+    send_policy(RTM_NEWRULE, CREATE_FLAGS, from_network, to_network, table_name, priority, family)
 }
 
 /// Delete a policy rule.
 pub fn policy_delete(from_network: &str, to_network: &str, table_name: &str, priority: u32, family: u8) -> Result<(), String> {
-    let mut sock = NetlinkSocket::open().map_err(|e| e.to_string())?;
-    let seq = sock.next_seq();
-    let table_id = resolve_table(table_name)?;
-
-    let (from_addr, from_prefix, _) = parse_network(from_network)?;
-
-    let mut buf = Vec::with_capacity(256);
-    buf.extend_from_slice(&[0u8; mem::size_of::<NlMsgHdr>()]);
-
-    let fib = FibRuleHdr {
-        family,
-        dst_len: 0,
-        src_len: from_prefix,
-        tos: 0,
-        table: if table_id <= 255 { table_id as u8 } else { 0 },
-        res1: 0,
-        res2: 0,
-        action: FR_ACT_TO_TBL,
-        flags: 0,
-    };
-    let fib_bytes = unsafe {
-        std::slice::from_raw_parts(&fib as *const FibRuleHdr as *const u8, mem::size_of::<FibRuleHdr>())
-    };
-    buf.extend_from_slice(fib_bytes);
-
-    push_attr(&mut buf, FRA_SRC, &addr_bytes(&from_addr));
-
-    if !to_network.is_empty() {
-        let (to_addr, to_prefix, _) = parse_network(to_network)?;
-        push_attr(&mut buf, FRA_DST, &addr_bytes(&to_addr));
-        let dst_len_offset = mem::size_of::<NlMsgHdr>() + 1;
-        buf[dst_len_offset] = to_prefix;
-    }
-
-    if table_id > 255 {
-        push_attr_u32(&mut buf, FRA_TABLE, table_id);
-    }
-
-    push_attr_u32(&mut buf, FRA_PRIORITY, priority);
-
-    let total_len = buf.len() as u32;
-    let hdr = NlMsgHdr {
-        nlmsg_len: total_len,
-        nlmsg_type: RTM_DELRULE,
-        nlmsg_flags: NLM_F_REQUEST | NLM_F_ACK,
-        nlmsg_seq: seq,
-        nlmsg_pid: 0,
-    };
-    let hdr_bytes = unsafe {
-        std::slice::from_raw_parts(&hdr as *const NlMsgHdr as *const u8, mem::size_of::<NlMsgHdr>())
-    };
-    buf[..mem::size_of::<NlMsgHdr>()].copy_from_slice(hdr_bytes);
-
-    sock.send_and_ack(&buf)
+    send_policy(RTM_DELRULE, DELETE_FLAGS, from_network, to_network, table_name, priority, family)
 }
 
 /// Add a route: ip route add <destination> dev <device> table <table>
 /// Use "default" as destination for default route (0.0.0.0/0).
 pub fn route_add(destination: &str, device: &str, table_name: &str, family: u8) -> Result<(), String> {
-    let mut sock = NetlinkSocket::open().map_err(|e| e.to_string())?;
-    let seq = sock.next_seq();
-    let table_id = resolve_table(table_name)?;
-    let ifindex = if_nametoindex(device)?;
-
-    let (dst_addr, dst_prefix) = if destination == "default" || destination == "0.0.0.0/0" || destination == "::/0" {
-        if family == libc::AF_INET6 as u8 {
-            (IpAddr::V6(Ipv6Addr::UNSPECIFIED), 0u8)
-        } else {
-            (IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)), 0u8)
-        }
-    } else {
-        let (addr, prefix, _) = parse_network(destination)?;
-        (addr, prefix)
-    };
-
-    let mut buf = Vec::with_capacity(256);
-    buf.extend_from_slice(&[0u8; mem::size_of::<NlMsgHdr>()]);
-
-    let rtm = RtMsg {
-        rtm_family: family,
-        rtm_dst_len: dst_prefix,
-        rtm_src_len: 0,
-        rtm_tos: 0,
-        rtm_table: if table_id <= 255 { table_id as u8 } else { 0 },
-        rtm_protocol: RTPROT_STATIC,
-        rtm_scope: if dst_prefix == 0 { RT_SCOPE_UNIVERSE } else { RT_SCOPE_LINK },
-        rtm_type: RTN_UNICAST,
-        rtm_flags: 0,
-    };
-    let rtm_bytes = unsafe {
-        std::slice::from_raw_parts(&rtm as *const RtMsg as *const u8, mem::size_of::<RtMsg>())
-    };
-    buf.extend_from_slice(rtm_bytes);
-
-    if dst_prefix > 0 {
-        push_attr(&mut buf, RTA_DST, &addr_bytes(&dst_addr));
-    }
-
-    push_attr_u32(&mut buf, RTA_OIF, ifindex);
-
-    if table_id > 255 {
-        push_attr_u32(&mut buf, RTA_TABLE, table_id);
-    }
-
-    let total_len = buf.len() as u32;
-    let hdr = NlMsgHdr {
-        nlmsg_len: total_len,
-        nlmsg_type: RTM_NEWROUTE,
-        nlmsg_flags: NLM_F_REQUEST | NLM_F_ACK | NLM_F_CREATE | NLM_F_EXCL,
-        nlmsg_seq: seq,
-        nlmsg_pid: 0,
-    };
-    let hdr_bytes = unsafe {
-        std::slice::from_raw_parts(&hdr as *const NlMsgHdr as *const u8, mem::size_of::<NlMsgHdr>())
-    };
-    buf[..mem::size_of::<NlMsgHdr>()].copy_from_slice(hdr_bytes);
-
-    sock.send_and_ack(&buf)
+    send_route(RTM_NEWROUTE, CREATE_FLAGS, destination, device, table_name, family)
 }
 
 /// Delete a route.
 pub fn route_delete(destination: &str, device: &str, table_name: &str, family: u8) -> Result<(), String> {
-    let mut sock = NetlinkSocket::open().map_err(|e| e.to_string())?;
-    let seq = sock.next_seq();
-    let table_id = resolve_table(table_name)?;
-    let ifindex = if_nametoindex(device)?;
-
-    let (dst_addr, dst_prefix) = if destination == "default" || destination == "0.0.0.0/0" || destination == "::/0" {
-        if family == libc::AF_INET6 as u8 {
-            (IpAddr::V6(Ipv6Addr::UNSPECIFIED), 0u8)
-        } else {
-            (IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)), 0u8)
-        }
-    } else {
-        let (addr, prefix, _) = parse_network(destination)?;
-        (addr, prefix)
-    };
-
-    let mut buf = Vec::with_capacity(256);
-    buf.extend_from_slice(&[0u8; mem::size_of::<NlMsgHdr>()]);
-
-    let rtm = RtMsg {
-        rtm_family: family,
-        rtm_dst_len: dst_prefix,
-        rtm_src_len: 0,
-        rtm_tos: 0,
-        rtm_table: if table_id <= 255 { table_id as u8 } else { 0 },
-        rtm_protocol: RTPROT_STATIC,
-        rtm_scope: if dst_prefix == 0 { RT_SCOPE_UNIVERSE } else { RT_SCOPE_LINK },
-        rtm_type: RTN_UNICAST,
-        rtm_flags: 0,
-    };
-    let rtm_bytes = unsafe {
-        std::slice::from_raw_parts(&rtm as *const RtMsg as *const u8, mem::size_of::<RtMsg>())
-    };
-    buf.extend_from_slice(rtm_bytes);
-
-    if dst_prefix > 0 {
-        push_attr(&mut buf, RTA_DST, &addr_bytes(&dst_addr));
-    }
-
-    push_attr_u32(&mut buf, RTA_OIF, ifindex);
-
-    if table_id > 255 {
-        push_attr_u32(&mut buf, RTA_TABLE, table_id);
-    }
-
-    let total_len = buf.len() as u32;
-    let hdr = NlMsgHdr {
-        nlmsg_len: total_len,
-        nlmsg_type: RTM_DELROUTE,
-        nlmsg_flags: NLM_F_REQUEST | NLM_F_ACK,
-        nlmsg_seq: seq,
-        nlmsg_pid: 0,
-    };
-    let hdr_bytes = unsafe {
-        std::slice::from_raw_parts(&hdr as *const NlMsgHdr as *const u8, mem::size_of::<NlMsgHdr>())
-    };
-    buf[..mem::size_of::<NlMsgHdr>()].copy_from_slice(hdr_bytes);
-
-    sock.send_and_ack(&buf)
+    send_route(RTM_DELROUTE, DELETE_FLAGS, destination, device, table_name, family)
 }
 
 /// The file `ip` reads table names from. iproute2 6.x ships its defaults in
@@ -692,6 +611,132 @@ mod tests {
         let bytes = addr_bytes(&addr);
         assert_eq!(bytes.len(), 16);
         assert!(bytes.iter().all(|&b| b == 0));
+    }
+
+    // ── netlink messages ─────────────────────────────────────────
+    //
+    // Expected bytes are spelled out from the kernel's layouts and numbers
+    // (linux/netlink.h, rtnetlink.h, fib_rules.h), not from this module's
+    // constants. Netlink fields are in host byte order.
+
+    fn cat(parts: &[&[u8]]) -> Vec<u8> {
+        parts.concat()
+    }
+
+    /// nlmsghdr: len, type, flags, seq, pid.
+    fn nlhdr(len: u32, kind: u16, flags: u16, seq: u32) -> Vec<u8> {
+        cat(&[&len.to_ne_bytes(), &kind.to_ne_bytes(), &flags.to_ne_bytes(),
+              &seq.to_ne_bytes(), &0u32.to_ne_bytes()])
+    }
+
+    /// rtattr: len, type, data, zero padding to 4 bytes.
+    fn attr(kind: u16, data: &[u8]) -> Vec<u8> {
+        let len = 4 + data.len();
+        let mut out = cat(&[&(len as u16).to_ne_bytes(), &kind.to_ne_bytes(), data]);
+        out.resize(len.div_ceil(4) * 4, 0);
+        out
+    }
+
+    const REQUEST_ACK_CREATE_EXCL: u16 = 0x0001 | 0x0004 | 0x0400 | 0x0200;
+    const REQUEST_ACK: u16 = 0x0001 | 0x0004;
+
+    #[test]
+    fn policy_message_v4_from_only() {
+        let req = Request { kind: RTM_NEWRULE, flags: CREATE_FLAGS, seq: 7 };
+        let msg = policy_msg(req, "10.0.1.0/24", "", 100, 1000, 2).unwrap();
+        let body = cat(&[
+            // fib_rule_hdr: family dst_len src_len tos table res1 res2 action, flags
+            &[2, 0, 24, 0, 100, 0, 0, 1], &0u32.to_ne_bytes(),
+            &attr(2, &[10, 0, 1, 0]),                    // FRA_SRC
+            &attr(6, &1000u32.to_ne_bytes()),            // FRA_PRIORITY
+        ]);
+        assert_eq!(msg, cat(&[&nlhdr(16 + body.len() as u32, 32, REQUEST_ACK_CREATE_EXCL, 7), &body]));
+    }
+
+    #[test]
+    fn policy_message_v4_from_and_to_delete() {
+        let req = Request { kind: RTM_DELRULE, flags: DELETE_FLAGS, seq: 1 };
+        let msg = policy_msg(req, "10.0.1.0/24", "10.0.2.0/23", 254, 99, 2).unwrap();
+        let body = cat(&[
+            &[2, 23, 24, 0, 254, 0, 0, 1], &0u32.to_ne_bytes(),
+            &attr(2, &[10, 0, 1, 0]),                    // FRA_SRC
+            &attr(1, &[10, 0, 2, 0]),                    // FRA_DST
+            &attr(6, &99u32.to_ne_bytes()),              // FRA_PRIORITY
+        ]);
+        assert_eq!(msg, cat(&[&nlhdr(16 + body.len() as u32, 33, REQUEST_ACK, 1), &body]));
+    }
+
+    #[test]
+    fn policy_message_v6_table_above_255() {
+        let req = Request { kind: RTM_NEWRULE, flags: CREATE_FLAGS, seq: 3 };
+        let msg = policy_msg(req, "fd00:70:68::/120", "", 1000, 100, 10).unwrap();
+        let src = Ipv6Addr::from_str("fd00:70:68::").unwrap().octets();
+        let body = cat(&[
+            // A table id above 255 goes in FRA_TABLE; the header's byte is 0.
+            &[10, 0, 120, 0, 0, 0, 0, 1], &0u32.to_ne_bytes(),
+            &attr(2, &src),                              // FRA_SRC
+            &attr(15, &1000u32.to_ne_bytes()),           // FRA_TABLE
+            &attr(6, &100u32.to_ne_bytes()),             // FRA_PRIORITY
+        ]);
+        assert_eq!(msg, cat(&[&nlhdr(16 + body.len() as u32, 32, REQUEST_ACK_CREATE_EXCL, 3), &body]));
+    }
+
+    #[test]
+    fn route_message_v4_link_scope() {
+        let req = Request { kind: RTM_NEWROUTE, flags: CREATE_FLAGS, seq: 5 };
+        let msg = route_msg(req, "10.98.0.0/16", 3, 100, 2).unwrap();
+        let body = cat(&[
+            // rtmsg: family dst_len src_len tos table protocol scope type, flags
+            &[2, 16, 0, 0, 100, 4, 253, 1], &0u32.to_ne_bytes(),
+            &attr(1, &[10, 98, 0, 0]),                   // RTA_DST
+            &attr(4, &3u32.to_ne_bytes()),               // RTA_OIF
+        ]);
+        assert_eq!(msg, cat(&[&nlhdr(16 + body.len() as u32, 24, REQUEST_ACK_CREATE_EXCL, 5), &body]));
+    }
+
+    #[test]
+    fn route_message_v6_default_delete() {
+        for destination in ["default", "::/0"] {
+            let req = Request { kind: RTM_DELROUTE, flags: DELETE_FLAGS, seq: 9 };
+            let msg = route_msg(req, destination, 1, 201, 10).unwrap();
+            let body = cat(&[
+                // A default route has no RTA_DST and universe scope.
+                &[10, 0, 0, 0, 201, 4, 0, 1], &0u32.to_ne_bytes(),
+                &attr(4, &1u32.to_ne_bytes()),           // RTA_OIF
+            ]);
+            assert_eq!(msg, cat(&[&nlhdr(16 + body.len() as u32, 25, REQUEST_ACK, 9), &body]),
+                       "destination {destination}");
+        }
+    }
+
+    #[test]
+    fn route_message_v4_default_table_above_255() {
+        let req = Request { kind: RTM_NEWROUTE, flags: CREATE_FLAGS, seq: 2 };
+        let msg = route_msg(req, "0.0.0.0/0", 4, 300, 2).unwrap();
+        let body = cat(&[
+            &[2, 0, 0, 0, 0, 4, 0, 1], &0u32.to_ne_bytes(),
+            &attr(4, &4u32.to_ne_bytes()),               // RTA_OIF
+            &attr(15, &300u32.to_ne_bytes()),            // RTA_TABLE
+        ]);
+        assert_eq!(msg, cat(&[&nlhdr(16 + body.len() as u32, 24, REQUEST_ACK_CREATE_EXCL, 2), &body]));
+    }
+
+    #[test]
+    fn messages_refuse_a_malformed_network() {
+        let req = Request { kind: RTM_NEWRULE, flags: CREATE_FLAGS, seq: 1 };
+        assert!(policy_msg(req, "10.0.1.0", "", 100, 1, 2).is_err());
+        assert!(policy_msg(req, "10.0.1.0/24", "nope/8", 100, 1, 2).is_err());
+        assert!(route_msg(req, "10.0.0.0/x", 1, 100, 2).is_err());
+    }
+
+    #[test]
+    fn attributes_pad_to_four_bytes() {
+        let mut buf = Vec::new();
+        push_attr(&mut buf, 7, &[1, 2, 3]);
+        assert_eq!(buf, cat(&[&7u16.to_ne_bytes(), &7u16.to_ne_bytes(), &[1, 2, 3, 0]]));
+        for (len, aligned) in [(0, 0), (1, 4), (4, 4), (5, 8), (16, 16), (17, 20)] {
+            assert_eq!(align4(len), aligned, "len {len}");
+        }
     }
 
     // ── ensure_table ─────────────────────────────────────────────
