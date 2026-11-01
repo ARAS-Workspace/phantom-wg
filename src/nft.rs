@@ -4,6 +4,7 @@
 //! This avoids conflicts with UFW, iptables, or any other rulesets.
 //! No DB dependency — pure kernel operations.
 
+use std::ffi::OsString;
 use std::path::PathBuf;
 use std::process::{Command, Stdio};
 
@@ -28,7 +29,12 @@ pub struct NftContext {
 impl NftContext {
     /// Resolves nft from `FIREWALL_BRIDGE_NFT_PATH`, else `/usr/sbin/nft`.
     pub fn new() -> Result<Self, &'static str> {
-        let binary = std::env::var_os(NFT_PATH_ENV)
+        Self::from_env(std::env::var_os(NFT_PATH_ENV))
+    }
+
+    /// `new` with the variable's value passed in, so tests need not set it.
+    fn from_env(value: Option<OsString>) -> Result<Self, &'static str> {
+        let binary = value
             .map(PathBuf::from)
             .unwrap_or_else(|| PathBuf::from(DEFAULT_NFT_PATH));
         Self::with_binary(binary)
@@ -479,6 +485,29 @@ mod tests {
     }
 
     #[test]
+    fn test_nft_from_env_takes_the_variable() {
+        let _serial = serial();
+        let nft = fake_nft("from_env", "printf 'ok'");
+        let ctx = NftContext::from_env(Some(nft.clone().into_os_string())).unwrap();
+        assert_eq!(ctx.binary, nft);
+        assert_eq!(NftContext::from_env(Some("nft".into())).err(),
+                   Some("nft path must be absolute"));
+        assert_eq!(NftContext::from_env(Some("/nonexistent/nft".into())).err(),
+                   Some("nft program not found"));
+    }
+
+    #[test]
+    fn test_nft_from_env_defaults_to_usr_sbin() {
+        match NftContext::from_env(None) {
+            Ok(ctx) => assert_eq!(ctx.binary, Path::new(DEFAULT_NFT_PATH)),
+            Err(e) => {
+                assert!(!Path::new(DEFAULT_NFT_PATH).is_file());
+                assert_eq!(e, "nft program not found");
+            }
+        }
+    }
+
+    #[test]
     fn test_nft_relative_path_is_refused() {
         for path in ["nft", "./nft", "sbin/nft"] {
             assert_eq!(NftContext::with_binary(path).err(),
@@ -503,6 +532,51 @@ mod tests {
         let ctx = NftContext::with_binary(&nft).unwrap();
         assert_eq!(ctx.run_json("list table inet phantom").unwrap(), r#"{"nftables": []}"#);
         assert_eq!(recorded(&nft, "args"), "--json\n--handle\n--\nlist table inet phantom\n");
+    }
+
+    #[test]
+    fn test_table_and_rule_commands() {
+        let _serial = serial();
+        let nft = fake_nft("commands", r#"printf '{"nftables": []}'"#);
+        let ctx = NftContext::with_binary(&nft).unwrap();
+        flush_table(&ctx).unwrap();
+        assert_eq!(recorded(&nft, "args"), "--\nflush table inet phantom\n");
+        remove_rule(&ctx, "forward", 42).unwrap();
+        assert_eq!(recorded(&nft, "args"), "--\ndelete rule inet phantom forward handle 42\n");
+        assert_eq!(list_table(&ctx).unwrap(), r#"{"nftables": []}"#);
+        assert_eq!(recorded(&nft, "args"), "--json\n--handle\n--\nlist table inet phantom\n");
+    }
+
+    #[test]
+    fn test_add_rule_reports_a_failure_and_a_missing_handle() {
+        let _serial = serial();
+        let rule = RuleSpec { chain: "input", action: "accept", family: 2, ..Default::default() };
+        let failing = fake_nft("add_rule-fails", "printf 'Error: no such chain' >&2; exit 1");
+        assert_eq!(add_rule(&NftContext::with_binary(&failing).unwrap(), &rule).unwrap_err(),
+                   "Error: no such chain");
+        let no_echo = fake_nft("add_rule-no-echo", r#"printf '{"nftables": []}'"#);
+        assert_eq!(add_rule(&NftContext::with_binary(&no_echo).unwrap(), &rule).unwrap_err(),
+                   "Rule applied but handle not found");
+    }
+
+    #[test]
+    fn test_nft_that_cannot_start_or_is_killed() {
+        let _serial = serial();
+        let script = fake_nft("not-executable", "printf 'ok'");
+        std::fs::set_permissions(&script, std::fs::Permissions::from_mode(0o644)).unwrap();
+        let err = NftContext::with_binary(&script).unwrap().run("list ruleset").unwrap_err();
+        assert!(err.starts_with("nft could not be started: "), "got: {err}");
+        let killed = fake_nft("killed", "kill -9 $$");
+        assert_eq!(NftContext::with_binary(&killed).unwrap().run("list ruleset").unwrap_err(),
+                   "nft command failed (rc=-1): list ruleset");
+    }
+
+    #[test]
+    fn test_nft_output_that_is_not_utf8() {
+        let _serial = serial();
+        let nft = fake_nft("not-utf8", r"printf 'a\377b'");
+        assert_eq!(NftContext::with_binary(&nft).unwrap().run("list ruleset").unwrap(),
+                   "a\u{FFFD}b");
     }
 
     #[test]
