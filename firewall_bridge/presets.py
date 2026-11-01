@@ -62,7 +62,9 @@ def apply_preset(bridge: FirewallBridge, preset: Union[str, Path, dict],
     """Apply a resolved YAML preset to the bridge.
 
     Creates a rule group and populates it with routing + firewall rules.
-    If the bridge is started, rules are applied to kernel immediately.
+    If the bridge is started, rules are applied to kernel immediately. If
+    the kernel refuses one, the group is deleted again and the error is
+    raised.
 
     YAML format:
         name: preset-name
@@ -89,7 +91,17 @@ def apply_preset(bridge: FirewallBridge, preset: Union[str, Path, dict],
     metadata.update(override)
 
     bridge.create_group(name, group_type, priority, metadata)
+    try:
+        _add_entries(bridge, name, spec)
+    except BaseException:
+        bridge.delete_group(name)
+        raise
 
+    return bridge.get_group(name)
+
+
+def _add_entries(bridge: FirewallBridge, name: str, spec: dict) -> None:
+    """The table: and rules: entries of a validated spec, into group `name`."""
     # table: section — routing operations
     for entry in spec.get("table", []):
         if "ensure" in entry:
@@ -138,8 +150,6 @@ def apply_preset(bridge: FirewallBridge, preset: Union[str, Path, dict],
             out_iface=rule.get("out_iface", ""),
             state_match=rule.get("state", ""),
         )
-
-    return bridge.get_group(name)
 
 
 def remove_preset(bridge: FirewallBridge, name: str) -> None:

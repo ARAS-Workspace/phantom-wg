@@ -5,6 +5,7 @@ Uses mock bridge, no .so required.
 
 import builtins
 import contextlib
+import sqlite3
 import sys
 from textwrap import dedent
 from unittest.mock import MagicMock
@@ -12,6 +13,7 @@ from unittest.mock import MagicMock
 import pytest
 
 from firewall_bridge.models import Group
+from firewall_bridge.types import NftablesError
 from firewall_bridge.presets import (
     apply_preset,
     remove_preset,
@@ -259,6 +261,40 @@ class TestApplyPresetYAML:
         from pathlib import Path
         with pytest.raises(FileNotFoundError, match="not found"):
             apply_preset(bridge, Path("/nonexistent/preset.yaml"))
+
+
+class TestRefusedByKernel:
+    """The kernel refuses one entry: apply_preset deletes the group again."""
+
+    SPEC = {
+        "name": "p",
+        "table": [{"ensure": {"id": 150, "name": "t150"}}],
+        "rules": [
+            {"chain": "input", "action": "accept"},
+            {"chain": "input", "action": "masquerade"},
+            {"chain": "input", "action": "drop"},
+        ],
+    }
+
+    def test_group_deleted_and_error_raised(self, bridge):
+        bridge.add_firewall_rule.side_effect = [1, NftablesError("refused"), 3]
+        with pytest.raises(NftablesError):
+            apply_preset(bridge, self.SPEC)
+        assert bridge.add_firewall_rule.call_count == 2
+        bridge.delete_group.assert_called_once_with("p")
+
+    def test_routing_refusal_deletes_the_group(self, bridge):
+        bridge.add_routing_rule.side_effect = NftablesError("refused")
+        with pytest.raises(NftablesError):
+            apply_preset(bridge, self.SPEC)
+        bridge.add_firewall_rule.assert_not_called()
+        bridge.delete_group.assert_called_once_with("p")
+
+    def test_group_that_could_not_be_created_is_not_deleted(self, bridge):
+        bridge.create_group.side_effect = sqlite3.IntegrityError("UNIQUE")
+        with pytest.raises(sqlite3.IntegrityError):
+            apply_preset(bridge, self.SPEC)
+        bridge.delete_group.assert_not_called()
 
 
 class TestPresetManagement:

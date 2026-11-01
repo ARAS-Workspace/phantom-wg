@@ -298,6 +298,27 @@ class TestRefusedByKernel:
                                     table_name="mh", priority=100)
         assert bridge.list_routing_rules() == []
 
+    def test_enable_group_undoes_what_it_applied(self, bridge, mock_lib, last_error):
+        bridge.create_group("g1")
+        bridge.add_firewall_rule("g1", "input", "accept")
+        bridge.add_routing_rule("g1", "policy", from_network="10.0.0.0/24",
+                                table_name="mh", priority=100)
+        bridge.add_routing_rule("g1", "route", destination="default",
+                                device="wg_exit", table_name="mh")
+        bridge.disable_group("g1")
+        bridge.start()
+        mock_lib.reset_mock()
+        mock_lib.nft_add_rule.return_value = 50
+        mock_lib.rt_route_add.return_value = -4
+        with pytest.raises(NetlinkError):
+            bridge.enable_group("g1")
+        assert bridge.get_group("g1").enabled is False
+        mock_lib.nft_remove_rule.assert_called_once_with(b"input", 50)
+        mock_lib.rt_policy_delete.assert_called_once()
+        mock_lib.rt_route_delete.assert_not_called()
+        assert not any(r.applied or r.nft_handle for r in bridge.list_firewall_rules())
+        assert not any(r.applied for r in bridge.list_routing_rules())
+
 
 class TestRoutingRules:
     def test_add_routing_rule(self, bridge):
