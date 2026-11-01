@@ -261,6 +261,10 @@ fn if_nametoindex(name: &str) -> Result<u32, String> {
 /// Resolve named routing table to numeric ID.
 /// Reads /etc/iproute2/rt_tables for name→id mapping.
 fn resolve_table(table_name: &str) -> Result<u32, String> {
+    resolve_table_in(Path::new(RT_TABLES), table_name)
+}
+
+fn resolve_table_in(path: &Path, table_name: &str) -> Result<u32, String> {
     // Built-in tables
     match table_name {
         "default" => return Ok(253),
@@ -276,7 +280,7 @@ fn resolve_table(table_name: &str) -> Result<u32, String> {
     }
 
     // Read rt_tables file
-    let content = std::fs::read_to_string("/etc/iproute2/rt_tables")
+    let content = std::fs::read_to_string(path)
         .map_err(|e| format!("Cannot read rt_tables: {}", e))?;
 
     for line in content.lines() {
@@ -790,6 +794,40 @@ mod tests {
     }
 
     const DEFAULTS: &str = "255\tlocal\n254\tmain\n253\tdefault\n0\tunspec\n";
+
+    // ── resolve_table ────────────────────────────────────────────
+
+    #[test]
+    fn resolve_table_builtins_and_numbers_need_no_file() {
+        let missing = Path::new("/nonexistent/rt_tables");
+        for (name, id) in [("default", 253), ("main", 254), ("local", 255), ("unspec", 0),
+                           ("100", 100), ("4294967295", u32::MAX)] {
+            assert_eq!(resolve_table_in(missing, name), Ok(id), "name {name}");
+        }
+    }
+
+    #[test]
+    fn resolve_table_reads_names_from_the_file() {
+        let dir = rt_dir("resolve");
+        let path = dir.join("rt_tables");
+        std::fs::write(&path, "# comment\n\n255\tlocal\n  100 mh  \n201\tmh6\n300 big # note\n").unwrap();
+        assert_eq!(resolve_table_in(&path, "mh"), Ok(100));
+        assert_eq!(resolve_table_in(&path, "mh6"), Ok(201));
+        assert_eq!(resolve_table_in(&path, "big"), Ok(300));
+        assert_eq!(resolve_table_in(&path, "comment"), Err("Routing table not found: comment".into()));
+        assert_eq!(resolve_table_in(&path, "absent"), Err("Routing table not found: absent".into()));
+    }
+
+    #[test]
+    fn resolve_table_reports_a_bad_id_and_a_missing_file() {
+        let dir = rt_dir("resolve-bad");
+        let path = dir.join("rt_tables");
+        std::fs::write(&path, "x1 broken\n").unwrap();
+        let err = resolve_table_in(&path, "broken").unwrap_err();
+        assert!(err.starts_with("Invalid table ID in rt_tables: "), "got: {err}");
+        let err = resolve_table_in(&dir.join("absent"), "mh").unwrap_err();
+        assert!(err.starts_with("Cannot read rt_tables: "), "got: {err}");
+    }
 
     #[test]
     fn ensure_table_seeds_a_missing_file_from_the_defaults() {
