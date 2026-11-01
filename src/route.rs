@@ -96,6 +96,45 @@ struct RtAttr {
     rta_type: u16,
 }
 
+// The byte forms below have the kernel's sizes; offsets elsewhere use size_of.
+const _: () = assert!(mem::size_of::<NlMsgHdr>() == 16);
+const _: () = assert!(mem::size_of::<RtMsg>() == 12);
+const _: () = assert!(mem::size_of::<FibRuleHdr>() == 12);
+const _: () = assert!(mem::size_of::<RtAttr>() == 4);
+
+impl NlMsgHdr {
+    fn to_bytes(&self) -> [u8; 16] {
+        let mut b = [0u8; 16];
+        b[0..4].copy_from_slice(&self.nlmsg_len.to_ne_bytes());
+        b[4..6].copy_from_slice(&self.nlmsg_type.to_ne_bytes());
+        b[6..8].copy_from_slice(&self.nlmsg_flags.to_ne_bytes());
+        b[8..12].copy_from_slice(&self.nlmsg_seq.to_ne_bytes());
+        b[12..16].copy_from_slice(&self.nlmsg_pid.to_ne_bytes());
+        b
+    }
+}
+
+impl RtMsg {
+    fn to_bytes(&self) -> [u8; 12] {
+        let mut b = [0u8; 12];
+        b[..8].copy_from_slice(&[self.rtm_family, self.rtm_dst_len, self.rtm_src_len,
+                                 self.rtm_tos, self.rtm_table, self.rtm_protocol,
+                                 self.rtm_scope, self.rtm_type]);
+        b[8..].copy_from_slice(&self.rtm_flags.to_ne_bytes());
+        b
+    }
+}
+
+impl FibRuleHdr {
+    fn to_bytes(&self) -> [u8; 12] {
+        let mut b = [0u8; 12];
+        b[..8].copy_from_slice(&[self.family, self.dst_len, self.src_len, self.tos,
+                                 self.table, self.res1, self.res2, self.action]);
+        b[8..].copy_from_slice(&self.flags.to_ne_bytes());
+        b
+    }
+}
+
 // ---------------------------------------------------------------------------
 // Netlink socket helper
 // ---------------------------------------------------------------------------
@@ -107,6 +146,7 @@ struct NetlinkSocket {
 
 impl NetlinkSocket {
     fn open() -> Result<Self, ErrorCode> {
+        // SAFETY: a plain syscall with constant arguments; the result is checked.
         let fd = unsafe {
             libc::socket(
                 libc::AF_NETLINK,
@@ -115,7 +155,7 @@ impl NetlinkSocket {
             )
         };
         if fd < 0 {
-            return Err(if unsafe { *libc::__errno_location() } == libc::EPERM {
+            return Err(if io::Error::last_os_error().raw_os_error() == Some(libc::EPERM) {
                 ErrorCode::PermissionDenied
             } else {
                 ErrorCode::NetlinkFailed
@@ -123,10 +163,12 @@ impl NetlinkSocket {
         }
 
         // Bind to kernel
+        // SAFETY: sockaddr_nl holds only integers, for which all zeros is valid.
         let mut addr: libc::sockaddr_nl = unsafe { mem::zeroed() };
         addr.nl_family = libc::AF_NETLINK as u16;
         addr.nl_pid = 0; // let kernel assign
 
+        // SAFETY: `addr` outlives the call and the length passed is its size.
         let rc = unsafe {
             libc::bind(
                 fd,
@@ -135,6 +177,7 @@ impl NetlinkSocket {
             )
         };
         if rc < 0 {
+            // SAFETY: `fd` is the socket opened above and is not used again.
             unsafe { libc::close(fd) };
             return Err(ErrorCode::NetlinkFailed);
         }
@@ -150,6 +193,7 @@ impl NetlinkSocket {
 
     /// Send a netlink message and wait for ACK.
     fn send_and_ack(&mut self, buf: &[u8]) -> Result<(), String> {
+        // SAFETY: the pointer and length describe `buf`, which outlives the call.
         let sent = unsafe {
             libc::send(self.fd, buf.as_ptr() as *const libc::c_void, buf.len(), 0)
         };
@@ -159,6 +203,7 @@ impl NetlinkSocket {
 
         // Read ACK
         let mut recv_buf = [0u8; 4096];
+        // SAFETY: the pointer and length describe `recv_buf`, which outlives the call.
         let len = unsafe {
             libc::recv(self.fd, recv_buf.as_mut_ptr() as *mut libc::c_void, recv_buf.len(), 0)
         };
@@ -192,6 +237,7 @@ fn check_ack(reply: &[u8]) -> Result<(), String> {
 impl Drop for NetlinkSocket {
     fn drop(&mut self) {
         if self.fd >= 0 {
+            // SAFETY: `fd` belongs to this socket and is closed once; it is set to -1 next.
             unsafe { libc::close(self.fd) };
             self.fd = -1;
         }
@@ -250,6 +296,7 @@ fn addr_bytes(addr: &IpAddr) -> Vec<u8> {
 /// Resolve interface name to ifindex.
 fn if_nametoindex(name: &str) -> Result<u32, String> {
     let c_name = std::ffi::CString::new(name).map_err(|e| e.to_string())?;
+    // SAFETY: `c_name` is a NUL-terminated string that outlives the call.
     let idx = unsafe { libc::if_nametoindex(c_name.as_ptr()) };
     if idx == 0 {
         Err(format!("Interface not found: {}", name))
@@ -322,10 +369,7 @@ fn write_header(buf: &mut [u8], req: Request) {
         nlmsg_seq: req.seq,
         nlmsg_pid: 0,
     };
-    let hdr_bytes = unsafe {
-        std::slice::from_raw_parts(&hdr as *const NlMsgHdr as *const u8, mem::size_of::<NlMsgHdr>())
-    };
-    buf[..mem::size_of::<NlMsgHdr>()].copy_from_slice(hdr_bytes);
+    buf[..mem::size_of::<NlMsgHdr>()].copy_from_slice(&hdr.to_bytes());
 }
 
 /// RTM_NEWRULE / RTM_DELRULE: from <from> [to <to>] table <table> priority <prio>.
@@ -347,10 +391,7 @@ fn policy_msg(req: Request, from_network: &str, to_network: &str, table_id: u32,
         action: FR_ACT_TO_TBL,
         flags: 0,
     };
-    let fib_bytes = unsafe {
-        std::slice::from_raw_parts(&fib as *const FibRuleHdr as *const u8, mem::size_of::<FibRuleHdr>())
-    };
-    buf.extend_from_slice(fib_bytes);
+    buf.extend_from_slice(&fib.to_bytes());
 
     push_attr(&mut buf, FRA_SRC, &addr_bytes(&from_addr));
 
@@ -401,10 +442,7 @@ fn route_msg(req: Request, destination: &str, ifindex: u32, table_id: u32, famil
         rtm_type: RTN_UNICAST,
         rtm_flags: 0,
     };
-    let rtm_bytes = unsafe {
-        std::slice::from_raw_parts(&rtm as *const RtMsg as *const u8, mem::size_of::<RtMsg>())
-    };
-    buf.extend_from_slice(rtm_bytes);
+    buf.extend_from_slice(&rtm.to_bytes());
 
     if dst_prefix > 0 {
         push_attr(&mut buf, RTA_DST, &addr_bytes(&dst_addr));
