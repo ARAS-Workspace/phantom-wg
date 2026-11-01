@@ -220,39 +220,61 @@ class Ledger:
         self.texts: dict[int, str] = {}
 
     def add(self, group: str, reference_rule: str, **fields) -> int:
-        """add_firewall_rule(group, **fields) on the bridge; when the bridge
-        is started and the group enabled, `reference_rule` on inet
-        reference too. Returns the bridge's rule id."""
+        """add_firewall_rule(group, **fields) on the bridge, then sync();
+        returns the bridge's rule id."""
         chain = fields["chain"]
         assert reference_rule.split(" ", 1)[0] == chain, (chain, reference_rule)
         rule_id = self.bridge.add_firewall_rule(group, **fields)
         self.texts[rule_id] = reference_rule
         self.reference[rule_id] = None
-        if self.bridge.get_state() == "started" and self.bridge.get_group(group).enabled:
-            self.reference[rule_id] = (chain, reference_add(reference_rule))
+        self.sync()
         return rule_id
 
     def remove(self, rule_id: int) -> None:
         self.bridge.remove_firewall_rule(rule_id)
         self.texts.pop(rule_id)
-        entry = self.reference.pop(rule_id)
-        if entry:
-            reference_delete(*entry)
+        self.reference.pop(rule_id)
+        self.sync()
+
+    def enable(self, group: str) -> None:
+        self.bridge.enable_group(group)
+        self.sync()
+
+    def disable(self, group: str) -> None:
+        self.bridge.disable_group(group)
+        self.sync()
+
+    def delete_group(self, group: str) -> None:
+        gone = {r.id for r in self.bridge.list_firewall_rules(group)}
+        self.bridge.delete_group(group)
+        for rule_id in gone & set(self.texts):
+            self.texts.pop(rule_id)
+            self.reference.pop(rule_id)
+        self.sync()
 
     def stopped(self) -> None:
-        """After bridge.stop(): inet reference is flushed the same way."""
-        nft(f"flush table inet {REFERENCE}")
-        self.reference = dict.fromkeys(self.reference)
+        """After bridge.stop()."""
+        self.sync()
 
     def started(self) -> None:
-        """After bridge.start(): inet reference gets the rules of the
-        enabled groups, by group priority, then position and id."""
+        """After bridge.start()."""
+        self.sync()
+
+    def sync(self) -> None:
+        """inet reference becomes the test's rules that the bridge holds
+        applied: enabled groups by priority and id, each group's rules by
+        position and id. Empty while the bridge is stopped."""
+        nft(f"flush table inet {REFERENCE}")
+        self.reference = dict.fromkeys(self.reference)
+        if self.bridge.get_state() != "started":
+            return
         for group in self.bridge.list_groups():
             if not group.enabled:
                 continue
             for row in self.bridge.list_firewall_rules(group.name):
-                text = self.texts[row.id]
-                self.reference[row.id] = (text.split(" ", 1)[0], reference_add(text))
+                if row.id in self.texts:
+                    text = self.texts[row.id]
+                    self.reference[row.id] = (text.split(" ", 1)[0], reference_add(text))
 
 
 def assert_db_matches_kernel(bridge, db_path: str, phantom: Table, ledger: Ledger | None = None,
