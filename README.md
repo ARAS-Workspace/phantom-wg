@@ -2,7 +2,7 @@
 
 Linux firewall manager — nftables + policy routing, SQLite state, YAML presets.
 
-- Rust backend talks directly to the kernel (netlink socket + libnftables).
+- Rust backend talks to the kernel through a netlink socket and the nft program.
 - Python layer provides state machine, DB persistence and preset system.
 
 ## Download
@@ -53,7 +53,7 @@ graph TB
     end
 
     subgraph Rust ["Rust — Kernel Backend (.so)"]
-        NFT[nft.rs<br/>libnftables]
+        NFT[nft.rs<br/>nft process]
         RT[route.rs<br/>netlink socket]
     end
 
@@ -71,7 +71,7 @@ graph TB
 | `presets.py` | YAML parse, group create, batch rule apply    |
 | `db.py`      | SQLite persistence, migration, WAL mode       |
 | `_ffi.py`    | cdylib load, ctypes binding                   |
-| `nft.rs`     | nftables chain/rule CRUD — libnftables        |
+| `nft.rs`     | nftables chain/rule CRUD — nft process        |
 | `route.rs`   | Policy routing + route table — netlink socket |
 
 ## Data Flow
@@ -87,7 +87,7 @@ sequenceDiagram
     App->>Bridge: apply_preset(yaml)
     Bridge->>DB: create group + rules
     Bridge->>Rust: nft_add_rule(chain, expr)
-    Rust->>Kernel: libnftables
+    Rust->>Kernel: nft -f -
     Bridge->>Rust: rt_policy_add(from, table, family)
     Rust->>Kernel: netlink socket
     Bridge->>DB: mark applied=true
