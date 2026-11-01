@@ -5,7 +5,6 @@ Uses mock bridge, no .so required.
 
 import builtins
 import contextlib
-import sqlite3
 import sys
 from textwrap import dedent
 from unittest.mock import MagicMock
@@ -13,7 +12,7 @@ from unittest.mock import MagicMock
 import pytest
 
 from firewall_bridge.models import Group
-from firewall_bridge.types import NftablesError
+from firewall_bridge.types import GroupExistsError, NftablesError
 from firewall_bridge.presets import (
     apply_preset,
     remove_preset,
@@ -304,8 +303,8 @@ class TestRefusedByKernel:
         bridge.delete_group.assert_called_once_with("p")
 
     def test_group_that_could_not_be_created_is_not_deleted(self, bridge):
-        bridge.create_group.side_effect = sqlite3.IntegrityError("UNIQUE")
-        with pytest.raises(sqlite3.IntegrityError):
+        bridge.create_group.side_effect = GroupExistsError("Group already exists: p")
+        with pytest.raises(GroupExistsError):
             apply_preset(bridge, self.SPEC)
         bridge.delete_group.assert_not_called()
 

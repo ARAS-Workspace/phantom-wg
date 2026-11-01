@@ -57,6 +57,10 @@ class GroupNotFoundError(BridgeError):
     """Rule group not found."""
 
 
+class GroupExistsError(BridgeError):
+    """A rule group with that name exists."""
+
+
 class RuleNotFoundError(BridgeError):
     """Firewall or routing rule not found."""
 

@@ -2,10 +2,12 @@
 Unit tests for FirewallDB — pure Python SQLite, no .so required.
 """
 
+import sqlite3
+
 import pytest
 
 from firewall_bridge.db import FirewallDB
-from firewall_bridge.types import GroupNotFoundError, RuleNotFoundError
+from firewall_bridge.types import GroupExistsError, GroupNotFoundError, RuleNotFoundError
 
 
 @pytest.fixture
@@ -146,8 +148,24 @@ class TestGroups:
 
     def test_unique_name(self, db):
         db.create_group("unique")
-        with pytest.raises(Exception):
+        with pytest.raises(GroupExistsError, match="Group already exists: unique"):
             db.create_group("unique")
+        assert [g.name for g in db.list_groups()] == ["unique"]
+
+    def test_a_name_taken_leaves_the_file_writable(self, db, tmp_path):
+        db.create_group("unique")
+        with pytest.raises(GroupExistsError):
+            db.create_group("unique")
+        other = sqlite3.connect(str(tmp_path / "test.db"), timeout=0)
+        try:
+            other.execute("UPDATE rule_groups SET priority=1")
+            other.commit()
+        finally:
+            other.close()
+
+    def test_a_missing_name_is_not_a_name_taken(self, db):
+        with pytest.raises(sqlite3.IntegrityError, match="NOT NULL"):
+            db.create_group(None)
 
 
 class TestFirewallRules:

@@ -10,9 +10,11 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from firewall_bridge.bridge import FirewallBridge
+from firewall_bridge.presets import apply_preset
 from firewall_bridge.types import (
     AlreadyStartedError,
     NotStartedError,
+    GroupExistsError,
     GroupNotFoundError,
     InvalidParamError,
     NetlinkError,
@@ -141,6 +143,19 @@ class TestRuleGroups:
     def test_delete_nonexistent(self, bridge):
         with pytest.raises(GroupNotFoundError):
             bridge.delete_group("nope")
+
+    def test_create_group_twice(self, bridge):
+        bridge.create_group("g1", priority=10)
+        with pytest.raises(GroupExistsError):
+            bridge.create_group("g1", priority=20)
+        assert [(g.name, g.priority) for g in bridge.list_groups()] == [("g1", 10)]
+
+    def test_apply_preset_over_a_name_taken(self, bridge):
+        bridge.create_group("g1")
+        rule_id = bridge.add_firewall_rule("g1", "input", "drop")
+        with pytest.raises(GroupExistsError):
+            apply_preset(bridge, {"name": "g1", "rules": [{"chain": "input", "action": "accept"}]})
+        assert [r.id for r in bridge.list_firewall_rules("g1")] == [rule_id]
 
     def test_enable_disable(self, bridge):
         bridge.create_group("toggle")

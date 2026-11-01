@@ -98,11 +98,18 @@ class FirewallDB:
                      priority: int = 100, metadata: Optional[dict] = None) -> Group:
         now = _now()
         meta_json = json.dumps(metadata or {})
-        self._conn.execute(
-            """INSERT INTO rule_groups (name, group_type, enabled, priority, metadata,
-               created_at, updated_at) VALUES (?, ?, 1, ?, ?, ?, ?)""",
-            (name, group_type, priority, meta_json, now, now),
-        )
+        try:
+            self._conn.execute(
+                """INSERT INTO rule_groups (name, group_type, enabled, priority, metadata,
+                   created_at, updated_at) VALUES (?, ?, 1, ?, ?, ?, ?)""",
+                (name, group_type, priority, meta_json, now, now),
+            )
+        except sqlite3.IntegrityError:
+            self._conn.rollback()
+            if self._conn.execute("SELECT 1 FROM rule_groups WHERE name=?", (name,)).fetchone() is None:
+                raise
+            from .types import GroupExistsError
+            raise GroupExistsError(f"Group already exists: {name}") from None
         self._conn.commit()
         return self.get_group(name)
 

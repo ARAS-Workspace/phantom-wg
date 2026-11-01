@@ -11,6 +11,7 @@ from firewall_bridge.types import (
     InvalidParamError,
     IoError,
     PermissionDeniedError,
+    GroupExistsError,
     GroupNotFoundError,
     RuleNotFoundError,
     AlreadyStartedError,
@@ -24,7 +25,7 @@ class TestExceptionHierarchy:
         for cls in (
             NftablesError, NetlinkError, InvalidParamError,
             IoError, PermissionDeniedError,
-            GroupNotFoundError, RuleNotFoundError,
+            GroupNotFoundError, GroupExistsError, RuleNotFoundError,
             AlreadyStartedError, NotStartedError,
         ):
             assert issubclass(cls, BridgeError)
