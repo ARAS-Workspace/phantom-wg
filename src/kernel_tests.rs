@@ -288,6 +288,30 @@ fn kernel_routing_tables_rules_and_routes() {
     }
 }
 
+/// The bridge's limit on an rt_tables line is the one ip reads: an entry of
+/// 511 characters resolves, and the same entry one character longer, put
+/// there by hand, makes ip refuse the file.
+#[test]
+fn kernel_rt_tables_line_limit_matches_ip() {
+    let _serial = serial();
+    isolate();
+    let fits = "a".repeat(509); // "7 " + 509 = 511 characters
+    let (fits_c, over_c) = (c(&fits), c(&format!("{fits}a")));
+
+    // SAFETY: NUL-terminated strings that outlive the calls.
+    unsafe {
+        assert_eq!(rt_table_ensure(7, over_c.as_ptr()), ErrorCode::NetlinkFailed as i32);
+        assert_eq!(last_error(), "Routing table entry longer than 511 characters");
+        assert_eq!(rt_table_ensure(7, fits_c.as_ptr()), ErrorCode::Ok as i32, "{}", last_error());
+    }
+    assert!(run("ip", &["rule", "add", "from", "10.40.0.0/24", "lookup", &fits]).0,
+            "ip did not resolve a 511-character entry");
+
+    std::fs::write(RT_TABLES, format!("7 {fits}a\n8 after\n")).unwrap();
+    assert!(!run("ip", &["rule", "add", "from", "10.41.0.0/24", "lookup", "after"]).0,
+            "ip read a 512-character entry");
+}
+
 const IP_FORWARD: &str = "/proc/sys/net/ipv4/ip_forward";
 
 #[test]

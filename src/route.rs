@@ -532,6 +532,9 @@ pub fn route_delete(destination: &str, device: &str, table_name: &str, family: u
 const RT_TABLES: &str = "/etc/iproute2/rt_tables";
 const RT_TABLES_DEFAULTS: &str = "/usr/share/iproute2/rt_tables";
 
+/// The longest `<id> <name>` line iproute2 6.15 reads back from RT_TABLES.
+const MAX_RT_TABLES_LINE: usize = 511;
+
 /// Ensure a routing table entry exists in /etc/iproute2/rt_tables.
 pub fn ensure_table(table_id: u32, table_name: &str) -> Result<(), String> {
     ensure_table_in(Path::new(RT_TABLES), Path::new(RT_TABLES_DEFAULTS),
@@ -543,11 +546,15 @@ fn ensure_table_in(path: &Path, defaults: &Path, table_id: u32, table_name: &str
 {
     // An entry is `<id> <name>`; an empty name or one with whitespace would
     // write a line that reads back as another name, or as none.
-    if table_name.is_empty() || table_name.chars().any(char::is_whitespace) {
+    if table_name.is_empty() || table_name.chars().any(char::is_whitespace)
+        || table_name.bytes().all(|b| b.is_ascii_digit()) {
         return Err(format!("Invalid routing table name: {table_name:?}"));
     }
-    seed_rt_tables(path, defaults)?;
     let entry = format!("{} {}", table_id, table_name);
+    if entry.len() > MAX_RT_TABLES_LINE {
+        return Err(format!("Routing table entry longer than {MAX_RT_TABLES_LINE} characters"));
+    }
+    seed_rt_tables(path, defaults)?;
 
     let content = std::fs::read_to_string(path)
         .unwrap_or_default();
@@ -961,16 +968,32 @@ mod tests {
     }
 
     #[test]
-    fn ensure_table_refuses_a_name_that_is_empty_or_has_whitespace() {
+    fn ensure_table_refuses_an_empty_spaced_or_numeric_name() {
         let dir = rt_dir("bad-name");
         let path = dir.join("etc/iproute2/rt_tables");
         let defaults = dir.join("defaults");
         std::fs::write(&defaults, DEFAULTS).unwrap();
-        for name in ["", "a b", "tab\tname", " lead", "trail\n"] {
+        // A name of digits only reads back as a table number, not as this id.
+        for name in ["", "a b", "tab\tname", " lead", "trail\n", "100", "007"] {
             assert_eq!(ensure_table_in(&path, &defaults, 101, name),
                        Err(format!("Invalid routing table name: {name:?}")), "name {name:?}");
         }
         assert!(!path.exists(), "a refused name created the file");
+    }
+
+    #[test]
+    fn ensure_table_refuses_an_entry_longer_than_iproute2_reads() {
+        let dir = rt_dir("long-name");
+        let path = dir.join("rt_tables");
+        let defaults = dir.join("no-defaults");
+        // "7 " and the name: 511 characters fit, 512 do not.
+        let fits = "a".repeat(MAX_RT_TABLES_LINE - 2);
+        let over = "a".repeat(MAX_RT_TABLES_LINE - 1);
+        assert_eq!(ensure_table_in(&path, &defaults, 7, &over),
+                   Err("Routing table entry longer than 511 characters".into()));
+        assert!(!path.exists(), "a refused entry created the file");
+        assert_eq!(ensure_table_in(&path, &defaults, 7, &fits), Ok(()));
+        assert_eq!(std::fs::read_to_string(&path).unwrap(), format!("7 {fits}\n"));
     }
 
     #[test]
