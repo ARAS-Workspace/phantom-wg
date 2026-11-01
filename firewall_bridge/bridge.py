@@ -109,11 +109,14 @@ class FirewallBridge:
         self._db.delete_group(name)
 
     def enable_group(self, name: str) -> None:
-        """Enable a group; when started, apply its rules too.
+        """Enable a group; when started, apply its rules too. A group that
+        is enabled already is left as it is.
 
         If the kernel refuses one, what was applied is removed again, the
         group is left disabled and the error is raised.
         """
+        if self._db.get_group(name).enabled:
+            return
         self._db.enable_group(name)
         if self._db.get_state() == "started":
             group = self._db.get_group(name)

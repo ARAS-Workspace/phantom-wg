@@ -228,6 +228,19 @@ class TestAutoApply:
         bridge.enable_group("g1")
         mock_lib.nft_add_rule.assert_called_once()
 
+    def test_enable_group_already_enabled_leaves_kernel_and_db(self, bridge, mock_lib):
+        bridge.create_group("g1")
+        bridge.add_firewall_rule("g1", "input", "accept")
+        bridge.start()
+        mock_lib.reset_mock()
+        bridge.enable_group("g1")
+        assert mock_lib.method_calls == []
+        assert bridge.list_firewall_rules()[0].nft_handle == 42
+
+    def test_enable_group_unknown_raises(self, bridge):
+        with pytest.raises(GroupNotFoundError):
+            bridge.enable_group("nope")
+
     def test_disable_group_while_started(self, bridge, mock_lib):
         bridge.create_group("g1")
         bridge.add_firewall_rule("g1", "input", "accept")
