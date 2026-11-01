@@ -35,7 +35,7 @@ HOW TO READ THIS FILE
 
   DEPENDENCIES and LICENSE TEXTS come from cargo-about. SYSTEM LIBRARIES
   and LICENSE COMPATIBILITY are written by hand: cargo-about reads Cargo
-  metadata, and a system library linked through build.rs is outside it.
+  metadata, and a program run from the operating system is outside it.
 
   Two groups of Python dependencies exist and neither ships in the package:
 
@@ -74,20 +74,19 @@ SYSTEM LIBRARIES
 Resolved from the operating system rather than from Cargo, so
 cargo-about does not see them.
 
-| Library     | License           | SPDX Identifier   | URL                                     |
-|-------------|-------------------|-------------------|-----------------------------------------|
-| libnftables | GPL-2.0-only      | GPL-2.0-only      | https://netfilter.org/projects/nftables/ |
-| libmnl      | LGPL-2.1-or-later | LGPL-2.1-or-later | https://netfilter.org/projects/libmnl/   |
+| Program | Package  | License      | SPDX Identifier | URL                                      |
+|---------|----------|--------------|-----------------|------------------------------------------|
+| nft     | nftables | GPL-2.0-only | GPL-2.0-only    | https://netfilter.org/projects/nftables/ |
 
 Usage Note:
-firewall-bridge links against libnftables (dynamically) to manage nftables
-rules via the nft_ctx API; build.rs emits the link flag and the build host
-needs libnftables-dev. All firewall rules are isolated in the "inet phantom"
-table, separate from system UFW/iptables rules.
+firewall-bridge does not link against libnftables. It runs the nft
+program from the operating system as a separate process, writes each
+command to its standard input and reads its standard output and exit
+status. All firewall rules are isolated in the "inet phantom" table,
+separate from system UFW/iptables rules.
 
-libmnl is a transitive dependency of libnftables for minimal netlink
-communication. Routing operations use raw NETLINK_ROUTE sockets directly
-via libc, without additional library dependencies.
+Routing operations use raw NETLINK_ROUTE sockets directly via libc,
+without additional library dependencies.
 
 ================================================================================
 LICENSE COMPATIBILITY
@@ -95,13 +94,11 @@ LICENSE COMPATIBILITY
 
 Every licence taken above is permissive and compatible with AGPL-3.0.
 
-libnftables (GPL-2.0-only) is not bundled with firewall-bridge. It is
-installed from the operating system's package repository when the user
-builds the container image, and is loaded dynamically at runtime.
-
-libmnl (LGPL-2.1-or-later) is not linked by firewall-bridge. It is a
-dependency of libnftables and comes with it from the operating system's
-package repository.
+nft (nftables, GPL-2.0-only) is a separate program. firewall-bridge and
+nft communicate only through nft's command language on standard input
+and its output on standard output; they share no address space. nft is
+installed from the operating system's package repository together with
+libnftables1, libnftnl11 and libmnl0, which it depends on.
 
 ================================================================================
 LICENSE TEXTS — 3 texts
