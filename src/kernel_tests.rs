@@ -170,6 +170,28 @@ fn kernel_nft_errors_reach_the_caller() {
     assert_eq!(table(), empty_table, "a failed call changed the table");
 }
 
+/// A table that already holds `output` with another priority: the batch
+/// fails as a whole, and nft's caret points at the `output` command.
+#[test]
+fn kernel_nft_ensure_table_is_all_or_nothing() {
+    let _serial = serial();
+    isolate();
+    read("nft", &["add", "table", "inet", "phantom"]);
+    read("nft", &["add chain inet phantom output { type filter hook output priority 10; policy accept; }"]);
+    let before = table();
+
+    assert_eq!(nft_init(), ErrorCode::NftablesFailed as i32);
+    let err = last_error();
+    let lines: Vec<&str> = err.lines().collect();
+    assert!(lines[0].starts_with("Error: Chain \"output\" already exists"), "{err}");
+    let start = lines[1].find("add chain inet phantom output").expect("command line");
+    let end = lines[1].find("; add chain inet phantom forward").expect("command line");
+    let caret = lines[2].find('^').expect("caret line");
+    assert!((start..end).contains(&caret), "caret {caret} outside {start}..{end}:\n{err}");
+
+    assert_eq!(table(), before, "the failed batch created something");
+}
+
 #[test]
 fn kernel_nft_close_ends_the_context() {
     let _serial = serial();

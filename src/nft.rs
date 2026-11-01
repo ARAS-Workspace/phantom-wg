@@ -117,7 +117,7 @@ pub fn ensure_table(nft: &NftContext) -> Result<(), String> {
         format!("add chain {TABLE} forward {{ type filter hook forward priority 0; policy accept; }}"),
         format!("add chain {TABLE} prerouting {{ type nat hook prerouting priority -100; policy accept; }}"),
         format!("add chain {TABLE} postrouting {{ type nat hook postrouting priority 100; policy accept; }}"),
-    ].join("\n");
+    ].join("; ");
     nft.run(&cmd).map(|_| ())
 }
 
@@ -578,14 +578,17 @@ mod tests {
         let ctx = NftContext::with_binary(&nft).unwrap();
         ensure_table(&ctx).unwrap();
         assert_eq!(recorded(&nft, "calls"), "x\n");
+        // One line, so nft's error context shows the command that failed.
         let args = recorded(&nft, "args");
         let lines: Vec<&str> = args.lines().collect();
+        assert_eq!(lines.len(), 2, "got: {args}");
         assert_eq!(lines[0], "--");
-        assert_eq!(lines[1], "add table inet phantom");
-        assert_eq!(lines.len(), 7, "got: {args}");
-        for (line, chain) in lines[2..].iter()
+        let commands: Vec<&str> = lines[1].split("; add ").collect();
+        assert_eq!(commands[0], "add table inet phantom");
+        assert_eq!(commands.len(), 6, "got: {}", lines[1]);
+        for (command, chain) in commands[1..].iter()
             .zip(["input", "output", "forward", "prerouting", "postrouting"]) {
-            assert!(line.starts_with(&format!("add chain inet phantom {chain} {{")), "got: {line}");
+            assert!(command.starts_with(&format!("chain inet phantom {chain} {{")), "got: {command}");
         }
     }
 
