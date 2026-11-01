@@ -294,7 +294,7 @@ pub extern "C" fn nft_list_table() -> *mut c_char {
 // Routing FFI
 // ---------------------------------------------------------------------------
 
-/// Ensure routing table entry in /etc/iproute2/rt_tables.
+/// Name a routing table in /etc/iproute2/rt_tables.d/phantom.conf.
 ///
 /// @witness kernel_tests::kernel_routing_tables_rules_and_routes
 /// @witness kernel_tests::kernel_rt_tables_line_limit_matches_ip

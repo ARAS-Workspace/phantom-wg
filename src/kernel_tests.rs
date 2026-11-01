@@ -308,7 +308,7 @@ fn kernel_nft_close_ends_the_context() {
 // Routing
 // ---------------------------------------------------------------------------
 
-const RT_TABLES: &str = "/etc/iproute2/rt_tables";
+const DROP_IN: &str = "/etc/iproute2/rt_tables.d/phantom.conf";
 
 #[test]
 fn kernel_routing_tables_rules_and_routes() {
@@ -319,13 +319,12 @@ fn kernel_routing_tables_rules_and_routes() {
 
     // SAFETY: every pointer passed below is a NUL-terminated literal.
     unsafe {
-        // The first entry starts the file from iproute2's defaults.
+        // The names go to the bridge's own file; iproute2's stay where they are.
         assert_eq!(rt_table_ensure(100, c"fwbtest".as_ptr()), ok, "{}", last_error());
         assert_eq!(rt_table_ensure(1000, c"fwbbig".as_ptr()), ok, "{}", last_error());
         assert_eq!(rt_table_ensure(100, c"fwbtest".as_ptr()), ok);
-        let file = std::fs::read_to_string(RT_TABLES).unwrap();
-        assert!(file.lines().any(|l| l.split_whitespace().eq(["0", "unspec"])), "{file}");
-        assert!(file.ends_with("100 fwbtest\n1000 fwbbig\n"), "{file}");
+        assert_eq!(std::fs::read_to_string(DROP_IN).unwrap(), "100 fwbtest\n1000 fwbbig\n");
+        assert!(!std::path::Path::new("/etc/iproute2/rt_tables").exists());
         assert!(run("ip", &["route", "show", "table", "unspec"]).0, "ip lost the default names");
 
         // Policy rules, v4 and v6, a table id above 255 among them.
@@ -408,9 +407,33 @@ fn kernel_rt_tables_line_limit_matches_ip() {
     assert!(run("ip", &["rule", "add", "from", "10.40.0.0/24", "lookup", &fits]).0,
             "ip did not resolve a 511-character entry");
 
-    std::fs::write(RT_TABLES, format!("7 {fits}a\n8 after\n")).unwrap();
+    std::fs::write(DROP_IN, format!("7 {fits}a\n8 after\n")).unwrap();
     assert!(!run("ip", &["rule", "add", "from", "10.41.0.0/24", "lookup", "after"]).0,
             "ip read a 512-character entry");
+}
+
+/// A name given twice, in rt_tables and in a drop-in, with ids in different
+/// and in the same `id % 256`: a route the bridge adds by that name lands in
+/// the table `ip` picks for it.
+#[test]
+fn kernel_table_names_resolve_as_ip_resolves() {
+    let _serial = serial();
+    isolate();
+    std::fs::write("/etc/iproute2/rt_tables", "200 fwbdup\n300 fwbdup\n").unwrap();
+    std::fs::create_dir_all("/etc/iproute2/rt_tables.d").unwrap();
+    for (drop_in, picked) in [("44 fwbdup\n", "44"), ("556 fwbdup\n", "556")] {
+        std::fs::write("/etc/iproute2/rt_tables.d/x.conf", drop_in).unwrap();
+        read("ip", &["route", "add", "10.51.0.0/16", "dev", "lo", "table", "fwbdup"]);
+        // SAFETY: NUL-terminated literals.
+        let rc = unsafe {
+            rt_route_add(c"10.50.0.0/16".as_ptr(), c"lo".as_ptr(), c"fwbdup".as_ptr(), 2)
+        };
+        assert_eq!(rc, ErrorCode::Ok as i32, "{}", last_error());
+        let routes = read("ip", &["route", "show", "table", picked]);
+        assert!(routes.contains("10.50.0.0/16") && routes.contains("10.51.0.0/16"),
+                "table {picked}: {routes}");
+        read("ip", &["route", "flush", "table", picked]);
+    }
 }
 
 const IP_FORWARD: &str = "/proc/sys/net/ipv4/ip_forward";

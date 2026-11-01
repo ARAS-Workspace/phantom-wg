@@ -1,5 +1,5 @@
 //! Policy rules and routes over a NETLINK_ROUTE socket, and the table names
-//! in /etc/iproute2/rt_tables.
+//! in /etc/iproute2/rt_tables.d/phantom.conf.
 
 use std::io;
 use std::mem;
@@ -320,18 +320,22 @@ fn if_nametoindex(name: &str) -> Result<u32, String> {
     }
 }
 
-/// Resolve named routing table to numeric ID through /etc/iproute2/rt_tables.
+/// Resolve a routing table name to its id, from the files `ip` reads.
 ///
 /// @witness kernel_tests::kernel_routing_tables_rules_and_routes
 fn resolve_table(table_name: &str) -> Result<u32, String> {
-    resolve_table_in(Path::new(RT_TABLES), table_name)
+    resolve_table_in(Path::new(IPROUTE2_ETC), Path::new(IPROUTE2_USR), table_name)
 }
 
+/// Built-in names and numbers first; then the name among the entries of
+/// `table_files(etc, usr)`, where the entry with the lowest `id % 256`
+/// wins and, within that, the one read last.
+///
 /// @witness route::tests::resolve_table_builtins_and_numbers_need_no_file
-/// @witness route::tests::resolve_table_reads_names_from_the_file
-/// @witness route::tests::resolve_table_reports_a_bad_id_and_a_missing_file
-fn resolve_table_in(path: &Path, table_name: &str) -> Result<u32, String> {
-    // Built-in tables
+/// @witness route::tests::resolve_table_reads_the_files_ip_reads
+/// @witness route::tests::resolve_table_picks_the_entry_ip_picks
+/// @witness route::tests::resolve_table_reports_a_bad_id_and_a_missing_name
+fn resolve_table_in(etc: &Path, usr: &Path, table_name: &str) -> Result<u32, String> {
     match table_name {
         "default" => return Ok(253),
         "main" => return Ok(254),
@@ -339,29 +343,64 @@ fn resolve_table_in(path: &Path, table_name: &str) -> Result<u32, String> {
         "unspec" => return Ok(0),
         _ => {}
     }
-
-    // Try numeric
     if let Ok(n) = table_name.parse::<u32>() {
         return Ok(n);
     }
 
-    // Read rt_tables file
-    let content = std::fs::read_to_string(path)
-        .map_err(|e| format!("Cannot read rt_tables: {}", e))?;
-
-    for line in content.lines() {
-        let line = line.trim();
-        if line.is_empty() || line.starts_with('#') {
-            continue;
-        }
-        let parts: Vec<&str> = line.split_whitespace().collect();
-        if parts.len() >= 2 && parts[1] == table_name {
-            return parts[0].parse::<u32>()
-                .map_err(|e| format!("Invalid table ID in rt_tables: {}", e));
+    let mut found: Option<u32> = None;
+    for file in table_files(etc, usr) {
+        let Ok(content) = std::fs::read_to_string(&file) else { continue };
+        for (id, name) in table_entries(&content) {
+            if name != table_name {
+                continue;
+            }
+            let id = id.parse::<u32>()
+                .map_err(|e| format!("Invalid table ID in {}: {}", file.display(), e))?;
+            if found.is_none_or(|f| id % 256 <= f % 256) {
+                found = Some(id);
+            }
         }
     }
+    found.ok_or_else(|| format!("Routing table not found: {}", table_name))
+}
 
-    Err(format!("Routing table not found: {}", table_name))
+/// The files `ip` reads table names from, in the order it reads them:
+/// `etc/rt_tables`, or `usr/rt_tables` when that is missing; then each
+/// `usr/rt_tables.d/*.conf` with no namesake in `etc/rt_tables.d`; then
+/// each `etc/rt_tables.d/*.conf`. Directory entries are taken in name order.
+///
+/// @witness route::tests::resolve_table_reads_the_files_ip_reads
+fn table_files(etc: &Path, usr: &Path) -> Vec<std::path::PathBuf> {
+    fn confs(dir: &Path) -> Vec<std::path::PathBuf> {
+        let Ok(entries) = std::fs::read_dir(dir) else { return Vec::new() };
+        let mut files: Vec<_> = entries.flatten()
+            .map(|e| e.path())
+            .filter(|p| p.file_name().and_then(|n| n.to_str())
+                .is_some_and(|n| !n.starts_with('.') && n.len() > 5 && n.ends_with(".conf")))
+            .collect();
+        files.sort();
+        files
+    }
+    let main = etc.join("rt_tables");
+    let mut files = vec![if main.exists() { main } else { usr.join("rt_tables") }];
+    let etc_d = etc.join("rt_tables.d");
+    files.extend(confs(&usr.join("rt_tables.d")).into_iter()
+        .filter(|p| p.file_name().is_none_or(|n| !etc_d.join(n).exists())));
+    files.extend(confs(&etc_d));
+    files
+}
+
+/// The `<id> <name>` pairs of an rt_tables file, comments and blank lines
+/// skipped.
+fn table_entries(content: &str) -> impl Iterator<Item = (&str, &str)> {
+    content.lines().filter_map(|line| {
+        let line = line.trim();
+        if line.is_empty() || line.starts_with('#') {
+            return None;
+        }
+        let mut parts = line.split_whitespace();
+        Some((parts.next()?, parts.next()?))
+    })
 }
 
 // ---------------------------------------------------------------------------
@@ -566,35 +605,42 @@ pub fn route_delete(destination: &str, device: &str, table_name: &str, family: u
     send_route(RTM_DELROUTE, DELETE_FLAGS, destination, device, table_name, family)
 }
 
-/// The file `ip` reads table names from.
+/// Where `ip` looks for table names first.
 ///
 /// @witness kernel_tests::kernel_routing_tables_rules_and_routes
-const RT_TABLES: &str = "/etc/iproute2/rt_tables";
+const IPROUTE2_ETC: &str = "/etc/iproute2";
 
-/// Where iproute2 keeps its own table names.
-const RT_TABLES_DEFAULTS: &str = "/usr/share/iproute2/rt_tables";
+/// Where `ip` looks when `IPROUTE2_ETC` has no rt_tables.
+const IPROUTE2_USR: &str = "/usr/share/iproute2";
 
-/// The longest `<id> <name>` line written to RT_TABLES.
+/// The bridge's own file of table names, under `IPROUTE2_ETC`.
+///
+/// @witness kernel_tests::kernel_routing_tables_rules_and_routes
+const DROP_IN: &str = "rt_tables.d/phantom.conf";
+
+/// The longest `<id> <name>` line written to `DROP_IN`.
 ///
 /// @witness kernel_tests::kernel_rt_tables_line_limit_matches_ip
 const MAX_RT_TABLES_LINE: usize = 511;
 
-/// Ensure a routing table entry exists in /etc/iproute2/rt_tables.
+/// Name table `table_id` `table_name` in `DROP_IN`.
 ///
 /// @witness kernel_tests::kernel_routing_tables_rules_and_routes
 /// @witness kernel_tests::kernel_rt_tables_line_limit_matches_ip
 pub fn ensure_table(table_id: u32, table_name: &str) -> Result<(), String> {
-    ensure_table_in(Path::new(RT_TABLES), Path::new(RT_TABLES_DEFAULTS),
-                    table_id, table_name)
+    ensure_table_in(&Path::new(IPROUTE2_ETC).join(DROP_IN), table_id, table_name)
 }
 
-/// @witness route::tests::ensure_table_adds_an_entry_once
-/// @witness route::tests::ensure_table_leaves_an_existing_file_unseeded
+/// Writes `<table_id> <table_name>` to `path`, in place of any line there
+/// with the same id or the same name. A file that holds the entry and no
+/// such line is not written.
+///
+/// @witness route::tests::ensure_table_creates_the_file_and_its_directory
+/// @witness route::tests::ensure_table_writes_an_entry_once
+/// @witness route::tests::ensure_table_replaces_the_same_id_or_name
 /// @witness route::tests::ensure_table_refuses_an_empty_spaced_or_numeric_name
 /// @witness route::tests::ensure_table_refuses_an_entry_longer_than_iproute2_reads
-fn ensure_table_in(path: &Path, defaults: &Path, table_id: u32, table_name: &str)
-    -> Result<(), String>
-{
+fn ensure_table_in(path: &Path, table_id: u32, table_name: &str) -> Result<(), String> {
     if table_name.is_empty() || table_name.chars().any(char::is_whitespace)
         || table_name.bytes().all(|b| b.is_ascii_digit()) {
         return Err(format!("Invalid routing table name: {table_name:?}"));
@@ -603,59 +649,33 @@ fn ensure_table_in(path: &Path, defaults: &Path, table_id: u32, table_name: &str
     if entry.len() > MAX_RT_TABLES_LINE {
         return Err(format!("Routing table entry longer than {MAX_RT_TABLES_LINE} characters"));
     }
-    seed_rt_tables(path, defaults)?;
 
-    let content = std::fs::read_to_string(path)
-        .unwrap_or_default();
-
-    // Check if entry already exists
-    for line in content.lines() {
-        let line = line.trim();
-        if line.is_empty() || line.starts_with('#') {
-            continue;
-        }
-        let parts: Vec<&str> = line.split_whitespace().collect();
-        if parts.len() >= 2 && parts[0] == table_id.to_string() && parts[1] == table_name {
-            return Ok(()); // Already exists
-        }
-    }
-
-    // Append entry
-    use std::io::Write;
-    let mut file = std::fs::OpenOptions::new()
-        .create(true)
-        .append(true)
-        .open(path)
-        .map_err(|e| format!("Cannot write {}: {}", path.display(), e))?;
-
-    writeln!(file, "{}", entry)
-        .map_err(|e| format!("Cannot write to {}: {}", path.display(), e))
-}
-
-/// Starts a missing `path` as a copy of `defaults`, or empty without them.
-///
-/// @witness route::tests::ensure_table_seeds_a_missing_file_from_the_defaults
-/// @witness route::tests::ensure_table_ends_defaults_without_a_newline
-/// @witness kernel_tests::kernel_routing_tables_rules_and_routes
-fn seed_rt_tables(path: &Path, defaults: &Path) -> Result<(), String> {
-    use std::io::Write;
-    if path.exists() {
+    let content = match std::fs::read_to_string(path) {
+        Ok(content) => content,
+        Err(e) if e.kind() == io::ErrorKind::NotFound => String::new(),
+        Err(e) => return Err(format!("Cannot read {}: {}", path.display(), e)),
+    };
+    let id = table_id.to_string();
+    let other = |line: &str| match table_entries(line).next() {
+        Some((i, n)) => i != id && n != table_name,
+        None => true,
+    };
+    let (kept, matching): (Vec<&str>, Vec<&str>) = content.lines().partition(|l| other(l));
+    if matching == [entry.as_str()] {
         return Ok(());
     }
-    if let Some(dir) = path.parent() {
-        std::fs::create_dir_all(dir)
-            .map_err(|e| format!("Cannot create {}: {}", dir.display(), e))?;
-    }
-    let mut seed = std::fs::read(defaults).unwrap_or_default();
-    if !seed.is_empty() && !seed.ends_with(b"\n") {
-        seed.push(b'\n');
-    }
-    match std::fs::OpenOptions::new().write(true).create_new(true).open(path) {
-        Ok(mut file) => file.write_all(&seed)
-            .map_err(|e| format!("Cannot write {}: {}", path.display(), e)),
-        Err(e) if e.kind() == io::ErrorKind::AlreadyExists => Ok(()),
-        Err(e) => Err(format!("Cannot write {}: {}", path.display(), e)),
-    }
+
+    let mut written: String = kept.into_iter().map(|l| format!("{l}\n")).collect();
+    written.push_str(&entry);
+    written.push('\n');
+
+    let dir = path.parent().unwrap_or(Path::new("."));
+    std::fs::create_dir_all(dir)
+        .map_err(|e| format!("Cannot create {}: {}", dir.display(), e))?;
+    let temp = dir.join(".phantom.conf.tmp");
+    std::fs::write(&temp, written)
+        .and_then(|()| std::fs::rename(&temp, path))
+        .map_err(|e| format!("Cannot write {}: {}", path.display(), e))
 }
 
 /// Flush the IPv4 route cache through /proc.
@@ -946,7 +966,7 @@ mod tests {
         }
     }
 
-    // ── ensure_table ─────────────────────────────────────────────
+    // ── table names ──────────────────────────────────────────────
 
     /// A fresh directory under target/ for one test.
     fn rt_dir(name: &str) -> std::path::PathBuf {
@@ -956,82 +976,111 @@ mod tests {
         dir
     }
 
-    const DEFAULTS: &str = "255\tlocal\n254\tmain\n253\tdefault\n0\tunspec\n";
-
-    // ── resolve_table ────────────────────────────────────────────
+    fn write(path: &Path, content: &str) {
+        std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+        std::fs::write(path, content).unwrap();
+    }
 
     #[test]
     fn resolve_table_builtins_and_numbers_need_no_file() {
-        let missing = Path::new("/nonexistent/rt_tables");
+        let missing = Path::new("/nonexistent");
         for (name, id) in [("default", 253), ("main", 254), ("local", 255), ("unspec", 0),
                            ("100", 100), ("4294967295", u32::MAX)] {
-            assert_eq!(resolve_table_in(missing, name), Ok(id), "name {name}");
+            assert_eq!(resolve_table_in(missing, missing, name), Ok(id), "name {name}");
         }
     }
 
     #[test]
-    fn resolve_table_reads_names_from_the_file() {
-        let dir = rt_dir("resolve");
-        let path = dir.join("rt_tables");
-        std::fs::write(&path, "# comment\n\n255\tlocal\n  100 mh  \n201\tmh6\n300 big # note\n").unwrap();
-        assert_eq!(resolve_table_in(&path, "mh"), Ok(100));
-        assert_eq!(resolve_table_in(&path, "mh6"), Ok(201));
-        assert_eq!(resolve_table_in(&path, "big"), Ok(300));
-        assert_eq!(resolve_table_in(&path, "comment"), Err("Routing table not found: comment".into()));
-        assert_eq!(resolve_table_in(&path, "absent"), Err("Routing table not found: absent".into()));
+    fn resolve_table_reads_the_files_ip_reads() {
+        let dir = rt_dir("resolve-files");
+        let (etc, usr) = (dir.join("etc"), dir.join("usr"));
+        write(&usr.join("rt_tables"), "# comment\n\n255\tlocal\n  100 inusr  \n");
+        write(&usr.join("rt_tables.d/a.conf"), "101 usrdropin\n");
+        write(&usr.join("rt_tables.d/b.conf"), "102 shadowed\n");
+        write(&usr.join("rt_tables.d/b.txt"), "103 notconf\n");
+        write(&etc.join("rt_tables.d/b.conf"), "104 inetc\n");
+        write(&etc.join("rt_tables.d/.c.conf"), "105 hidden\n");
+        // etc/rt_tables is missing: usr/rt_tables is read.
+        assert_eq!(resolve_table_in(&etc, &usr, "inusr"), Ok(100));
+        assert_eq!(resolve_table_in(&etc, &usr, "usrdropin"), Ok(101));
+        assert_eq!(resolve_table_in(&etc, &usr, "inetc"), Ok(104));
+        for name in ["shadowed", "notconf", "hidden", "comment"] {
+            assert_eq!(resolve_table_in(&etc, &usr, name),
+                       Err(format!("Routing table not found: {name}")), "name {name}");
+        }
+        // With etc/rt_tables present, usr/rt_tables is not read.
+        write(&etc.join("rt_tables"), "200 inetcmain\n");
+        assert_eq!(resolve_table_in(&etc, &usr, "inetcmain"), Ok(200));
+        assert_eq!(resolve_table_in(&etc, &usr, "inusr"),
+                   Err("Routing table not found: inusr".into()));
     }
 
     #[test]
-    fn resolve_table_reports_a_bad_id_and_a_missing_file() {
+    fn resolve_table_picks_the_entry_ip_picks() {
+        let dir = rt_dir("resolve-pick");
+        let (etc, usr) = (dir.join("etc"), dir.join("usr"));
+        // Lowest id % 256 first: 300 (44) over 200; within 300 and 44, the
+        // one read last.
+        write(&etc.join("rt_tables"), "200 t\n300 t\n");
+        write(&etc.join("rt_tables.d/x.conf"), "44 t\n");
+        assert_eq!(resolve_table_in(&etc, &usr, "t"), Ok(44));
+        write(&etc.join("rt_tables.d/x.conf"), "556 t\n");
+        assert_eq!(resolve_table_in(&etc, &usr, "t"), Ok(556));
+    }
+
+    #[test]
+    fn resolve_table_reports_a_bad_id_and_a_missing_name() {
         let dir = rt_dir("resolve-bad");
-        let path = dir.join("rt_tables");
-        std::fs::write(&path, "x1 broken\n").unwrap();
-        let err = resolve_table_in(&path, "broken").unwrap_err();
-        assert!(err.starts_with("Invalid table ID in rt_tables: "), "got: {err}");
-        let err = resolve_table_in(&dir.join("absent"), "mh").unwrap_err();
-        assert!(err.starts_with("Cannot read rt_tables: "), "got: {err}");
+        let (etc, usr) = (dir.join("etc"), dir.join("usr"));
+        write(&etc.join("rt_tables"), "x1 broken\n");
+        let err = resolve_table_in(&etc, &usr, "broken").unwrap_err();
+        assert!(err.starts_with(&format!("Invalid table ID in {}: ", etc.join("rt_tables").display())),
+                "got: {err}");
+        assert_eq!(resolve_table_in(&dir.join("none"), &dir.join("none"), "mh"),
+                   Err("Routing table not found: mh".into()));
     }
 
     #[test]
-    fn ensure_table_seeds_a_missing_file_from_the_defaults() {
-        let dir = rt_dir("seed");
-        let defaults = dir.join("defaults");
-        std::fs::write(&defaults, DEFAULTS).unwrap();
-        let path = dir.join("etc/iproute2/rt_tables");
-        ensure_table_in(&path, &defaults, 100, "mh").unwrap();
-        assert_eq!(std::fs::read_to_string(&path).unwrap(), format!("{DEFAULTS}100 mh\n"));
-    }
-
-    #[test]
-    fn ensure_table_leaves_an_existing_file_unseeded() {
-        let dir = rt_dir("existing");
-        let defaults = dir.join("defaults");
-        std::fs::write(&defaults, DEFAULTS).unwrap();
-        let path = dir.join("rt_tables");
-        std::fs::write(&path, "100 mh\n").unwrap();
-        ensure_table_in(&path, &defaults, 101, "mh6").unwrap();
-        assert_eq!(std::fs::read_to_string(&path).unwrap(), "100 mh\n101 mh6\n");
-    }
-
-    #[test]
-    fn ensure_table_adds_an_entry_once() {
-        let dir = rt_dir("once");
-        let path = dir.join("rt_tables");
-        let defaults = dir.join("no-defaults");
-        ensure_table_in(&path, &defaults, 100, "mh").unwrap();
-        ensure_table_in(&path, &defaults, 100, "mh").unwrap();
+    fn ensure_table_creates_the_file_and_its_directory() {
+        let path = rt_dir("create").join("etc/rt_tables.d/phantom.conf");
+        ensure_table_in(&path, 100, "mh").unwrap();
         assert_eq!(std::fs::read_to_string(&path).unwrap(), "100 mh\n");
+        assert!(!path.with_file_name(".phantom.conf.tmp").exists());
+    }
+
+    #[test]
+    fn ensure_table_writes_an_entry_once() {
+        let path = rt_dir("once").join("phantom.conf");
+        write(&path, "# kept\n100 mh\n201 mh6\n");
+        let before = std::fs::metadata(&path).unwrap().modified().unwrap();
+        std::thread::sleep(std::time::Duration::from_millis(20));
+        ensure_table_in(&path, 100, "mh").unwrap();
+        assert_eq!(std::fs::read_to_string(&path).unwrap(), "# kept\n100 mh\n201 mh6\n");
+        assert_eq!(std::fs::metadata(&path).unwrap().modified().unwrap(), before);
+    }
+
+    #[test]
+    fn ensure_table_replaces_the_same_id_or_name() {
+        let path = rt_dir("replace").join("phantom.conf");
+        write(&path, "# kept\n100 mh\n201 mh6\n300 other\n");
+        ensure_table_in(&path, 101, "mh").unwrap();
+        assert_eq!(std::fs::read_to_string(&path).unwrap(),
+                   "# kept\n201 mh6\n300 other\n101 mh\n");
+        ensure_table_in(&path, 300, "renamed").unwrap();
+        assert_eq!(std::fs::read_to_string(&path).unwrap(),
+                   "# kept\n201 mh6\n101 mh\n300 renamed\n");
+        // One entry can clash with two lines: one by id, one by name.
+        ensure_table_in(&path, 201, "mh").unwrap();
+        assert_eq!(std::fs::read_to_string(&path).unwrap(),
+                   "# kept\n300 renamed\n201 mh\n");
     }
 
     #[test]
     fn ensure_table_refuses_an_empty_spaced_or_numeric_name() {
-        let dir = rt_dir("bad-name");
-        let path = dir.join("etc/iproute2/rt_tables");
-        let defaults = dir.join("defaults");
-        std::fs::write(&defaults, DEFAULTS).unwrap();
+        let path = rt_dir("bad-name").join("etc/rt_tables.d/phantom.conf");
         // A name of digits only reads back as a table number, not as this id.
         for name in ["", "a b", "tab\tname", " lead", "trail\n", "100", "007"] {
-            assert_eq!(ensure_table_in(&path, &defaults, 101, name),
+            assert_eq!(ensure_table_in(&path, 101, name),
                        Err(format!("Invalid routing table name: {name:?}")), "name {name:?}");
         }
         assert!(!path.exists(), "a refused name created the file");
@@ -1039,27 +1088,15 @@ mod tests {
 
     #[test]
     fn ensure_table_refuses_an_entry_longer_than_iproute2_reads() {
-        let dir = rt_dir("long-name");
-        let path = dir.join("rt_tables");
-        let defaults = dir.join("no-defaults");
+        let path = rt_dir("long-name").join("phantom.conf");
         // "7 " and the name: 511 characters fit, 512 do not.
         let fits = "a".repeat(MAX_RT_TABLES_LINE - 2);
         let over = "a".repeat(MAX_RT_TABLES_LINE - 1);
-        assert_eq!(ensure_table_in(&path, &defaults, 7, &over),
+        assert_eq!(ensure_table_in(&path, 7, &over),
                    Err("Routing table entry longer than 511 characters".into()));
         assert!(!path.exists(), "a refused entry created the file");
-        assert_eq!(ensure_table_in(&path, &defaults, 7, &fits), Ok(()));
+        assert_eq!(ensure_table_in(&path, 7, &fits), Ok(()));
         assert_eq!(std::fs::read_to_string(&path).unwrap(), format!("7 {fits}\n"));
-    }
-
-    #[test]
-    fn ensure_table_ends_defaults_without_a_newline() {
-        let dir = rt_dir("no-newline");
-        let defaults = dir.join("defaults");
-        std::fs::write(&defaults, "0\tunspec").unwrap();
-        let path = dir.join("rt_tables");
-        ensure_table_in(&path, &defaults, 100, "mh").unwrap();
-        assert_eq!(std::fs::read_to_string(&path).unwrap(), "0\tunspec\n100 mh\n");
     }
 }
 
