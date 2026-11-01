@@ -3,21 +3,31 @@
 # Test code mounted via compose volumes at runtime.
 # ──────────────────────────────────────────────────────────────────
 
-FROM rust:1.85-bookworm
+FROM rust:1.99.1-trixie
 
-# System dependencies: nftables (build + runtime) + networking tools + Python
+# nft's command language and JSON output are what nft.rs drives, so nftables
+# is installed at an exact version. nftables pins libnftables1 with "=".
+ARG NFTABLES_VERSION=1.1.3-1
+
+# System dependencies: nftables (runtime) + networking tools + Python
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    libnftables-dev libmnl-dev \
-    nftables iproute2 iptables iputils-ping \
+    nftables=${NFTABLES_VERSION} libnftables1=${NFTABLES_VERSION} \
+    iproute2 iptables iputils-ping \
     wireguard-tools procps bash \
-    python3 python3-pip python3-venv \
-    && rm -rf /var/lib/apt/lists/*
+    python3 python3-venv \
+    && rm -rf /var/lib/apt/lists/* \
+    && mkdir -p /etc/iproute2
+
+# Debian marks the system site-packages as externally managed (PEP 668), so
+# the test dependencies go into a venv.
+RUN python3 -m venv /opt/venv
+ENV PATH="/opt/venv/bin:${PATH}"
 
 WORKDIR /workspace
 
 # Python test dependencies
 COPY requirements.txt ./
-RUN pip3 install --break-system-packages --no-cache-dir -r requirements.txt
+RUN pip install --no-cache-dir -r requirements.txt
 
 # Rust: fetch deps then build .so
 COPY Cargo.toml Cargo.lock ./
