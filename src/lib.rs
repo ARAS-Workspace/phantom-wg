@@ -99,8 +99,13 @@ pub extern "C" fn nft_close() {
 }
 
 /// Add a firewall rule to the phantom table. Returns nft handle (>0) or negative error.
+///
+/// # Safety
+///
+/// Each string pointer is null or a NUL-terminated string that stays valid
+/// for the call. Null reads as an empty string.
 #[unsafe(no_mangle)]
-pub extern "C" fn nft_add_rule(
+pub unsafe extern "C" fn nft_add_rule(
     chain: *const c_char,
     action: *const c_char,
     family: i32,
@@ -113,15 +118,12 @@ pub extern "C" fn nft_add_rule(
     state_match: *const c_char,
     comment: *const c_char,
 ) -> i64 {
-    let ch = unsafe { cstr_to_str(chain) };
-    let act = unsafe { cstr_to_str(action) };
-    let pr = unsafe { cstr_to_str(proto) };
-    let sr = unsafe { cstr_to_str(source) };
-    let ds = unsafe { cstr_to_str(destination) };
-    let ii = unsafe { cstr_to_str(in_iface) };
-    let oi = unsafe { cstr_to_str(out_iface) };
-    let sm = unsafe { cstr_to_str(state_match) };
-    let cm = unsafe { cstr_to_str(comment) };
+    // SAFETY: every pointer meets this function's contract.
+    let (ch, act, pr, sr, ds, ii, oi, sm, cm) = unsafe {
+        (cstr_to_str(chain), cstr_to_str(action), cstr_to_str(proto),
+         cstr_to_str(source), cstr_to_str(destination), cstr_to_str(in_iface),
+         cstr_to_str(out_iface), cstr_to_str(state_match), cstr_to_str(comment))
+    };
 
     with_nft(ErrorCode::NotInitialized as i64, |ctx| {
         match nft::add_rule(ctx, ch, act, family, pr, dport, sr, ds, ii, oi, sm, cm) {
@@ -132,8 +134,13 @@ pub extern "C" fn nft_add_rule(
 }
 
 /// Remove a firewall rule by chain + nft handle.
+///
+/// # Safety
+///
+/// `chain` is null or a NUL-terminated string that stays valid for the call.
 #[unsafe(no_mangle)]
-pub extern "C" fn nft_remove_rule(chain: *const c_char, handle: u64) -> i32 {
+pub unsafe extern "C" fn nft_remove_rule(chain: *const c_char, handle: u64) -> i32 {
+    // SAFETY: `chain` meets this function's contract.
     let ch = unsafe { cstr_to_str(chain) };
     with_nft(ErrorCode::NotInitialized as i32, |ctx| {
         match nft::remove_rule(ctx, ch, handle) {
@@ -170,8 +177,14 @@ pub extern "C" fn nft_list_table() -> *mut c_char {
 // ---------------------------------------------------------------------------
 
 /// Ensure routing table entry in /etc/iproute2/rt_tables.
+///
+/// # Safety
+///
+/// `table_name` is null or a NUL-terminated string that stays valid for
+/// the call.
 #[unsafe(no_mangle)]
-pub extern "C" fn rt_table_ensure(table_id: u32, table_name: *const c_char) -> i32 {
+pub unsafe extern "C" fn rt_table_ensure(table_id: u32, table_name: *const c_char) -> i32 {
+    // SAFETY: `table_name` meets this function's contract.
     let name = unsafe { cstr_to_str(table_name) };
     match route::ensure_table(table_id, name) {
         Ok(()) => ErrorCode::Ok as i32,
@@ -181,17 +194,23 @@ pub extern "C" fn rt_table_ensure(table_id: u32, table_name: *const c_char) -> i
 
 /// Add a policy rule (ip rule add from ... table ... priority ...).
 /// family: 2 = AF_INET, 10 = AF_INET6.
+///
+/// # Safety
+///
+/// Each string pointer is null or a NUL-terminated string that stays valid
+/// for the call. Null reads as an empty string.
 #[unsafe(no_mangle)]
-pub extern "C" fn rt_policy_add(
+pub unsafe extern "C" fn rt_policy_add(
     from_network: *const c_char,
     to_network: *const c_char,
     table_name: *const c_char,
     priority: u32,
     family: i32,
 ) -> i32 {
-    let frm = unsafe { cstr_to_str(from_network) };
-    let to = unsafe { cstr_to_str(to_network) };
-    let tn = unsafe { cstr_to_str(table_name) };
+    // SAFETY: every pointer meets this function's contract.
+    let (frm, to, tn) = unsafe {
+        (cstr_to_str(from_network), cstr_to_str(to_network), cstr_to_str(table_name))
+    };
 
     match route::policy_add(frm, to, tn, priority, family as u8) {
         Ok(()) => ErrorCode::Ok as i32,
@@ -200,17 +219,23 @@ pub extern "C" fn rt_policy_add(
 }
 
 /// Delete a policy rule.
+///
+/// # Safety
+///
+/// Each string pointer is null or a NUL-terminated string that stays valid
+/// for the call. Null reads as an empty string.
 #[unsafe(no_mangle)]
-pub extern "C" fn rt_policy_delete(
+pub unsafe extern "C" fn rt_policy_delete(
     from_network: *const c_char,
     to_network: *const c_char,
     table_name: *const c_char,
     priority: u32,
     family: i32,
 ) -> i32 {
-    let frm = unsafe { cstr_to_str(from_network) };
-    let to = unsafe { cstr_to_str(to_network) };
-    let tn = unsafe { cstr_to_str(table_name) };
+    // SAFETY: every pointer meets this function's contract.
+    let (frm, to, tn) = unsafe {
+        (cstr_to_str(from_network), cstr_to_str(to_network), cstr_to_str(table_name))
+    };
 
     match route::policy_delete(frm, to, tn, priority, family as u8) {
         Ok(()) => ErrorCode::Ok as i32,
@@ -220,16 +245,22 @@ pub extern "C" fn rt_policy_delete(
 
 /// Add a route (ip route add ... dev ... table ...).
 /// family: 2 = AF_INET, 10 = AF_INET6.
+///
+/// # Safety
+///
+/// Each string pointer is null or a NUL-terminated string that stays valid
+/// for the call. Null reads as an empty string.
 #[unsafe(no_mangle)]
-pub extern "C" fn rt_route_add(
+pub unsafe extern "C" fn rt_route_add(
     destination: *const c_char,
     device: *const c_char,
     table_name: *const c_char,
     family: i32,
 ) -> i32 {
-    let dst = unsafe { cstr_to_str(destination) };
-    let dev = unsafe { cstr_to_str(device) };
-    let tn = unsafe { cstr_to_str(table_name) };
+    // SAFETY: every pointer meets this function's contract.
+    let (dst, dev, tn) = unsafe {
+        (cstr_to_str(destination), cstr_to_str(device), cstr_to_str(table_name))
+    };
 
     match route::route_add(dst, dev, tn, family as u8) {
         Ok(()) => ErrorCode::Ok as i32,
@@ -238,16 +269,22 @@ pub extern "C" fn rt_route_add(
 }
 
 /// Delete a route.
+///
+/// # Safety
+///
+/// Each string pointer is null or a NUL-terminated string that stays valid
+/// for the call. Null reads as an empty string.
 #[unsafe(no_mangle)]
-pub extern "C" fn rt_route_delete(
+pub unsafe extern "C" fn rt_route_delete(
     destination: *const c_char,
     device: *const c_char,
     table_name: *const c_char,
     family: i32,
 ) -> i32 {
-    let dst = unsafe { cstr_to_str(destination) };
-    let dev = unsafe { cstr_to_str(device) };
-    let tn = unsafe { cstr_to_str(table_name) };
+    // SAFETY: every pointer meets this function's contract.
+    let (dst, dev, tn) = unsafe {
+        (cstr_to_str(destination), cstr_to_str(device), cstr_to_str(table_name))
+    };
 
     match route::route_delete(dst, dev, tn, family as u8) {
         Ok(()) => ErrorCode::Ok as i32,
@@ -308,8 +345,12 @@ pub extern "C" fn firewall_bridge_get_last_error() -> *const c_char {
 /// error lock, so the result can never dangle. Returns the number of
 /// bytes copied (0 = no error recorded), or FW_ERR_INVALID_PARAM for a
 /// null buffer / non-positive len.
+///
+/// # Safety
+///
+/// `buf` is null or valid for writes of `len` bytes.
 #[unsafe(no_mangle)]
-pub extern "C" fn firewall_bridge_get_last_error_copy(buf: *mut c_char, len: i32) -> i32 {
+pub unsafe extern "C" fn firewall_bridge_get_last_error_copy(buf: *mut c_char, len: i32) -> i32 {
     if buf.is_null() || len <= 0 {
         return ErrorCode::InvalidParam as i32;
     }
@@ -320,11 +361,14 @@ pub extern "C" fn firewall_bridge_get_last_error_copy(buf: *mut c_char, len: i32
     let msg = match guard.as_ref() {
         Some(c) => c.as_bytes(),
         None => {
+            // SAFETY: `buf` is not null and `len` > 0, so its first byte is writable.
             unsafe { *buf = 0 };
             return 0;
         }
     };
     let n = msg.len().min(len as usize - 1);
+    // SAFETY: n + 1 <= len bytes go into `buf`, which holds `len`; `msg` is
+    // the CString's own allocation, so the two ranges do not overlap.
     unsafe {
         std::ptr::copy_nonoverlapping(msg.as_ptr() as *const c_char, buf, n);
         *buf.add(n) = 0;
@@ -333,9 +377,16 @@ pub extern "C" fn firewall_bridge_get_last_error_copy(buf: *mut c_char, len: i32
 }
 
 /// Free a heap-allocated string returned by nft_list_table.
+///
+/// # Safety
+///
+/// `ptr` is null or a pointer `nft_list_table` returned that has not been
+/// freed yet.
 #[unsafe(no_mangle)]
-pub extern "C" fn firewall_bridge_free_string(ptr: *mut c_char) {
+pub unsafe extern "C" fn firewall_bridge_free_string(ptr: *mut c_char) {
     if !ptr.is_null() {
+        // SAFETY: `ptr` came from `CString::into_raw` in `to_heap_cstring`
+        // and is freed once, per this function's contract.
         unsafe { drop(CString::from_raw(ptr)); }
     }
 }
@@ -354,12 +405,15 @@ mod tests {
     fn uninitialized_context_returns_code_not_panic() {
         // NFT_CTX is never initialized in the test process (no kernel).
         assert_eq!(nft_flush_table(), ErrorCode::NotInitialized as i32);
-        assert_eq!(nft_remove_rule(ptr::null(), 1), ErrorCode::NotInitialized as i32);
+        // SAFETY: a null chain is allowed.
+        assert_eq!(unsafe { nft_remove_rule(ptr::null(), 1) }, ErrorCode::NotInitialized as i32);
         assert!(nft_list_table().is_null());
 
         let mut buf = [0 as c_char; 128];
-        let n = firewall_bridge_get_last_error_copy(buf.as_mut_ptr(), buf.len() as i32);
+        // SAFETY: `buf` holds the length passed.
+        let n = unsafe { firewall_bridge_get_last_error_copy(buf.as_mut_ptr(), buf.len() as i32) };
         assert!(n > 0);
+        // SAFETY: the copy NUL-terminated `buf`.
         let msg = unsafe { CStr::from_ptr(buf.as_ptr()) }.to_str().unwrap();
         assert!(msg.contains("not initialized"), "{msg}");
     }
@@ -370,26 +424,32 @@ mod tests {
 
         // Full copy
         let mut buf = [0 as c_char; 64];
-        let n = firewall_bridge_get_last_error_copy(buf.as_mut_ptr(), 64);
+        // SAFETY: `buf` holds the length passed.
+        let n = unsafe { firewall_bridge_get_last_error_copy(buf.as_mut_ptr(), 64) };
         assert_eq!(n as usize, "boundary test message".len());
+        // SAFETY: the copy NUL-terminated `buf`.
         let msg = unsafe { CStr::from_ptr(buf.as_ptr()) }.to_str().unwrap();
         assert_eq!(msg, "boundary test message");
 
         // Truncation: len-1 bytes + NUL, never past the buffer
         let mut small = [0x7f as c_char; 9];
-        let n = firewall_bridge_get_last_error_copy(small.as_mut_ptr(), 8);
+        // SAFETY: `small` holds 9 bytes, more than the 8 passed.
+        let n = unsafe { firewall_bridge_get_last_error_copy(small.as_mut_ptr(), 8) };
         assert_eq!(n, 7);
+        // SAFETY: the copy NUL-terminated `small`.
         let msg = unsafe { CStr::from_ptr(small.as_ptr()) }.to_str().unwrap();
         assert_eq!(msg, "boundar");
         assert_eq!(small[8], 0x7f as c_char, "wrote past len");
 
         // Guards
         assert_eq!(
-            firewall_bridge_get_last_error_copy(ptr::null_mut(), 64),
+            // SAFETY: a null buffer is allowed and refused.
+            unsafe { firewall_bridge_get_last_error_copy(ptr::null_mut(), 64) },
             ErrorCode::InvalidParam as i32
         );
         assert_eq!(
-            firewall_bridge_get_last_error_copy(buf.as_mut_ptr(), 0),
+            // SAFETY: a zero length writes nothing.
+            unsafe { firewall_bridge_get_last_error_copy(buf.as_mut_ptr(), 0) },
             ErrorCode::InvalidParam as i32
         );
     }

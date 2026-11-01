@@ -55,7 +55,7 @@ def _rust_exports() -> dict[str, int]:
     text = LIB_RS.read_text()
     out: dict[str, int] = {}
     for m in re.finditer(
-        r'#\[(?:no_mangle|unsafe\(no_mangle\))\]\s*pub extern "C" fn\s+(\w+)\s*\((.*?)\)\s*(?:->|\{)',
+        r'#\[(?:no_mangle|unsafe\(no_mangle\))\]\s*pub (?:unsafe )?extern "C" fn\s+(\w+)\s*\((.*?)\)\s*(?:->|\{)',
         text,
         flags=re.S,
     ):
