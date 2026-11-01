@@ -8,8 +8,7 @@ mod error;
 mod nft;
 mod route;
 
-use std::ffi::{CStr, CString};
-use std::os::raw::c_char;
+use std::ffi::{c_char, CStr, CString};
 use std::ptr;
 use std::sync::Mutex;
 
@@ -54,9 +53,16 @@ fn to_heap_cstring(s: &str) -> *mut c_char {
     CString::new(s).map(|c| c.into_raw()).unwrap_or(ptr::null_mut())
 }
 
+/// Borrow a C string as `&str`; null and invalid UTF-8 both read as "".
+///
+/// # Safety
+///
+/// `ptr` is null or points to a NUL-terminated string that stays valid and
+/// unchanged for `'a`.
 unsafe fn cstr_to_str<'a>(ptr: *const c_char) -> &'a str {
     if ptr.is_null() { "" }
-    else { CStr::from_ptr(ptr).to_str().unwrap_or("") }
+    // SAFETY: `ptr` is not null; the rest is this function's contract.
+    else { unsafe { CStr::from_ptr(ptr) }.to_str().unwrap_or("") }
 }
 
 // ---------------------------------------------------------------------------
@@ -65,7 +71,7 @@ unsafe fn cstr_to_str<'a>(ptr: *const c_char) -> &'a str {
 
 /// Initialize nft context and ensure phantom table + chains exist.
 /// Must be called before any other nft_* function.
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub extern "C" fn nft_init() -> i32 {
     let ctx = match NftContext::new() {
         Ok(c) => c,
@@ -86,14 +92,14 @@ pub extern "C" fn nft_init() -> i32 {
 }
 
 /// Close nft context and release resources.
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub extern "C" fn nft_close() {
     let mut guard = NFT_CTX.lock().unwrap_or_else(|e| e.into_inner());
     *guard = None;
 }
 
 /// Add a firewall rule to the phantom table. Returns nft handle (>0) or negative error.
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub extern "C" fn nft_add_rule(
     chain: *const c_char,
     action: *const c_char,
@@ -126,7 +132,7 @@ pub extern "C" fn nft_add_rule(
 }
 
 /// Remove a firewall rule by chain + nft handle.
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub extern "C" fn nft_remove_rule(chain: *const c_char, handle: u64) -> i32 {
     let ch = unsafe { cstr_to_str(chain) };
     with_nft(ErrorCode::NotInitialized as i32, |ctx| {
@@ -138,7 +144,7 @@ pub extern "C" fn nft_remove_rule(chain: *const c_char, handle: u64) -> i32 {
 }
 
 /// Flush all rules in the phantom table (keeps chains).
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub extern "C" fn nft_flush_table() -> i32 {
     with_nft(ErrorCode::NotInitialized as i32, |ctx| {
         match nft::flush_table(ctx) {
@@ -149,7 +155,7 @@ pub extern "C" fn nft_flush_table() -> i32 {
 }
 
 /// List phantom table as JSON. Caller must free with firewall_bridge_free_string.
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub extern "C" fn nft_list_table() -> *mut c_char {
     with_nft(ptr::null_mut(), |ctx| {
         match nft::list_table(ctx) {
@@ -164,7 +170,7 @@ pub extern "C" fn nft_list_table() -> *mut c_char {
 // ---------------------------------------------------------------------------
 
 /// Ensure routing table entry in /etc/iproute2/rt_tables.
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub extern "C" fn rt_table_ensure(table_id: u32, table_name: *const c_char) -> i32 {
     let name = unsafe { cstr_to_str(table_name) };
     match route::ensure_table(table_id, name) {
@@ -175,7 +181,7 @@ pub extern "C" fn rt_table_ensure(table_id: u32, table_name: *const c_char) -> i
 
 /// Add a policy rule (ip rule add from ... table ... priority ...).
 /// family: 2 = AF_INET, 10 = AF_INET6.
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub extern "C" fn rt_policy_add(
     from_network: *const c_char,
     to_network: *const c_char,
@@ -194,7 +200,7 @@ pub extern "C" fn rt_policy_add(
 }
 
 /// Delete a policy rule.
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub extern "C" fn rt_policy_delete(
     from_network: *const c_char,
     to_network: *const c_char,
@@ -214,7 +220,7 @@ pub extern "C" fn rt_policy_delete(
 
 /// Add a route (ip route add ... dev ... table ...).
 /// family: 2 = AF_INET, 10 = AF_INET6.
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub extern "C" fn rt_route_add(
     destination: *const c_char,
     device: *const c_char,
@@ -232,7 +238,7 @@ pub extern "C" fn rt_route_add(
 }
 
 /// Delete a route.
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub extern "C" fn rt_route_delete(
     destination: *const c_char,
     device: *const c_char,
@@ -250,7 +256,7 @@ pub extern "C" fn rt_route_delete(
 }
 
 /// Enable IPv4 forwarding.
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub extern "C" fn rt_enable_ip_forward() -> i32 {
     match route::enable_ip_forward() {
         Ok(()) => ErrorCode::Ok as i32,
@@ -259,7 +265,7 @@ pub extern "C" fn rt_enable_ip_forward() -> i32 {
 }
 
 /// Flush route cache.
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub extern "C" fn rt_flush_cache() -> i32 {
     match route::flush_cache() {
         Ok(()) => ErrorCode::Ok as i32,
@@ -272,7 +278,7 @@ pub extern "C" fn rt_flush_cache() -> i32 {
 // ---------------------------------------------------------------------------
 
 /// Return version string (static, do NOT free).
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub extern "C" fn firewall_bridge_get_version() -> *const c_char {
     use std::sync::OnceLock;
     static VERSION_CSTR: OnceLock<CString> = OnceLock::new();
@@ -287,7 +293,7 @@ pub extern "C" fn firewall_bridge_get_version() -> *const c_char {
 /// invalidated the moment a newer error is recorded — a reader racing a
 /// writer dereferences freed memory. Prefer
 /// firewall_bridge_get_last_error_copy, which copies under the lock.
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub extern "C" fn firewall_bridge_get_last_error() -> *const c_char {
     if let Ok(guard) = LAST_ERROR.lock() {
         guard.as_ref().map(|c| c.as_ptr()).unwrap_or(ptr::null())
@@ -302,7 +308,7 @@ pub extern "C" fn firewall_bridge_get_last_error() -> *const c_char {
 /// error lock, so the result can never dangle. Returns the number of
 /// bytes copied (0 = no error recorded), or FW_ERR_INVALID_PARAM for a
 /// null buffer / non-positive len.
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub extern "C" fn firewall_bridge_get_last_error_copy(buf: *mut c_char, len: i32) -> i32 {
     if buf.is_null() || len <= 0 {
         return ErrorCode::InvalidParam as i32;
@@ -327,7 +333,7 @@ pub extern "C" fn firewall_bridge_get_last_error_copy(buf: *mut c_char, len: i32
 }
 
 /// Free a heap-allocated string returned by nft_list_table.
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub extern "C" fn firewall_bridge_free_string(ptr: *mut c_char) {
     if !ptr.is_null() {
         unsafe { drop(CString::from_raw(ptr)); }
