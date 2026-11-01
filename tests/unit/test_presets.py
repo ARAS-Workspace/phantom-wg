@@ -290,6 +290,19 @@ class TestRefusedByKernel:
         bridge.add_firewall_rule.assert_not_called()
         bridge.delete_group.assert_called_once_with("p")
 
+    def test_entries_go_into_a_disabled_group_enabled_last(self, bridge):
+        apply_preset(bridge, self.SPEC)
+        calls = [c[0] for c in bridge.method_calls]
+        assert calls[:2] == ["create_group", "disable_group"]
+        assert calls[-2:] == ["enable_group", "get_group"]
+        assert calls.count("add_firewall_rule") == 3
+
+    def test_enable_refusal_deletes_the_group(self, bridge):
+        bridge.enable_group.side_effect = NftablesError("refused")
+        with pytest.raises(NftablesError):
+            apply_preset(bridge, self.SPEC)
+        bridge.delete_group.assert_called_once_with("p")
+
     def test_group_that_could_not_be_created_is_not_deleted(self, bridge):
         bridge.create_group.side_effect = sqlite3.IntegrityError("UNIQUE")
         with pytest.raises(sqlite3.IntegrityError):

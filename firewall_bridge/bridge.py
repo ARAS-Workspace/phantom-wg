@@ -61,8 +61,7 @@ class FirewallBridge:
 
     def start(self) -> None:
         """Write the table, then apply all enabled rules from DB to kernel:
-        the firewall rules in one nft transaction that also flushes the
-        table, then the routing rules.
+        the firewall rules with _rebuild_fw, then the routing rules.
 
         If the kernel refuses a rule, what was applied is removed again,
         the bridge is left stopped and the error is raised.
@@ -72,15 +71,10 @@ class FirewallBridge:
             raise AlreadyStartedError("Bridge already started")
         check_result(self._lib.nft_init())
         self._flush_stale_routing()
-        groups = self._db.enabled_groups()
         try:
-            rules = [r for g in groups for r in self._db.firewall_rules_for_group(g.id)]
-            for rule, handle in zip(rules, self._kernel_replace_fw_rules(rules)):
-                self._db.update_fw_applied(rule.id, True, handle)
-            for group in groups:
-                for rule in self._db.routing_rules_for_group(group.id):
-                    self._kernel_apply_routing(rule)
-                    self._db.update_rt_applied(rule.id, True)
+            self._rebuild_fw()
+            for group in self._db.enabled_groups():
+                self._apply_routing(group)
         except BaseException:
             self._lib.nft_flush_table()
             self._remove_all_routing()
@@ -119,8 +113,9 @@ class FirewallBridge:
         self._db.delete_group(name)
 
     def enable_group(self, name: str) -> None:
-        """Enable a group; when started, apply its rules too. A group that
-        is enabled already is left as it is.
+        """Enable a group; when started, apply its rules too: the firewall
+        rules with _rebuild_fw, then its routing rules. A group that is
+        enabled already is left as it is.
 
         If the kernel refuses one, what was applied is removed again, the
         group is left disabled and the error is raised.
@@ -131,7 +126,8 @@ class FirewallBridge:
         if self._db.get_state() == "started":
             group = self._db.get_group(name)
             try:
-                self._apply_group(group)
+                self._rebuild_fw()
+                self._apply_routing(group)
             except BaseException:
                 self._unapply_group(group)
                 self._db.disable_group(name)
@@ -157,7 +153,8 @@ class FirewallBridge:
                           in_iface: str = "", out_iface: str = "",
                           state_match: str = "", comment: str = "",
                           position: int = 0) -> int:
-        """Store a rule; when started and its group enabled, apply it too.
+        """Store a rule; when started and its group enabled, apply it too,
+        with _rebuild_fw.
 
         Fields that fail validate_firewall_rule raise InvalidParamError
         before anything is stored. A rule the kernel refuses is deleted from
@@ -175,14 +172,10 @@ class FirewallBridge:
         )
         if self._db.get_state() == "started" and self._db.is_group_enabled(group_name):
             try:
-                handle = self._kernel_add_fw_rule(
-                    chain, action, family, proto, dport, source, destination,
-                    in_iface, out_iface, state_match, comment,
-                )
+                self._rebuild_fw()
             except BaseException:
                 self._db.remove_firewall_rule(rule_id)
                 raise
-            self._db.update_fw_applied(rule_id, True, handle)
         return rule_id
 
     def remove_firewall_rule(self, rule_id: int) -> None:
@@ -246,20 +239,15 @@ class FirewallBridge:
 
     # ---- Kernel operations (private) ----
 
-    def _kernel_add_fw_rule(self, chain: str, action: str, family: int,
-                            proto: str, dport: int, source: str,
-                            destination: str, in_iface: str, out_iface: str,
-                            state_match: str, comment: str) -> int:
-        handle = self._lib.nft_add_rule(
-            _encode(chain), _encode(action), family,
-            _encode(proto), dport,
-            _encode(source), _encode(destination),
-            _encode(in_iface), _encode(out_iface),
-            _encode(state_match), _encode(comment),
-        )
-        if handle < 0:
-            check_result(int(handle))
-        return int(handle)
+    def _rebuild_fw(self) -> None:
+        """The table's rules become the enabled groups' rules, by group
+        priority, then position and id, in one nft transaction; the DB
+        gets their handles. When nft refuses one, the table and the DB are
+        as they were and the error is raised."""
+        rules = [r for g in self._db.enabled_groups()
+                 for r in self._db.firewall_rules_for_group(g.id)]
+        for rule, handle in zip(rules, self._kernel_replace_fw_rules(rules)):
+            self._db.update_fw_applied(rule.id, True, handle)
 
     def _kernel_replace_fw_rules(self, rules: list[FirewallRule]) -> list[int]:
         """The table's rules become `rules`, in one transaction; returns
@@ -326,18 +314,9 @@ class FirewallBridge:
                 return str(other.table_id)
         return rule.table_name
 
-    def _apply_group(self, group: Group) -> None:
-        """Apply all rules in a group to kernel."""
-        gid = group.id
-        for rule in self._db.firewall_rules_for_group(gid):
-            handle = self._kernel_add_fw_rule(
-                rule.chain, rule.action, rule.family,
-                rule.proto, rule.dport, rule.source,
-                rule.destination, rule.in_iface, rule.out_iface,
-                rule.state_match, rule.comment,
-            )
-            self._db.update_fw_applied(rule.id, True, handle)
-        for rule in self._db.routing_rules_for_group(gid):
+    def _apply_routing(self, group: Group) -> None:
+        """Apply a group's routing rules to kernel."""
+        for rule in self._db.routing_rules_for_group(group.id):
             self._kernel_apply_routing(rule)
             self._db.update_rt_applied(rule.id, True)
 
