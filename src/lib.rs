@@ -268,6 +268,86 @@ pub unsafe extern "C" fn nft_remove_rule(chain: *const c_char, handle: u64) -> i
     })
 }
 
+/// One rule for `nft_replace_rules`, field for field as `nft_add_rule`
+/// takes it.
+#[repr(C)]
+pub struct NftRule {
+    pub chain: *const c_char,
+    pub action: *const c_char,
+    pub family: i32,
+    pub proto: *const c_char,
+    pub dport: i32,
+    pub source: *const c_char,
+    pub destination: *const c_char,
+    pub in_iface: *const c_char,
+    pub out_iface: *const c_char,
+    pub state_match: *const c_char,
+    pub comment: *const c_char,
+}
+
+/// Flush the phantom table and add `rules`, in one nft transaction; on
+/// success writes each rule's handle to `handles`, in order. On an error
+/// the table is as it was and `handles` is not written.
+///
+/// @witness kernel_tests::kernel_nft_replace_rules_is_one_transaction
+/// @witness tests::null_pointers_give_error_codes
+///
+/// # Safety
+///
+/// When `count` is above 0, `rules` points to `count` NftRule values and
+/// `handles` to room for `count` u64 values, both valid for the call; each
+/// string pointer in a rule is null or a NUL-terminated string that stays
+/// valid and unchanged for the call. Null reads as an empty string.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn nft_replace_rules(rules: *const NftRule, count: i32, handles: *mut u64)
+    -> i32
+{
+    let Ok(count) = usize::try_from(count) else {
+        set_last_error("Rule count is negative");
+        return ErrorCode::InvalidParam as i32;
+    };
+    if count > 0 && (rules.is_null() || handles.is_null()) {
+        set_last_error("Rules or handles is null");
+        return ErrorCode::InvalidParam as i32;
+    }
+    let rules: &[NftRule] = if count == 0 { &[] } else {
+        // SAFETY: `rules` is not null and points to `count` values, per the contract.
+        unsafe { std::slice::from_raw_parts(rules, count) }
+    };
+    // SAFETY: every string pointer meets this function's contract.
+    let specs: Vec<nft::RuleSpec> = rules.iter().map(|r| unsafe {
+        nft::RuleSpec {
+            chain: cstr_to_str(r.chain),
+            action: cstr_to_str(r.action),
+            family: r.family,
+            proto: cstr_to_str(r.proto),
+            dport: r.dport,
+            source: cstr_to_str(r.source),
+            destination: cstr_to_str(r.destination),
+            in_iface: cstr_to_str(r.in_iface),
+            out_iface: cstr_to_str(r.out_iface),
+            state_match: cstr_to_str(r.state_match),
+            comment: cstr_to_str(r.comment),
+        }
+    }).collect();
+
+    with_nft(ErrorCode::NotInitialized as i32, |ctx| {
+        let commands = match specs.iter().map(nft::rule_command).collect::<Result<Vec<_>, _>>() {
+            Ok(commands) => commands,
+            Err(msg) => { set_last_error(&msg); return ErrorCode::InvalidParam as i32; }
+        };
+        match nft::replace_rules(ctx, commands) {
+            Ok(added) => {
+                // SAFETY: `handles` has room for `count` values, per the contract, and
+                // `added` holds exactly `count`.
+                unsafe { std::ptr::copy_nonoverlapping(added.as_ptr(), handles, added.len()) };
+                ErrorCode::Ok as i32
+            }
+            Err(msg) => { set_last_error(&msg); ErrorCode::NftablesFailed as i32 }
+        }
+    })
+}
+
 /// Flush all rules in the phantom table.
 ///
 /// @witness kernel_tests::kernel_nft_table_rules_and_handles
@@ -593,6 +673,14 @@ mod tests {
         unsafe {
             assert_eq!(nft_add_rule(null, null, 2, null, 0, null, null, null, null, null, null),
                        ErrorCode::NotInitialized as i64);
+            assert_eq!(nft_replace_rules(ptr::null(), 0, ptr::null_mut()),
+                       ErrorCode::NotInitialized as i32);
+            assert_eq!(nft_replace_rules(ptr::null(), 1, ptr::null_mut()),
+                       ErrorCode::InvalidParam as i32);
+            assert_eq!(last_error(), "Rules or handles is null");
+            assert_eq!(nft_replace_rules(ptr::null(), -1, ptr::null_mut()),
+                       ErrorCode::InvalidParam as i32);
+            assert_eq!(last_error(), "Rule count is negative");
             assert_eq!(rt_table_ensure(101, null), ErrorCode::NetlinkFailed as i32);
             assert_eq!(last_error(), "Invalid routing table name: \"\"");
             type NamedCall = (&'static str, fn() -> i32);

@@ -37,6 +37,27 @@ int64_t     nft_add_rule(const char* chain, const char* action,
                          const char* state_match, const char* comment);
 
 int32_t     nft_remove_rule(const char* chain, uint64_t handle);
+
+/* One rule for nft_replace_rules; the fields are nft_add_rule's. */
+typedef struct {
+    const char* chain;
+    const char* action;
+    int32_t     family;
+    const char* proto;
+    int32_t     dport;
+    const char* source;
+    const char* destination;
+    const char* in_iface;
+    const char* out_iface;
+    const char* state_match;
+    const char* comment;
+} fw_nft_rule;
+
+/* Flush the phantom table and add rules[0..count) in one nft transaction;
+ * on success handles[i] is rule i's handle. On an error the table is as it
+ * was and handles is not written. */
+int32_t     nft_replace_rules(const fw_nft_rule* rules, int32_t count,
+                              uint64_t* handles);
 int32_t     nft_flush_table(void);
 char*       nft_list_table(void);   /* JSON, caller frees */
 

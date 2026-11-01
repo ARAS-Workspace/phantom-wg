@@ -241,6 +241,86 @@ fn kernel_nft_builds_what_nft_builds_from_text() {
     assert_eq!(tables, "table inet phantom\ntable inet reference\n");
 }
 
+/// `specs` as NftRule values, with the C strings they point into.
+fn c_rules(specs: &[crate::nft::RuleSpec]) -> (Vec<[CString; 9]>, Vec<NftRule>) {
+    let strings: Vec<[CString; 9]> = specs.iter()
+        .map(|r| [r.chain, r.action, r.proto, r.source, r.destination, r.in_iface,
+                  r.out_iface, r.state_match, r.comment].map(c))
+        .collect();
+    let rules = specs.iter().zip(&strings).map(|(r, s)| NftRule {
+        chain: s[0].as_ptr(), action: s[1].as_ptr(), family: r.family, proto: s[2].as_ptr(),
+        dport: r.dport, source: s[3].as_ptr(), destination: s[4].as_ptr(),
+        in_iface: s[5].as_ptr(), out_iface: s[6].as_ptr(), state_match: s[7].as_ptr(),
+        comment: s[8].as_ptr(),
+    }).collect();
+    (strings, rules)
+}
+
+/// The rule lines of inet phantom, as `nft -a list` prints them.
+fn rule_lines() -> Vec<String> {
+    table_lines().into_iter()
+        .filter(|l| l.contains("# handle") && !l.starts_with("table ") && !l.starts_with("chain "))
+        .collect()
+}
+
+fn table_lines() -> Vec<String> {
+    read("nft", &["-a", "list", "table", "inet", "phantom"]).lines().map(|l| l.trim().to_string()).collect()
+}
+
+/// nft_replace_rules swaps the table's rules for the given ones in one
+/// transaction: a rule nft refuses, or one build_rule refuses, leaves the
+/// table and the handles as they were.
+#[test]
+fn kernel_nft_replace_rules_is_one_transaction() {
+    use crate::nft::RuleSpec;
+    let _serial = serial();
+    isolate();
+    let _nft = Nft::init();
+    for port in [1, 2, 3] {
+        assert!(add_input_rule(port, "") > 0, "{}", last_error());
+    }
+
+    let specs = [
+        RuleSpec { chain: "input", action: "accept", family: 2, proto: "tcp", dport: 22, ..Default::default() },
+        RuleSpec { chain: "postrouting", action: "masquerade", family: 2, source: "10.0.1.0/24",
+                   out_iface: "eth0", ..Default::default() },
+        RuleSpec { chain: "input", action: "drop", family: 2, ..Default::default() },
+    ];
+    let (_strings, rules) = c_rules(&specs);
+    let mut handles = [0u64; 3];
+    // SAFETY: three rules whose strings outlive the call, and room for three handles.
+    assert_eq!(unsafe { nft_replace_rules(rules.as_ptr(), 3, handles.as_mut_ptr()) },
+               ErrorCode::Ok as i32, "{}", last_error());
+    assert_eq!(rule_lines(), [
+        format!("tcp dport 22 accept # handle {}", handles[0]),
+        format!("drop # handle {}", handles[2]),
+        format!("oifname \"eth0\" ip saddr 10.0.1.0/24 masquerade # handle {}", handles[1]),
+    ]);
+
+    let before = table_lines();
+    for (specs, code) in [
+        ([RuleSpec { chain: "input", action: "accept", family: 2, ..Default::default() },
+          RuleSpec { chain: "input", action: "masquerade", family: 2, ..Default::default() }],
+         ErrorCode::NftablesFailed),
+        ([RuleSpec { chain: "input", action: "accept", family: 2, ..Default::default() },
+          RuleSpec { chain: "input", action: "bogus", family: 2, ..Default::default() }],
+         ErrorCode::InvalidParam),
+    ] {
+        let (_strings, rules) = c_rules(&specs);
+        let mut untouched = [u64::MAX; 2];
+        // SAFETY: two rules whose strings outlive the call, and room for two handles.
+        assert_eq!(unsafe { nft_replace_rules(rules.as_ptr(), 2, untouched.as_mut_ptr()) },
+                   code as i32);
+        assert_eq!(table_lines(), before, "{code:?}: {}", last_error());
+        assert_eq!(untouched, [u64::MAX; 2]);
+    }
+
+    // SAFETY: no rules and no handles, with a count of 0.
+    assert_eq!(unsafe { nft_replace_rules(std::ptr::null(), 0, std::ptr::null_mut()) },
+               ErrorCode::Ok as i32);
+    assert_eq!(rule_lines(), Vec::<String>::new());
+}
+
 /// A table that already holds `output` with another priority: the batch
 /// fails as a whole, and nft's caret points at the `output` command.
 #[test]

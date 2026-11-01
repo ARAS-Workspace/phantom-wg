@@ -201,6 +201,24 @@ pub fn remove_rule(nft: &NftContext, chain: &str, handle: u64) -> Result<(), Str
     nft.run_json(&cmd.to_string()).map(|_| ())
 }
 
+/// Flush the table and add `rules` (from `rule_command`) in one nft
+/// transaction; returns their handles, in order. When nft refuses one,
+/// the table is as it was.
+///
+/// @witness nft::tests::test_replace_rules_is_one_run
+/// @witness kernel_tests::kernel_nft_replace_rules_is_one_transaction
+pub fn replace_rules(nft: &NftContext, rules: Vec<Value>) -> Result<Vec<u64>, String> {
+    let count = rules.len();
+    let mut commands = vec![json!({"flush": {"table": {"family": TABLE_FAMILY, "name": TABLE_NAME}}})];
+    commands.extend(rules);
+    let echo = nft.run_echo(&json!({"nftables": commands}).to_string())?;
+    let handles = added_handles(&echo);
+    if handles.len() != count {
+        return Err(format!("Rules applied but {} of {count} handles found", handles.len()));
+    }
+    Ok(handles)
+}
+
 // ---------------------------------------------------------------------------
 // Rule builder
 // ---------------------------------------------------------------------------
@@ -210,6 +228,14 @@ pub fn remove_rule(nft: &NftContext, chain: &str, handle: u64) -> Result<(), Str
 /// @witness nft::tests::test_build_rule_exact_output
 /// @witness kernel_tests::kernel_nft_builds_what_nft_builds_from_text
 pub fn build_rule(rule: &RuleSpec) -> Result<String, String> {
+    Ok(json!({"nftables": [rule_command(rule)?]}).to_string())
+}
+
+/// `build_rule`'s command as one entry of an `nftables` array.
+///
+/// @witness nft::tests::test_build_rule_exact_output
+/// @witness kernel_tests::kernel_nft_replace_rules_is_one_transaction
+pub fn rule_command(rule: &RuleSpec) -> Result<Value, String> {
     let RuleSpec { chain, action, family, proto, dport, source, destination,
                    in_iface, out_iface, state_match, comment } = *rule;
     if chain.is_empty() {
@@ -245,7 +271,7 @@ pub fn build_rule(rule: &RuleSpec) -> Result<String, String> {
     if !comment.is_empty() {
         body["comment"] = json!(comment);
     }
-    Ok(json!({"nftables": [{"add": {"rule": body}}]}).to_string())
+    Ok(json!({"add": {"rule": body}}))
 }
 
 /// Any family other than AF_INET6 reads as IPv4.
@@ -323,9 +349,19 @@ fn statement(action: &str, family: i32) -> Result<Value, String> {
 /// @witness nft::tests::test_find_added_handle
 /// @witness nft::tests::test_find_added_handle_absent
 fn find_added_handle(json: &str) -> Option<u64> {
-    let parsed: serde_json::Value = serde_json::from_str(json).ok()?;
-    parsed.get("nftables")?.as_array()?.iter()
-        .find_map(|item| item.get("add")?.get("rule")?.get("handle")?.as_u64())
+    added_handles(json).into_iter().next()
+}
+
+/// The handles of every `add rule` in nft's echo, in order.
+///
+/// @witness nft::tests::test_find_added_handle
+/// @witness nft::tests::test_replace_rules_is_one_run
+fn added_handles(json: &str) -> Vec<u64> {
+    let Ok(parsed) = serde_json::from_str::<Value>(json) else { return Vec::new() };
+    let Some(items) = parsed.get("nftables").and_then(Value::as_array) else { return Vec::new() };
+    items.iter()
+        .filter_map(|item| item.get("add")?.get("rule")?.get("handle")?.as_u64())
+        .collect()
 }
 
 // ---------------------------------------------------------------------------
@@ -486,6 +522,29 @@ pub(crate) mod tests {
     #[test]
     fn test_find_added_handle() {
         assert_eq!(find_added_handle(ECHO), Some(2));
+    }
+
+    #[test]
+    fn test_replace_rules_is_one_run() {
+        let _serial = serial();
+        let echo = r#"{"nftables": [{"flush": {"table": {"family": "inet", "name": "phantom"}}}, {"add": {"rule": {"handle": 7}}}, {"add": {"rule": {"handle": 8}}}]}"#;
+        let nft = fake_nft("replace_rules", &format!(
+            "printf 'x\\n' >> \"$0.calls\"\nprintf '%s' '{echo}'"));
+        let ctx = NftContext::with_binary(&nft).unwrap();
+        let rules = [RuleSpec { chain: "input", action: "accept", family: 2, ..Default::default() },
+                     RuleSpec { chain: "input", action: "drop", family: 2, ..Default::default() }];
+        let commands: Vec<Value> = rules.iter().map(|r| rule_command(r).unwrap()).collect();
+        let sent = json!({"nftables": [
+            {"flush": {"table": {"family": "inet", "name": "phantom"}}}, commands[0], commands[1],
+        ]});
+        assert_eq!(replace_rules(&ctx, commands).unwrap(), vec![7, 8]);
+        assert_eq!(recorded(&nft, "calls"), "x\n");
+        assert_eq!(recorded(&nft, "args"), format!("--echo\n--json\n--handle\n--\n{sent}\n"));
+
+        let one_short = fake_nft("replace_rules-short", &format!("printf '%s' '{echo}'"));
+        let ctx = NftContext::with_binary(&one_short).unwrap();
+        let three = vec![rule_command(&rules[0]).unwrap(); 3];
+        assert_eq!(replace_rules(&ctx, three).unwrap_err(), "Rules applied but 2 of 3 handles found");
     }
 
     #[test]

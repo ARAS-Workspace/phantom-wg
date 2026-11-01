@@ -22,7 +22,9 @@ from __future__ import annotations
 from types import TracebackType
 from typing import Optional, Type
 
-from ._ffi import get_lib, _read_and_free
+import ctypes
+
+from ._ffi import NftRule, get_lib, _read_and_free
 from .db import FirewallDB
 from .models import Group, FirewallRule, RoutingRule
 from .schema import validate_firewall_rule
@@ -58,7 +60,9 @@ class FirewallBridge:
     # ---- Lifecycle ----
 
     def start(self) -> None:
-        """Write the table, then apply all enabled rules from DB to kernel.
+        """Write the table, then apply all enabled rules from DB to kernel:
+        the firewall rules in one nft transaction that also flushes the
+        table, then the routing rules.
 
         If the kernel refuses a rule, what was applied is removed again,
         the bridge is left stopped and the error is raised.
@@ -67,11 +71,16 @@ class FirewallBridge:
         if state == "started":
             raise AlreadyStartedError("Bridge already started")
         check_result(self._lib.nft_init())
-        self._lib.nft_flush_table()
         self._flush_stale_routing()
+        groups = self._db.enabled_groups()
         try:
-            for group in self._db.enabled_groups():
-                self._apply_group(group)
+            rules = [r for g in groups for r in self._db.firewall_rules_for_group(g.id)]
+            for rule, handle in zip(rules, self._kernel_replace_fw_rules(rules)):
+                self._db.update_fw_applied(rule.id, True, handle)
+            for group in groups:
+                for rule in self._db.routing_rules_for_group(group.id):
+                    self._kernel_apply_routing(rule)
+                    self._db.update_rt_applied(rule.id, True)
         except BaseException:
             self._lib.nft_flush_table()
             self._remove_all_routing()
@@ -251,6 +260,20 @@ class FirewallBridge:
         if handle < 0:
             check_result(int(handle))
         return int(handle)
+
+    def _kernel_replace_fw_rules(self, rules: list[FirewallRule]) -> list[int]:
+        """The table's rules become `rules`, in one transaction; returns
+        their handles, in order."""
+        array = (NftRule * len(rules))(*(
+            NftRule(_encode(r.chain), _encode(r.action), r.family, _encode(r.proto),
+                    r.dport, _encode(r.source), _encode(r.destination),
+                    _encode(r.in_iface), _encode(r.out_iface),
+                    _encode(r.state_match), _encode(r.comment))
+            for r in rules
+        ))
+        handles = (ctypes.c_uint64 * len(rules))()
+        check_result(self._lib.nft_replace_rules(array, len(rules), handles))
+        return list(handles)
 
     def _kernel_apply_routing(self, rule: RoutingRule) -> None:
         rt = rule.rule_type

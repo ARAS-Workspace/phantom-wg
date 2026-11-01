@@ -71,6 +71,24 @@ def get_lib() -> ctypes.CDLL:
     return _lib
 
 
+class NftRule(ctypes.Structure):
+    """One rule for nft_replace_rules, field for field as nft_add_rule takes it."""
+
+    _fields_ = [
+        ("chain", c_p),
+        ("action", c_p),
+        ("family", c_i32),
+        ("proto", c_p),
+        ("dport", c_i32),
+        ("source", c_p),
+        ("destination", c_p),
+        ("in_iface", c_p),
+        ("out_iface", c_p),
+        ("state_match", c_p),
+        ("comment", c_p),
+    ]
+
+
 def _setup_signatures(lib: ctypes.CDLL) -> None:
     """Define C function signatures — kernel ops only."""
 
@@ -98,6 +116,13 @@ def _setup_signatures(lib: ctypes.CDLL) -> None:
 
     lib.nft_remove_rule.argtypes = [c_p, c_u64]  # chain, handle
     lib.nft_remove_rule.restype = c_i32
+
+    lib.nft_replace_rules.argtypes = [
+        ctypes.POINTER(NftRule),  # rules
+        c_i32,                    # count
+        ctypes.POINTER(c_u64),    # handles
+    ]
+    lib.nft_replace_rules.restype = c_i32
 
     lib.nft_flush_table.argtypes = []
     lib.nft_flush_table.restype = c_i32

@@ -83,8 +83,8 @@ def rust() -> dict[str, int]:
 class TestHeaderMatchesRust:
     def test_parsers_found_something(self, header, rust):
         """Guard the guard — a broken regex must not pass silently."""
-        assert len(rust) >= 17, f"only parsed {len(rust)} Rust exports"
-        assert len(header) >= 17, f"only parsed {len(header)} header decls"
+        assert len(rust) >= 18, f"only parsed {len(rust)} Rust exports"
+        assert len(header) >= 18, f"only parsed {len(header)} header decls"
 
     def test_no_export_missing_from_header(self, header, rust):
         missing = set(rust) - set(header)
