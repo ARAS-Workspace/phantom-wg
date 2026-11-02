@@ -1,0 +1,128 @@
+name: Verify KVM for firewall-bridge
+
+# What the kernel matrix needs from a GitHub-hosted runner: /dev/kvm, its
+# access from the runner user, and a guest booted under KVM from a pinned
+# cloud image. Each step writes what it read to the job summary.
+
+on:
+  push:
+    branches:
+      - 'dev/firewall-bridge'
+    paths:
+      - '.github/workflows/verify-kvm-firewall-bridge.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  verify-kvm:
+    name: KVM and a guest
+    runs-on: ubuntu-26.04
+    timeout-minutes: 20
+    env:
+      # Ubuntu 22.04 (kernel 5.15), the lowest kernel of the support matrix;
+      # the digest is the one SHA256SUMS of this release gives.
+      IMAGE_URL: https://cloud-images.ubuntu.com/releases/jammy/release-20261020/ubuntu-22.04-server-cloudimg-amd64.img
+      IMAGE_SHA256: 2099e63da0b822ef8e05e3d596c1b402eaaae658fc08ab919cb8495bfcdc488b
+      GUEST_KERNEL: 5.15.0-198-generic
+    steps:
+      - name: Harden runner
+        uses: step-security/harden-runner@58077d3c7e43986b6b15fba718e8ea69e387dfcc # v2.15.1
+        with:
+          egress-policy: audit
+
+      - name: Runner
+        run: |
+          {
+            echo "## Runner"
+            echo '```'
+            echo "kernel:      $(uname -r)"
+            echo "cpus:        $(nproc)"
+            echo "memory:      $(free -m | awk '/^Mem:/ {print $2 " MiB"}')"
+            echo "free on /:   $(df -h --output=avail / | tail -1 | tr -d ' ')"
+            echo "virt flag:   $(grep -oE -m1 '\b(vmx|svm)\b' /proc/cpuinfo || echo none)"
+            echo "kvm modules: $(lsmod | awk '/^kvm/ {print $1}' | tr '\n' ' ')"
+            echo "/dev/kvm:    $(ls -l /dev/kvm 2>&1)"
+            echo '```'
+          } | tee -a "$GITHUB_STEP_SUMMARY"
+          test -c /dev/kvm
+
+      - name: Open /dev/kvm as the runner user
+        run: |
+          # The rule GitHub's changelog of 2024-04-02 gives for KVM on Linux runners.
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+          # KVM_GET_API_VERSION is _IO(0xAE, 0x00); the stable API answers 12.
+          {
+            echo '```'
+            ls -l /dev/kvm
+            python3 -c 'import fcntl, os; fd = os.open("/dev/kvm", os.O_RDWR); print("KVM_GET_API_VERSION:", fcntl.ioctl(fd, 0xAE00)); os.close(fd)'
+            echo '```'
+          } | tee -a "$GITHUB_STEP_SUMMARY"
+
+      - name: Install QEMU
+        run: |
+          sudo apt-get update -q
+          sudo apt-get install -y -q --no-install-recommends qemu-system-x86 qemu-utils cloud-image-utils
+          qemu-system-x86_64 --version | head -1 | tee -a "$GITHUB_STEP_SUMMARY"
+
+      - name: Fetch the image
+        run: |
+          mkdir -p "$RUNNER_TEMP/vm"
+          cd "$RUNNER_TEMP/vm"
+          curl -fSL --retry 3 --retry-delay 2 -o base.img "$IMAGE_URL"
+          echo "$IMAGE_SHA256  base.img" | sha256sum -c -
+          qemu-img create -f qcow2 -b base.img -F qcow2 disk.qcow2 20G
+          {
+            echo '```'
+            qemu-img info base.img | grep -E '^(file format|virtual size|disk size)'
+            echo "free on / after the image: $(df -h --output=avail / | tail -1 | tr -d ' ')"
+            echo '```'
+          } | tee -a "$GITHUB_STEP_SUMMARY"
+
+      - name: Boot a guest under KVM
+        run: |
+          cd "$RUNNER_TEMP/vm"
+          cat > user-data <<'EOF'
+          #cloud-config
+          runcmd:
+            - [sh, -c, 'echo "GUEST kernel=$(uname -r) virt=$(systemd-detect-virt) cpus=$(nproc)" > /dev/ttyS0']
+          power_state:
+            mode: poweroff
+            timeout: 30
+          EOF
+          echo "instance-id: verify-kvm" > meta-data
+          cloud-localds seed.img user-data meta-data
+          # -accel kvm has no fallback: without KVM, QEMU exits at once.
+          start=$SECONDS
+          rc=0
+          timeout 600 qemu-system-x86_64 -accel kvm -cpu host -smp 2 -m 4096 \
+            -drive file=disk.qcow2,if=virtio,format=qcow2 \
+            -drive file=seed.img,if=virtio,format=raw \
+            -nic user,model=virtio-net-pci \
+            -display none -monitor none -serial file:serial.log -no-reboot || rc=$?
+          guest=$(grep -ao 'GUEST kernel=[^ ]* virt=[^ ]* cpus=[0-9]*' serial.log | tail -1 || true)
+          {
+            echo "## Guest"
+            echo '```'
+            echo "qemu exit:   $rc after $((SECONDS - start)) s (boot to power off)"
+            echo "guest line:  ${guest:-none}"
+            echo "expected:    kernel=$GUEST_KERNEL virt=kvm"
+            echo '```'
+          } | tee -a "$GITHUB_STEP_SUMMARY"
+          test "$rc" -eq 0
+          case "$guest" in
+            "GUEST kernel=$GUEST_KERNEL virt=kvm "*) ;;
+            *) echo "The guest did not report kernel $GUEST_KERNEL under KVM"; exit 1 ;;
+          esac
+
+      - name: Keep the guest's console
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: verify-kvm-serial
+          path: ${{ runner.temp }}/vm/serial.log
+          retention-days: 14
+          if-no-files-found: ignore
