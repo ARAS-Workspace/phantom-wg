@@ -8,7 +8,9 @@ the multihop shape of policy and route rows; started then added and
 added then started; stop() and start(); disable_group and enable_group;
 remove_routing_rule; delete_group; a new FirewallBridge on the same
 database while the kernel still holds the last one's rules, and while it
-holds a v4 default route of universe scope in its place. After every
+holds a v4 default route of universe scope in its place; a route row with
+no device in main, stored while stopped, beside a route ip put there for
+the same destination, then start() and delete_group. After every
 step the database's routing rows are the kernel's policy rules and
 routes (oracle.assert_routing_matches_db) and the meter is flat. Each
 case's state, as `ip -N -j` prints it, equals the state its ip commands
@@ -16,15 +18,19 @@ below make by hand.
 
 Does not show: routes through a gateway, other route types or metrics
 (the bridge writes none); names given by another group or by the system
-(each case names its own); packets. The priorities and tables are the
-rule stage's own (oracle.RULE_PRIORITIES, oracle.ROUTE_TABLES).
+(each case names its own); remove_routing_rule while stopped (unit tests
+only); packets. The priorities and tables are the rule stage's own
+(oracle.RULE_PRIORITIES, oracle.ROUTE_TABLES).
 """
 
 from __future__ import annotations
 
+import os
+import subprocess
+
 import pytest
 
-from firewall_bridge import FirewallBridge
+from firewall_bridge import FirewallBridge, NetlinkError
 
 from e2e_tests.rules import oracle
 
@@ -177,7 +183,7 @@ def test_groups_turned_off_and_on(bridge, db_path, meter):
 
 
 def test_a_new_bridge_finds_the_last_ones_routing(bridge, db_path, meter):
-    """The first bridge's process ends without stop(): its policy rules and
+    """The first bridge is left started, without stop(): its policy rules and
     routes stay in the kernel; the new bridge's start() leaves one of each,
     not two."""
     _two_groups(bridge)
@@ -195,7 +201,7 @@ def test_a_new_bridge_finds_the_last_ones_routing(bridge, db_path, meter):
 
 
 def test_a_new_bridge_takes_a_default_route_of_universe_scope(bridge, db_path, meter):
-    """The first bridge's process ends without stop(), and its v4 default
+    """The first bridge is left started, without stop(), and its v4 default
     route is in the kernel with universe scope, as bridge 2.1.8 made it:
     the new bridge's start() puts its own in its place."""
     bridge.create_group("r4")
@@ -239,7 +245,56 @@ def test_two_groups_one_name_two_ids(bridge, db_path, meter):
     assert list(oracle.routing_state()[1]) == [154]
 
 
+def test_one_group_two_ensure_rows_of_one_name(bridge, db_path, meter):
+    """A group's two ensure rows name a table alike: its route goes to the
+    first row's id."""
+    bridge.create_group("r4")
+    bridge.add_routing_rule("r4", "ensure", table_name="r4twice", table_id=156)
+    bridge.add_routing_rule("r4", "ensure", table_name="r4twice", table_id=157)
+    bridge.add_routing_rule("r4", "route", destination="10.58.0.0/24", device="lo",
+                            table_name="r4twice")
+    bridge.start()
+    _check(bridge, db_path, meter)
+    assert list(oracle.routing_state()[1]) == [156]
+
+
+def test_a_route_with_no_device_in_main_leaves_main(bridge, db_path, meter):
+    """A route row with no device in main, stored while stopped: start() is
+    refused, and the route ip put in main for that destination stays, after
+    start() and after delete_group."""
+    main_route = lambda: oracle.run([oracle.IP, "route", "show", "10.59.0.0/24"]).strip()
+    oracle.run([oracle.IP, "route", "add", "10.59.0.0/24", "dev", "lo"])
+    try:
+        made = main_route()
+        bridge.create_group("r4")
+        bridge.add_routing_rule("r4", "route", destination="10.59.0.0/24", device="",
+                                table_name="main")
+        with pytest.raises(NetlinkError, match="Interface not found"):
+            bridge.start()
+        assert bridge.get_state() == "stopped"
+        assert main_route() == made != ""
+        bridge.delete_group("r4")
+        assert main_route() == made
+        _check(bridge, db_path, meter)
+    finally:
+        subprocess.run([oracle.IP, "route", "del", "10.59.0.0/24", "dev", "lo"],
+                       capture_output=True, check=False)
+
+
 # ── The routing check, before it judges the bridge ───────────────
+
+@pytest.fixture
+def drop_in():
+    """oracle.DROP_IN as it was before the test, put back after it."""
+    before = open(oracle.DROP_IN).read() if os.path.exists(oracle.DROP_IN) else None
+    yield oracle.DROP_IN
+    if before is None:
+        if os.path.exists(oracle.DROP_IN):
+            os.remove(oracle.DROP_IN)
+    else:
+        with open(oracle.DROP_IN, "w") as f:
+            f.write(before)
+
 
 def _one_policy_and_route(bridge):
     bridge.create_group("r4")
@@ -266,10 +321,27 @@ def test_the_check_finds_a_route_gone(bridge, db_path):
         oracle.assert_routing_matches_db(db_path)
 
 
-def test_the_check_finds_a_table_name_gone(bridge, db_path):
+def test_the_check_finds_a_table_name_gone(bridge, db_path, drop_in):
     _one_policy_and_route(bridge)
     lines = open(oracle.DROP_IN).read().splitlines()
     with open(oracle.DROP_IN, "w") as f:
         f.write("".join(f"{line}\n" for line in lines if line != "159 r4check"))
     with pytest.raises(AssertionError, match="159 r4check: .* holds neither its id nor its name"):
+        oracle.assert_routing_matches_db(db_path)
+
+
+def test_the_check_finds_a_table_id_under_another_name(bridge, db_path, drop_in):
+    _one_policy_and_route(bridge)
+    lines = open(oracle.DROP_IN).read().splitlines()
+    with open(oracle.DROP_IN, "w") as f:
+        f.write("".join(f"{'159 r4other' if line == '159 r4check' else line}\n" for line in lines))
+    with pytest.raises(AssertionError, match=r"159 r4check: .* holds \[\(159, 'r4other'\)\]"):
+        oracle.assert_routing_matches_db(db_path)
+
+
+def test_the_check_finds_an_id_twice(bridge, db_path, drop_in):
+    _one_policy_and_route(bridge)
+    with open(oracle.DROP_IN, "a") as f:
+        f.write("159 r4again\n")
+    with pytest.raises(AssertionError, match="an id or a name twice"):
         oracle.assert_routing_matches_db(db_path)

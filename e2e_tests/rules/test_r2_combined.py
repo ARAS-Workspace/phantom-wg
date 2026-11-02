@@ -6,7 +6,7 @@ Drives: add_firewall_rule on a started bridge, and add_firewall_rule on a
 stopped bridge followed by start(), the order the daemon boots in; then
 stop() and start() with the rules in place, and remove_firewall_rule.
 Cases: the forwarding, masquerade and listen rules of the daemon's core
-and multihop presets, a forward rule with five matches, dnat with a
+and multihop presets, a forward rule with six matches, dnat with a
 port, an address and an interface in IPv4 and IPv6, reject with a
 network and a port, and comments in ASCII, Turkish, Chinese, an emoji
 and at 128 bytes. Each case's nft rule is written out below by hand.
@@ -61,9 +61,9 @@ CASES = [
     ("five-matches",
      dict(chain="forward", action="accept", in_iface="wg0", out_iface="eth0",
           source="10.0.0.0/24", destination="10.0.1.5", proto="tcp", dport=8080,
-          state_match="new", comment="five matches"),
+          state_match="new", comment="six matches"),
      'forward iifname "wg0" oifname "eth0" ip saddr 10.0.0.0/24 ip daddr 10.0.1.5 '
-     'tcp dport 8080 ct state new accept comment "five matches"'),
+     'tcp dport 8080 ct state new accept comment "six matches"'),
     ("dnat-v4",
      dict(chain="prerouting", action="dnat to 10.0.0.5:443", in_iface="eth0",
           destination="192.0.2.1", proto="tcp", dport=8443),

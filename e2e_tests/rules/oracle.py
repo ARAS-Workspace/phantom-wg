@@ -277,17 +277,20 @@ def assert_routing_matches_db(db_path: str) -> None:
     routes in ROUTE_TABLES, no more and no fewer. DROP_IN holds no id or
     name twice, and for each applied ensure row a line with its id or its
     name that is one of the applied ensure rows. A row's table is the id
-    of its group's ensure row for that name, else the name as a number or
-    a built-in name."""
+    of its group's first ensure row for that name, else the name as a
+    number or a built-in name."""
     db = sqlite3.connect(db_path)
     try:
         rows = db.execute(
             "SELECT id, group_id, rule_type, family, from_network, to_network, table_name, "
-            "table_id, priority, destination, device, applied FROM routing_rules").fetchall()
+            "table_id, priority, destination, device, applied FROM routing_rules "
+            "ORDER BY id").fetchall()
     finally:
         db.close()
-    ensures = {(g, name): tid for _, g, kind, _, _, _, name, tid, _, _, _, _ in rows
-               if kind == "ensure"}
+    ensures: dict[tuple[int, str], int] = {}
+    for _, g, kind, _, _, _, name, tid, _, _, _, _ in rows:
+        if kind == "ensure":
+            ensures.setdefault((g, name), tid)
 
     def table(group_id: int, name: str) -> int:
         if (group_id, name) in ensures:

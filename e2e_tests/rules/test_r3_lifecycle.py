@@ -9,8 +9,10 @@ remove_firewall_rule across groups; enable_group while stopped; a preset
 applied while started; stop() and start(); a new FirewallBridge on the
 same database while the kernel still holds the last one's rules; and a
 second Python process that starts a bridge on the database and exits
-without stop(). After every step the three invariants of oracle.check
-hold, with inet reference built in group priority order.
+without stop(); an ip and an inet table of another owner beside inet
+phantom through start, changes, stop and start. After every step the three
+invariants of oracle.check hold, with inet reference built in group
+priority order.
 
 Does not show: routing rows (R4); presets beyond their group order (R5);
 size (R6); changes made from outside the bridge (R7); a kernel that
@@ -166,8 +168,39 @@ def test_a_preset_applied_while_started_lands_in_its_place(bridge, db_path, mete
     assert _first_verdict("input") == "accept"
 
 
+def test_tables_of_others_are_left_as_they_are(bridge, db_path, meter):
+    """An ip table and an inet table of another owner, with a base chain and
+    a rule each, through the bridge's start, changes, stop and start again."""
+    for family in ("ip", "inet"):
+        oracle.nft(f"add table {family} r3other")
+        oracle.nft(f"add chain {family} r3other c {{ type filter hook input priority 10; "
+                   "policy accept; }")
+        oracle.nft(f"add rule {family} r3other c tcp dport 7 drop")
+    try:
+        listing = lambda: [oracle.nft(f"list table {family} r3other") for family in ("ip", "inet")]
+        made = listing()
+        _groups(bridge)
+        ledger = oracle.Ledger(bridge)
+        for group, fields, rule in RULES:
+            ledger.add(group, rule, **fields)
+        bridge.start()
+        ledger.started()
+        steps = [lambda: ledger.disable("mid"), lambda: ledger.enable("mid"),
+                 lambda: ledger.delete_group("low"), lambda: (bridge.stop(), ledger.stopped()),
+                 lambda: (bridge.start(), ledger.started())]
+        for step in steps:
+            step()
+            oracle.check(bridge, db_path, meter, ledger)
+            assert listing() == made
+        assert {"ip r3other", "inet r3other"} <= set(oracle.foreign_tables())
+    finally:
+        for family in ("ip", "inet"):
+            subprocess.run([oracle.NFT, f"delete table {family} r3other"], capture_output=True,
+                           check=False)
+
+
 def test_a_new_bridge_on_the_same_database(bridge, db_path, meter):
-    """The first bridge's process ends without stop(): the kernel holds its
+    """The first bridge is left started, without stop(): the kernel holds its
     rules, the new bridge holds none applied until start() replaces them."""
     _groups(bridge)
     ledger = oracle.Ledger(bridge)

@@ -4,12 +4,14 @@ R0: the oracle, before it judges the bridge.
 Drives: normalize and assert_same_rules on one rule written through the
 bridge and through nft, and on rules that differ from it in one respect;
 assert_db_matches_kernel on a bridge whose kernel rules or database rows
-are changed from outside it, and on one whose report of its rows is
-changed; ProcessMeter on a child, a zombie, an open file, a thread and
-resident memory over oracle.RSS_CEILING_KB made here; the ip readers on
-rules and routes written with ip; oracle.reaped on a child killed while a
-process it started runs; oracle.foreign_tables with a table added and
-deleted.
+are changed from outside it (a rule gone, one added, one left unapplied,
+one applied while stopped, one with no handle, one in a disabled group,
+one handle on two rules, two handles swapped), on a test that holds an
+applied rule unapplied, and on one whose report of its rows is changed;
+ProcessMeter on a child, a zombie, an open file, a thread and resident
+memory over oracle.RSS_CEILING_KB made here; the ip readers on rules and
+routes written with ip; oracle.reaped on a child killed while a process it
+started runs; oracle.foreign_tables with a table added and deleted.
 
 Does not show: that the bridge writes correct rules (R1 onward); the
 zombie count on a zombie that is not pytest's own child; reaper.py on a
@@ -163,6 +165,40 @@ def test_a_rule_applied_while_stopped_is_found(bridge, db_path):
         db.execute("UPDATE config SET state='stopped'")
     with pytest.raises(AssertionError, match="state=stopped"):
         oracle.assert_db_matches_kernel(bridge, db_path, oracle.read_table(PHANTOM))
+
+
+def test_an_applied_rule_with_no_handle_is_found(bridge, db_path):
+    _started(bridge).add_firewall_rule("r0", **RULE)
+    with _db(db_path) as db:
+        db.execute("UPDATE firewall_rules SET nft_handle=0")
+    with pytest.raises(AssertionError, match="applied=True with handle 0"):
+        oracle.assert_db_matches_kernel(bridge, db_path, oracle.read_table(PHANTOM))
+
+
+def test_a_rule_applied_in_a_disabled_group_is_found(bridge, db_path):
+    _started(bridge).add_firewall_rule("r0", **RULE)
+    with _db(db_path) as db:
+        db.execute("UPDATE rule_groups SET enabled=0")
+    with pytest.raises(AssertionError, match="group enabled=False"):
+        oracle.assert_db_matches_kernel(bridge, db_path, oracle.read_table(PHANTOM))
+
+
+def test_one_handle_on_two_rules_is_found(bridge, db_path):
+    _started(bridge).add_firewall_rule("r0", **RULE)
+    bridge.add_firewall_rule("r0", "input", "drop")
+    with _db(db_path) as db:
+        db.execute("UPDATE firewall_rules SET nft_handle=(SELECT min(nft_handle) FROM firewall_rules)")
+    with pytest.raises(AssertionError, match="one handle on two rules"):
+        oracle.assert_db_matches_kernel(bridge, db_path, oracle.read_table(PHANTOM))
+
+
+def test_a_rule_the_test_holds_unapplied_is_found(bridge, meter, db_path):
+    ledger = oracle.Ledger(_started(bridge))
+    rule_id = ledger.add("r0", RULE_NFT, **RULE)
+    oracle.check(bridge, db_path, meter, ledger)
+    ledger.reference[rule_id] = None
+    with pytest.raises(AssertionError, match="the test has it unapplied"):
+        oracle.assert_db_matches_kernel(bridge, db_path, oracle.read_table(PHANTOM), ledger)
 
 
 def test_two_rules_with_swapped_handles_are_found(bridge, meter, db_path):

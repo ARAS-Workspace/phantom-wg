@@ -207,6 +207,7 @@ def test_networks_changed_while_started(bridge, db_path, meter, tmp_path, name):
     ledger = oracle.Ledger(bridge)
     bridge.start()
     group = ledger.apply_preset(SCENARIOS / f"{name}.yaml", rules)
+    _check(bridge, db_path, meter, ledger)
     before = oracle.routing_state()
 
     ledger.remove_preset(group.name)
@@ -223,6 +224,7 @@ def test_networks_changed_while_started(bridge, db_path, meter, tmp_path, name):
     ledger.started()
     _check(bridge, db_path, meter, ledger)
     ledger.remove_preset(group.name)
+    _check(bridge, db_path, meter, ledger)
     _ip([[_changed(part) for part in command] for command in commands])
     assert oracle.routing_state() == made
 
@@ -301,6 +303,7 @@ def test_two_exits_one_removed(bridge, db_path, meter):
     bridge.start()
     for name in ("exit-one", "exit-two"):
         ledger.apply_preset(SCENARIOS / f"{name}.yaml", PRESETS[name][0])
+        _check(bridge, db_path, meter, ledger)
     assert sorted(oracle.routing_state()[1]) == [152, 153]
     ledger.remove_preset("exit-one")
     _check(bridge, db_path, meter, ledger)

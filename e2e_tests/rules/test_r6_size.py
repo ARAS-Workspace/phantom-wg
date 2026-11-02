@@ -2,19 +2,19 @@
 R6: size, thousands of rules and hundreds of routing rows.
 
 Drives: start() over 189 and 2000 rules of the longest shape with a
-128-byte comment, added while stopped (188 of them filled one argument to
-nft, 128 KiB); 1000 and 5000 rules of six shapes in ten presets made in an
-order that is not their priority order, started then applied and applied
-then started; stop() and start(); a new FirewallBridge on the same
-database; half the presets disabled and enabled; every preset removed;
-five presets of 100 policy rules and 100 routes each, the same routing
-then made with one `ip -batch` run; three cycles of 5000 rules applied
-and removed with no check in between, the resident memory at the end of
-the second and third within 8 MiB of the first. After every step the
-invariants of oracle.check hold, with inet reference written in one nft run from
-oracle.rule_text, and the routing rows are the kernel's
-(oracle.assert_routing_matches_db). rule_text is first held to the rules
-written by hand in R1, R2 and R5.
+128-byte comment, added while stopped (188 of them fill 128 KiB, the most
+one argument holds; the command goes to nft on its stdin); 1000 and 5000
+rules of six shapes in ten presets made in an order that is not their
+priority order, started then applied and applied then started; stop() and
+start(); a new FirewallBridge on the same database; half the presets
+disabled and enabled; every preset removed; five presets of 100 policy
+rules and 100 routes each, the same routing then made with one `ip -batch`
+run; three cycles of 5000 rules applied and removed with no check in
+between, the resident memory at the end of the second and third within
+8 MiB of the first. After every step the invariants of oracle.check hold,
+with inet reference written in one nft run from oracle.rule_text, and the
+routing rows are the kernel's (oracle.assert_routing_matches_db).
+rule_text is first held to the rules written by hand in R1, R2 and R5.
 
 Does not show: more than 5000 rules or 500 routing rows; the time a step
 takes (printed, not bounded); rules added one at a time while started at
