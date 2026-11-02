@@ -108,8 +108,7 @@ class FirewallBridge:
 
     def delete_group(self, name: str) -> None:
         if self._db.get_state() == "started":
-            group = self._db.get_group(name)
-            self._unapply_group(group)
+            self._withdraw(self._db.get_group(name))
         self._db.delete_group(name)
 
     def enable_group(self, name: str) -> None:
@@ -135,8 +134,7 @@ class FirewallBridge:
 
     def disable_group(self, name: str) -> None:
         if self._db.get_state() == "started":
-            group = self._db.get_group(name)
-            self._unapply_group(group)
+            self._withdraw(self._db.get_group(name))
         self._db.disable_group(name)
 
     def list_groups(self) -> list[Group]:
@@ -320,14 +318,32 @@ class FirewallBridge:
 
     def _unapply_group(self, group: Group) -> None:
         """Remove all applied rules in a group from kernel."""
-        gid = group.id
-        for rule in self._db.firewall_rules_for_group(gid):
+        for rule in self._db.firewall_rules_for_group(group.id):
             if rule.applied and rule.nft_handle:
                 self._lib.nft_remove_rule(
                     _encode(rule.chain), rule.nft_handle,
                 )
                 self._db.update_fw_applied(rule.id, False, 0)
-        for rule in self._db.routing_rules_for_group(gid):
+        self._unapply_routing(group)
+
+    def _withdraw(self, group: Group) -> None:
+        """A started bridge's group out of the kernel: when it is enabled,
+        the table rebuilt without its firewall rules with _rebuild_fw, then
+        its routing rules removed. When nft refuses the table, the group is
+        as it was and the error is raised."""
+        if group.enabled:
+            self._db.disable_group(group.name)
+            try:
+                self._rebuild_fw()
+            except BaseException:
+                self._db.enable_group(group.name)
+                raise
+            for rule in self._db.firewall_rules_for_group(group.id):
+                self._db.update_fw_applied(rule.id, False, 0)
+        self._unapply_routing(group)
+
+    def _unapply_routing(self, group: Group) -> None:
+        for rule in self._db.routing_rules_for_group(group.id):
             if rule.applied:
                 self._kernel_remove_routing(rule)
                 self._db.update_rt_applied(rule.id, False)

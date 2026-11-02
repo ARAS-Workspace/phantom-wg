@@ -277,14 +277,41 @@ class TestAutoApply:
         bridge.add_firewall_rule("g1", "input", "accept")
         bridge.start()
         bridge.disable_group("g1")
-        mock_lib.nft_remove_rule.assert_called()
+        assert mock_lib.nft_replace_rules.call_args.args[1] == 0
+        mock_lib.nft_remove_rule.assert_not_called()
+        assert [(r.applied, r.nft_handle) for r in bridge.list_firewall_rules()] == [(False, 0)]
 
     def test_delete_group_while_started(self, bridge, mock_lib):
         bridge.create_group("g1")
         bridge.start()
         _rid = bridge.add_firewall_rule("g1", "input", "accept")
         bridge.delete_group("g1")
-        mock_lib.nft_remove_rule.assert_called()
+        assert mock_lib.nft_replace_rules.call_args.args[1] == 0
+        mock_lib.nft_remove_rule.assert_not_called()
+        assert bridge.list_firewall_rules() == []
+
+    def test_disable_group_rebuilds_the_others_in_one_run(self, bridge, mock_lib):
+        bridge.create_group("a", priority=10)
+        bridge.create_group("b", priority=20)
+        bridge.add_firewall_rule("a", "input", "accept")
+        kept = bridge.add_firewall_rule("b", "input", "drop")
+        bridge.start()
+        calls = mock_lib.nft_replace_rules.call_count
+        bridge.disable_group("a")
+        assert mock_lib.nft_replace_rules.call_count == calls + 1
+        assert mock_lib.nft_replace_rules.call_args.args[1] == 1
+        assert [(r.id, r.applied, r.nft_handle) for r in bridge.list_firewall_rules("b")] == [
+            (kept, True, 42)]
+
+    def test_disable_group_already_disabled_leaves_the_kernel(self, bridge, mock_lib):
+        bridge.create_group("g1")
+        bridge.add_firewall_rule("g1", "input", "accept")
+        bridge.disable_group("g1")
+        bridge.start()
+        calls = mock_lib.nft_replace_rules.call_count
+        bridge.disable_group("g1")
+        bridge.delete_group("g1")
+        assert mock_lib.nft_replace_rules.call_count == calls
 
 
 class TestRefusedByKernel:
@@ -358,6 +385,19 @@ class TestRefusedByKernel:
             bridge.add_routing_rule("g1", "policy", from_network="10.0.0.0/24",
                                     table_name="mh", priority=100)
         assert bridge.list_routing_rules() == []
+
+    @pytest.mark.parametrize("call", ["disable_group", "delete_group"])
+    def test_a_refused_rebuild_leaves_the_group(self, bridge, mock_lib, last_error, call):
+        bridge.create_group("g1")
+        rule_id = bridge.add_firewall_rule("g1", "input", "accept")
+        bridge.start()
+        mock_lib.nft_replace_rules.side_effect = None
+        mock_lib.nft_replace_rules.return_value = -3
+        with pytest.raises(NftablesError):
+            getattr(bridge, call)("g1")
+        assert bridge.get_group("g1").enabled
+        assert [(r.id, r.applied, r.nft_handle) for r in bridge.list_firewall_rules()] == [
+            (rule_id, True, 42)]
 
     def test_enable_group_undoes_what_it_applied(self, bridge, mock_lib, last_error):
         bridge.create_group("g1")
