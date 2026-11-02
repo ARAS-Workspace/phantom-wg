@@ -689,12 +689,17 @@ fn ensure_table_in(path: &Path, table_id: u32, table_name: &str) -> Result<(), S
         .map_err(|e| format!("Cannot write {}: {}", path.display(), e))
 }
 
-/// Flush the IPv4 route cache through /proc.
+/// Flush the IPv4 route cache through /proc; a write that fails is an error.
 ///
 /// @witness kernel_tests::kernel_forwarding_and_route_cache
+/// @witness route::tests::flush_cache_reports_a_failed_write
 pub fn flush_cache() -> Result<(), String> {
-    let _ = std::fs::write("/proc/sys/net/ipv4/route/flush", "1");
-    Ok(())
+    flush_cache_at(Path::new("/proc/sys/net/ipv4/route/flush"))
+}
+
+/// `flush_cache`, writing to `path`.
+fn flush_cache_at(path: &Path) -> Result<(), String> {
+    std::fs::write(path, "1").map_err(|e| format!("Cannot flush the route cache: {e}"))
 }
 
 /// Enable IP forwarding.
@@ -1053,6 +1058,15 @@ mod tests {
         assert_eq!(resolve_table_in(&etc, &usr, "inetcmain"), Ok(200));
         assert_eq!(resolve_table_in(&etc, &usr, "inusr"),
                    Err("Routing table not found: inusr".into()));
+    }
+
+    #[test]
+    fn flush_cache_reports_a_failed_write() {
+        let dir = rt_dir("flush-cache");
+        let err = flush_cache_at(&dir.join("missing/flush")).unwrap_err();
+        assert!(err.starts_with("Cannot flush the route cache: "), "{err}");
+        assert_eq!(flush_cache_at(&dir.join("flush")), Ok(()));
+        assert_eq!(std::fs::read_to_string(dir.join("flush")).unwrap(), "1");
     }
 
     #[test]
