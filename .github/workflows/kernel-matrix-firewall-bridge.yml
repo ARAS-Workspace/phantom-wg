@@ -3,9 +3,10 @@ name: Kernel matrix for firewall-bridge
 # The steps of test-firewall-bridge.yml on the kernels of the support
 # matrix: each job boots a pinned cloud image under KVM, and the guest runs
 # .github/scripts/kernel-matrix-guest.sh on the repository it gets on a
-# payload disk. The guest's kernel, each step's exit code and seconds, and
-# the failed tests go to the job summary; the guest's logs are kept as an
-# artifact.
+# payload disk. Each step's output shows in this job's log while it runs,
+# one collapsible group per step. The guest's kernel, each step's exit code
+# and seconds, and the failed tests go to the job summary, the failed tests
+# also as annotations; the guest's logs are kept as an artifact.
 
 on:
   push:
@@ -144,9 +145,12 @@ jobs:
           ls -l "$vm"
 
       - name: Run the steps in the guest
+        env:
+          NAME: ${{ matrix.name }}
         run: |
           cd "$RUNNER_TEMP/vm"
           : > serial.log
+          : > guest.log
           # -accel kvm has no fallback: without KVM, QEMU exits at once.
           timeout 90m qemu-system-x86_64 -accel kvm -cpu host -smp 3 -m 12288 \
             -drive file=disk.qcow2,if=virtio,format=qcow2 \
@@ -156,12 +160,32 @@ jobs:
             -drive file=results.img,if=none,id=results,format=raw \
             -device virtio-blk-pci,drive=results,serial=results \
             -nic user,model=virtio-net-pci \
+            -device virtio-serial-pci -chardev file,id=matrixlog,path=guest.log \
+            -device virtserialport,chardev=matrixlog,name=matrix.log \
             -display none -monitor none -serial file:serial.log -no-reboot &
           qemu=$!
-          tail -n +1 -F --pid="$qemu" serial.log 2>/dev/null | grep -a --line-buffered 'MATRIX |' || true
+          # The guest's lines as they come: "@@matrix" lines become groups,
+          # notes and, for a step that exits non-zero, an annotation; every
+          # other line starts with its step's name and is printed as it is.
+          tail -n +1 -F --pid="$qemu" guest.log 2>/dev/null | awk -v name="$NAME" '
+            $1 == "@@matrix" && $2 == "step-start" { print "::group::" $3; fflush(); next }
+            $1 == "@@matrix" && $2 == "step-end" {
+              print "::endgroup::"
+              print $3 ": exit " $4 " after " $5 " s"
+              if ($4 != 0) print "::error title=" name " " $3 "::" $3 " exited " $4 " after " $5 " s"
+              fflush(); next
+            }
+            $1 == "@@matrix" && $2 == "note" { sub(/^@@matrix note /, ""); print "MATRIX | " $0; fflush(); next }
+            { print; fflush() }
+          ' || true
           rc=0
           wait "$qemu" || rc=$?
           echo "qemu exit: $rc"
+          if ! grep -q '^@@matrix step-start ' guest.log; then
+            echo "::group::serial console, last 60 lines (no step reached the virtio port)"
+            tail -n 60 serial.log | sed 's/^/console | /'
+            echo "::endgroup::"
+          fi
           mkdir -p results
           tar -xf results.img -C results || echo "the results disk holds no tar"
           test "$rc" -eq 0
@@ -188,6 +212,24 @@ jobs:
               | sed -E 's/^.*TEST \| //; s/^.*\[INFO\] +//; s/^/e2e    /' || true
             echo '```'
           } | tee -a "$GITHUB_STEP_SUMMARY"
+          # The failed tests as annotations; GitHub shows ten per step, so past
+          # ten the tenth says how many more the summary above lists.
+          fails=$(
+            {
+              grep -hE '^test .* FAILED$' "$r/cargo.log" | sed -E 's/^test (.*) \.\.\. FAILED$/cargo \1/'
+              grep -hE '^(FAILED|ERROR) ' "$r/unit.log" | sed -E 's/ - .*//; s/^/unit /'
+              grep -haE 'TEST \| (FAILED|ERROR) ' "$r/e2e.log" | sed -E 's/^.*TEST \| //; s/ - .*//; s/^/e2e /'
+            } 2>/dev/null | sed 's/%/%25/g' || true
+          )
+          n=$(printf '%s\n' "$fails" | grep -c . || true)
+          shown=$n
+          if [ "$n" -gt 10 ]; then shown=9; fi
+          printf '%s\n' "$fails" | grep . | head -n "$shown" | while read -r step test; do
+            echo "::error title=$NAME $step::$test"
+          done
+          if [ "$n" -gt 10 ]; then
+            echo "::error title=$NAME::$((n - 9)) more failed tests, listed in the job summary"
+          fi
           test "$kernel" = "$KERNEL"
           test "$(wc -l < "$r/steps")" -eq 5
           awk '$2 != 0 {bad = 1} END {exit bad}' "$r/steps"
@@ -199,6 +241,7 @@ jobs:
           name: kernel-matrix-${{ matrix.docker_codename }}
           path: |
             ${{ runner.temp }}/vm/results
+            ${{ runner.temp }}/vm/guest.log
             ${{ runner.temp }}/vm/serial.log
           retention-days: 14
           if-no-files-found: ignore

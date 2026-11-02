@@ -5,19 +5,41 @@
 # guest's kernel: the dev image, cargo test --lib in it, the Python unit
 # runner and the E2E runner.
 #
-# Each step's output goes to /results/<step>.log and a line "<step> <exit
-# code> <seconds>" to /results/steps; /results/kernel holds uname -r. On exit
-# /results is written as a tar to the results disk and the guest powers off.
-# Progress lines start with "MATRIX |" on the serial console.
+# Each step's output goes, line by line, to /results/<step>.log and, with
+# "<step> | " before each line, to the virtio port matrix.log, which the
+# runner shows while the step runs (to /dev/ttyS0 when the port is absent).
+# Lines of the script itself start with "@@matrix ": "step-start <step>",
+# "step-end <step> <exit code> <seconds>" and "note <text>"; a step's lines
+# start with its name, so none of them starts with "@@matrix ". A line
+# "<step> <exit code> <seconds>" goes to /results/steps; /results/kernel
+# holds uname -r. On exit /results is written as a tar to the results disk
+# and the guest powers off.
 set -uo pipefail
 
 WORK=/work
 RESULTS=/results
 mkdir -p "$RESULTS"
 . "$WORK/matrix.env"
+# Python writes each line when it is printed, not when its buffer fills.
+export PYTHONUNBUFFERED=1 BUILDKIT_PROGRESS=plain
+
+LOG=/dev/virtio-ports/matrix.log
+for _ in $(seq 30); do
+    [ -e "$LOG" ] && break
+    sleep 1
+done
+if [ ! -e "$LOG" ]; then
+    LOG=/dev/ttyS0
+    echo "@@matrix note no virtio port matrix.log, writing to /dev/ttyS0" >> "$LOG"
+fi
+
+mark() {
+    echo "@@matrix $*" >> "$LOG"
+}
 
 say() {
-    echo "MATRIX | $*" | tee -a "$RESULTS/progress" >> /dev/ttyS0
+    echo "$*" >> "$RESULTS/progress"
+    mark "note $*"
 }
 
 finish() {
@@ -29,12 +51,13 @@ finish() {
 trap finish EXIT
 
 step() {
-    local name=$1 t0=$SECONDS rc=0
+    local name=$1 t0=$SECONDS rc
     shift
-    say "$name started"
-    "$@" > "$RESULTS/$name.log" 2>&1 || rc=$?
+    mark "step-start $name"
+    "$@" 2>&1 | tee -a "$RESULTS/$name.log" | sed -u -e "s/^/$name | /" -e '$a\' >> "$LOG"
+    rc=${PIPESTATUS[0]}
     echo "$name $rc $((SECONDS - t0))" >> "$RESULTS/steps"
-    say "$name: exit $rc after $((SECONDS - t0)) s"
+    mark "step-end $name $rc $((SECONDS - t0))"
     return "$rc"
 }
 
