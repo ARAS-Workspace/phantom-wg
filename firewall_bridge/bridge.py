@@ -76,18 +76,19 @@ class FirewallBridge:
             for group in self._db.enabled_groups():
                 self._apply_routing(group)
         except BaseException:
-            self._lib.nft_flush_table()
+            self._empty_table()
             self._remove_all_routing()
             self._db.clear_applied_state()
             raise
         self._db.set_state("started")
 
     def stop(self) -> None:
-        """Flush all rules from kernel, mark unapplied."""
+        """Replace the table with one with no rules, remove the applied
+        routing rules from kernel, mark all unapplied."""
         state = self._db.get_state()
         if state != "started":
             raise NotStartedError("Bridge not started")
-        self._lib.nft_flush_table()
+        self._empty_table()
         self._remove_all_routing()
         self._db.clear_applied_state()
         self._db.set_state("stopped")
@@ -246,6 +247,11 @@ class FirewallBridge:
                  for r in self._db.firewall_rules_for_group(g.id)]
         for rule, handle in zip(rules, self._kernel_replace_fw_rules(rules)):
             self._db.update_fw_applied(rule.id, True, handle)
+
+    def _empty_table(self) -> None:
+        """The table replaced with one with no rules; a refusal is not
+        raised."""
+        self._lib.nft_replace_rules(None, 0, None)
 
     def _kernel_replace_fw_rules(self, rules: list[FirewallRule]) -> list[int]:
         """The table's rules become `rules`, in one transaction; returns

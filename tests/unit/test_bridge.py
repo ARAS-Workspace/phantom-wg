@@ -232,13 +232,23 @@ class TestAutoApply:
             (b"input", b"accept"), (b"forward", b"drop")]
         assert [r.nft_handle for r in bridge.list_firewall_rules()] == [42, 43]
 
-    def test_stop_flushes_kernel(self, bridge, mock_lib):
+    def test_stop_replaces_the_table_with_no_rules(self, bridge, mock_lib):
         bridge.create_group("g1")
         bridge.add_firewall_rule("g1", "input", "accept")
         bridge.start()
-        mock_lib.nft_flush_table.reset_mock()
+        mock_lib.reset_mock()
         bridge.stop()
-        mock_lib.nft_flush_table.assert_called()
+        assert mock_lib.nft_replace_rules.call_args_list == [((None, 0, None),)]
+        mock_lib.nft_flush_table.assert_not_called()
+
+    def test_stop_refused_by_nft_still_stops(self, bridge, mock_lib, last_error):
+        bridge.create_group("g1")
+        bridge.add_firewall_rule("g1", "input", "accept")
+        bridge.start()
+        mock_lib.nft_replace_rules.side_effect = lambda rules, count, handles: -3
+        bridge.stop()
+        assert bridge.get_state() == "stopped"
+        assert not any(r.applied for r in bridge.list_firewall_rules())
 
     def test_disabled_group_not_applied(self, bridge, mock_lib):
         bridge.create_group("g1")
@@ -333,12 +343,13 @@ class TestRefusedByKernel:
         assert [c[0] for c in mock_lib.method_calls] == [
             "nft_init", "rt_policy_delete", "rt_policy_delete",
             "nft_replace_rules", "rt_policy_add", "rt_policy_add",
-            "nft_flush_table", "rt_policy_delete",
+            "nft_replace_rules", "rt_policy_delete",
         ]
+        assert mock_lib.nft_replace_rules.call_args_list[-1] == ((None, 0, None),)
         assert not any(r.applied or r.nft_handle for r in bridge.list_firewall_rules())
         assert not any(r.applied for r in bridge.list_routing_rules())
 
-    def test_start_refused_by_nft_flushes(self, bridge, mock_lib, last_error):
+    def test_start_refused_by_nft_empties_the_table(self, bridge, mock_lib, last_error):
         bridge.create_group("g1")
         bridge.add_routing_rule("g1", "policy", from_network="10.0.0.0/24",
                                 table_name="mh", priority=100)
@@ -348,8 +359,9 @@ class TestRefusedByKernel:
         with pytest.raises(NftablesError):
             bridge.start()
         assert [c[0] for c in mock_lib.method_calls] == [
-            "nft_init", "rt_policy_delete", "nft_replace_rules", "nft_flush_table",
+            "nft_init", "rt_policy_delete", "nft_replace_rules", "nft_replace_rules",
         ]
+        assert mock_lib.nft_replace_rules.call_args_list[-1] == ((None, 0, None),)
         assert bridge.get_state() == "stopped"
         assert not any(r.applied for r in bridge.list_routing_rules())
 
