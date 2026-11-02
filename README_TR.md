@@ -233,6 +233,9 @@ firewall-bridge/
 # dev konteynerini gerektiren çekirdek testleri (nft, netlink)
 dev/build.sh && dev/cargo.sh test --lib
 
+# Dev konteynerinde clippy, her uyarı hata sayılır
+dev/clippy.sh
+
 # Python unit testleri
 python tests/runner.py
 

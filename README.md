@@ -231,6 +231,9 @@ firewall-bridge/
 # privileged dev container dev/cargo.sh starts
 dev/build.sh && dev/cargo.sh test --lib
 
+# Clippy in the dev container, every warning an error
+dev/clippy.sh
+
 # Python unit tests
 python tests/runner.py
 

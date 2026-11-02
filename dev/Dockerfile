@@ -12,8 +12,12 @@
 #   dev/build.sh          # build image
 #   dev/shell.sh          # interactive shell (source mounted)
 #   dev/cargo.sh test     # run cargo commands inside container
+#   dev/clippy.sh         # clippy, every warning an error
 
 FROM rust:1.99.1-trixie
+
+# clippy of the image's toolchain, for dev/clippy.sh
+RUN rustup component add clippy
 
 # nft's command language and JSON output are what nft.rs drives, so nftables
 # is installed at an exact version. nftables pins libnftables1 with "=".
