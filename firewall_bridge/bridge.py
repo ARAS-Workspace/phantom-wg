@@ -333,11 +333,11 @@ class FirewallBridge:
         self._unapply_routing(group)
 
     def _withdraw(self, group: Group) -> None:
-        """A started bridge's group out of the kernel: when it is enabled,
-        the table rebuilt without its firewall rules with _rebuild_fw, then
-        its routing rules removed. When nft refuses the table, the group is
-        as it was and the error is raised."""
-        if group.enabled:
+        """A started bridge's group out of the kernel: when it is enabled
+        and has applied firewall rules, the table rebuilt without them with
+        _rebuild_fw, then its routing rules removed. When nft refuses the
+        table, the group is as it was and the error is raised."""
+        if group.enabled and any(r.applied for r in self._db.firewall_rules_for_group(group.id)):
             self._db.disable_group(group.name)
             try:
                 self._rebuild_fw()

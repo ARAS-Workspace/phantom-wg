@@ -323,6 +323,31 @@ class TestAutoApply:
         bridge.delete_group("g1")
         assert mock_lib.nft_replace_rules.call_count == calls
 
+    def test_a_group_with_no_applied_rule_leaves_the_table(self, bridge, mock_lib):
+        bridge.create_group("rules")
+        bridge.add_firewall_rule("rules", "input", "accept")
+        bridge.create_group("routing")
+        bridge.add_routing_rule("routing", "policy", from_network="10.0.0.0/24",
+                                table_name="mh", priority=100)
+        bridge.create_group("empty")
+        bridge.start()
+        mock_lib.reset_mock()
+        bridge.disable_group("routing")
+        bridge.delete_group("empty")
+        mock_lib.nft_replace_rules.assert_not_called()
+        mock_lib.rt_policy_delete.assert_called_once()
+        assert not bridge.get_group("routing").enabled
+        assert not any(r.applied for r in bridge.list_routing_rules())
+
+    def test_apply_preset_while_started_rebuilds_once(self, bridge, mock_lib):
+        bridge.create_group("a")
+        bridge.add_firewall_rule("a", "input", "accept")
+        bridge.start()
+        calls = mock_lib.nft_replace_rules.call_count
+        apply_preset(bridge, {"name": "p", "rules": [{"chain": "input", "action": "drop"}]})
+        assert mock_lib.nft_replace_rules.call_count == calls + 1
+        assert mock_lib.nft_replace_rules.call_args.args[1] == 2
+
 
 class TestRefusedByKernel:
     """The kernel refuses one rule: what the call applied is removed again."""
@@ -410,6 +435,17 @@ class TestRefusedByKernel:
         assert bridge.get_group("g1").enabled
         assert [(r.id, r.applied, r.nft_handle) for r in bridge.list_firewall_rules()] == [
             (rule_id, True, 42)]
+
+    def test_apply_preset_refused_by_nft_leaves_no_group(self, bridge, mock_lib, last_error):
+        bridge.create_group("a")
+        bridge.add_firewall_rule("a", "input", "accept")
+        bridge.start()
+        mock_lib.nft_replace_rules.side_effect = None
+        mock_lib.nft_replace_rules.return_value = -3
+        with pytest.raises(NftablesError):
+            apply_preset(bridge, {"name": "p", "rules": [{"chain": "input", "action": "drop"}]})
+        assert [g.name for g in bridge.list_groups()] == ["a"]
+        assert [(r.applied, r.nft_handle) for r in bridge.list_firewall_rules()] == [(True, 42)]
 
     def test_enable_group_undoes_what_it_applied(self, bridge, mock_lib, last_error):
         bridge.create_group("g1")
