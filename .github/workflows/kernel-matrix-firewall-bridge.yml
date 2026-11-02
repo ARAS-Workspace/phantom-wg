@@ -1,0 +1,204 @@
+name: Kernel matrix for firewall-bridge
+
+# The steps of test-firewall-bridge.yml on the kernels of the support
+# matrix: each job boots a pinned cloud image under KVM, and the guest runs
+# .github/scripts/kernel-matrix-guest.sh on the repository it gets on a
+# payload disk. The guest's kernel, each step's exit code and seconds, and
+# the failed tests go to the job summary; the guest's logs are kept as an
+# artifact.
+
+on:
+  push:
+    branches:
+      - 'dev/firewall-bridge'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read
+
+env:
+  # Docker CE from download.docker.com, the same versions on every guest
+  # (bullseye's repository ends at docker-ce 29.8.0); each matrix entry
+  # gives the suffix its repository adds.
+  DOCKER_CE: '5:29.8.0-1'
+  CONTAINERD_IO: '2.3.4-2'
+  BUILDX: '0.37.0-1'
+  COMPOSE: '5.5.1-1'
+  PY_DOCKER: '7.1.0'
+
+jobs:
+  kernel:
+    name: Kernel ${{ matrix.name }}
+    runs-on: ubuntu-26.04
+    timeout-minutes: 100
+    strategy:
+      fail-fast: false
+      matrix:
+        # The first kernel of each release: Ubuntu 22.04's, the lowest of the
+        # support matrix, and Debian 11's (below it), 12's and 13's.
+        include:
+          - name: Ubuntu 22.04 GA (5.15)
+            image: https://cloud-images.ubuntu.com/releases/jammy/release-20220420/ubuntu-22.04-server-cloudimg-amd64.img
+            digest_tool: sha256sum
+            digest: de5e632e17b8965f2baf4ea6d2b824788e154d9a65df4fd419ec4019898e15cd
+            kernel: 5.15.0-25-generic
+            docker_os: ubuntu
+            docker_codename: jammy
+            docker_suffix: '~ubuntu.22.04~jammy'
+          - name: Debian 11.0 (5.10)
+            image: https://cloud.debian.org/images/cloud/bullseye/20210814-734/debian-11-generic-amd64-20210814-734.qcow2
+            digest_tool: sha512sum
+            digest: ed680265ce925e3e02336b052bb476883e2d3b023f7b7d39d064d58ba5f1856869f75dca637c27c0303b731d082ff23a7e45ea2e3f9bcb8f3c4ce0c24332885d
+            kernel: 5.10.0-8-amd64
+            docker_os: debian
+            docker_codename: bullseye
+            docker_suffix: '~debian.11~bullseye'
+          - name: Debian 12.0 (6.1)
+            image: https://cloud.debian.org/images/cloud/bookworm/20230612-1409/debian-12-generic-amd64-20230612-1409.qcow2
+            digest_tool: sha512sum
+            digest: 61358292dbec302446a272d5011019091ca78e3fe8878b2d67d31b32e0661306c53a72f793f109394daf937a3db7b2db34422d504e07fdbb300a7bf87109fcf1
+            kernel: 6.1.0-9-amd64
+            docker_os: debian
+            docker_codename: bookworm
+            docker_suffix: '~debian.12~bookworm'
+          - name: Debian 13.0 (6.12)
+            image: https://cloud.debian.org/images/cloud/trixie/20250811-2201/debian-13-generic-amd64-20250811-2201.qcow2
+            digest_tool: sha512sum
+            digest: 72a3755e2ae5e7cb02b5ef04c2572c8e631baa53de8a1732cf24e10cf14adbf9f122b485a505f378b7fe1c0323e9a2ca92b2bf44040f3c8468e4da135a5f67dd
+            kernel: 6.12.38+deb13-amd64
+            docker_os: debian
+            docker_codename: trixie
+            docker_suffix: '~debian.13~trixie'
+    steps:
+      - name: Harden runner
+        uses: step-security/harden-runner@58077d3c7e43986b6b15fba718e8ea69e387dfcc # v2.15.1
+        with:
+          egress-policy: audit
+
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+
+      - name: Fetch compose-bridge
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: bash fetch_compose_bridge.sh
+
+      - name: Open /dev/kvm as the runner user
+        run: |
+          # The rule GitHub's changelog of 2024-04-02 gives for KVM on Linux runners.
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+          python3 -c 'import fcntl, os; fd = os.open("/dev/kvm", os.O_RDWR); print("KVM_GET_API_VERSION:", fcntl.ioctl(fd, 0xAE00)); os.close(fd)'
+
+      - name: Install QEMU
+        run: |
+          sudo apt-get update -q
+          sudo apt-get install -y -q --no-install-recommends qemu-system-x86 qemu-utils cloud-image-utils
+          qemu-system-x86_64 --version | head -1
+
+      - name: Fetch the image
+        env:
+          IMAGE_URL: ${{ matrix.image }}
+          DIGEST_TOOL: ${{ matrix.digest_tool }}
+          DIGEST: ${{ matrix.digest }}
+        run: |
+          mkdir -p "$RUNNER_TEMP/vm"
+          curl -fSL --retry 3 --retry-delay 2 -o "$RUNNER_TEMP/vm/base.img" "$IMAGE_URL"
+          echo "$DIGEST  $RUNNER_TEMP/vm/base.img" | "$DIGEST_TOOL" -c -
+          qemu-img create -f qcow2 -b base.img -F qcow2 "$RUNNER_TEMP/vm/disk.qcow2" 40G
+
+      - name: Make the payload, seed and results disks
+        env:
+          KERNEL: ${{ matrix.kernel }}
+          DOCKER_OS: ${{ matrix.docker_os }}
+          DOCKER_CODENAME: ${{ matrix.docker_codename }}
+          DOCKER_SUFFIX: ${{ matrix.docker_suffix }}
+        run: |
+          vm="$RUNNER_TEMP/vm"
+          {
+            echo "EXPECT_KERNEL='$KERNEL'"
+            echo "DOCKER_OS='$DOCKER_OS'"
+            echo "DOCKER_CODENAME='$DOCKER_CODENAME'"
+            echo "DOCKER_SUFFIX='$DOCKER_SUFFIX'"
+            echo "DOCKER_CE='$DOCKER_CE'"
+            echo "CONTAINERD_IO='$CONTAINERD_IO'"
+            echo "BUILDX='$BUILDX'"
+            echo "COMPOSE='$COMPOSE'"
+            echo "PY_DOCKER='$PY_DOCKER'"
+          } > matrix.env
+          # The repository at this commit, compose-bridge and matrix.env.
+          git archive --format=tar -o "$vm/payload.tar" HEAD
+          tar -rf "$vm/payload.tar" lib/compose_bridge matrix.env
+          truncate -s 1G "$vm/results.img"
+          cat > "$vm/user-data" <<'EOF'
+          #cloud-config
+          runcmd:
+            - [sh, -c, 'mkdir -p /work && tar -xf /dev/disk/by-id/virtio-payload -C /work && exec bash /work/.github/scripts/kernel-matrix-guest.sh || { echo "MATRIX | payload unreadable" > /dev/ttyS0; poweroff; }']
+          EOF
+          echo "instance-id: kernel-matrix" > "$vm/meta-data"
+          cloud-localds "$vm/seed.img" "$vm/user-data" "$vm/meta-data"
+          ls -l "$vm"
+
+      - name: Run the steps in the guest
+        run: |
+          cd "$RUNNER_TEMP/vm"
+          : > serial.log
+          # -accel kvm has no fallback: without KVM, QEMU exits at once.
+          timeout 90m qemu-system-x86_64 -accel kvm -cpu host -smp 3 -m 12288 \
+            -drive file=disk.qcow2,if=virtio,format=qcow2 \
+            -drive file=seed.img,if=virtio,format=raw \
+            -drive file=payload.tar,if=none,id=payload,format=raw,readonly=on \
+            -device virtio-blk-pci,drive=payload,serial=payload \
+            -drive file=results.img,if=none,id=results,format=raw \
+            -device virtio-blk-pci,drive=results,serial=results \
+            -nic user,model=virtio-net-pci \
+            -display none -monitor none -serial file:serial.log -no-reboot &
+          qemu=$!
+          tail -n +1 -F --pid="$qemu" serial.log 2>/dev/null | grep -a --line-buffered 'MATRIX |' || true
+          rc=0
+          wait "$qemu" || rc=$?
+          echo "qemu exit: $rc"
+          mkdir -p results
+          tar -xf results.img -C results || echo "the results disk holds no tar"
+          test "$rc" -eq 0
+
+      - name: Summary
+        if: always()
+        env:
+          NAME: ${{ matrix.name }}
+          KERNEL: ${{ matrix.kernel }}
+        run: |
+          r="$RUNNER_TEMP/vm/results"
+          kernel=$(cat "$r/kernel" 2>/dev/null || echo none)
+          {
+            echo "## $NAME"
+            echo '```'
+            echo "guest kernel: $kernel (expected $KERNEL)"
+            echo
+            echo "step         exit  seconds"
+            awk '{printf "%-12s %4s  %7s\n", $1, $2, $3}' "$r/steps" 2>/dev/null || echo "no steps recorded"
+            echo
+            grep -hE '^test result:|^test .* FAILED$' "$r/cargo.log" 2>/dev/null | sed 's/^/cargo  /' || true
+            grep -hE '^(FAILED|ERROR) |^=+ .*(passed|failed|error).* in ' "$r/unit.log" 2>/dev/null | sed 's/^/unit   /' || true
+            grep -haE 'stage: (PASSED|FAILED)|TEST \| (FAILED|ERROR) ' "$r/e2e.log" 2>/dev/null \
+              | sed -E 's/^.*TEST \| //; s/^.*\[INFO\] +//; s/^/e2e    /' || true
+            echo '```'
+          } | tee -a "$GITHUB_STEP_SUMMARY"
+          test "$kernel" = "$KERNEL"
+          test "$(wc -l < "$r/steps")" -eq 5
+          awk '$2 != 0 {bad = 1} END {exit bad}' "$r/steps"
+
+      - name: Keep the guest's logs
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: kernel-matrix-${{ matrix.docker_codename }}
+          path: |
+            ${{ runner.temp }}/vm/results
+            ${{ runner.temp }}/vm/serial.log
+          retention-days: 14
+          if-no-files-found: ignore

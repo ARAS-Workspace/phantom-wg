@@ -2,12 +2,13 @@
 
 ## Workflows
 
-| Workflow                         | Trigger                               | Jobs                                     | Output                                    |
-|----------------------------------|---------------------------------------|------------------------------------------|-------------------------------------------|
-| `test-firewall-bridge.yml`       | push, `workflow_call`                 | `test-rust`, `test-python`, `e2e`        | —                                         |
-| `build-firewall-bridge.yml`      | push, `workflow_call`                 | `build-linux-amd64`, `build-linux-arm64` | .so + .h + .sha256 artifacts              |
-| `publish-firewall-bridge.yml`    | `workflow_dispatch`                   | `version` → `test` → `build` → `publish` | tagged release + zip assets               |
-| `verify-kvm-firewall-bridge.yml` | push (this file), `workflow_dispatch` | `verify-kvm`                             | runner and guest facts in the job summary |
+| Workflow                            | Trigger                               | Jobs                                     | Output                                    |
+|-------------------------------------|---------------------------------------|------------------------------------------|-------------------------------------------|
+| `test-firewall-bridge.yml`          | push, `workflow_call`                 | `test-rust`, `test-python`, `e2e`        | —                                         |
+| `build-firewall-bridge.yml`         | push, `workflow_call`                 | `build-linux-amd64`, `build-linux-arm64` | .so + .h + .sha256 artifacts              |
+| `publish-firewall-bridge.yml`       | `workflow_dispatch`                   | `version` → `test` → `build` → `publish` | tagged release + zip assets               |
+| `verify-kvm-firewall-bridge.yml`    | push (this file), `workflow_dispatch` | `verify-kvm`                             | runner and guest facts in the job summary |
+| `kernel-matrix-firewall-bridge.yml` | push, `workflow_dispatch`             | `kernel` × guest kernels                 | per kernel: steps, failed tests; logs     |
 
 ## Flow
 
@@ -17,9 +18,12 @@ Branch push (dev/firewall-bridge):
   │     ├── test-rust      (Docker cargo test)
   │     ├── test-python    (Docker SDK unit runner)
   │     └── e2e            (compose-bridge multihop v4/v6)
-  └── build-firewall-bridge.yml
-        ├── build-linux-amd64  (ubuntu-26.04, rust trixie image)
-        └── build-linux-arm64  (ubuntu-26.04-arm, rust trixie image)
+  ├── build-firewall-bridge.yml
+  │     ├── build-linux-amd64  (ubuntu-26.04, rust trixie image)
+  │     └── build-linux-arm64  (ubuntu-26.04-arm, rust trixie image)
+  └── kernel-matrix-firewall-bridge.yml
+        └── kernel   (one job per guest kernel, under KVM: the steps of
+                      test-firewall-bridge.yml, Docker CE pinned)
 
 Publish (workflow_dispatch):
   └── publish-firewall-bridge.yml
