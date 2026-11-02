@@ -309,10 +309,8 @@ class FirewallBridge:
     def _table_for(self, rule: RoutingRule) -> str:
         """The table a policy or route row is sent to: the id of its own
         group's ensure row for that name, else the name as written."""
-        for other in self._db.routing_rules_for_group(rule.group_id):
-            if other.rule_type == "ensure" and other.table_name == rule.table_name:
-                return str(other.table_id)
-        return rule.table_name
+        table_id = self._db.ensure_table_id(rule.group_id, rule.table_name)
+        return rule.table_name if table_id is None else str(table_id)
 
     def _apply_routing(self, group: Group) -> None:
         """Apply a group's routing rules to kernel."""

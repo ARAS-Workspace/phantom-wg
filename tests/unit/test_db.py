@@ -252,6 +252,19 @@ class TestRoutingRules:
         with pytest.raises(GroupNotFoundError):
             db.add_routing_rule("nope", "policy")
 
+    def test_ensure_table_id_is_the_groups_first(self, db):
+        g1 = db.create_group("g1")
+        g2 = db.create_group("g2")
+        db.add_routing_rule("g2", "ensure", table_name="mh", table_id=300)
+        db.add_routing_rule("g1", "policy", from_network="10.0.0.0/24", table_name="mh",
+                            table_id=400, priority=100)
+        db.add_routing_rule("g1", "ensure", table_name="mh", table_id=200)
+        db.add_routing_rule("g1", "ensure", table_name="mh", table_id=201)
+        db.add_routing_rule("g1", "ensure", table_name="other", table_id=202)
+        assert db.ensure_table_id(g1.id, "mh") == 200
+        assert db.ensure_table_id(g2.id, "mh") == 300
+        assert db.ensure_table_id(g2.id, "other") is None
+
     def test_list_rules(self, db):
         db.create_group("g1")
         db.add_routing_rule("g1", "ensure", table_name="mh", table_id=200)

@@ -334,6 +334,15 @@ class FirewallDB:
         ).fetchall()
         return [self._row_to_rt_rule(r) for r in rows]
 
+    def ensure_table_id(self, group_id: int, table_name: str) -> Optional[int]:
+        """The table id of the group's first ensure row for table_name."""
+        row = self._conn.execute(
+            "SELECT table_id FROM routing_rules WHERE group_id=? AND rule_type='ensure' "
+            "AND table_name=? ORDER BY id LIMIT 1",
+            (group_id, table_name),
+        ).fetchone()
+        return None if row is None else row[0]
+
     def update_rt_applied(self, rule_id: int, applied: bool) -> None:
         self._conn.execute(
             "UPDATE routing_rules SET applied=? WHERE id=?",
