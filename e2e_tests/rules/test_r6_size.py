@@ -10,22 +10,26 @@ start(); a new FirewallBridge on the same database; half the presets
 disabled and enabled; every preset removed; five presets of 100 policy
 rules and 100 routes each, the same routing then made with one `ip -batch`
 run; three cycles of 5000 rules applied and removed with no check in
-between, the resident memory at the end of the second and third within
-8 MiB of the first; list_table 20 times and then 100 times over 500 rules,
-the resident memory after the 100 within 8 MiB of after the 20. After
-every step the invariants of oracle.check hold, with inet reference
-written in one nft run from oracle.rule_text, and the routing rows are the
-kernel's (oracle.assert_routing_matches_db). rule_text is first held to
-the rules written by hand in R1, R2 and R5.
+between, malloc's bytes in use and Python's blocks at the end of the
+second and third within 1 MiB and 1000 of the first's; list_table 20 times
+and then 100 times over 500 rules, the same two after the 100 within 1 MiB
+and 1000 of after the 20. After every step the invariants of oracle.check
+hold, with inet reference written in one nft run from oracle.rule_text,
+and the routing rows are the kernel's (oracle.assert_routing_matches_db).
+rule_text is first held to the rules written by hand in R1, R2 and R5.
 
 Does not show: more than 5000 rules or 500 routing rows; the time a step
 takes (printed, not bounded); rules added one at a time while started at
-this size (each rebuilds the table); packets.
+this size (each rebuilds the table); resident memory growth below
+oracle.RSS_CEILING_KB (the memory tests read malloc's bytes in use and
+Python's blocks); packets.
 """
 
 from __future__ import annotations
 
+import ctypes
 import subprocess
+import sys
 
 import pytest
 import yaml
@@ -175,12 +179,37 @@ def test_presets_by_the_thousand(bridge, db_path, meter, order, size):
         second.close()
 
 
-def _rss_kb() -> int:
-    with open("/proc/self/status") as f:
-        return int(next(line for line in f if line.startswith("VmRSS")).split()[1])
+class _Mallinfo2(ctypes.Structure):
+    _fields_ = [(name, ctypes.c_size_t) for name in (
+        "arena", "ordblks", "smblks", "hblks", "hblkhd",
+        "usmblks", "fsmblks", "uordblks", "fordblks", "keepcost")]
+
+
+_libc = ctypes.CDLL("libc.so.6")
+_libc.mallinfo2.restype = _Mallinfo2
+
+# How much the memory tests let grow: bytes glibc's malloc has in use, and
+# blocks Python has allocated (its small objects live in its own arenas,
+# outside malloc's count).
+HELD_BYTES = 1024 * 1024
+HELD_BLOCKS = 1000
+
+
+def _held() -> tuple[int, int]:
+    """Bytes glibc's malloc has in use (mallinfo2 uordblks + hblkhd) and the
+    blocks Python has allocated (sys.getallocatedblocks)."""
+    m = _libc.mallinfo2()
+    return m.uordblks + m.hblkhd, sys.getallocatedblocks()
+
+
+def _within(first: tuple[int, int], later: tuple[int, int]) -> bool:
+    return later[0] - first[0] <= HELD_BYTES and later[1] - first[1] <= HELD_BLOCKS
 
 
 def test_the_bridge_grows_no_memory_over_cycles(bridge, db_path, meter):
+    """Three cycles of 5000 rules in ten presets applied while started and
+    removed: at the end of the second and the third, malloc's bytes in use
+    and Python's blocks within HELD_BYTES and HELD_BLOCKS of the first's."""
     bridge.start()
     ends = []
     for _ in range(3):
@@ -190,16 +219,18 @@ def test_the_bridge_grows_no_memory_over_cycles(bridge, db_path, meter):
         assert _kernel_rules() == 5000
         for spec in specs:
             remove_preset(bridge, spec["name"])
-        ends.append(_rss_kb())
-    assert max(ends[1:]) <= ends[0] + 8 * 1024, f"resident kB at the cycle ends: {ends}"
+        ends.append(_held())
+    assert all(_within(ends[0], end) for end in ends[1:]), (
+        f"bytes in use and Python blocks at the cycle ends: {ends}")
     _check(bridge, db_path, meter, oracle.Ledger(bridge))
     assert _kernel_rules() == 0
 
 
 def test_listing_the_table_grows_no_memory(bridge, db_path, meter):
     """list_table over 500 rules of the longest shape, 20 times and then
-    100 times: the resident memory after the 100 is within 8 MiB of after
-    the 20, and 100 listings held would be at least twice that."""
+    100 times: after the 100, malloc's bytes in use and Python's blocks
+    within HELD_BYTES and HELD_BLOCKS of after the 20; 100 listings held
+    would be at least twice HELD_BYTES."""
     bridge.create_group("r6")
     ledger = oracle.Ledger(bridge)
     for i in range(500):
@@ -210,14 +241,15 @@ def test_listing_the_table_grows_no_memory(bridge, db_path, meter):
     bridge.start()
     ledger.started()
     listing = bridge.list_table()
-    assert len(listing) * 100 >= 2 * 8 * 1024 * 1024, f"a listing of {len(listing)} bytes"
+    assert len(listing) * 100 >= 2 * HELD_BYTES, f"a listing of {len(listing)} bytes"
     for _ in range(20):
         bridge.list_table()
-    first = _rss_kb()
+    first = _held()
     for _ in range(100):
         bridge.list_table()
-    last = _rss_kb()
-    assert last <= first + 8 * 1024, f"resident kB after 20 listings {first}, after 100 more {last}"
+    last = _held()
+    assert _within(first, last), (
+        f"bytes in use and Python blocks after 20 listings {first}, after 100 more {last}")
     _check(bridge, db_path, meter, ledger)
 
 
