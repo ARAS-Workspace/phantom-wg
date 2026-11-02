@@ -321,8 +321,50 @@ fn kernel_nft_replace_rules_is_one_transaction() {
     assert_eq!(rule_lines(), Vec::<String>::new());
 }
 
+/// More rules than one argument to nft holds (128 KiB): 2000 rules of
+/// about 700 bytes are one transaction, refused as a whole when one of them
+/// is refused.
+#[test]
+fn kernel_nft_replace_rules_past_the_argument_limit() {
+    use crate::nft::RuleSpec;
+    let _serial = serial();
+    isolate();
+    let _nft = Nft::init();
+    let sources: Vec<String> = (0..2000).map(|i| format!("10.8.{}.{}/32", i / 256, i % 256)).collect();
+    let comment = "x".repeat(100);
+    let spec = |i: usize, chain: &'static str, action: &'static str| RuleSpec {
+        chain, action, family: 2, proto: "tcp", dport: 443, source: &sources[i],
+        in_iface: "wg_phantom_main", out_iface: "wg_phantom_exit",
+        state_match: "new,established", comment: &comment, ..Default::default()
+    };
+    let specs: Vec<RuleSpec> = (0..2000).map(|i| spec(i, "forward", "accept")).collect();
+    let (_strings, rules) = c_rules(&specs);
+    let mut handles = vec![0u64; specs.len()];
+    // SAFETY: 2000 rules whose strings outlive the call, and room for 2000 handles.
+    assert_eq!(unsafe { nft_replace_rules(rules.as_ptr(), 2000, handles.as_mut_ptr()) },
+               ErrorCode::Ok as i32, "{}", last_error());
+    let lines = rule_lines();
+    assert_eq!(lines.len(), 2000);
+    for (line, handle) in lines.iter().zip(&handles) {
+        assert!(line.ends_with(&format!("# handle {handle}")), "{line}");
+    }
+
+    let before = table_lines();
+    let refused: Vec<RuleSpec> = (0..2000)
+        .map(|i| if i == 1000 { spec(i, "input", "masquerade") } else { spec(i, "forward", "accept") })
+        .collect();
+    let (_strings, rules) = c_rules(&refused);
+    let mut untouched = vec![u64::MAX; refused.len()];
+    // SAFETY: 2000 rules whose strings outlive the call, and room for 2000 handles.
+    assert_eq!(unsafe { nft_replace_rules(rules.as_ptr(), 2000, untouched.as_mut_ptr()) },
+               ErrorCode::NftablesFailed as i32);
+    assert_eq!(table_lines(), before, "{}", last_error());
+    assert!(untouched.iter().all(|&h| h == u64::MAX));
+}
+
 /// A table that already holds `output` with another priority: the batch
-/// fails as a whole, and nft's caret points at the `output` command.
+/// fails as a whole, and nft's position and caret point at the `output`
+/// command.
 #[test]
 fn kernel_nft_ensure_table_is_all_or_nothing() {
     let _serial = serial();
@@ -334,11 +376,16 @@ fn kernel_nft_ensure_table_is_all_or_nothing() {
     assert_eq!(nft_init(), ErrorCode::NftablesFailed as i32);
     let err = last_error();
     let lines: Vec<&str> = err.lines().collect();
-    assert!(lines[0].starts_with("Error: Chain \"output\" already exists"), "{err}");
+    let (position, message) = lines[0].split_once(": ").expect("position");
+    assert!(message.starts_with("Error: Chain \"output\" already exists"), "{err}");
     let start = lines[1].find("add chain inet phantom output").expect("command line");
     let end = lines[1].find("; add chain inet phantom forward").expect("command line");
     let caret = lines[2].find('^').expect("caret line");
     assert!((start..end).contains(&caret), "caret {caret} outside {start}..{end}:\n{err}");
+    let (from, to) = position.strip_prefix("/dev/stdin:1:").and_then(|p| p.split_once('-'))
+        .unwrap_or_else(|| panic!("position: {err}"));
+    let (from, to): (usize, usize) = (from.parse().unwrap(), to.parse().unwrap());
+    assert!(start < from && to <= end, "columns {from}-{to} outside {start}..{end}:\n{err}");
 
     assert_eq!(table(), before, "the failed batch created something");
 }

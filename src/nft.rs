@@ -1,6 +1,7 @@
 //! nftables through the nft program, in the `inet phantom` table.
 
 use std::ffi::OsString;
+use std::io::Write;
 use std::net::IpAddr;
 use std::path::PathBuf;
 use std::process::{Command, Stdio};
@@ -59,7 +60,7 @@ impl NftContext {
         Ok(Self { binary })
     }
 
-    /// @witness nft::tests::test_nft_run_passes_the_command_as_one_argument
+    /// @witness nft::tests::test_nft_run_passes_the_command_on_stdin
     pub fn run(&self, cmd: &str) -> Result<String, String> {
         self.exec(&[], cmd)
     }
@@ -77,7 +78,12 @@ impl NftContext {
         self.exec(&["--echo", "--json", "--handle"], cmd)
     }
 
-    /// @witness nft::tests::test_nft_run_passes_the_command_as_one_argument
+    /// `cmd` goes to nft on its stdin (`-f -`); `flags` are its arguments.
+    ///
+    /// @witness nft::tests::test_nft_run_passes_the_command_on_stdin
+    /// @witness nft::tests::test_nft_input_and_output_larger_than_a_pipe_buffer
+    /// @witness nft::tests::test_nft_that_reads_no_input
+    /// @witness kernel_tests::kernel_nft_replace_rules_past_the_argument_limit
     /// @witness nft::tests::test_nft_environment_is_cleared
     /// @witness nft::tests::test_nft_failure_carries_stderr
     /// @witness nft::tests::test_nft_failure_without_stderr_names_the_command
@@ -88,20 +94,27 @@ impl NftContext {
     /// @witness kernel_tests::kernel_nft_leaves_no_child_behind
     /// @witness kernel_tests::kernel_nft_with_sigchld_ignored
     fn exec(&self, flags: &[&str], cmd: &str) -> Result<String, String> {
-        let child = Command::new(&self.binary)
+        let mut child = Command::new(&self.binary)
             .args(flags)
-            .arg("--")
-            .arg(cmd)
+            .args(["-f", "-"])
             .env_clear()
             .env("LC_ALL", "C")
-            .stdin(Stdio::null())
+            .stdin(Stdio::piped())
             .stdout(Stdio::piped())
             .stderr(Stdio::piped())
             .spawn()
             .map_err(|e| format!("nft could not be started: {e}"))?;
 
-        let out = child.wait_with_output()
-            .map_err(|e| format!("nft did not finish: {e}"))?;
+        let mut stdin = child.stdin.take().ok_or("nft stdin is not a pipe")?;
+        let (written, out) = std::thread::scope(|scope| {
+            let writer = scope.spawn(move || {
+                block_sigpipe();
+                stdin.write_all(cmd.as_bytes())
+            });
+            let out = child.wait_with_output();
+            (writer.join(), out)
+        });
+        let out = out.map_err(|e| format!("nft did not finish: {e}"))?;
 
         if !out.status.success() {
             let error = String::from_utf8_lossy(&out.stderr).into_owned();
@@ -112,8 +125,27 @@ impl NftContext {
                 error
             });
         }
+        match written {
+            Ok(Ok(())) => {}
+            Ok(Err(e)) => return Err(format!("nft did not read the command: {e}")),
+            Err(_) => return Err("nft did not read the command".to_string()),
+        }
 
         Ok(String::from_utf8_lossy(&out.stdout).into_owned())
+    }
+}
+
+/// Blocks SIGPIPE in the calling thread, whatever the process does with it.
+///
+/// @witness nft::tests::test_nft_that_reads_no_input
+fn block_sigpipe() {
+    // SAFETY: `set` is a sigset_t that sigemptyset initialises before it is
+    // read, and pthread_sigmask changes the calling thread's mask only.
+    unsafe {
+        let mut set: libc::sigset_t = std::mem::zeroed();
+        libc::sigemptyset(&mut set);
+        libc::sigaddset(&mut set, libc::SIGPIPE);
+        libc::pthread_sigmask(libc::SIG_BLOCK, &set, std::ptr::null_mut());
     }
 }
 
@@ -539,7 +571,8 @@ pub(crate) mod tests {
         ]});
         assert_eq!(replace_rules(&ctx, commands).unwrap(), vec![7, 8]);
         assert_eq!(recorded(&nft, "calls"), "x\n");
-        assert_eq!(recorded(&nft, "args"), format!("--echo\n--json\n--handle\n--\n{sent}\n"));
+        assert_eq!(recorded(&nft, "args"), "--echo\n--json\n--handle\n-f\n-\n");
+        assert_eq!(recorded(&nft, "stdin"), sent.to_string());
 
         let one_short = fake_nft("replace_rules-short", &format!("printf '%s' '{echo}'"));
         let ctx = NftContext::with_binary(&one_short).unwrap();
@@ -567,20 +600,24 @@ pub(crate) mod tests {
 
     /// A shell script that records its arguments and stdin next to itself,
     /// then runs `body`. It lives under target/, not the system temp
-    /// directory, which may be mounted noexec.
+    /// directory, which may be mounted noexec. Reading stdin stops after
+    /// 5 s, so a stdin left open fails the test.
     fn fake_nft(name: &str, body: &str) -> PathBuf {
+        fake_script(name, &format!(
+            "#!/bin/sh\nprintf '%s\\n' \"$@\" > \"$0.args\"\ntimeout 5 cat > \"$0.stdin\" || exit 9\n{body}\n"))
+    }
+
+    /// `script` as the stand-in nft, as it is.
+    fn fake_script(name: &str, script: &str) -> PathBuf {
         let dir = Path::new(env!("CARGO_MANIFEST_DIR"))
             .join("target/nft-tests")
             .join(name);
         let _ = std::fs::remove_dir_all(&dir);
         std::fs::create_dir_all(&dir).unwrap();
-        let script = dir.join("nft");
-        std::fs::write(
-            &script,
-            format!("#!/bin/sh\nprintf '%s\\n' \"$@\" > \"$0.args\"\ncat > \"$0.stdin\"\n{body}\n"),
-        ).unwrap();
-        std::fs::set_permissions(&script, std::fs::Permissions::from_mode(0o755)).unwrap();
-        script
+        let path = dir.join("nft");
+        std::fs::write(&path, script).unwrap();
+        std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o755)).unwrap();
+        path
     }
 
     fn recorded(script: &Path, what: &str) -> String {
@@ -624,13 +661,13 @@ pub(crate) mod tests {
     }
 
     #[test]
-    fn test_nft_run_passes_the_command_as_one_argument() {
+    fn test_nft_run_passes_the_command_on_stdin() {
         let _serial = serial();
         let nft = fake_nft("run", "printf 'ok'");
         let ctx = NftContext::with_binary(&nft).unwrap();
         assert_eq!(ctx.run("add table inet phantom").unwrap(), "ok");
-        assert_eq!(recorded(&nft, "args"), "--\nadd table inet phantom\n");
-        assert_eq!(recorded(&nft, "stdin"), "");
+        assert_eq!(recorded(&nft, "args"), "-f\n-\n");
+        assert_eq!(recorded(&nft, "stdin"), "add table inet phantom");
     }
 
     #[test]
@@ -639,7 +676,8 @@ pub(crate) mod tests {
         let nft = fake_nft("run_json", r#"printf '{"nftables": []}'"#);
         let ctx = NftContext::with_binary(&nft).unwrap();
         assert_eq!(ctx.run_json("list table inet phantom").unwrap(), r#"{"nftables": []}"#);
-        assert_eq!(recorded(&nft, "args"), "--json\n--handle\n--\nlist table inet phantom\n");
+        assert_eq!(recorded(&nft, "args"), "--json\n--handle\n-f\n-\n");
+        assert_eq!(recorded(&nft, "stdin"), "list table inet phantom");
     }
 
     #[test]
@@ -648,13 +686,15 @@ pub(crate) mod tests {
         let nft = fake_nft("commands", r#"printf '{"nftables": []}'"#);
         let ctx = NftContext::with_binary(&nft).unwrap();
         flush_table(&ctx).unwrap();
-        assert_eq!(recorded(&nft, "args"), "--\nflush table inet phantom\n");
+        assert_eq!(recorded(&nft, "args"), "-f\n-\n");
+        assert_eq!(recorded(&nft, "stdin"), "flush table inet phantom");
         remove_rule(&ctx, "forward", 42).unwrap();
-        assert_eq!(recorded(&nft, "args"), "--json\n--handle\n--\n\
-            {\"nftables\":[{\"delete\":{\"rule\":{\"chain\":\"forward\",\"family\":\"inet\",\
-            \"handle\":42,\"table\":\"phantom\"}}}]}\n");
+        assert_eq!(recorded(&nft, "args"), "--json\n--handle\n-f\n-\n");
+        assert_eq!(recorded(&nft, "stdin"), "{\"nftables\":[{\"delete\":{\"rule\":{\"chain\":\"forward\",\
+            \"family\":\"inet\",\"handle\":42,\"table\":\"phantom\"}}}]}");
         assert_eq!(list_table(&ctx).unwrap(), r#"{"nftables": []}"#);
-        assert_eq!(recorded(&nft, "args"), "--json\n--handle\n--\nlist table inet phantom\n");
+        assert_eq!(recorded(&nft, "args"), "--json\n--handle\n-f\n-\n");
+        assert_eq!(recorded(&nft, "stdin"), "list table inet phantom");
     }
 
     #[test]
@@ -698,13 +738,12 @@ pub(crate) mod tests {
         ensure_table(&ctx).unwrap();
         assert_eq!(recorded(&nft, "calls"), "x\n");
         // One line, so nft's error context shows the command that failed.
-        let args = recorded(&nft, "args");
-        let lines: Vec<&str> = args.lines().collect();
-        assert_eq!(lines.len(), 2, "got: {args}");
-        assert_eq!(lines[0], "--");
-        let commands: Vec<&str> = lines[1].split("; add ").collect();
+        assert_eq!(recorded(&nft, "args"), "-f\n-\n");
+        let stdin = recorded(&nft, "stdin");
+        assert!(!stdin.contains('\n'), "got: {stdin}");
+        let commands: Vec<&str> = stdin.split("; add ").collect();
         assert_eq!(commands[0], "add table inet phantom");
-        assert_eq!(commands.len(), 6, "got: {}", lines[1]);
+        assert_eq!(commands.len(), 6, "got: {stdin}");
         for (command, chain) in commands[1..].iter()
             .zip(["input", "output", "forward", "prerouting", "postrouting"]) {
             assert!(command.starts_with(&format!("chain inet phantom {chain} {{")), "got: {command}");
@@ -724,7 +763,8 @@ pub(crate) mod tests {
         let handle = add_rule(&ctx, &rule).unwrap();
         assert_eq!(handle, 2);
         assert_eq!(recorded(&nft, "calls"), "x\n");
-        assert_eq!(recorded(&nft, "args"), format!("--echo\n--json\n--handle\n--\n{rule}\n"));
+        assert_eq!(recorded(&nft, "args"), "--echo\n--json\n--handle\n-f\n-\n");
+        assert_eq!(recorded(&nft, "stdin"), rule);
     }
 
     #[test]
@@ -782,5 +822,49 @@ pub(crate) mod tests {
         let nft = fake_nft("large", r"head -c 300000 /dev/zero | tr '\0' x");
         let ctx = NftContext::with_binary(&nft).unwrap();
         assert_eq!(ctx.run_json("list table inet phantom").unwrap().len(), 300_000);
+    }
+
+    /// A command and an answer of 1 MiB each, against 64 KiB pipes. The
+    /// stand-in echoes stdin to stdout and is stopped after 5 s.
+    #[test]
+    fn test_nft_input_and_output_larger_than_a_pipe_buffer() {
+        let _serial = serial();
+        let nft = fake_script("echo-large", "#!/bin/sh\nexec timeout 5 cat\n");
+        let cmd = "x".repeat(1 << 20);
+        assert_eq!(NftContext::with_binary(&nft).unwrap().run(&cmd).unwrap(), cmd);
+        assert_eq!(children(), Vec::<String>::new());
+    }
+
+    /// SIGPIPE back to the default action while the value lives.
+    struct DefaultSigpipe(libc::sighandler_t);
+
+    impl DefaultSigpipe {
+        fn set() -> Self {
+            // SAFETY: SIG_DFL is a valid disposition for SIGPIPE.
+            Self(unsafe { libc::signal(libc::SIGPIPE, libc::SIG_DFL) })
+        }
+    }
+
+    impl Drop for DefaultSigpipe {
+        fn drop(&mut self) {
+            // SAFETY: the disposition signal() returned when the value was made.
+            unsafe { libc::signal(libc::SIGPIPE, self.0) };
+        }
+    }
+
+    /// An nft that ends without reading its stdin, failing and not, in a
+    /// process whose SIGPIPE has the default action. The serial lock holds
+    /// the other tests that run nft meanwhile.
+    #[test]
+    fn test_nft_that_reads_no_input() {
+        let _serial = serial();
+        let _sigpipe = DefaultSigpipe::set();
+        let cmd = "x".repeat(1 << 20);
+        let failing = fake_script("reads-nothing-fails", "#!/bin/sh\nprintf 'Error: refused' >&2\nexit 1\n");
+        assert_eq!(NftContext::with_binary(&failing).unwrap().run(&cmd).unwrap_err(), "Error: refused");
+        let quiet = fake_script("reads-nothing", "#!/bin/sh\nexit 0\n");
+        assert_eq!(NftContext::with_binary(&quiet).unwrap().run(&cmd).unwrap_err(),
+                   "nft did not read the command: Broken pipe (os error 32)");
+        assert_eq!(children(), Vec::<String>::new());
     }
 }
