@@ -20,6 +20,7 @@ from __future__ import annotations
 
 import ipaddress
 import re
+from typing import NoReturn
 
 from .types import InvalidParamError, PresetValidationError
 
@@ -208,7 +209,7 @@ def _check_port_match(path: str, rule: dict) -> None:
 
 # ---- Validation helpers ----
 
-def _fail(path: str, reason: str, value: object = None) -> None:
+def _fail(path: str, reason: str, value: object = None) -> NoReturn:
     raise PresetValidationError(path, reason, value)
 
 
@@ -321,7 +322,8 @@ def validate_preset(spec: object) -> dict:
 
     Raises PresetValidationError on invalid input with field path + reason.
     """
-    _check_type("preset", spec, dict)
+    if not isinstance(spec, dict):
+        _fail("preset", "expected dict", spec)
     _check_unknown_keys("preset", spec, set(PRESET_FIELDS.keys()))
 
     result = _validate_fields("preset", spec, PRESET_FIELDS)

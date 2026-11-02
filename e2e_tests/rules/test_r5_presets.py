@@ -270,8 +270,8 @@ def test_the_daemon_order(bridge, db_path, meter, tmp_path):
     ledger.started()
     _check(bridge, db_path, meter, ledger)
 
-    def changed(name):
-        ledger.apply_preset(_changed_file(name, tmp_path), [_changed(r) for r in PRESETS[name][0]])
+    def changed(preset):
+        ledger.apply_preset(_changed_file(preset, tmp_path), [_changed(r) for r in PRESETS[preset][0]])
         _check(bridge, db_path, meter, ledger)
 
     def multihop_off():

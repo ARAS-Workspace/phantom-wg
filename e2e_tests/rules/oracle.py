@@ -290,8 +290,8 @@ def assert_routing_matches_db(db_path: str) -> None:
             continue
         flag = "-6" if fam == 10 else "-4"
         if kind == "policy":
-            rule = {"family": flag, "priority": prio}
-            rule["src"], rule["srclen"] = _ip_net(frm)
+            src, srclen = _ip_net(frm)
+            rule = {"family": flag, "priority": prio, "src": src, "srclen": srclen}
             if to:
                 rule["dst"], rule["dstlen"] = _ip_net(to)
             rule["table"] = str(table(g, name))
