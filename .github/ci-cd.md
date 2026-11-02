@@ -21,7 +21,8 @@ Branch push (dev/firewall-bridge):
   │     ├── build-linux-amd64  (ubuntu-26.04, rust trixie image)
   │     └── build-linux-arm64  (ubuntu-26.04-arm, rust trixie image)
   └── kernel-matrix-firewall-bridge.yml
-        └── kernel   (one job per guest kernel, under KVM: the steps of
+        └── kernel   (self-hosted bare-metal runner labeled kvm; one job per
+                      guest kernel, under KVM: the steps of
                       test-firewall-bridge.yml, Docker CE pinned)
 
 Publish (workflow_dispatch):

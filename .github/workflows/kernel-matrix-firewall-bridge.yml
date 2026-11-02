@@ -31,8 +31,10 @@ env:
 jobs:
   kernel:
     name: Kernel ${{ matrix.name }}
-    runs-on: ubuntu-26.04
-    timeout-minutes: 100
+    # The self-hosted bare-metal runner with KVM, labeled kvm; it takes one
+    # job at a time, so the kernels run one after another.
+    runs-on: [self-hosted, linux, x64, kvm]
+    timeout-minutes: 130
     strategy:
       fail-fast: false
       matrix:
@@ -72,34 +74,38 @@ jobs:
             docker_codename: trixie
             docker_suffix: '~debian.13~trixie'
     steps:
-      - name: Harden runner
-        uses: step-security/harden-runner@58077d3c7e43986b6b15fba718e8ea69e387dfcc # v2.15.1
-        with:
-          egress-policy: audit
-
       - name: Checkout
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
           persist-credentials: false
 
+      - name: Check the host
+        run: |
+          {
+            echo "## Host"
+            echo '```'
+            echo "kernel:      $(uname -r)"
+            echo "cpus:        $(nproc)"
+            echo "memory:      $(free -m | awk '/^Mem:/ {print $2 " MiB"}')"
+            echo "free:        $(df -h --output=avail "$RUNNER_TEMP" | tail -1 | tr -d ' ') in $RUNNER_TEMP"
+            for c in qemu-system-x86_64 qemu-img cloud-localds gh git curl unzip python3; do
+              printf '%-19s %s\n' "$c:" "$(command -v "$c" || echo MISSING)"
+            done
+            qemu-system-x86_64 --version 2>/dev/null | head -1 || true
+            # KVM_GET_API_VERSION is _IO(0xAE, 0x00); the stable API answers 12.
+            python3 -c 'import fcntl, os; fd = os.open("/dev/kvm", os.O_RDWR); print("KVM_GET_API_VERSION:", fcntl.ioctl(fd, 0xAE00)); os.close(fd)' 2>&1 || true
+            echo '```'
+          } | tee -a "$GITHUB_STEP_SUMMARY"
+          for c in qemu-system-x86_64 qemu-img cloud-localds gh git curl unzip python3; do
+            command -v "$c" > /dev/null || { echo "::error::$c is not installed on this runner"; exit 1; }
+          done
+          python3 -c 'import os; os.close(os.open("/dev/kvm", os.O_RDWR))' \
+            || { echo "::error::/dev/kvm cannot be opened by $(id -un)"; exit 1; }
+
       - name: Fetch compose-bridge
         env:
           GH_TOKEN: ${{ github.token }}
         run: bash fetch_compose_bridge.sh
-
-      - name: Open /dev/kvm as the runner user
-        run: |
-          # The rule GitHub's changelog of 2024-04-02 gives for KVM on Linux runners.
-          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
-          sudo udevadm control --reload-rules
-          sudo udevadm trigger --name-match=kvm
-          python3 -c 'import fcntl, os; fd = os.open("/dev/kvm", os.O_RDWR); print("KVM_GET_API_VERSION:", fcntl.ioctl(fd, 0xAE00)); os.close(fd)'
-
-      - name: Install QEMU
-        run: |
-          sudo apt-get update -q
-          sudo apt-get install -y -q --no-install-recommends qemu-system-x86 qemu-utils cloud-image-utils
-          qemu-system-x86_64 --version | head -1
 
       - name: Fetch the image
         env:
@@ -152,7 +158,7 @@ jobs:
           : > serial.log
           : > guest.log
           # -accel kvm has no fallback: without KVM, QEMU exits at once.
-          timeout 90m qemu-system-x86_64 -accel kvm -cpu host -smp 3 -m 12288 \
+          timeout 120m qemu-system-x86_64 -accel kvm -cpu host -smp 4 -m 16384 \
             -drive file=disk.qcow2,if=virtio,format=qcow2 \
             -drive file=seed.img,if=virtio,format=raw \
             -drive file=payload.tar,if=none,id=payload,format=raw,readonly=on \
