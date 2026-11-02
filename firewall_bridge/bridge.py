@@ -305,7 +305,8 @@ class FirewallBridge:
 
     def _kernel_remove_routing(self, rule: RoutingRule) -> None:
         """A route in a table its own group ensures is deleted by destination
-        and table, whatever its device; elsewhere by its device too."""
+        and table, whatever its device; elsewhere by its device too, and a
+        route there with no device is not sent."""
         rt = rule.rule_type
         if rt == "policy":
             self._lib.rt_policy_delete(
@@ -317,6 +318,8 @@ class FirewallBridge:
             )
         elif rt == "route":
             owned = self._db.ensure_table_id(rule.group_id, rule.table_name) is not None
+            if not owned and not rule.device:
+                return
             self._lib.rt_route_delete(
                 _encode(rule.destination),
                 _encode("" if owned else rule.device),

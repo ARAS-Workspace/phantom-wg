@@ -289,6 +289,22 @@ class TestMissingRequired:
                 "table": [{"route": {"destination": "default", "table": "mh"}}],
             })
 
+    @pytest.mark.parametrize("device", ["", "x" * 16, "wg 0"])
+    def test_route_device_not_an_interface_name(self, device):
+        with pytest.raises(PresetValidationError, match="device.*valid interface name"):
+            validate_preset({
+                "name": "bad",
+                "table": [{"route": {"destination": "default", "device": device, "table": "mh"}}],
+            })
+
+    @pytest.mark.parametrize("device", ["wg_phantom_main", "wg_phantom_exit", "eth0.100"])
+    def test_route_device_an_interface_name(self, device):
+        spec = validate_preset({
+            "name": "ok",
+            "table": [{"route": {"destination": "default", "device": device, "table": "mh"}}],
+        })
+        assert spec["table"][0]["route"]["device"] == device
+
     def test_missing_route_table(self):
         with pytest.raises(PresetValidationError, match="table.*required"):
             validate_preset({

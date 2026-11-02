@@ -147,7 +147,7 @@ POLICY_FIELDS = {
 
 ROUTE_FIELDS = {
     "destination": {"type": str, "required": True},
-    "device":      {"type": str, "required": True},
+    "device":      {"type": str, "required": True, "format": "iface"},
     "table":       {"type": str, "required": True},
     "family":      {"type": int, "required": False, "default": 2, "enum": VALID_FAMILIES},
 }
@@ -271,6 +271,10 @@ def _check_format(path: str, value: str, fmt: str) -> None:
             _fail(path, "must be empty, an IP address or valid CIDR", value)
     elif fmt == "comment":
         _check_comment(path, value)
+    elif fmt == "iface":
+        if not _IFACE_RE.match(value):
+            _fail(path, "must be a valid interface name "
+                        "(1-15 chars, [A-Za-z0-9_.-])", value)
     elif fmt == "iface_or_empty":
         if value and not _IFACE_RE.match(value):
             _fail(path, "must be empty or a valid interface name "

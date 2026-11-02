@@ -702,6 +702,19 @@ class TestTableOfAGroup:
             (b"default", b"", b"200"),
         ]
 
+    def test_a_route_with_no_device_outside_its_tables_is_not_deleted(self, bridge, mock_lib):
+        bridge.create_group("g")
+        bridge.add_routing_rule("g", "ensure", table_name="mh", table_id=200)
+        bridge.add_routing_rule("g", "route", destination="default", device="",
+                                table_name="main")
+        bridge.add_routing_rule("g", "route", destination="10.9.0.0/24", device="",
+                                table_name="mh")
+        bridge.start()
+        bridge.stop()
+        bridge.delete_group("g")
+        assert [c.args[:3] for c in mock_lib.rt_route_delete.call_args_list] == [
+            (b"10.9.0.0/24", b"", b"200")] * 3
+
     def test_another_group_ensure_is_not_used(self, bridge, mock_lib):
         bridge.create_group("a")
         bridge.add_routing_rule("a", "ensure", table_name="mh", table_id=200)
