@@ -158,8 +158,11 @@ jobs:
           : > serial.log
           : > guest.log
           # -accel kvm has no fallback: without KVM, QEMU exits at once.
+          # The root disk is a -device with bootindex=0: a disk given with
+          # -drive if=virtio comes after the -device disks in PCI order.
           timeout 120m qemu-system-x86_64 -accel kvm -cpu host -smp 4 -m 16384 \
-            -drive file=disk.qcow2,if=virtio,format=qcow2 \
+            -drive file=disk.qcow2,if=none,id=root,format=qcow2 \
+            -device virtio-blk-pci,drive=root,bootindex=0 \
             -drive file=seed.img,if=virtio,format=raw \
             -drive file=payload.tar,if=none,id=payload,format=raw,readonly=on \
             -device virtio-blk-pci,drive=payload,serial=payload \
