@@ -78,9 +78,14 @@ install_docker() {
     local apt=(apt-get -q -y -o DPkg::Lock::Timeout=600)
     # Backports are not used here, and bullseye-backports is only on
     # archive.debian.org: their lines in sources.list are commented out.
+    # security.debian.org has bullseye-security's index but not its
+    # packages; archive.debian.org has both, under the same index: its
+    # lines point there.
     if [ -f /etc/apt/sources.list ]; then
         sed -i -E 's/^(deb(-src)? .* [a-z]+-backports( |$))/# \1/' /etc/apt/sources.list || return
-        grep -E -- '-backports' /etc/apt/sources.list || true
+        sed -i 's#http://security\.debian\.org/debian-security bullseye-security #http://archive.debian.org/debian-security bullseye-security #' \
+            /etc/apt/sources.list || return
+        grep -E -- '-backports|-security' /etc/apt/sources.list || true
     fi
     "${apt[@]}" update || return
     "${apt[@]}" install --no-install-recommends ca-certificates curl gnupg python3-venv || return
