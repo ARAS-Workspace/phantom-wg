@@ -680,6 +680,16 @@ mod tests {
             assert_eq!(nft_replace_rules(ptr::null(), 1, ptr::null_mut()),
                        ErrorCode::InvalidParam as i32);
             assert_eq!(last_error(), "Rules or handles is null");
+            let rule = NftRule { chain: null, action: null, family: 2, proto: null, dport: 0,
+                                 source: null, destination: null, in_iface: null,
+                                 out_iface: null, state_match: null, comment: null };
+            let mut handle = [0u64];
+            for (rules, handles) in [(&rule as *const NftRule, ptr::null_mut()),
+                                     (ptr::null(), handle.as_mut_ptr())] {
+                set_last_error("sentinel");
+                assert_eq!(nft_replace_rules(rules, 1, handles), ErrorCode::InvalidParam as i32);
+                assert_eq!(last_error(), "Rules or handles is null");
+            }
             assert_eq!(nft_replace_rules(ptr::null(), -1, ptr::null_mut()),
                        ErrorCode::InvalidParam as i32);
             assert_eq!(last_error(), "Rule count is negative");
@@ -715,16 +725,21 @@ mod tests {
     #[test]
     fn routing_family_outside_u8_is_refused_at_the_boundary() {
         let _serial = test_support::serial();
-        let (net, empty, table, dev) = (c"10.0.0.0/24".as_ptr(), c"".as_ptr(), c"main".as_ptr(), c"lo".as_ptr());
-        // SAFETY: NUL-terminated literals.
-        let codes = unsafe {
-            [rt_policy_add(net, empty, table, 1, 266), rt_policy_delete(net, empty, table, 1, 266),
-             rt_route_add(net, dev, table, 266), rt_route_delete(net, dev, table, 266)]
-        };
-        for rc in codes {
-            assert_eq!(rc, ErrorCode::NetlinkFailed as i32);
+        type NamedCall = (&'static str, fn() -> i32);
+        // SAFETY: each call passes NUL-terminated literals.
+        let calls: [NamedCall; 4] = unsafe { [
+            ("rt_policy_add", || rt_policy_add(c"10.0.0.0/24".as_ptr(), c"".as_ptr(), c"main".as_ptr(), 1, 266)),
+            ("rt_policy_delete", || rt_policy_delete(c"10.0.0.0/24".as_ptr(), c"".as_ptr(), c"main".as_ptr(), 1, 266)),
+            ("rt_route_add", || rt_route_add(c"10.0.0.0/24".as_ptr(), c"lo".as_ptr(), c"main".as_ptr(), 266)),
+            ("rt_route_delete", || rt_route_delete(c"10.0.0.0/24".as_ptr(), c"lo".as_ptr(), c"main".as_ptr(), 266)),
+        ] };
+        for (name, call) in calls {
+            // 266 cut to u8 is 10, AF_INET6, which an IPv4 network refuses
+            // with another message.
+            set_last_error("sentinel");
+            assert_eq!(call(), ErrorCode::NetlinkFailed as i32, "{name}");
+            assert_eq!(last_error(), "Unknown address family: 266", "{name}");
         }
-        assert_eq!(last_error(), "Unknown address family: 266");
     }
 
     #[test]
@@ -816,5 +831,19 @@ mod tests {
             unsafe { firewall_bridge_get_last_error_copy(buf.as_mut_ptr(), 0) },
             ErrorCode::InvalidParam as i32
         );
+        let mut untouched = [0x7f as c_char; 2];
+        assert_eq!(
+            // SAFETY: a negative length writes nothing.
+            unsafe { firewall_bridge_get_last_error_copy(untouched.as_mut_ptr(), -1) },
+            ErrorCode::InvalidParam as i32
+        );
+        assert_eq!(untouched, [0x7f as c_char; 2]);
+
+        // No error recorded: 0, and the buffer holds the NUL alone.
+        *LAST_ERROR.lock().unwrap_or_else(|e| e.into_inner()) = None;
+        let mut none = [0x7f as c_char; 4];
+        // SAFETY: `none` holds the 4 bytes passed.
+        assert_eq!(unsafe { firewall_bridge_get_last_error_copy(none.as_mut_ptr(), 4) }, 0);
+        assert_eq!(none, [0, 0x7f as c_char, 0x7f as c_char, 0x7f as c_char]);
     }
 }

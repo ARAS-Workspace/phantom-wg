@@ -1061,6 +1061,24 @@ mod tests {
     }
 
     #[test]
+    fn resolve_table_reads_drop_ins_in_name_order() {
+        // Under the system's temporary directory, not under target/.
+        let dir = std::env::temp_dir().join(format!("fwb-rt-order-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        let (etc, usr) = (dir.join("etc"), dir.join("usr"));
+        // Each id is 44 modulo 256, so the entry read last is picked; e.conf
+        // is written first and is last in name order.
+        for (name, id) in ["e", "a", "d", "b", "c"].into_iter().zip([44, 300, 556, 812, 1068]) {
+            write(&etc.join(format!("rt_tables.d/{name}.conf")), &format!("{id} t\n"));
+        }
+        let read: Vec<_> = table_files(&etc, &usr).iter()
+            .filter_map(|p| p.file_name()?.to_str().map(str::to_string)).collect();
+        assert_eq!(read, ["rt_tables", "a.conf", "b.conf", "c.conf", "d.conf", "e.conf"]);
+        assert_eq!(resolve_table_in(&etc, &usr, "t"), Ok(44));
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
     fn flush_cache_reports_a_failed_write() {
         let dir = rt_dir("flush-cache");
         let err = flush_cache_at(&dir.join("missing/flush")).unwrap_err();

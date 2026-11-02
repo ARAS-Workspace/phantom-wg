@@ -324,8 +324,8 @@ fn kernel_nft_replace_rules_is_one_transaction() {
 /// nft_replace_rules on a table changed from outside: the table deleted, a
 /// chain deleted, a chain's policy set to drop, a chain and a set added, a
 /// chain declared again with another priority. Each time the table it
-/// leaves lists as the one the same rules make in an empty namespace. With a
-/// rule nft refuses, a changed table lists as it did before the call.
+/// leaves lists as the same call left the table nft_init made. With a rule
+/// nft refuses, a changed table lists as it did before the call.
 #[test]
 fn kernel_nft_replace_rules_makes_the_table_anew() {
     use crate::nft::RuleSpec;
@@ -368,6 +368,21 @@ fn kernel_nft_replace_rules_makes_the_table_anew() {
     assert_eq!(unsafe { nft_replace_rules(refused.as_ptr(), 1, handle.as_mut_ptr()) },
                ErrorCode::NftablesFailed as i32);
     assert_eq!(table(), before);
+}
+
+/// The table nft_init makes lists as the one nft_replace_rules makes with no
+/// rules: the same five chains, each with policy accept.
+#[test]
+fn kernel_nft_init_makes_the_table_replace_rules_makes() {
+    let _serial = serial();
+    isolate();
+    let _nft = Nft::init();
+    let made = table();
+    // SAFETY: no rules and no handles, with a count of 0.
+    assert_eq!(unsafe { nft_replace_rules(std::ptr::null(), 0, std::ptr::null_mut()) },
+               ErrorCode::Ok as i32, "{}", last_error());
+    assert_eq!(table(), made);
+    assert_eq!(made.matches("policy accept;").count(), 5, "{made}");
 }
 
 /// More rules than one argument to nft holds (128 KiB): 2000 rules of
@@ -620,9 +635,9 @@ fn kernel_route_delete_takes_a_route_of_any_scope() {
 }
 
 /// A route the bridge added, then replaced from outside with another device,
-/// another protocol, or as a blackhole: rt_route_delete with the bridge's
-/// device takes none of them, with an empty device it takes each. An empty
-/// device is still refused by rt_route_add.
+/// another protocol, or as a blackhole, IPv4 and IPv6: rt_route_delete with
+/// the bridge's device takes none of them, with an empty device it takes
+/// each. An empty device is still refused by rt_route_add.
 #[test]
 fn kernel_route_delete_with_no_device_takes_any_route() {
     let _serial = serial();
@@ -633,24 +648,27 @@ fn kernel_route_delete_with_no_device_takes_any_route() {
     }
     let ok = ErrorCode::Ok as i32;
     let failed = ErrorCode::NetlinkFailed as i32;
-    for outside in [&["10.71.0.0/24", "dev", "fwb1", "proto", "static"][..],
-                    &["10.71.0.0/24", "dev", "fwb0", "proto", "boot"],
-                    &["blackhole", "10.71.0.0/24"]] {
-        // SAFETY: every pointer passed below is a NUL-terminated literal.
-        unsafe {
-            assert_eq!(rt_route_add(c"10.71.0.0/24".as_ptr(), c"fwb0".as_ptr(), c"150".as_ptr(), 2),
-                       ok, "{}", last_error());
-            let mut args = vec!["route", "replace"];
-            args.extend(outside);
-            args.extend(["table", "150"]);
-            read("ip", &args);
-            assert_eq!(rt_route_delete(c"10.71.0.0/24".as_ptr(), c"fwb0".as_ptr(), c"150".as_ptr(), 2),
-                       failed, "{outside:?}");
-            assert_ne!(read("ip", &["route", "show", "table", "150"]), "", "{outside:?}");
-            assert_eq!(rt_route_delete(c"10.71.0.0/24".as_ptr(), c"".as_ptr(), c"150".as_ptr(), 2),
-                       ok, "{outside:?}: {}", last_error());
+    for (family, dst, flag) in [(2, c"10.71.0.0/24", "-4"), (10, c"fd00:71::/64", "-6")] {
+        let net = dst.to_str().unwrap();
+        for outside in [vec![net, "dev", "fwb1", "proto", "static"],
+                        vec![net, "dev", "fwb0", "proto", "boot"],
+                        vec!["blackhole", net]] {
+            // SAFETY: every pointer passed below is a NUL-terminated literal.
+            unsafe {
+                assert_eq!(rt_route_add(dst.as_ptr(), c"fwb0".as_ptr(), c"150".as_ptr(), family),
+                           ok, "{}", last_error());
+                let mut args = vec![flag, "route", "replace"];
+                args.extend(&outside);
+                args.extend(["table", "150"]);
+                read("ip", &args);
+                assert_eq!(rt_route_delete(dst.as_ptr(), c"fwb0".as_ptr(), c"150".as_ptr(), family),
+                           failed, "{outside:?}");
+                assert_ne!(read("ip", &[flag, "route", "show", "table", "150"]), "", "{outside:?}");
+                assert_eq!(rt_route_delete(dst.as_ptr(), c"".as_ptr(), c"150".as_ptr(), family),
+                           ok, "{outside:?}: {}", last_error());
+            }
+            assert_eq!(run("ip", &[flag, "route", "show", "table", "150"]).1, "", "{outside:?}");
         }
-        assert_eq!(run("ip", &["route", "show", "table", "150"]).1, "", "{outside:?}");
     }
     // SAFETY: NUL-terminated literals.
     assert_eq!(unsafe { rt_route_add(c"10.71.0.0/24".as_ptr(), c"".as_ptr(), c"150".as_ptr(), 2) },

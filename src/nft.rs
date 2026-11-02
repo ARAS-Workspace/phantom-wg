@@ -521,9 +521,20 @@ pub(crate) mod tests {
              Err("Unknown action: \"dnat\""), None),
             (RuleSpec { chain: "input", action: "accept; flush ruleset", family: 2, ..Default::default() },
              Err("Unknown action: \"accept; flush ruleset\""), None),
-            // An IPv6 target needs brackets.
+            (RuleSpec { chain: "prerouting", action: "dnat to [2001:db8::1]", family: 10,
+                        ..Default::default() },
+             Ok(r#"{"chain":"prerouting","expr":[{"dnat":{"family":"ip6","addr":"2001:db8::1"}}]}"#),
+             Some("prerouting dnat ip6 to 2001:db8::1")),
+            // An IPv6 target without brackets reads as address:port.
             (RuleSpec { chain: "prerouting", action: "dnat to 2001:db8::1", family: 10, ..Default::default() },
              Err("Unknown action: \"dnat to 2001:db8::1\""), None),
+            (RuleSpec { chain: "prerouting", action: "dnat to [2001:db8::1", family: 10, ..Default::default() },
+             Err("Unknown action: \"dnat to [2001:db8::1\""), None),
+            (RuleSpec { chain: "prerouting", action: "dnat to [2001:db8::1]443", family: 10,
+                        ..Default::default() },
+             Err("Unknown action: \"dnat to [2001:db8::1]443\""), None),
+            (RuleSpec { chain: "prerouting", action: "dnat to 192.0.2.1:0", family: 2, ..Default::default() },
+             Err("Unknown action: \"dnat to 192.0.2.1:0\""), None),
             (RuleSpec { chain: "prerouting", action: "dnat to 192.0.2.1:70000", family: 2, ..Default::default() },
              Err("Unknown action: \"dnat to 192.0.2.1:70000\""), None),
             (RuleSpec { chain: "prerouting", action: "dnat to 192.0.2.1", family: 10, ..Default::default() },
@@ -575,7 +586,16 @@ pub(crate) mod tests {
     #[test]
     fn test_replace_rules_is_one_run() {
         let _serial = serial();
-        let echo = r#"{"nftables": [{"flush": {"table": {"family": "inet", "name": "phantom"}}}, {"add": {"rule": {"handle": 7}}}, {"add": {"rule": {"handle": 8}}}]}"#;
+        // nft 1.1.3's echo of such a batch, one chain kept: the table and the
+        // chain carry handles too.
+        let echo = concat!(
+            r#"{"nftables": [{"add": {"table": {"family": "inet", "name": "phantom", "handle": 1}}}, "#,
+            r#"{"delete": {"table": {"family": "inet", "name": "phantom"}}}, "#,
+            r#"{"add": {"table": {"family": "inet", "name": "phantom", "handle": 2}}}, "#,
+            r#"{"add": {"chain": {"family": "inet", "table": "phantom", "name": "input", "type": "filter", "hook": "input", "prio": 0, "policy": "accept", "handle": 1}}}, "#,
+            r#"{"add": {"rule": {"family": "inet", "table": "phantom", "chain": "input", "expr": [{"accept": null}], "handle": 2}}}, "#,
+            r#"{"add": {"rule": {"family": "inet", "table": "phantom", "chain": "input", "expr": [{"drop": null}], "handle": 3}}}]}"#,
+        );
         let nft = fake_nft("replace_rules", &format!(
             "printf 'x\\n' >> \"$0.calls\"\nprintf '%s' '{echo}'"));
         let ctx = NftContext::with_binary(&nft).unwrap();
@@ -593,7 +613,7 @@ pub(crate) mod tests {
             chain("prerouting", "nat", -100), chain("postrouting", "nat", 100),
             commands[0], commands[1],
         ]});
-        assert_eq!(replace_rules(&ctx, commands).unwrap(), vec![7, 8]);
+        assert_eq!(replace_rules(&ctx, commands).unwrap(), vec![2, 3]);
         assert_eq!(recorded(&nft, "calls"), "x\n");
         assert_eq!(recorded(&nft, "args"), "--echo\n--json\n--handle\n-f\n-\n");
         assert_eq!(recorded(&nft, "stdin"), sent.to_string());
@@ -659,6 +679,7 @@ pub(crate) mod tests {
         let nft = fake_nft("from_env", "printf 'ok'");
         let ctx = NftContext::from_env(Some(nft.clone().into_os_string())).unwrap();
         assert_eq!(ctx.binary, nft);
+        assert_eq!(NFT_PATH_ENV, "FIREWALL_BRIDGE_NFT_PATH");
         assert_eq!(NftContext::from_env(Some("nft".into())).err(),
                    Some("nft path must be absolute"));
         assert_eq!(NftContext::from_env(Some("/nonexistent/nft".into())).err(),
@@ -667,10 +688,11 @@ pub(crate) mod tests {
 
     #[test]
     fn test_nft_from_env_defaults_to_usr_sbin() {
+        assert_eq!(DEFAULT_NFT_PATH, "/usr/sbin/nft");
         match NftContext::from_env(None) {
-            Ok(ctx) => assert_eq!(ctx.binary, Path::new(DEFAULT_NFT_PATH)),
+            Ok(ctx) => assert_eq!(ctx.binary, Path::new("/usr/sbin/nft")),
             Err(e) => {
-                assert!(!Path::new(DEFAULT_NFT_PATH).is_file());
+                assert!(!Path::new("/usr/sbin/nft").is_file());
                 assert_eq!(e, "nft program not found");
             }
         }
