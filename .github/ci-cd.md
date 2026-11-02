@@ -2,13 +2,12 @@
 
 ## Workflows
 
-| Workflow                            | Trigger                               | Jobs                                     | Output                                    |
-|-------------------------------------|---------------------------------------|------------------------------------------|-------------------------------------------|
-| `test-firewall-bridge.yml`          | push, `workflow_call`                 | `test-rust`, `test-python`, `e2e`        | —                                         |
-| `build-firewall-bridge.yml`         | push, `workflow_call`                 | `build-linux-amd64`, `build-linux-arm64` | .so + .h + .sha256 artifacts              |
-| `publish-firewall-bridge.yml`       | `workflow_dispatch`                   | `version` → `test` → `build` → `publish` | tagged release + zip assets               |
-| `verify-kvm-firewall-bridge.yml`    | push (this file), `workflow_dispatch` | `verify-kvm`                             | runner and guest facts in the job summary |
-| `kernel-matrix-firewall-bridge.yml` | push, `workflow_dispatch`             | `kernel` × guest kernels                 | per kernel: steps, failed tests; logs     |
+| Workflow                            | Trigger                   | Jobs                                     | Output                                |
+|-------------------------------------|---------------------------|------------------------------------------|---------------------------------------|
+| `test-firewall-bridge.yml`          | push, `workflow_call`     | `test-rust`, `test-python`, `e2e`        | —                                     |
+| `build-firewall-bridge.yml`         | push, `workflow_call`     | `build-linux-amd64`, `build-linux-arm64` | .so + .h + .sha256 artifacts          |
+| `publish-firewall-bridge.yml`       | `workflow_dispatch`       | `version` → `test` → `build` → `publish` | tagged release + zip assets           |
+| `kernel-matrix-firewall-bridge.yml` | push, `workflow_dispatch` | `kernel` × guest kernels                 | per kernel: steps, failed tests; logs |
 
 ## Flow
 
