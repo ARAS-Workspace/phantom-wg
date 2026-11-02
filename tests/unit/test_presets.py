@@ -5,12 +5,15 @@ Uses mock bridge, no .so required.
 
 import builtins
 import contextlib
+import os
+import subprocess
 import sys
 from textwrap import dedent
 from unittest.mock import MagicMock
 
 import pytest
 
+import firewall_bridge
 from firewall_bridge.models import Group
 from firewall_bridge.types import GroupExistsError, NftablesError
 from firewall_bridge.presets import (
@@ -139,6 +142,7 @@ class TestApplyPresetDict:
         bridge.get_group.return_value = Group(name="ret-test", enabled=True)
         result = apply_preset(bridge, spec)
         assert result.name == "ret-test"
+        assert bridge.get_group.call_args.args == ("ret-test",)
 
     def test_default_priority(self, bridge):
         spec = {"name": "no-priority"}
@@ -263,7 +267,8 @@ class TestApplyPresetYAML:
 
 
 class TestRefusedByKernel:
-    """The kernel refuses one entry: apply_preset deletes the group again."""
+    """An entry, or enable_group, raises: apply_preset deletes the group
+    again and the error is raised."""
 
     SPEC = {
         "name": "p",
@@ -282,7 +287,7 @@ class TestRefusedByKernel:
         assert bridge.add_firewall_rule.call_count == 2
         bridge.delete_group.assert_called_once_with("p")
 
-    def test_routing_refusal_deletes_the_group(self, bridge):
+    def test_a_routing_entry_that_raises_deletes_the_group(self, bridge):
         bridge.add_routing_rule.side_effect = NftablesError("refused")
         with pytest.raises(NftablesError):
             apply_preset(bridge, self.SPEC)
@@ -479,6 +484,15 @@ class TestYamlIsOptional:
             from firewall_bridge.presets import _load_spec
             spec = _load_spec({"name": "dictonly", "rules": []})
             assert spec["name"] == "dictonly"
+
+    def test_the_package_imports_without_yaml(self):
+        """Every module, in a process where yaml cannot be imported."""
+        code = ("import sys; sys.modules['yaml'] = None; import firewall_bridge; "
+                "from firewall_bridge import bridge, db, presets, schema; print('ok')")
+        root = os.path.dirname(os.path.dirname(os.path.abspath(firewall_bridge.__file__)))
+        out = subprocess.run([sys.executable, "-c", code], capture_output=True, text=True,
+                             cwd=root, check=False)
+        assert (out.returncode, out.stdout.strip()) == (0, "ok"), out.stderr
 
     def test_yaml_string_raises_clearly_without_yaml(self):
         with _without_yaml():

@@ -27,7 +27,6 @@ def mock_lib():
     lib = MagicMock()
     lib.nft_init.return_value = 0
     lib.nft_close.return_value = None
-    lib.nft_add_rule.return_value = 42  # fake handle
 
     def replace_rules(rules, count, handles):
         for i in range(count):
@@ -73,11 +72,22 @@ class TestInit:
     def test_state_is_stopped(self, bridge):
         assert bridge.get_state() == "stopped"
 
-    def test_init_clears_applied(self, bridge):
-        """Init always clears stale applied flags (crash recovery)."""
-        # Internally _db.clear_applied_state() was called in __init__
-        # We verify by checking no rules are applied
-        assert bridge.list_firewall_rules() == []
+    def test_init_clears_applied(self, bridge, mock_lib, tmp_path):
+        """A new bridge on a database whose rows a started bridge applied
+        holds them unapplied."""
+        bridge.create_group("g")
+        bridge.add_firewall_rule("g", "input", "accept")
+        bridge.add_routing_rule("g", "policy", from_network="10.0.0.0/24",
+                                table_name="mh", priority=100)
+        bridge.start()
+        assert [r.applied for r in bridge.list_firewall_rules() + bridge.list_routing_rules()] == [
+            True, True]
+        with patch("firewall_bridge.bridge.get_lib", return_value=mock_lib):
+            second = FirewallBridge(str(tmp_path / "test.db"))
+        assert second.get_state() == "stopped"
+        assert [(r.applied, r.nft_handle) for r in second.list_firewall_rules()] == [(False, 0)]
+        assert [r.applied for r in second.list_routing_rules()] == [False]
+        second.close()
 
 
 class TestLifecycle:
@@ -91,7 +101,7 @@ class TestLifecycle:
         bridge.stop()
         assert bridge.get_state() == "stopped"
 
-    def test_start_writes_the_table_before_it_flushes(self, bridge, mock_lib):
+    def test_start_writes_the_table_before_it_replaces_the_rules(self, bridge, mock_lib):
         mock_lib.reset_mock()
         bridge.start()
         calls = [c[0] for c in mock_lib.method_calls]
@@ -197,7 +207,6 @@ class TestAutoApply:
         bridge.create_group("g1")
         bridge.start()
         _rid = bridge.add_firewall_rule("g1", "input", "accept", proto="tcp", dport=443)
-        mock_lib.nft_add_rule.assert_not_called()
         assert mock_lib.nft_replace_rules.call_args[0][1] == 1
         # Rule should be marked as applied in DB
         rules = bridge.list_firewall_rules("g1")
@@ -206,10 +215,9 @@ class TestAutoApply:
 
     def test_add_rule_while_stopped(self, bridge, mock_lib):
         bridge.create_group("g1")
-        mock_lib.nft_add_rule.reset_mock()
+        mock_lib.reset_mock()
         bridge.add_firewall_rule("g1", "input", "accept")
-        # Should NOT call kernel when stopped
-        mock_lib.nft_add_rule.assert_not_called()
+        mock_lib.nft_replace_rules.assert_not_called()
         rules = bridge.list_firewall_rules("g1")
         assert rules[0].applied is False
 
@@ -244,9 +252,7 @@ class TestAutoApply:
         bridge.create_group("g1")
         bridge.add_firewall_rule("g1", "input", "accept")
         bridge.add_firewall_rule("g1", "forward", "drop")
-        mock_lib.nft_add_rule.reset_mock()
         bridge.start()
-        mock_lib.nft_add_rule.assert_not_called()
         rules, count, _ = mock_lib.nft_replace_rules.call_args[0]
         assert [(rules[i].chain, rules[i].action) for i in range(count)] == [
             (b"input", b"accept"), (b"forward", b"drop")]
@@ -274,9 +280,7 @@ class TestAutoApply:
         bridge.create_group("g1")
         bridge.add_firewall_rule("g1", "input", "accept")
         bridge.disable_group("g1")
-        mock_lib.nft_add_rule.reset_mock()
         bridge.start()
-        mock_lib.nft_add_rule.assert_not_called()
         assert mock_lib.nft_replace_rules.call_args[0][1] == 0
 
     def test_enable_group_while_started(self, bridge, mock_lib):
@@ -286,7 +290,6 @@ class TestAutoApply:
         bridge.start()
         mock_lib.reset_mock()
         bridge.enable_group("g1")
-        mock_lib.nft_add_rule.assert_not_called()
         assert mock_lib.nft_replace_rules.call_args[0][1] == 1
 
     def test_enable_group_already_enabled_leaves_kernel_and_db(self, bridge, mock_lib):
@@ -394,6 +397,25 @@ class TestRefusedByKernel:
         assert not any(r.applied or r.nft_handle for r in bridge.list_firewall_rules())
         assert not any(r.applied for r in bridge.list_routing_rules())
 
+    def test_start_undoes_its_routing_when_emptying_is_refused(self, bridge, mock_lib, last_error):
+        bridge.create_group("g")
+        bridge.add_routing_rule("g", "policy", from_network="10.0.0.0/24",
+                                table_name="mh", priority=100)
+        bridge.add_routing_rule("g", "policy", from_network="10.1.0.0/24",
+                                table_name="mh", priority=101)
+        bridge.add_firewall_rule("g", "input", "accept")
+        replace = mock_lib.nft_replace_rules.side_effect
+        mock_lib.nft_replace_rules.side_effect = (
+            lambda rules, count, handles: -3 if count == 0 else replace(rules, count, handles))
+        mock_lib.rt_policy_add.side_effect = [0, -4]
+        mock_lib.rt_policy_delete.reset_mock()
+        with pytest.raises(NetlinkError):
+            bridge.start()
+        assert bridge.get_state() == "stopped"
+        assert [c.args[3] for c in mock_lib.rt_policy_delete.call_args_list] == [100, 101, 100]
+        assert not any(r.applied or r.nft_handle for r in bridge.list_firewall_rules())
+        assert not any(r.applied for r in bridge.list_routing_rules())
+
     def test_start_refused_by_nft_empties_the_table(self, bridge, mock_lib, last_error):
         bridge.create_group("g1")
         bridge.add_routing_rule("g1", "policy", from_network="10.0.0.0/24",
@@ -447,14 +469,19 @@ class TestRefusedByKernel:
     def test_a_refused_rebuild_leaves_the_group(self, bridge, mock_lib, last_error, call):
         bridge.create_group("g1")
         rule_id = bridge.add_firewall_rule("g1", "input", "accept")
+        bridge.add_routing_rule("g1", "policy", from_network="10.0.0.0/24",
+                                table_name="mh", priority=100)
         bridge.start()
         mock_lib.nft_replace_rules.side_effect = None
         mock_lib.nft_replace_rules.return_value = -3
+        mock_lib.rt_policy_delete.reset_mock()
         with pytest.raises(NftablesError):
             getattr(bridge, call)("g1")
         assert bridge.get_group("g1").enabled
         assert [(r.id, r.applied, r.nft_handle) for r in bridge.list_firewall_rules()] == [
             (rule_id, True, 42)]
+        mock_lib.rt_policy_delete.assert_not_called()
+        assert [r.applied for r in bridge.list_routing_rules()] == [True]
 
     def test_remove_rule_refused_by_nft_keeps_it(self, bridge, mock_lib, last_error):
         bridge.create_group("g1")
@@ -507,6 +534,15 @@ class TestTableOrder:
     def _sent(mock_lib):
         rules, count, _ = mock_lib.nft_replace_rules.call_args[0]
         return [(rules[i].chain, rules[i].action) for i in range(count)]
+
+    def test_rules_of_a_group_go_by_position_then_id(self, bridge, mock_lib):
+        bridge.create_group("g")
+        for action, position in [("drop", 2), ("accept", 0), ("reject", 1), ("masquerade", 0)]:
+            bridge.add_firewall_rule("g", "input" if action != "masquerade" else "postrouting",
+                                     action, position=position)
+        bridge.start()
+        assert self._sent(mock_lib) == [(b"input", b"accept"), (b"postrouting", b"masquerade"),
+                                        (b"input", b"reject"), (b"input", b"drop")]
 
     def test_a_rule_added_lands_in_its_group_place(self, bridge, mock_lib):
         bridge.create_group("late", priority=20)
@@ -594,6 +630,17 @@ class TestRoutingRules:
         mock_lib.rt_route_add.assert_called()
         call_args = mock_lib.rt_route_add.call_args
         assert call_args[0][-1] == 10
+
+    def test_remove_a_disabled_groups_row_while_started_sends_nothing(self, bridge, mock_lib):
+        bridge.create_group("g")
+        rid = bridge.add_routing_rule("g", "policy", from_network="10.0.0.0/24",
+                                      table_name="mh", priority=100)
+        bridge.disable_group("g")
+        bridge.start()
+        mock_lib.reset_mock()
+        bridge.remove_routing_rule(rid)
+        mock_lib.rt_policy_delete.assert_not_called()
+        assert bridge.list_routing_rules() == []
 
 
 class TestDirectRuleFields:
@@ -743,7 +790,6 @@ class TestCrashRecovery:
             fw1.start()
             # Simulate crash — no close()
 
-        mock_lib.nft_add_rule.reset_mock()
         mock_lib.rt_policy_add.reset_mock()
         mock_lib.rt_policy_delete.reset_mock()
 
@@ -809,7 +855,17 @@ class TestCrashRecovery:
         mock_lib.rt_policy_delete.return_value = -4
         mock_lib.rt_route_delete.return_value = -4
         bridge.delete_group("g")
+        assert (mock_lib.rt_policy_delete.call_count, mock_lib.rt_route_delete.call_count) == (2, 2)
         assert bridge.list_groups() == []
+        bridge.close()
+
+    def test_remove_routing_rule_while_stopped_refused_is_not_raised(self, mock_lib, tmp_path):
+        bridge = self._after_a_crash(mock_lib, tmp_path)
+        mock_lib.rt_route_delete.return_value = -4
+        route = next(r for r in bridge.list_routing_rules("g") if r.rule_type == "route")
+        bridge.remove_routing_rule(route.id)
+        assert mock_lib.rt_route_delete.call_count == 1
+        assert route.id not in [r.id for r in bridge.list_routing_rules()]
         bridge.close()
 
     def test_remove_routing_rule_while_stopped_removes_it(self, mock_lib, tmp_path):

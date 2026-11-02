@@ -36,6 +36,22 @@ class TestSchema:
         fk = db._conn.execute("PRAGMA foreign_keys").fetchone()[0]
         assert fk == 1
 
+    def test_an_old_database_gets_the_family_column(self, tmp_path):
+        path = str(tmp_path / "old.db")
+        first = FirewallDB(path)
+        first.create_group("g")
+        first.add_routing_rule("g", "policy", from_network="10.0.0.0/24")
+        first.close()
+        conn = sqlite3.connect(path)
+        conn.execute("ALTER TABLE routing_rules DROP COLUMN family")
+        conn.commit()
+        conn.close()
+        again = FirewallDB(path)
+        try:
+            assert [(r.rule_type, r.family) for r in again.list_routing_rules()] == [("policy", 2)]
+        finally:
+            again.close()
+
     def test_config_singleton(self, db):
         rows = db._conn.execute("SELECT * FROM config").fetchall()
         assert len(rows) == 1
