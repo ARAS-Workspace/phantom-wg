@@ -47,6 +47,8 @@ impl NftContext {
         Self::with_binary(binary)
     }
 
+    /// nft at `binary`; a path that is not absolute, or not a file, is refused.
+    ///
     /// @witness nft::tests::test_nft_relative_path_is_refused
     /// @witness nft::tests::test_nft_missing_program
     fn with_binary(binary: impl Into<PathBuf>) -> Result<Self, &'static str> {
@@ -60,25 +62,34 @@ impl NftContext {
         Ok(Self { binary })
     }
 
+    /// Runs `cmd` with no flags; returns nft's output.
+    ///
     /// @witness nft::tests::test_nft_run_passes_the_command_on_stdin
     pub fn run(&self, cmd: &str) -> Result<String, String> {
         self.exec(&[], cmd)
     }
 
+    /// Runs `cmd` with `--json --handle`; returns nft's output.
+    ///
     /// @witness nft::tests::test_nft_run_json_asks_for_json_with_handles
     pub fn run_json(&self, cmd: &str) -> Result<String, String> {
         self.exec(&["--json", "--handle"], cmd)
     }
 
-    /// Runs an `add` command with `--echo --json --handle`.
+    /// Runs `cmd` with `--echo --json --handle`; returns nft's echo.
     ///
     /// @witness nft::tests::test_add_rule_takes_the_handle_from_one_run
-    /// @witness nft::tests::test_find_added_handle
     pub fn run_echo(&self, cmd: &str) -> Result<String, String> {
         self.exec(&["--echo", "--json", "--handle"], cmd)
     }
 
-    /// `cmd` goes to nft on its stdin (`-f -`); `flags` are its arguments.
+    /// Runs nft with `flags` and `-f -` as its arguments, `LC_ALL=C` as its
+    /// whole environment and `cmd` on its stdin; returns its output, read in
+    /// full and decoded lossily. An exit other than 0 is an error holding
+    /// nft's stderr, or "nft command failed (rc=N): <cmd>" when stderr is
+    /// empty, whether or not `cmd` was written; an exit of 0 with `cmd` not
+    /// read is "nft did not read the command"; a child that cannot be waited
+    /// for is "nft did not finish".
     ///
     /// @witness nft::tests::test_nft_run_passes_the_command_on_stdin
     /// @witness nft::tests::test_nft_input_and_output_larger_than_a_pipe_buffer
@@ -158,6 +169,9 @@ const TABLE_FAMILY: &str = "inet";
 const TABLE_NAME: &str = "phantom";
 
 /// The table's chains: name, type, hook, priority. Each has policy accept.
+///
+/// @witness nft::tests::test_replace_rules_is_one_run
+/// @witness kernel_tests::kernel_nft_init_makes_the_table_replace_rules_makes
 const CHAINS: [(&str, &str, &str, i32); 5] = [
     ("input", "filter", "input", 0),
     ("output", "filter", "output", 0),
@@ -172,6 +186,7 @@ const CHAINS: [(&str, &str, &str, i32); 5] = [
 /// @witness nft::tests::test_ensure_table_is_one_run
 /// @witness kernel_tests::kernel_nft_ensure_table_is_all_or_nothing
 /// @witness kernel_tests::kernel_nft_table_rules_and_handles
+/// @witness kernel_tests::kernel_nft_init_makes_the_table_replace_rules_makes
 pub fn ensure_table(nft: &NftContext) -> Result<(), String> {
     let mut cmd = vec![format!("add table {TABLE}")];
     cmd.extend(CHAINS.iter().map(|(name, kind, hook, prio)| {
@@ -180,12 +195,16 @@ pub fn ensure_table(nft: &NftContext) -> Result<(), String> {
     nft.run(&cmd.join("; ")).map(|_| ())
 }
 
+/// `flush table inet phantom`: its rules removed, its chains kept.
+///
 /// @witness nft::tests::test_table_and_rule_commands
 /// @witness kernel_tests::kernel_nft_table_rules_and_handles
 pub fn flush_table(nft: &NftContext) -> Result<(), String> {
     nft.run(&format!("flush table {TABLE}")).map(|_| ())
 }
 
+/// The table as nft lists it in JSON, with handles.
+///
 /// @witness nft::tests::test_table_and_rule_commands
 /// @witness kernel_tests::kernel_nft_table_rules_and_handles
 pub fn list_table(nft: &NftContext) -> Result<String, String> {

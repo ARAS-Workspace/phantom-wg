@@ -2,8 +2,10 @@
  * firewall_bridge_linux.h — Kernel operations backend
  *
  * Functions returning char* (JSON) must be freed with firewall_bridge_free_string().
- * Functions returning const char* are static and must NOT be freed.
- * All other functions return 0 on success, negative on error.
+ * Functions returning const char* must NOT be freed: the version is static,
+ * the last error lives until the next recorded error.
+ * nft_add_rule returns the rule's handle (> 0) on success; all other
+ * functions return 0 on success, negative on error.
  */
 
 #ifndef FIREWALL_BRIDGE_LINUX_H
@@ -53,9 +55,10 @@ typedef struct {
     const char* comment;
 } fw_nft_rule;
 
-/* Flush the phantom table and add rules[0..count) in one nft transaction;
- * on success handles[i] is rule i's handle. On an error the table is as it
- * was and handles is not written. */
+/* Replace the phantom table in one nft transaction: the table deleted and
+ * added again with its chains, then rules[0..count); on success handles[i]
+ * is rule i's handle. When nft refuses one, the table is as it was; on an
+ * error handles is not written. */
 int32_t     nft_replace_rules(const fw_nft_rule* rules, int32_t count,
                               uint64_t* handles);
 int32_t     nft_flush_table(void);
@@ -76,6 +79,9 @@ int32_t     rt_policy_delete(const char* from_network, const char* to_network,
 
 int32_t     rt_route_add(const char* destination, const char* device,
                          const char* table_name, int32_t family);
+/* With an empty or NULL device, the route of destination in the table
+ * whatever its device, protocol and type; with a device, the static
+ * unicast route through it. */
 int32_t     rt_route_delete(const char* destination, const char* device,
                             const char* table_name, int32_t family);
 

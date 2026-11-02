@@ -163,7 +163,6 @@ unsafe fn cstr_to_str<'a>(ptr: *const c_char) -> &'a str {
 ///
 /// @witness kernel_tests::kernel_nft_table_rules_and_handles
 /// @witness kernel_tests::kernel_nft_ensure_table_is_all_or_nothing
-/// @witness tests::uninitialized_context_returns_code_not_panic
 #[unsafe(no_mangle)]
 pub extern "C" fn nft_init() -> i32 {
     let ctx = match NftContext::new() {
@@ -285,11 +284,13 @@ pub struct NftRule {
     pub comment: *const c_char,
 }
 
-/// Flush the phantom table and add `rules`, in one nft transaction; on
-/// success writes each rule's handle to `handles`, in order. On an error
-/// the table is as it was and `handles` is not written.
+/// Replace the phantom table, in one nft transaction: the table deleted and
+/// added again with its chains, then `rules`; on success writes each rule's
+/// handle to `handles`, in order. When nft refuses one, the table is as it
+/// was; on an error `handles` is not written.
 ///
 /// @witness kernel_tests::kernel_nft_replace_rules_is_one_transaction
+/// @witness kernel_tests::kernel_nft_replace_rules_makes_the_table_anew
 /// @witness tests::null_pointers_give_error_codes
 ///
 /// # Safety
@@ -488,10 +489,13 @@ pub unsafe extern "C" fn rt_route_add(
     }
 }
 
-/// Delete a route.
+/// Delete a route. With an empty `device`, null and invalid UTF-8 read as
+/// empty, the route of `destination` in the table whatever its device,
+/// protocol and type; with a device, the static unicast route through it.
 ///
 /// @witness kernel_tests::kernel_routing_tables_rules_and_routes
 /// @witness kernel_tests::kernel_route_delete_takes_a_route_of_any_scope
+/// @witness kernel_tests::kernel_route_delete_with_no_device_takes_any_route
 /// @witness tests::null_pointers_give_error_codes
 /// @witness tests::routing_family_outside_u8_is_refused_at_the_boundary
 ///

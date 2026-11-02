@@ -155,7 +155,8 @@ def _add_entries(bridge: FirewallBridge, name: str, spec: dict) -> None:
 
 
 def remove_preset(bridge: FirewallBridge, name: str) -> None:
-    """Remove a preset rule group. Removes from kernel if started."""
+    """Remove a preset rule group with delete_group: from the kernel when
+    started, and its routing rules from the kernel when stopped too."""
     bridge.delete_group(name)
 
 

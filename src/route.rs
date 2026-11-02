@@ -216,7 +216,9 @@ impl NetlinkSocket {
     }
 }
 
-/// The kernel's answer to a request sent with NLM_F_ACK.
+/// The kernel's answer to a request sent with NLM_F_ACK: Ok for an
+/// NLMSG_ERROR of code 0, and for a reply shorter than a message header or
+/// of another type; an error for any other code.
 ///
 /// @witness route::tests::ack_with_code_zero_is_accepted
 /// @witness route::tests::ack_with_an_errno_is_an_error
@@ -250,11 +252,15 @@ impl Drop for NetlinkSocket {
 // Message builder helpers
 // ---------------------------------------------------------------------------
 
+/// `len` rounded up to a multiple of 4.
+///
 /// @witness route::tests::attributes_pad_to_four_bytes
 fn align4(len: usize) -> usize {
     (len + 3) & !3
 }
 
+/// Appends an attribute of `rta_type` holding `data`, padded to 4 bytes.
+///
 /// @witness route::tests::attributes_pad_to_four_bytes
 fn push_attr(buf: &mut Vec<u8>, rta_type: u16, data: &[u8]) {
     let rta_len = (mem::size_of::<RtAttr>() + data.len()) as u16;
@@ -372,6 +378,7 @@ fn resolve_table_in(etc: &Path, usr: &Path, table_name: &str) -> Result<u32, Str
 /// each `etc/rt_tables.d/*.conf`. Directory entries are taken in name order.
 ///
 /// @witness route::tests::resolve_table_reads_the_files_ip_reads
+/// @witness route::tests::resolve_table_reads_drop_ins_in_name_order
 fn table_files(etc: &Path, usr: &Path) -> Vec<std::path::PathBuf> {
     fn confs(dir: &Path) -> Vec<std::path::PathBuf> {
         let Ok(entries) = std::fs::read_dir(dir) else { return Vec::new() };
@@ -483,10 +490,13 @@ fn policy_msg(req: Request, from_network: &str, to_network: &str, table_id: u32,
 
 /// RTM_NEWROUTE / RTM_DELROUTE: <destination> dev <ifindex> table <table>;
 /// "default" is the default route of `family`. A new route has link scope,
-/// a delete RT_SCOPE_NOWHERE.
+/// a delete RT_SCOPE_NOWHERE. A delete with `ifindex` 0 carries no RTA_OIF,
+/// protocol or type; any other message is a static unicast route through
+/// `ifindex`.
 ///
 /// @witness route::tests::route_message_v4_link_scope
 /// @witness route::tests::route_message_v4_delete_has_no_scope
+/// @witness route::tests::route_message_v4_delete_of_any_device
 /// @witness route::tests::route_message_v6_default_delete
 /// @witness kernel_tests::kernel_route_delete_takes_a_route_of_any_scope
 /// @witness route::tests::route_message_v4_default_table_above_255
@@ -541,6 +551,8 @@ fn route_msg(req: Request, destination: &str, ifindex: u32, table_id: u32, famil
     Ok(buf)
 }
 
+/// Ok for AF_INET and AF_INET6.
+///
 /// @witness route::tests::policy_messages_refuse_an_address_of_another_family
 /// @witness route::tests::route_messages_refuse_an_address_of_another_family
 fn known_family(family: u8) -> Result<(), String> {
@@ -551,6 +563,8 @@ fn known_family(family: u8) -> Result<(), String> {
     }
 }
 
+/// Ok when `network_family` is `family`.
+///
 /// @witness route::tests::policy_messages_refuse_an_address_of_another_family
 /// @witness route::tests::route_messages_refuse_an_address_of_another_family
 fn check_family(network: &str, network_family: u8, family: u8) -> Result<(), String> {
@@ -607,10 +621,10 @@ pub fn route_add(destination: &str, device: &str, table_name: &str, family: u8) 
 }
 
 /// Delete a route. With an empty `device`, the route of `destination` in
-/// the table, whatever its device, protocol and type.
+/// the table, whatever its device, protocol and type; with a device, the
+/// static unicast route through it.
 ///
 /// @witness kernel_tests::kernel_routing_tables_rules_and_routes
-/// @witness route::tests::route_message_v4_delete_of_any_device
 /// @witness kernel_tests::kernel_route_delete_with_no_device_takes_any_route
 pub fn route_delete(destination: &str, device: &str, table_name: &str, family: u8) -> Result<(), String> {
     send_route(RTM_DELROUTE, DELETE_FLAGS, destination, device, table_name, family)
@@ -644,7 +658,8 @@ pub fn ensure_table(table_id: u32, table_name: &str) -> Result<(), String> {
 
 /// Writes `<table_id> <table_name>` to `path`, in place of any line there
 /// with the same id or the same name. A file that holds the entry and no
-/// such line is not written.
+/// such line is not written. An empty name, a name with whitespace or of
+/// digits alone, and an entry longer than MAX_RT_TABLES_LINE are refused.
 ///
 /// @witness route::tests::ensure_table_creates_the_file_and_its_directory
 /// @witness route::tests::ensure_table_writes_an_entry_once
