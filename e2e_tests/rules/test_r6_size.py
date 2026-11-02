@@ -11,10 +11,12 @@ disabled and enabled; every preset removed; five presets of 100 policy
 rules and 100 routes each, the same routing then made with one `ip -batch`
 run; three cycles of 5000 rules applied and removed with no check in
 between, the resident memory at the end of the second and third within
-8 MiB of the first. After every step the invariants of oracle.check hold,
-with inet reference written in one nft run from oracle.rule_text, and the
-routing rows are the kernel's (oracle.assert_routing_matches_db).
-rule_text is first held to the rules written by hand in R1, R2 and R5.
+8 MiB of the first; list_table 20 times and then 100 times over 500 rules,
+the resident memory after the 100 within 8 MiB of after the 20. After
+every step the invariants of oracle.check hold, with inet reference
+written in one nft run from oracle.rule_text, and the routing rows are the
+kernel's (oracle.assert_routing_matches_db). rule_text is first held to
+the rules written by hand in R1, R2 and R5.
 
 Does not show: more than 5000 rules or 500 routing rows; the time a step
 takes (printed, not bounded); rules added one at a time while started at
@@ -192,6 +194,31 @@ def test_the_bridge_grows_no_memory_over_cycles(bridge, db_path, meter):
     assert max(ends[1:]) <= ends[0] + 8 * 1024, f"resident kB at the cycle ends: {ends}"
     _check(bridge, db_path, meter, oracle.Ledger(bridge))
     assert _kernel_rules() == 0
+
+
+def test_listing_the_table_grows_no_memory(bridge, db_path, meter):
+    """list_table over 500 rules of the longest shape, 20 times and then
+    100 times: the resident memory after the 100 is within 8 MiB of after
+    the 20, and 100 listings held would be at least twice that."""
+    bridge.create_group("r6")
+    ledger = oracle.Ledger(bridge)
+    for i in range(500):
+        fields = _longest(i)
+        rule_id = bridge.add_firewall_rule("r6", **fields)
+        ledger.texts[rule_id] = oracle.rule_text(fields)
+        ledger.reference[rule_id] = None
+    bridge.start()
+    ledger.started()
+    listing = bridge.list_table()
+    assert len(listing) * 100 >= 2 * 8 * 1024 * 1024, f"a listing of {len(listing)} bytes"
+    for _ in range(20):
+        bridge.list_table()
+    first = _rss_kb()
+    for _ in range(100):
+        bridge.list_table()
+    last = _rss_kb()
+    assert last <= first + 8 * 1024, f"resident kB after 20 listings {first}, after 100 more {last}"
+    _check(bridge, db_path, meter, ledger)
 
 
 def test_routing_by_the_hundred(bridge, db_path, meter):
