@@ -4,14 +4,14 @@
 
 | Workflow                      | Trigger                                    | Jobs                                     | Output                         |
 |-------------------------------|--------------------------------------------|------------------------------------------|--------------------------------|
-| `test-firewall-bridge.yml`    | push (`.github/` ignored), `workflow_call` | `test-rust`, `test-python`, `e2e`        | —                              |
-| `build-firewall-bridge.yml`   | push (`.github/` ignored), `workflow_call` | `build-linux-amd64`, `build-linux-arm64` | .so + .h + .sha256 artifacts   |
+| `test-firewall-bridge.yml`    | push, `workflow_call`                      | `test-rust`, `test-python`, `e2e`        | —                              |
+| `build-firewall-bridge.yml`   | push, `workflow_call`                      | `build-linux-amd64`, `build-linux-arm64` | .so + .h + .sha256 artifacts   |
 | `publish-firewall-bridge.yml` | `workflow_dispatch`                        | `version` → `test` → `build` → `publish` | tagged release + zip assets    |
 
 ## Flow
 
 ```
-Branch push (dev/firewall-bridge, .github/ ignored):
+Branch push (dev/firewall-bridge):
   ├── test-firewall-bridge.yml
   │     ├── test-rust      (Docker cargo test)
   │     ├── test-python    (Docker SDK unit runner)
@@ -110,7 +110,6 @@ https://github.com/ARAS-Workspace/phantom-wg/releases/download/vendor-firewall-b
 
 ## Notes
 
-- `.github/` changes do not trigger test/build on push (paths-ignore)
 - Publish runs on ubuntu-26.04; its only credential is GITHUB_TOKEN
 - No moving "latest" pointer: this repository holds several components and
   GitHub's `/releases/latest` answers for the repository, so consumers pin a tag
