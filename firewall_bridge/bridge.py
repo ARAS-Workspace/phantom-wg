@@ -29,7 +29,6 @@ from .db import FirewallDB
 from .models import Group, FirewallRule, RoutingRule
 from .schema import validate_firewall_rule
 from .types import (
-    BridgeError,
     AlreadyStartedError,
     NotStartedError,
     check_result,
@@ -378,16 +377,10 @@ class FirewallBridge:
                 self._kernel_remove_routing(rule)
 
     def _flush_stale_routing(self) -> None:
-        """Best-effort removal of routing rules that may be stale after crash.
-
-        After a crash, applied flags are cleared but rules may still exist
-        in kernel. Try to remove all known routing rules before re-applying.
-        """
+        """Every routing row of the database, applied or not, removed from
+        kernel; a refusal is not raised."""
         for rule in self._db.list_routing_rules():
-            try:
-                self._kernel_remove_routing(rule)
-            except (BridgeError, OSError):
-                pass
+            self._kernel_remove_routing(rule)
 
     # ---- Context manager ----
 

@@ -374,7 +374,7 @@ fn statement(action: &str, family: i32) -> Result<Value, String> {
         },
     };
     let ip: IpAddr = addr.parse().map_err(|_| bad())?;
-    if ip.is_ipv6() != is_v6(family) || (ip.is_ipv6() && !target.starts_with('[')) {
+    if ip.is_ipv6() != is_v6(family) {
         return Err(bad());
     }
     let fam = if is_v6(family) { "ip6" } else { "ip" };
