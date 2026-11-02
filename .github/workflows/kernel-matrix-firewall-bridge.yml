@@ -164,6 +164,20 @@ jobs:
             -device virtserialport,chardev=matrixlog,name=matrix.log \
             -display none -monitor none -serial file:serial.log -no-reboot &
           qemu=$!
+          # Ten minutes with no line from the guest's script: the end of the
+          # serial console is printed and the guest stopped.
+          (
+            for _ in $(seq 600); do
+              if grep -q '^@@matrix ' guest.log || ! kill -0 "$qemu" 2>/dev/null; then exit 0; fi
+              sleep 1
+            done
+            touch watchdog.fired
+            echo "::error title=$NAME::no line from the guest's script after 10 min; the guest is stopped"
+            echo "::group::serial console, last 60 lines"
+            tail -n 60 serial.log | sed 's/^/console | /'
+            echo "::endgroup::"
+            kill "$qemu"
+          ) &
           # The guest's lines as they come: "@@matrix" lines become groups,
           # notes and, for a step that exits non-zero, an annotation; every
           # other line starts with its step's name and is printed as it is.
@@ -181,7 +195,7 @@ jobs:
           rc=0
           wait "$qemu" || rc=$?
           echo "qemu exit: $rc"
-          if ! grep -q '^@@matrix step-start ' guest.log; then
+          if [ ! -e watchdog.fired ] && ! grep -q '^@@matrix step-start ' guest.log; then
             echo "::group::serial console, last 60 lines (no step reached the virtio port)"
             tail -n 60 serial.log | sed 's/^/console | /'
             echo "::endgroup::"

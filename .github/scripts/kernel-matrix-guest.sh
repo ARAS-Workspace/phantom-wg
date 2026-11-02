@@ -51,44 +51,61 @@ finish() {
 trap finish EXIT
 
 step() {
-    local name=$1 t0=$SECONDS rc
+    local name=$1 t0=$SECONDS rc tick
     shift
     mark "step-start $name"
+    # A note every five minutes while the step runs.
+    (
+        while sleep 300; do
+            mark "note $name still running after $((SECONDS - t0)) s"
+        done
+    ) &
+    tick=$!
     "$@" 2>&1 | tee -a "$RESULTS/$name.log" | sed -u -e "s/^/$name | /" -e '$a\' >> "$LOG"
     rc=${PIPESTATUS[0]}
+    kill "$tick" 2>/dev/null
+    wait "$tick" 2>/dev/null
     echo "$name $rc $((SECONDS - t0))" >> "$RESULTS/steps"
     mark "step-end $name $rc $((SECONDS - t0))"
     return "$rc"
 }
 
 install_docker() {
+    # A command that fails ends the step with its exit code. (set -e would
+    # not: the step is called on the left of ||, where bash ignores it.)
     # No terminal under cloud-init: debconf and needrestart ask nothing.
     export DEBIAN_FRONTEND=noninteractive NEEDRESTART_MODE=a
     local apt=(apt-get -q -y -o DPkg::Lock::Timeout=600)
-    "${apt[@]}" update
-    "${apt[@]}" install --no-install-recommends ca-certificates curl gnupg python3-venv
-    install -m 0755 -d /etc/apt/keyrings
-    curl -fsSL "https://download.docker.com/linux/$DOCKER_OS/gpg" -o /etc/apt/keyrings/docker.asc
+    # Backports are not used here, and bullseye-backports is only on
+    # archive.debian.org: their lines in sources.list are commented out.
+    if [ -f /etc/apt/sources.list ]; then
+        sed -i -E 's/^(deb(-src)? .* [a-z]+-backports( |$))/# \1/' /etc/apt/sources.list || return
+        grep -E -- '-backports' /etc/apt/sources.list || true
+    fi
+    "${apt[@]}" update || return
+    "${apt[@]}" install --no-install-recommends ca-certificates curl gnupg python3-venv || return
+    install -m 0755 -d /etc/apt/keyrings || return
+    curl -fsSL "https://download.docker.com/linux/$DOCKER_OS/gpg" -o /etc/apt/keyrings/docker.asc || return
     # The fingerprint Docker publishes for its repository key.
     gpg --show-keys --with-colons /etc/apt/keyrings/docker.asc \
         | grep -q '^fpr:::::::::9DC858229FC7DD38854AE2D88D81803C0EBFCD88:' || {
         echo "the key at download.docker.com is not 9DC8 5822 9FC7 DD38 854A E2D8 8D81 803C 0EBF CD88"
         return 1
     }
-    chmod a+r /etc/apt/keyrings/docker.asc
+    chmod a+r /etc/apt/keyrings/docker.asc || return
     echo "deb [arch=amd64 signed-by=/etc/apt/keyrings/docker.asc] https://download.docker.com/linux/$DOCKER_OS $DOCKER_CODENAME stable" \
-        > /etc/apt/sources.list.d/docker.list
-    "${apt[@]}" update
+        > /etc/apt/sources.list.d/docker.list || return
+    "${apt[@]}" update || return
     "${apt[@]}" install \
         "docker-ce=${DOCKER_CE}${DOCKER_SUFFIX}" \
         "docker-ce-cli=${DOCKER_CE}${DOCKER_SUFFIX}" \
         "containerd.io=${CONTAINERD_IO}${DOCKER_SUFFIX}" \
         "docker-buildx-plugin=${BUILDX}${DOCKER_SUFFIX}" \
-        "docker-compose-plugin=${COMPOSE}${DOCKER_SUFFIX}"
-    python3 -m venv /opt/venv
-    /opt/venv/bin/pip install --no-cache-dir "docker==${PY_DOCKER}"
-    docker version
-    docker compose version
+        "docker-compose-plugin=${COMPOSE}${DOCKER_SUFFIX}" || return
+    python3 -m venv /opt/venv || return
+    /opt/venv/bin/pip install --no-cache-dir "docker==${PY_DOCKER}" || return
+    docker version || return
+    docker compose version || return
     /opt/venv/bin/python --version
 }
 
