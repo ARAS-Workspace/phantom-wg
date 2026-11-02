@@ -178,11 +178,12 @@ class FirewallBridge:
         return rule_id
 
     def remove_firewall_rule(self, rule_id: int) -> None:
-        rule = self._db.remove_firewall_rule(rule_id)
-        if rule.applied and rule.nft_handle:
-            self._lib.nft_remove_rule(
-                _encode(rule.chain), rule.nft_handle,
-            )
+        """Delete a rule; when it is applied, the table is first rebuilt
+        without it with _rebuild_fw. When nft refuses the table, the rule is
+        kept and the error is raised."""
+        if self._db.get_firewall_rule(rule_id).applied:
+            self._rebuild_fw(exclude=rule_id)
+        self._db.remove_firewall_rule(rule_id)
 
     def list_firewall_rules(self, group_name: Optional[str] = None) -> list[FirewallRule]:
         return self._db.list_firewall_rules(group_name)
@@ -238,13 +239,13 @@ class FirewallBridge:
 
     # ---- Kernel operations (private) ----
 
-    def _rebuild_fw(self) -> None:
-        """The table's rules become the enabled groups' rules, by group
-        priority, then position and id, in one nft transaction; the DB
-        gets their handles. When nft refuses one, the table and the DB are
-        as they were and the error is raised."""
+    def _rebuild_fw(self, exclude: int = 0) -> None:
+        """The table's rules become the enabled groups' rules but the rule
+        with id `exclude`, by group priority, then position and id, in one
+        nft transaction; the DB gets their handles. When nft refuses one,
+        the table and the DB are as they were and the error is raised."""
         rules = [r for g in self._db.enabled_groups()
-                 for r in self._db.firewall_rules_for_group(g.id)]
+                 for r in self._db.firewall_rules_for_group(g.id) if r.id != exclude]
         for rule, handle in zip(rules, self._kernel_replace_fw_rules(rules)):
             self._db.update_fw_applied(rule.id, True, handle)
 

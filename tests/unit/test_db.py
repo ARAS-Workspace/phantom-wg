@@ -204,6 +204,14 @@ class TestFirewallRules:
         with pytest.raises(RuleNotFoundError):
             db.remove_firewall_rule(999)
 
+    def test_get_rule(self, db):
+        db.create_group("g1")
+        rid = db.add_firewall_rule("g1", "input", "accept", proto="tcp", dport=22)
+        rule = db.get_firewall_rule(rid)
+        assert (rule.id, rule.chain, rule.dport, rule.applied) == (rid, "input", 22, False)
+        with pytest.raises(RuleNotFoundError, match="Firewall rule not found: 999"):
+            db.get_firewall_rule(999)
+
     def test_update_applied(self, db):
         db.create_group("g1")
         rid = db.add_firewall_rule("g1", "input", "accept")

@@ -232,6 +232,15 @@ class FirewallDB:
         self._conn.commit()
         return cur.lastrowid
 
+    def get_firewall_rule(self, rule_id: int) -> FirewallRule:
+        row = self._conn.execute(
+            "SELECT * FROM firewall_rules WHERE id=?", (rule_id,)
+        ).fetchone()
+        if not row:
+            from .types import RuleNotFoundError
+            raise RuleNotFoundError(f"Firewall rule not found: {rule_id}")
+        return self._row_to_fw_rule(row)
+
     def remove_firewall_rule(self, rule_id: int) -> FirewallRule:
         """Remove and return rule data (needed for kernel removal)."""
         row = self._conn.execute(

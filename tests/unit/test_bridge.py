@@ -216,9 +216,29 @@ class TestAutoApply:
     def test_remove_rule_while_started(self, bridge, mock_lib):
         bridge.create_group("g1")
         bridge.start()
-        rid = bridge.add_firewall_rule("g1", "forward", "accept")
+        gone = bridge.add_firewall_rule("g1", "forward", "accept")
+        kept = bridge.add_firewall_rule("g1", "input", "drop")
+        calls = mock_lib.nft_replace_rules.call_count
+        bridge.remove_firewall_rule(gone)
+        assert mock_lib.nft_replace_rules.call_count == calls + 1
+        rules, count, _ = mock_lib.nft_replace_rules.call_args.args
+        assert [(rules[i].chain, rules[i].action) for i in range(count)] == [(b"input", b"drop")]
+        mock_lib.nft_remove_rule.assert_not_called()
+        assert [(r.id, r.applied, r.nft_handle) for r in bridge.list_firewall_rules()] == [
+            (kept, True, 42)]
+
+    @pytest.mark.parametrize("disabled", [False, True])
+    def test_remove_rule_not_applied_runs_no_nft(self, bridge, mock_lib, disabled):
+        bridge.create_group("g1")
+        rid = bridge.add_firewall_rule("g1", "input", "accept")
+        if disabled:
+            bridge.disable_group("g1")
+            bridge.start()
+        mock_lib.reset_mock()
         bridge.remove_firewall_rule(rid)
-        mock_lib.nft_remove_rule.assert_called()
+        mock_lib.nft_replace_rules.assert_not_called()
+        mock_lib.nft_remove_rule.assert_not_called()
+        assert bridge.list_firewall_rules() == []
 
     def test_start_applies_existing_rules(self, bridge, mock_lib):
         bridge.create_group("g1")
@@ -435,6 +455,17 @@ class TestRefusedByKernel:
         assert bridge.get_group("g1").enabled
         assert [(r.id, r.applied, r.nft_handle) for r in bridge.list_firewall_rules()] == [
             (rule_id, True, 42)]
+
+    def test_remove_rule_refused_by_nft_keeps_it(self, bridge, mock_lib, last_error):
+        bridge.create_group("g1")
+        rid = bridge.add_firewall_rule("g1", "input", "accept")
+        bridge.start()
+        mock_lib.nft_replace_rules.side_effect = None
+        mock_lib.nft_replace_rules.return_value = -3
+        with pytest.raises(NftablesError):
+            bridge.remove_firewall_rule(rid)
+        assert [(r.id, r.applied, r.nft_handle) for r in bridge.list_firewall_rules()] == [
+            (rid, True, 42)]
 
     def test_apply_preset_refused_by_nft_leaves_no_group(self, bridge, mock_lib, last_error):
         bridge.create_group("a")
