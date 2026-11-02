@@ -7,19 +7,23 @@ assert_db_matches_kernel on a bridge whose kernel rules or database rows
 are changed from outside it, and on one whose report of its rows is
 changed; ProcessMeter on a child, a zombie, an open file, a thread and
 resident memory over oracle.RSS_CEILING_KB made here; the ip readers on
-rules and routes written with ip.
+rules and routes written with ip; oracle.reaped on a child killed while a
+process it started runs; oracle.foreign_tables with a table added and
+deleted.
 
 Does not show: that the bridge writes correct rules (R1 onward); the
-zombie count on a zombie that is not pytest's own child. Apart from the
-first test, each test changes one thing and asserts the oracle reports
-it.
+zombie count on a zombie that is not pytest's own child; reaper.py on a
+process that outlives its 30 s. Apart from the first test, each test
+changes one thing and asserts the oracle reports it.
 """
 
 from __future__ import annotations
 
 import shutil
+import signal
 import sqlite3
 import subprocess
+import sys
 import threading
 import time
 from contextlib import contextmanager
@@ -317,3 +321,31 @@ def test_ip_routes_reader(ip_cleanup):
     assert [(r["family"], r["dst"], r["dev"]) for r in routes] == [
         ("-4", "10.5.0.0/16", "lo"), ("-6", "fd00:5::/64", "lo"),
     ]
+
+
+# A child that starts a process of one second, says so, then waits to be killed.
+LEAVES_A_SLEEP = """
+import subprocess, time
+subprocess.Popen(["sleep", "1"])
+print("started", flush=True)
+time.sleep(60)
+"""
+
+
+def test_the_reaper_reaps_what_a_killed_child_leaves(meter):
+    report = oracle.reaped("sleep", 0, [sys.executable, "-c", LEAVES_A_SLEEP])
+    assert report["rc"] == -signal.SIGKILL
+    assert report["program"] is not None
+    assert (report["reaped"], report["left"]) == ([report["program"]], [])
+    meter.check_processes()
+
+
+def test_foreign_tables_are_listed(tables):
+    before = oracle.foreign_tables()
+    assert not {f"inet {PHANTOM}", f"inet {REFERENCE}"} & set(before)
+    oracle.nft("add table ip r0foreign")
+    try:
+        assert sorted(oracle.foreign_tables()) == sorted(before + ["ip r0foreign"])
+    finally:
+        oracle.nft("delete table ip r0foreign")
+    assert oracle.foreign_tables() == before

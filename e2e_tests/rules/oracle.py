@@ -27,7 +27,9 @@ import json
 import os
 import sqlite3
 import subprocess
+import sys
 from dataclasses import dataclass
+from pathlib import Path
 
 from firewall_bridge import presets
 
@@ -117,6 +119,14 @@ def read_table(name: str) -> Table:
 def delete_table(name: str) -> None:
     """Deletes inet `name`; a missing table is not an error."""
     subprocess.run([NFT, f"delete table inet {name}"], capture_output=True, check=False)
+
+
+def foreign_tables() -> list[str]:
+    """The ruleset's tables other than inet phantom and inet reference, as
+    "<family> <name>"."""
+    listing = json.loads(run([NFT, "-j", "list", "tables"]))["nftables"]
+    names = [f"{t['table']['family']} {t['table']['name']}" for t in listing if "table" in t]
+    return [n for n in names if n not in (f"inet {PHANTOM}", f"inet {REFERENCE}")]
 
 
 def create_reference(chains: tuple[str, ...] = REFERENCE_CHAINS) -> None:
@@ -589,6 +599,19 @@ class ProcessMeter:
     def report(self) -> str:
         return (f"rss {self.baseline.rss_kb} kB at the start, "
                 f"{self.peak_rss_kb} kB at most")
+
+
+# ── Children killed on purpose ────────────────────────────────────
+
+REAPER = Path(__file__).with_name("reaper.py")
+
+
+def reaped(program: str, delay: float, argv: list[str]) -> dict:
+    """Runs argv under reaper.py, SIGKILLed `delay` seconds after a
+    `program` child of it appears; returns reaper.py's report: "rc",
+    "program", "reaped", "left"."""
+    out = run([sys.executable, str(REAPER), program, str(delay), *argv])
+    return json.loads(out.splitlines()[-1])
 
 
 # ── All three ─────────────────────────────────────────────────────
