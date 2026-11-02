@@ -7,30 +7,39 @@ stop() and start(); remove_preset; a preset removed and applied again with
 other networks while started, as the daemon's change_cidr does; every
 preset at once, applied against its priority order, then a new
 FirewallBridge on the same database; the daemon's boot order (presets
-while stopped, then start) and what follows it; two exits in two tables,
-one removed. The scenarios: the daemon's core and multihop presets with
-the rule stage's names, and port forwarding, per-peer forwarding, IPv6
-services, a reject set, two exits and three groups on one port. After
-every step the invariants of oracle.check hold, with inet reference
-written from the rules below, and the routing rows are the kernel's
+while stopped, then start) and what follows it; the daemon's boot again,
+written here as main.py makes it, on the database the last boot left after
+stop() and close() or after its process was killed while started, on the
+same networks and on change_cidr's, from each multihop configuration
+(none, IPv4, IPv6, both) to each, and after it stop(), with no policy rule
+or route of the last boot left; two exits in two tables, one removed. The
+scenarios: the daemon's core and multihop presets with the rule stage's
+names, and port forwarding, per-peer forwarding, IPv6 services, a reject
+set, two exits and three groups on one port. After every step the
+invariants of oracle.check hold, with inet reference written from the
+rules below, and the routing rows are the kernel's
 (oracle.assert_routing_matches_db); the routing a preset made equals what
 its ip commands below make by hand. The IPv6 services preset holds a
 family 10 rule without an address, written below without an ip6 match.
 
 Does not show: presets the schema or the kernel refuses, and presets that
-want the same route (R8); templates (the daemon resolves them); a process
-that ends while it applies a preset (R7); packets.
+want the same route (R8); templates (the daemon resolves them); the
+daemon's own code (its boot is written here); a process that ends while it
+applies a preset (R7); packets.
 """
 
 from __future__ import annotations
 
+import signal
+import subprocess
+import sys
 from pathlib import Path
 
 import pytest
 import yaml
 
 from firewall_bridge import FirewallBridge
-from firewall_bridge.presets import disable_preset, enable_preset, get_preset
+from firewall_bridge.presets import apply_preset, disable_preset, enable_preset, get_preset
 
 from e2e_tests.rules import oracle
 from e2e_tests.rules.oracle import PHANTOM
@@ -309,6 +318,101 @@ def test_two_exits_one_removed(bridge, db_path, meter):
     _check(bridge, db_path, meter, ledger)
     rules, routes = oracle.routing_state()
     assert ([r["priority"] for r in rules], list(routes)) == ([5201], [153])
+
+
+# ── The daemon's boot on a database used before ──────────────────
+
+# The groups the daemon's presets make.
+GROUP = {"core": "core", "multihop": "multihop-exit", "multihop-v6": "multihop-exit-v6"}
+# The multihop presets the exit's families ask for.
+MULTIHOP = {"none": (), "v4": ("multihop",), "v6": ("multihop-v6",),
+            "both": ("multihop", "multihop-v6")}
+
+
+def _daemon_boot(bridge, apply, remove, multihop) -> None:
+    """main.py's boot, as the daemon makes it: while stopped, core removed
+    and applied (bootstrap), both multihop presets removed and the ones in
+    `multihop` applied (resync_multihop); then start()."""
+    remove("core")
+    apply("core")
+    for name in ("multihop", "multihop-v6"):
+        remove(name)
+    for name in multihop:
+        apply(name)
+    bridge.start()
+
+
+# A process that boots as the daemon does on the database argv[1], with
+# the multihop presets argv[2] (comma separated), then is killed.
+KILLED_AFTER_BOOT = """
+import os, signal, sys
+from firewall_bridge import FirewallBridge, GroupNotFoundError
+from firewall_bridge.presets import apply_preset, remove_preset
+from e2e_tests.rules.test_r5_presets import GROUP, SCENARIOS, _daemon_boot
+
+bridge = FirewallBridge(sys.argv[1])
+
+def remove(name):
+    try:
+        bridge.get_group(GROUP[name])
+    except GroupNotFoundError:
+        return
+    remove_preset(bridge, GROUP[name])
+
+_daemon_boot(bridge, lambda name: apply_preset(bridge, SCENARIOS / f"{name}.yaml"), remove,
+             [name for name in sys.argv[2].split(",") if name])
+os.kill(os.getpid(), signal.SIGKILL)
+"""
+
+
+@pytest.mark.parametrize("after", list(MULTIHOP))
+@pytest.mark.parametrize("before", list(MULTIHOP))
+@pytest.mark.parametrize("networks", ["same", "changed"])
+@pytest.mark.parametrize("ended", ["stop-and-close", "killed"])
+def test_the_daemon_boots_again(bridge, db_path, meter, tmp_path, ended, networks, before, after):
+    """The last boot, with the multihop presets of `before` and the
+    scenarios' networks, ended by stop() and close() or by its process
+    killed while started; this boot, with the presets of `after`, on the
+    same networks or on change_cidr's."""
+    if ended == "killed":
+        out = subprocess.run([sys.executable, "-c", KILLED_AFTER_BOOT, db_path,
+                              ",".join(MULTIHOP[before])], capture_output=True, text=True)
+        assert out.returncode == -signal.SIGKILL, out.stderr
+    else:
+        first = FirewallBridge(db_path)
+        _daemon_boot(first, lambda name: apply_preset(first, SCENARIOS / f"{name}.yaml"),
+                     lambda name: None, MULTIHOP[before])
+        first.stop()
+        first.close()
+    changed = _changed if networks == "changed" else (lambda text: text)
+    path = (lambda name: _changed_file(name, tmp_path)) if networks == "changed" else (
+        lambda name: SCENARIOS / f"{name}.yaml")
+
+    second = FirewallBridge(db_path)
+    try:
+        ledger = oracle.Ledger(second)
+
+        def remove(name):
+            if GROUP[name] in [g.name for g in second.list_groups()]:
+                ledger.remove_preset(GROUP[name])
+
+        _daemon_boot(second, lambda name: ledger.apply_preset(
+            path(name), [changed(r) for r in PRESETS[name][0]]), remove, MULTIHOP[after])
+        ledger.started()
+        _check(second, db_path, meter, ledger)
+        assert [g.name for g in second.list_groups()] == [
+            GROUP[n] for n in ("core", *MULTIHOP[after])]
+        made = oracle.routing_state()
+
+        second.stop()
+        ledger.stopped()
+        _check(second, db_path, meter, ledger)
+        assert oracle.routing_state() == ([], {})
+        _ip([[changed(part) for part in command]
+             for name in ("core", *MULTIHOP[after]) for command in PRESETS[name][1]])
+        assert oracle.routing_state() == made
+    finally:
+        second.close()
 
 
 # ── The preset ledger, before it judges the bridge ───────────────
