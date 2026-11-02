@@ -752,6 +752,62 @@ class TestCrashRecovery:
         fw1.close()
         fw2.close()
 
+    @staticmethod
+    def _after_a_crash(mock_lib, tmp_path):
+        """A bridge on the database of one that started and was not stopped,
+        its group g with routing in its own table mh and in main."""
+        db_path = str(tmp_path / "crash.db")
+        with patch("firewall_bridge.bridge.get_lib", return_value=mock_lib):
+            first = FirewallBridge(db_path)
+            first.create_group("g")
+            first.add_routing_rule("g", "ensure", table_name="mh", table_id=200)
+            first.add_routing_rule("g", "policy", from_network="10.0.0.0/24",
+                                   table_name="mh", priority=100)
+            first.add_routing_rule("g", "policy", from_network="10.0.0.0/24",
+                                   to_network="10.0.0.0/24", table_name="main", priority=99)
+            first.add_routing_rule("g", "route", destination="default",
+                                   device="wg_exit", table_name="mh")
+            first.add_routing_rule("g", "route", destination="10.9.0.0/24",
+                                   device="wg_exit", table_name="main")
+            first.start()
+            second = FirewallBridge(db_path)
+        first.close()
+        mock_lib.reset_mock()
+        return second
+
+    def test_delete_group_while_stopped_removes_its_routing(self, mock_lib, tmp_path):
+        bridge = self._after_a_crash(mock_lib, tmp_path)
+        assert not any(r.applied for r in bridge.list_routing_rules())
+        bridge.delete_group("g")
+        assert [c.args for c in mock_lib.rt_policy_delete.call_args_list] == [
+            (b"10.0.0.0/24", b"", b"200", 100, 2),
+            (b"10.0.0.0/24", b"10.0.0.0/24", b"main", 99, 2),
+        ]
+        assert [c.args for c in mock_lib.rt_route_delete.call_args_list] == [
+            (b"default", b"", b"200", 2),
+            (b"10.9.0.0/24", b"wg_exit", b"main", 2),
+        ]
+        mock_lib.nft_replace_rules.assert_not_called()
+        assert bridge.list_groups() == []
+        bridge.close()
+
+    def test_a_refused_removal_while_stopped_is_not_raised(self, mock_lib, tmp_path):
+        bridge = self._after_a_crash(mock_lib, tmp_path)
+        mock_lib.rt_policy_delete.return_value = -4
+        mock_lib.rt_route_delete.return_value = -4
+        bridge.delete_group("g")
+        assert bridge.list_groups() == []
+        bridge.close()
+
+    def test_remove_routing_rule_while_stopped_removes_it(self, mock_lib, tmp_path):
+        bridge = self._after_a_crash(mock_lib, tmp_path)
+        policy = next(r for r in bridge.list_routing_rules("g") if r.priority == 100)
+        bridge.remove_routing_rule(policy.id)
+        assert [c.args for c in mock_lib.rt_policy_delete.call_args_list] == [
+            (b"10.0.0.0/24", b"", b"200", 100, 2)]
+        assert policy.id not in [r.id for r in bridge.list_routing_rules()]
+        bridge.close()
+
 
 class TestUtility:
     def test_enable_ip_forward(self, bridge, mock_lib):

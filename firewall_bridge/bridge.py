@@ -108,8 +108,15 @@ class FirewallBridge:
         return self._db.create_group(name, group_type, priority, metadata)
 
     def delete_group(self, name: str) -> None:
+        """Delete a group. When started, it is withdrawn with _withdraw; when
+        stopped, its routing rules are removed from kernel all the same, and
+        a refusal is not raised."""
+        group = self._db.get_group(name)
         if self._db.get_state() == "started":
-            self._withdraw(self._db.get_group(name))
+            self._withdraw(group)
+        else:
+            for rule in self._db.routing_rules_for_group(group.id):
+                self._kernel_remove_routing(rule)
         self._db.delete_group(name)
 
     def enable_group(self, name: str) -> None:
@@ -216,8 +223,11 @@ class FirewallBridge:
         return rule_id
 
     def remove_routing_rule(self, rule_id: int) -> None:
+        """Delete a routing rule; when it is applied, or the bridge is
+        stopped, it is removed from kernel too, and a refusal is not
+        raised."""
         rule = self._db.remove_routing_rule(rule_id)
-        if rule.applied:
+        if rule.applied or self._db.get_state() != "started":
             self._kernel_remove_routing(rule)
 
     def list_routing_rules(self, group_name: Optional[str] = None) -> list[RoutingRule]:
