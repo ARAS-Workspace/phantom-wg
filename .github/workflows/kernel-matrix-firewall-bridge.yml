@@ -88,7 +88,7 @@ jobs:
             echo "cpus:        $(nproc)"
             echo "memory:      $(free -m | awk '/^Mem:/ {print $2 " MiB"}')"
             echo "free:        $(df -h --output=avail "$RUNNER_TEMP" | tail -1 | tr -d ' ') in $RUNNER_TEMP"
-            for c in qemu-system-x86_64 qemu-img cloud-localds gh git curl unzip python3; do
+            for c in qemu-system-x86_64 qemu-img cloud-localds gh git curl unzip python3 mawk; do
               printf '%-19s %s\n' "$c:" "$(command -v "$c" || echo MISSING)"
             done
             qemu-system-x86_64 --version 2>/dev/null | head -1 || true
@@ -96,7 +96,7 @@ jobs:
             python3 -c 'import fcntl, os; fd = os.open("/dev/kvm", os.O_RDWR); print("KVM_GET_API_VERSION:", fcntl.ioctl(fd, 0xAE00)); os.close(fd)' 2>&1 || true
             echo '```'
           } | tee -a "$GITHUB_STEP_SUMMARY"
-          for c in qemu-system-x86_64 qemu-img cloud-localds gh git curl unzip python3; do
+          for c in qemu-system-x86_64 qemu-img cloud-localds gh git curl unzip python3 mawk; do
             command -v "$c" > /dev/null || { echo "::error::$c is not installed on this runner"; exit 1; }
           done
           python3 -c 'import os; os.close(os.open("/dev/kvm", os.O_RDWR))' \
@@ -190,7 +190,10 @@ jobs:
           # The guest's lines as they come: "@@matrix" lines become groups,
           # notes and, for a step that exits non-zero, an annotation; every
           # other line starts with its step's name and is printed as it is.
-          tail -n +1 -F --pid="$qemu" guest.log 2>/dev/null | awk -v name="$NAME" '
+          # Reading a pipe, mawk holds the lines until its buffer fills or
+          # the pipe ends; with -W interactive it takes each line as it
+          # comes.
+          tail -n +1 -F --pid="$qemu" guest.log 2>/dev/null | mawk -W interactive -v name="$NAME" '
             $1 == "@@matrix" && $2 == "step-start" { print "::group::" $3; fflush(); next }
             $1 == "@@matrix" && $2 == "step-end" {
               print "::endgroup::"
