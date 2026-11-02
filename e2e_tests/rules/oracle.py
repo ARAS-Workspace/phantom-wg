@@ -138,6 +138,48 @@ def reference_add(rule: str) -> int:
     return read_table(REFERENCE).handles[chain][-1]
 
 
+def reference_add_many(rules: list[str]) -> list[int]:
+    """Appends `rules` to inet reference in one nft run, in their order;
+    returns their handles as nft echoes them."""
+    if not rules:
+        return []
+    r = subprocess.run([NFT, "--echo", "--handle", "-f", "-"], capture_output=True, text=True,
+                       input="".join(f"add rule inet {REFERENCE} {rule}\n" for rule in rules))
+    if r.returncode != 0:
+        raise RuntimeError(f"nft -f - failed (rc={r.returncode}): {r.stderr.strip()}")
+    handles = [int(line.rsplit("# handle ", 1)[1]) for line in r.stdout.splitlines()
+               if line.startswith("add rule ")]
+    assert len(handles) == len(rules), f"{len(rules)} rules, {len(handles)} handles echoed"
+    return handles
+
+
+def rule_text(fields: dict) -> str:
+    """add_firewall_rule's fields (or a preset rule's) in nft's text syntax,
+    the matches in the order the bridge builds them; a host's network
+    reads as its address."""
+    ip = "ip6" if fields.get("family", 2) == 10 else "ip"
+    parts = [fields["chain"]]
+    if fields.get("in_iface"):
+        parts.append(f'iifname "{fields["in_iface"]}"')
+    if fields.get("out_iface"):
+        parts.append(f'oifname "{fields["out_iface"]}"')
+    for key, field in (("source", "saddr"), ("destination", "daddr")):
+        if fields.get(key):
+            net = ipaddress.ip_network(fields[key], strict=False)
+            value = str(net.network_address) if net.prefixlen == net.max_prefixlen else fields[key]
+            parts.append(f"{ip} {field} {value}")
+    if fields.get("proto") and fields.get("dport"):
+        parts.append(f'{fields["proto"]} dport {fields["dport"]}')
+    state = fields.get("state_match") or fields.get("state")
+    if state:
+        parts.append("ct state " + ",".join(s.strip().lower() for s in state.split(",")))
+    action = fields["action"]
+    parts.append(f"dnat {ip} to {action[len('dnat to '):]}" if action.startswith("dnat to ") else action)
+    if fields.get("comment"):
+        parts.append(f'comment "{fields["comment"]}"')
+    return " ".join(parts)
+
+
 def reference_delete(chain: str, handle: int) -> None:
     nft(f"delete rule inet {REFERENCE} {chain} handle {handle}")
 
@@ -405,13 +447,11 @@ class Ledger:
         self.reference = dict.fromkeys(self.reference)
         if self.bridge.get_state() != "started":
             return
-        for group in self.bridge.list_groups():
-            if not group.enabled:
-                continue
-            for row in self.bridge.list_firewall_rules(group.name):
-                if row.id in self.texts:
-                    text = self.texts[row.id]
-                    self.reference[row.id] = (text.split(" ", 1)[0], reference_add(text))
+        ids = [row.id for group in self.bridge.list_groups() if group.enabled
+               for row in self.bridge.list_firewall_rules(group.name) if row.id in self.texts]
+        texts = [self.texts[rule_id] for rule_id in ids]
+        for rule_id, text, handle in zip(ids, texts, reference_add_many(texts)):
+            self.reference[rule_id] = (text.split(" ", 1)[0], handle)
 
 
 def assert_db_matches_kernel(bridge, db_path: str, phantom: Table, ledger: Ledger | None = None,
@@ -508,6 +548,10 @@ def sample() -> Sample:
     )
 
 
+# The resident memory a test may end with.
+RSS_CEILING_KB = 256 * 1024
+
+
 class ProcessMeter:
     """Checks samples against the one taken when the meter was made, and
     keeps the highest resident memory seen."""
@@ -527,6 +571,8 @@ class ProcessMeter:
         ] + ([
             (now.fds == b.fds, f"{now.fds} descriptors open, {b.fds} at the start"),
             (now.threads == b.threads, f"{now.threads} threads, {b.threads} at the start"),
+            (now.rss_kb <= RSS_CEILING_KB,
+             f"{now.rss_kb} kB resident, {RSS_CEILING_KB} kB at most"),
         ] if resources else []) if not ok]
         assert not failed, "; ".join(failed)
         return now
@@ -535,8 +581,9 @@ class ProcessMeter:
         return self._check(resources=False)
 
     def check_resources(self) -> Sample:
-        """check_processes, and descriptors and threads as at the start;
-        for a moment when no bridge is open."""
+        """check_processes, descriptors and threads as at the start, and
+        resident memory within RSS_CEILING_KB; for a moment when no bridge
+        is open."""
         return self._check(resources=True)
 
     def report(self) -> str:

@@ -5,13 +5,14 @@ Drives: normalize and assert_same_rules on one rule written through the
 bridge and through nft, and on rules that differ from it in one respect;
 assert_db_matches_kernel on a bridge whose kernel rules or database rows
 are changed from outside it, and on one whose report of its rows is
-changed; ProcessMeter on a child, a zombie, an open file and a thread
-made here; the ip readers on rules and routes written with ip.
+changed; ProcessMeter on a child, a zombie, an open file, a thread and
+resident memory over oracle.RSS_CEILING_KB made here; the ip readers on
+rules and routes written with ip.
 
 Does not show: that the bridge writes correct rules (R1 onward); the
-zombie count on a zombie that is not pytest's own child. Resident memory
-is printed at the end of the run, not checked. Apart from the first
-test, each test changes one thing and asserts the oracle reports it.
+zombie count on a zombie that is not pytest's own child. Apart from the
+first test, each test changes one thing and asserts the oracle reports
+it.
 """
 
 from __future__ import annotations
@@ -257,6 +258,19 @@ def test_a_thread_is_found(meter):
     finally:
         stop.set()
         thread.join()
+    meter.check_resources()
+
+
+def test_resident_memory_over_the_ceiling_is_found():
+    """A meter of its own, so the run's highest resident memory is not this
+    test's."""
+    meter = oracle.ProcessMeter()
+    held = b"\x01" * (oracle.RSS_CEILING_KB * 1024 + (64 << 20))
+    try:
+        with pytest.raises(AssertionError, match="kB resident"):
+            meter.check_resources()
+    finally:
+        del held
     meter.check_resources()
 
 
