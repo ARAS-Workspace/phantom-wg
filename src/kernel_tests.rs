@@ -619,6 +619,45 @@ fn kernel_route_delete_takes_a_route_of_any_scope() {
                "default dev lo proto static scope link");
 }
 
+/// A route the bridge added, then replaced from outside with another device,
+/// another protocol, or as a blackhole: rt_route_delete with the bridge's
+/// device takes none of them, with an empty device it takes each. An empty
+/// device is still refused by rt_route_add.
+#[test]
+fn kernel_route_delete_with_no_device_takes_any_route() {
+    let _serial = serial();
+    isolate();
+    for dev in ["fwb0", "fwb1"] {
+        read("ip", &["link", "add", dev, "type", "dummy"]);
+        read("ip", &["link", "set", dev, "up"]);
+    }
+    let ok = ErrorCode::Ok as i32;
+    let failed = ErrorCode::NetlinkFailed as i32;
+    for outside in [&["10.71.0.0/24", "dev", "fwb1", "proto", "static"][..],
+                    &["10.71.0.0/24", "dev", "fwb0", "proto", "boot"],
+                    &["blackhole", "10.71.0.0/24"]] {
+        // SAFETY: every pointer passed below is a NUL-terminated literal.
+        unsafe {
+            assert_eq!(rt_route_add(c"10.71.0.0/24".as_ptr(), c"fwb0".as_ptr(), c"150".as_ptr(), 2),
+                       ok, "{}", last_error());
+            let mut args = vec!["route", "replace"];
+            args.extend(outside);
+            args.extend(["table", "150"]);
+            read("ip", &args);
+            assert_eq!(rt_route_delete(c"10.71.0.0/24".as_ptr(), c"fwb0".as_ptr(), c"150".as_ptr(), 2),
+                       failed, "{outside:?}");
+            assert_ne!(read("ip", &["route", "show", "table", "150"]), "", "{outside:?}");
+            assert_eq!(rt_route_delete(c"10.71.0.0/24".as_ptr(), c"".as_ptr(), c"150".as_ptr(), 2),
+                       ok, "{outside:?}: {}", last_error());
+        }
+        assert_eq!(run("ip", &["route", "show", "table", "150"]).1, "", "{outside:?}");
+    }
+    // SAFETY: NUL-terminated literals.
+    assert_eq!(unsafe { rt_route_add(c"10.71.0.0/24".as_ptr(), c"".as_ptr(), c"150".as_ptr(), 2) },
+               failed);
+    assert!(last_error().contains("Interface not found"), "{}", last_error());
+}
+
 /// The bridge's limit on an rt_tables line is the one ip reads: an entry of
 /// 511 characters resolves, and the same entry one character longer, put
 /// there by hand, makes ip refuse the file.

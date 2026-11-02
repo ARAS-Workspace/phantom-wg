@@ -683,6 +683,25 @@ class TestTableOfAGroup:
         assert mock_lib.rt_policy_delete.call_args[0][2] == b"200"
         assert mock_lib.rt_route_delete.call_args[0][2] == b"200"
 
+    def test_a_route_of_an_ensured_table_is_deleted_by_any_device(self, bridge, mock_lib):
+        bridge.create_group("g1")
+        bridge.add_routing_rule("g1", "ensure", table_name="mh", table_id=200)
+        bridge.add_routing_rule("g1", "route", destination="default",
+                                device="wg_exit", table_name="mh")
+        bridge.add_routing_rule("g1", "route", destination="10.9.0.0/24",
+                                device="wg_exit", table_name="main")
+        bridge.create_group("g2")
+        bridge.add_routing_rule("g2", "route", destination="10.8.0.0/24",
+                                device="wg_main", table_name="mh")
+        bridge.start()
+        mock_lib.rt_route_delete.reset_mock()
+        bridge.stop()
+        assert sorted(c.args[:3] for c in mock_lib.rt_route_delete.call_args_list) == [
+            (b"10.8.0.0/24", b"wg_main", b"mh"),
+            (b"10.9.0.0/24", b"wg_exit", b"main"),
+            (b"default", b"", b"200"),
+        ]
+
     def test_another_group_ensure_is_not_used(self, bridge, mock_lib):
         bridge.create_group("a")
         bridge.add_routing_rule("a", "ensure", table_name="mh", table_id=200)

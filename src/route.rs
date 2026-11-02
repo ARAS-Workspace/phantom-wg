@@ -37,9 +37,11 @@ const FRA_TABLE: u16 = 15;
 const FRA_PRIORITY: u16 = 6;
 
 // Route types
+const RTN_UNSPEC: u8 = 0;
 const RTN_UNICAST: u8 = 1;
 
 // Route protocols
+const RTPROT_UNSPEC: u8 = 0;
 const RTPROT_STATIC: u8 = 4;
 
 // Route scope
@@ -506,6 +508,7 @@ fn route_msg(req: Request, destination: &str, ifindex: u32, table_id: u32, famil
         (addr, prefix)
     };
 
+    let any_device = req.kind == RTM_DELROUTE && ifindex == 0;
     let mut buf = Vec::with_capacity(256);
     buf.extend_from_slice(&[0u8; mem::size_of::<NlMsgHdr>()]);
 
@@ -515,9 +518,9 @@ fn route_msg(req: Request, destination: &str, ifindex: u32, table_id: u32, famil
         rtm_src_len: 0,
         rtm_tos: 0,
         rtm_table: if table_id <= 255 { table_id as u8 } else { 0 },
-        rtm_protocol: RTPROT_STATIC,
+        rtm_protocol: if any_device { RTPROT_UNSPEC } else { RTPROT_STATIC },
         rtm_scope: if req.kind == RTM_DELROUTE { RT_SCOPE_NOWHERE } else { RT_SCOPE_LINK },
-        rtm_type: RTN_UNICAST,
+        rtm_type: if any_device { RTN_UNSPEC } else { RTN_UNICAST },
         rtm_flags: 0,
     };
     buf.extend_from_slice(&rtm.to_bytes());
@@ -526,7 +529,9 @@ fn route_msg(req: Request, destination: &str, ifindex: u32, table_id: u32, famil
         push_attr(&mut buf, RTA_DST, &addr_bytes(&dst_addr));
     }
 
-    push_attr_u32(&mut buf, RTA_OIF, ifindex);
+    if !any_device {
+        push_attr_u32(&mut buf, RTA_OIF, ifindex);
+    }
 
     if table_id > 255 {
         push_attr_u32(&mut buf, RTA_TABLE, table_id);
@@ -570,7 +575,7 @@ fn send_route(kind: u16, flags: u16, destination: &str, device: &str, table_name
     let mut sock = NetlinkSocket::open().map_err(|e| e.to_string())?;
     let req = Request { kind, flags, seq: sock.next_seq() };
     let table_id = resolve_table(table_name)?;
-    let ifindex = if_nametoindex(device)?;
+    let ifindex = if kind == RTM_DELROUTE && device.is_empty() { 0 } else { if_nametoindex(device)? };
     let msg = route_msg(req, destination, ifindex, table_id, family)?;
     sock.send_and_ack(&msg)
 }
@@ -601,9 +606,12 @@ pub fn route_add(destination: &str, device: &str, table_name: &str, family: u8) 
     send_route(RTM_NEWROUTE, CREATE_FLAGS, destination, device, table_name, family)
 }
 
-/// Delete a route.
+/// Delete a route. With an empty `device`, the route of `destination` in
+/// the table, whatever its device, protocol and type.
 ///
 /// @witness kernel_tests::kernel_routing_tables_rules_and_routes
+/// @witness route::tests::route_message_v4_delete_of_any_device
+/// @witness kernel_tests::kernel_route_delete_with_no_device_takes_any_route
 pub fn route_delete(destination: &str, device: &str, table_name: &str, family: u8) -> Result<(), String> {
     send_route(RTM_DELROUTE, DELETE_FLAGS, destination, device, table_name, family)
 }
@@ -865,6 +873,23 @@ mod tests {
             &attr(4, &3u32.to_ne_bytes()),               // RTA_OIF
         ]);
         assert_eq!(msg, cat(&[&nlhdr(16 + body.len() as u32, 25, REQUEST_ACK, 6), &body]));
+    }
+
+    #[test]
+    fn route_message_v4_delete_of_any_device() {
+        let req = Request { kind: RTM_DELROUTE, flags: DELETE_FLAGS, seq: 7 };
+        let msg = route_msg(req, "10.98.0.0/16", 0, 100, 2).unwrap();
+        let body = cat(&[
+            // No protocol, no type and no RTA_OIF.
+            &[2, 16, 0, 0, 100, 0, 255, 0], &0u32.to_ne_bytes(),
+            &attr(1, &[10, 98, 0, 0]),                   // RTA_DST
+        ]);
+        assert_eq!(msg, cat(&[&nlhdr(16 + body.len() as u32, 25, REQUEST_ACK, 7), &body]));
+
+        let req = Request { kind: RTM_NEWROUTE, flags: CREATE_FLAGS, seq: 8 };
+        let add = route_msg(req, "10.98.0.0/16", 0, 100, 2).unwrap();
+        assert_eq!(&add[16..24], &[2, 16, 0, 0, 100, 4, 253, 1]);
+        assert!(add.ends_with(&attr(4, &0u32.to_ne_bytes())));
     }
 
     #[test]
