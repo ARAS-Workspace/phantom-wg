@@ -157,6 +157,15 @@ const TABLE: &str = "inet phantom";
 const TABLE_FAMILY: &str = "inet";
 const TABLE_NAME: &str = "phantom";
 
+/// The table's chains: name, type, hook, priority. Each has policy accept.
+const CHAINS: [(&str, &str, &str, i32); 5] = [
+    ("input", "filter", "input", 0),
+    ("output", "filter", "output", 0),
+    ("forward", "filter", "forward", 0),
+    ("prerouting", "nat", "prerouting", -100),
+    ("postrouting", "nat", "postrouting", 100),
+];
+
 /// The `inet phantom` table with its input, output, forward, prerouting and
 /// postrouting chains, in one nft run.
 ///
@@ -164,15 +173,11 @@ const TABLE_NAME: &str = "phantom";
 /// @witness kernel_tests::kernel_nft_ensure_table_is_all_or_nothing
 /// @witness kernel_tests::kernel_nft_table_rules_and_handles
 pub fn ensure_table(nft: &NftContext) -> Result<(), String> {
-    let cmd = [
-        format!("add table {TABLE}"),
-        format!("add chain {TABLE} input {{ type filter hook input priority 0; policy accept; }}"),
-        format!("add chain {TABLE} output {{ type filter hook output priority 0; policy accept; }}"),
-        format!("add chain {TABLE} forward {{ type filter hook forward priority 0; policy accept; }}"),
-        format!("add chain {TABLE} prerouting {{ type nat hook prerouting priority -100; policy accept; }}"),
-        format!("add chain {TABLE} postrouting {{ type nat hook postrouting priority 100; policy accept; }}"),
-    ].join("; ");
-    nft.run(&cmd).map(|_| ())
+    let mut cmd = vec![format!("add table {TABLE}")];
+    cmd.extend(CHAINS.iter().map(|(name, kind, hook, prio)| {
+        format!("add chain {TABLE} {name} {{ type {kind} hook {hook} priority {prio}; policy accept; }}")
+    }));
+    nft.run(&cmd.join("; ")).map(|_| ())
 }
 
 /// @witness nft::tests::test_table_and_rule_commands
@@ -233,15 +238,26 @@ pub fn remove_rule(nft: &NftContext, chain: &str, handle: u64) -> Result<(), Str
     nft.run_json(&cmd.to_string()).map(|_| ())
 }
 
-/// Flush the table and add `rules` (from `rule_command`) in one nft
+/// Replace the table with a new one: the table added, deleted and added
+/// again, its chains, then `rules` (from `rule_command`), in one nft
 /// transaction; returns their handles, in order. When nft refuses one,
 /// the table is as it was.
 ///
 /// @witness nft::tests::test_replace_rules_is_one_run
 /// @witness kernel_tests::kernel_nft_replace_rules_is_one_transaction
+/// @witness kernel_tests::kernel_nft_replace_rules_makes_the_table_anew
 pub fn replace_rules(nft: &NftContext, rules: Vec<Value>) -> Result<Vec<u64>, String> {
     let count = rules.len();
-    let mut commands = vec![json!({"flush": {"table": {"family": TABLE_FAMILY, "name": TABLE_NAME}}})];
+    let table = json!({"family": TABLE_FAMILY, "name": TABLE_NAME});
+    let mut commands = vec![
+        json!({"add": {"table": table}}),
+        json!({"delete": {"table": table}}),
+        json!({"add": {"table": table}}),
+    ];
+    commands.extend(CHAINS.iter().map(|(name, kind, hook, prio)| json!({"add": {"chain": {
+        "family": TABLE_FAMILY, "table": TABLE_NAME, "name": name,
+        "type": kind, "hook": hook, "prio": prio, "policy": "accept",
+    }}})));
     commands.extend(rules);
     let echo = nft.run_echo(&json!({"nftables": commands}).to_string())?;
     let handles = added_handles(&echo);
@@ -566,8 +582,16 @@ pub(crate) mod tests {
         let rules = [RuleSpec { chain: "input", action: "accept", family: 2, ..Default::default() },
                      RuleSpec { chain: "input", action: "drop", family: 2, ..Default::default() }];
         let commands: Vec<Value> = rules.iter().map(|r| rule_command(r).unwrap()).collect();
+        let table = json!({"family": "inet", "name": "phantom"});
+        let chain = |name: &str, kind: &str, prio: i32| json!({"add": {"chain": {
+            "family": "inet", "table": "phantom", "name": name, "type": kind, "hook": name,
+            "prio": prio, "policy": "accept",
+        }}});
         let sent = json!({"nftables": [
-            {"flush": {"table": {"family": "inet", "name": "phantom"}}}, commands[0], commands[1],
+            {"add": {"table": table}}, {"delete": {"table": table}}, {"add": {"table": table}},
+            chain("input", "filter", 0), chain("output", "filter", 0), chain("forward", "filter", 0),
+            chain("prerouting", "nat", -100), chain("postrouting", "nat", 100),
+            commands[0], commands[1],
         ]});
         assert_eq!(replace_rules(&ctx, commands).unwrap(), vec![7, 8]);
         assert_eq!(recorded(&nft, "calls"), "x\n");

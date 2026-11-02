@@ -321,6 +321,55 @@ fn kernel_nft_replace_rules_is_one_transaction() {
     assert_eq!(rule_lines(), Vec::<String>::new());
 }
 
+/// nft_replace_rules on a table changed from outside: the table deleted, a
+/// chain deleted, a chain's policy set to drop, a chain and a set added, a
+/// chain declared again with another priority. Each time the table it
+/// leaves lists as the one the same rules make in an empty namespace. With a
+/// rule nft refuses, a changed table lists as it did before the call.
+#[test]
+fn kernel_nft_replace_rules_makes_the_table_anew() {
+    use crate::nft::RuleSpec;
+    let _serial = serial();
+    isolate();
+    let _nft = Nft::init();
+    let specs = [
+        RuleSpec { chain: "input", action: "accept", family: 2, proto: "tcp", dport: 22, ..Default::default() },
+        RuleSpec { chain: "forward", action: "drop", family: 2, ..Default::default() },
+    ];
+    let (_strings, rules) = c_rules(&specs);
+    let replace = || {
+        let mut handles = [0u64; 2];
+        // SAFETY: two rules whose strings outlive the call, and room for two handles.
+        unsafe { nft_replace_rules(rules.as_ptr(), 2, handles.as_mut_ptr()) }
+    };
+    assert_eq!(replace(), ErrorCode::Ok as i32, "{}", last_error());
+    let want = table();
+
+    for outside in [
+        "delete table inet phantom",
+        "flush chain inet phantom forward; delete chain inet phantom forward",
+        "chain inet phantom forward { policy drop; }",
+        "add chain inet phantom outside; add set inet phantom s { type ipv4_addr; elements = { 192.0.2.1 } }",
+        "flush chain inet phantom input; delete chain inet phantom input; \
+         add chain inet phantom input { type filter hook input priority 10; policy accept; }",
+    ] {
+        read("nft", &[outside]);
+        assert_ne!(run("nft", &["list", "table", "inet", "phantom"]).1, want, "{outside}");
+        assert_eq!(replace(), ErrorCode::Ok as i32, "{outside}: {}", last_error());
+        assert_eq!(table(), want, "{outside}");
+    }
+
+    read("nft", &["add chain inet phantom outside"]);
+    let before = table();
+    let refused = [RuleSpec { chain: "input", action: "masquerade", family: 2, ..Default::default() }];
+    let (_refused_strings, refused) = c_rules(&refused);
+    let mut handle = [u64::MAX];
+    // SAFETY: one rule whose strings outlive the call, and room for one handle.
+    assert_eq!(unsafe { nft_replace_rules(refused.as_ptr(), 1, handle.as_mut_ptr()) },
+               ErrorCode::NftablesFailed as i32);
+    assert_eq!(table(), before);
+}
+
 /// More rules than one argument to nft holds (128 KiB): 2000 rules of
 /// about 700 bytes are one transaction, refused as a whole when one of them
 /// is refused.
