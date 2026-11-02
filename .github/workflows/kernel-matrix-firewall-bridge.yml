@@ -31,8 +31,8 @@ env:
 jobs:
   kernel:
     name: Kernel ${{ matrix.name }}
-    # The self-hosted bare-metal runner with KVM, labeled kvm; it takes one
-    # job at a time, so the kernels run one after another.
+    # The self-hosted bare-metal runners with KVM, labeled kvm: four runner
+    # instances on one host, one kernel each, at the same time.
     runs-on: [self-hosted, linux, x64, kvm]
     timeout-minutes: 130
     strategy:
@@ -160,7 +160,7 @@ jobs:
           # -accel kvm has no fallback: without KVM, QEMU exits at once.
           # The root disk is a -device with bootindex=0: a disk given with
           # -drive if=virtio comes after the -device disks in PCI order.
-          timeout 120m qemu-system-x86_64 -accel kvm -cpu host -smp 4 -m 16384 \
+          timeout 120m qemu-system-x86_64 -accel kvm -cpu host -smp 2 -m 6144 \
             -drive file=disk.qcow2,if=none,id=root,format=qcow2 \
             -device virtio-blk-pci,drive=root,bootindex=0 \
             -drive file=seed.img,if=virtio,format=raw \
