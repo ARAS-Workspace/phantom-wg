@@ -16,7 +16,7 @@ functions with the same arity; the error codes of the header are the
 ones the Python map knows; and a call records its error for the calling
 thread. Needs WIREGUARD_GO_BRIDGE_LIB_PATH and, next to the library,
 include/ with the header and the cgo prototypes (tests/Dockerfile puts
-them there).
+them there); without the variable the module is skipped.
 """
 
 import contextlib
@@ -41,6 +41,11 @@ from wireguard_go_bridge.types import (
 
 LIB_PATH = os.environ.get("WIREGUARD_GO_BRIDGE_LIB_PATH", "")
 INCLUDE = os.path.join(os.path.dirname(LIB_PATH), "include")
+
+pytestmark = [
+    pytest.mark.integration,
+    pytest.mark.skipif(not LIB_PATH, reason="WIREGUARD_GO_BRIDGE_LIB_PATH is not set"),
+]
 
 
 def exported_functions(path: str) -> set[str]:
