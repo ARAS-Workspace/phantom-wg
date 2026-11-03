@@ -6,10 +6,35 @@ on:
       - 'dev/wireguard-go-bridge'
   workflow_call:
 
+env:
+  GO_VERSION: '1.27.3'
+
 permissions:
   contents: read
 
 jobs:
+  test-go:
+    name: Go tests
+    runs-on: ubuntu-26.04
+    steps:
+      - name: Harden runner
+        uses: step-security/harden-runner@cb605e52c26070c328afc4562f0b4ada7618a84e # v2.10.4
+        with:
+          egress-policy: audit
+
+      - name: Checkout
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+
+      - name: Run go test
+        # In the image the .so is built in, as the runner's user.
+        run: |
+          docker run --rm --user "$(id -u):$(id -g)" -e HOME=/tmp \
+            -v "$PWD:/workspace" -w /workspace/src \
+            "golang:${GO_VERSION}-trixie" \
+            go test -race -v ./...
+
   test:
     name: Unit + integration tests (Docker)
     runs-on: ubuntu-26.04
