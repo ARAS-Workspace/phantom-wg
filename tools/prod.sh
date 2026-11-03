@@ -220,6 +220,9 @@ cmd_update() {
             services/auth-service/Dockerfile services/auth-service/requirements.txt; then
         rebuild+=(auth-service)
     fi
+    if ! git diff --quiet "$before" "$after" -- nginx.Dockerfile; then
+        rebuild+=(nginx)
+    fi
 
     if [[ ${#rebuild[@]} -gt 0 ]]; then
         bold "Build inputs changed (${rebuild[*]}) — rebuilding..."

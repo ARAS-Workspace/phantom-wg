@@ -65,7 +65,9 @@ services:
     env_file: .env.auth-service
 
   nginx:
-    image: nginx:1-alpine
+    build:
+      context: .
+      dockerfile: nginx.Dockerfile
     container_name: phantom-nginx
     restart: unless-stopped
     depends_on:

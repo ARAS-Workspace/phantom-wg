@@ -57,7 +57,9 @@ services:
       - WIREGUARD_ENDPOINT_V6=2001:db8::10
 
   gateway:
-    image: alpine/socat:latest
+    build:
+      context: .
+      dockerfile: socat.Dockerfile
     container_name: phantom-gateway
     restart: unless-stopped
     depends_on:
@@ -90,7 +92,9 @@ services:
       - "8443:8443"
 
   nginx:
-    image: nginx:alpine
+    build:
+      context: .
+      dockerfile: nginx.Dockerfile
     container_name: phantom-nginx-dev
     restart: unless-stopped
     depends_on:

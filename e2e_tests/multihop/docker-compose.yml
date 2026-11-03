@@ -54,7 +54,9 @@ services:
         ipv6_address: fd00:e2e::10
 
   gateway:
-    image: alpine/socat:latest
+    build:
+      context: ../..
+      dockerfile: socat.Dockerfile
     depends_on: [daemon]
     command: TCP-LISTEN:9080,fork,reuseaddr UNIX-CONNECT:/var/run/phantom/daemon.sock
     volumes:
