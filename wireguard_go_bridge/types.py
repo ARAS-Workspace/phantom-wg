@@ -10,8 +10,9 @@ Copyright (c) 2025 Rıza Emre ARAS <r.emrearas@proton.me>
 Licensed under AGPL-3.0 - see LICENSE file for details
 WireGuard® is a registered trademark of Jason A. Donenfeld.
 
-Exception types for wireguard-go-bridge: one per error code of the bridge.
-An exception carries the code and the message the bridge recorded for
+Exception types for wireguard-go-bridge: one per error code of the bridge,
+and BridgeError itself for WG_ERR_INTERNAL (-99) and for a code the map
+does not hold. An exception carries the code and the message the bridge recorded for
 the call that failed.
 """
 

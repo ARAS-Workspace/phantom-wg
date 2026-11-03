@@ -10,10 +10,11 @@ Copyright (c) 2025 Rıza Emre ARAS <r.emrearas@proton.me>
 Licensed under AGPL-3.0 - see LICENSE file for details
 WireGuard® is a registered trademark of Jason A. Donenfeld.
 
-Curve25519 key generation via Go FFI. A failure raises RuntimeError for a
-key that could not be generated and ValueError for an argument the bridge
-refused, InvalidArgumentError when the bridge reported it, with the
-bridge's message.
+Curve25519 key generation via Go FFI. A key the bridge refuses raises
+InvalidArgumentError, a ValueError, with code -10. Any other failure
+raises RuntimeError from the generate functions and ValueError from
+derive_public_key and hex_to_base64. The exception carries the bridge's
+message when the bridge recorded one.
 """
 
 from ._ffi import get_lib, _read_and_free, last_error
