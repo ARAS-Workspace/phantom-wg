@@ -7,7 +7,7 @@ on:
 jobs:
   extract-version:
     name: Extract Version
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-26.04
     permissions: {}
     outputs:
       version: ${{ steps.version.outputs.version }}
