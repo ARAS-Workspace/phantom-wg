@@ -24,15 +24,15 @@ ARG VENDOR_REPO=ARAS-Workspace/phantom-wg
 # about which bridge build a developer and a user are running. To see what
 # GitHub publishes for a tag:
 #
-#   gh api repos/ARAS-Workspace/phantom-wg/releases/tags/vendor-firewall-bridge-v2.1.8 \
+#   gh api repos/ARAS-Workspace/phantom-wg/releases/tags/vendor-firewall-bridge-v2.2.0 \
 #     --jq '.assets[] | "\(.name)  \(.digest)"'
 #
-ARG FIREWALL_BRIDGE_VERSION=v2.1.8
-ARG FIREWALL_BRIDGE_SHA256_AMD64=6571ce0831b76a89517a6e3fa064e4937abaf90b9203be14a553afe67e474084
-ARG FIREWALL_BRIDGE_SHA256_ARM64=de3c097dc9513caf7fadace003415f091e4407448f4094ec1bc051d3195791ac
-ARG WIREGUARD_GO_BRIDGE_VERSION=v2.1.4
-ARG WIREGUARD_GO_BRIDGE_SHA256_AMD64=8020ff6cfc1885de488a1f69d634928fa42e51b9c5f927a4f0bdea07cf9c645f
-ARG WIREGUARD_GO_BRIDGE_SHA256_ARM64=bc70ce790693d3956f351df1d856459757d2e3b25c3e97acdfe4ee89d806d92c
+ARG FIREWALL_BRIDGE_VERSION=v2.2.0
+ARG FIREWALL_BRIDGE_SHA256_AMD64=cdb35fec6f356494476bbb575708e7c7206313cabde39b20ef329bf7f315e359
+ARG FIREWALL_BRIDGE_SHA256_ARM64=4c98edf43aa42cff9a0d3f5eccb059227202baf54d61ed6deba104613a269542
+ARG WIREGUARD_GO_BRIDGE_VERSION=v2.2.0
+ARG WIREGUARD_GO_BRIDGE_SHA256_AMD64=c84cbd53ffe1f1b0e583b2903fdfa820ad99012f0a93aabd8452c543212c91c7
+ARG WIREGUARD_GO_BRIDGE_SHA256_ARM64=6fbdfe59f09e3a3773b8123771c12b5588323b8f4c8611ab8beb54804e5f16c3
 
 # A vendor/linux-<arch>/ tree in the context wins over the download, the same
 # way it does in Dockerfile. The trailing glob is what makes it optional — a
