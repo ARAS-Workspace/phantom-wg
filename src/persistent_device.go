@@ -21,6 +21,7 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"sync"
 
 	_ "github.com/mattn/go-sqlite3"
 	"golang.zx2c4.com/wireguard/conn"
@@ -28,17 +29,28 @@ import (
 	"golang.zx2c4.com/wireguard/tun"
 )
 
+// wgDevice is the part of *device.Device a persistentDevice uses.
+type wgDevice interface {
+	IpcSet(config string) error
+	IpcGet() (string, error)
+	Up() error
+	Down() error
+	Close()
+}
+
 // persistentDevice wraps a WireGuard device with automatic IPC state persistence.
 type persistentDevice struct {
-	dev *device.Device
+	// mu is held by ipcSet across the IpcSet and the persist of its
+	// state, and by close: an ipcSet persists the state it set, and close
+	// waits for an ipcSet in progress.
+	mu  sync.Mutex
+	dev wgDevice
 	tun tun.Device
 	db  *sql.DB
 }
 
-// newPersistentDevice creates a TUN device, WireGuard device, opens the state DB,
-// and restores previous IPC state if available. DB must already exist.
-func newPersistentDevice(ifname string, mtu int, dbPath string) (*persistentDevice, error) {
-	// Open state DB
+// openStateDB opens the state DB at dbPath, which must already exist.
+func openStateDB(dbPath string) (*sql.DB, error) {
 	db, err := sql.Open("sqlite3", dbPath+"?_journal_mode=WAL&_busy_timeout=5000")
 	if err != nil {
 		return nil, fmt.Errorf("open state db: %w", err)
@@ -46,6 +58,16 @@ func newPersistentDevice(ifname string, mtu int, dbPath string) (*persistentDevi
 	if err := db.Ping(); err != nil {
 		_ = db.Close()
 		return nil, fmt.Errorf("ping state db: %w", err)
+	}
+	return db, nil
+}
+
+// newPersistentDevice creates a TUN device, WireGuard device, opens the state DB,
+// and restores previous IPC state if available. DB must already exist.
+func newPersistentDevice(ifname string, mtu int, dbPath string) (*persistentDevice, error) {
+	db, err := openStateDB(dbPath)
+	if err != nil {
+		return nil, err
 	}
 
 	// Create TUN + WireGuard device
@@ -77,10 +99,15 @@ func newPersistentDevice(ifname string, mtu int, dbPath string) (*persistentDevi
 
 // ipcSet applies config to the device and persists the full state.
 func (pd *persistentDevice) ipcSet(config string) error {
+	pd.mu.Lock()
+	defer pd.mu.Unlock()
 	if err := pd.dev.IpcSet(config); err != nil {
 		return err
 	}
-	return pd.persist()
+	if err := pd.persist(); err != nil {
+		return fmt.Errorf("config applied, state not persisted: %w", err)
+	}
+	return nil
 }
 
 // ipcGet returns the current device state.
@@ -137,6 +164,8 @@ func (pd *persistentDevice) restore() error {
 
 // close shuts down the device and closes the state DB.
 func (pd *persistentDevice) close() {
+	pd.mu.Lock()
+	defer pd.mu.Unlock()
 	pd.dev.Close()
 	_ = pd.db.Close()
 }
