@@ -31,6 +31,9 @@ RUN pip3 install --break-system-packages pytest pytest-cov
 WORKDIR /workspace
 
 COPY --from=builder /wireguard_go_bridge.so /workspace/wireguard_go_bridge.so
+# The error codes and the prototypes cgo generated, for the contract tests.
+COPY src/wireguard_go_bridge.h /workspace/include/wireguard_go_bridge.h
+COPY --from=builder /wireguard_go_bridge.h /workspace/include/exports.h
 
 ENV WIREGUARD_GO_BRIDGE_LIB_PATH=/workspace/wireguard_go_bridge.so
 ENV PYTHONPATH=/workspace
