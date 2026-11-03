@@ -4,23 +4,24 @@
 
 | Workflow                          | Trigger                                    | Jobs                                     | Output                         |
 |-----------------------------------|--------------------------------------------|------------------------------------------|--------------------------------|
-| `test-wireguard-go-bridge.yml`    | push (`.github/` ignored), `workflow_call` | `test` (Docker unit+integration)         | test-results artifact          |
-| `build-wireguard-go-bridge.yml`   | push (`.github/` ignored), `workflow_call` | `build-linux-amd64`, `build-linux-arm64` | .so + .sha256 artifacts        |
+| `test-wireguard-go-bridge.yml`    | push, `workflow_call`                      | `test` (Docker unit+integration)         | test-results artifact          |
+| `build-wireguard-go-bridge.yml`   | push, `workflow_call`                      | `build-linux-amd64`, `build-linux-arm64` | .so + .sha256 artifacts        |
 | `publish-wireguard-go-bridge.yml` | `workflow_dispatch`                        | `version` → `test` → `build` → `publish` | tagged release + zip assets    |
 
 ## Flow
 
 ```
-Branch push (dev/wireguard-go-bridge, .github/ ignored):
+Branch push (dev/wireguard-go-bridge):
   ├── test-wireguard-go-bridge.yml   (unit + integration via test_runner.py)
-  └── build-wireguard-go-bridge.yml  (amd64 + arm64 → artifact upload)
+  └── build-wireguard-go-bridge.yml  (amd64 on ubuntu-26.04, arm64 on ubuntu-26.04-arm,
+                                      each in golang:<GO_VERSION>-trixie → artifact upload)
 
 Publish (workflow_dispatch):
   └── publish-wireguard-go-bridge.yml
         ├── version   (extract from wireguard_go_bridge/__init__.py)
         ├── test      (workflow_call → test-wireguard-go-bridge.yml)
         ├── build     (workflow_call → build-wireguard-go-bridge.yml)
-        └── publish   (ubuntu-latest, gh release create)
+        └── publish   (ubuntu-26.04, gh release create)
 ```
 
 ## Version
@@ -98,7 +99,6 @@ https://github.com/ARAS-Workspace/phantom-wg/releases/download/vendor-wireguard-
 
 ## Notes
 
-- `.github/` changes do not trigger test/build on push (paths-ignore)
 - No moving "latest" pointer: this repository holds several components and
   GitHub's `/releases/latest` answers for the repository, so consumers pin a tag
 - VERSION file inside zip for runtime version verification

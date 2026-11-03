@@ -4,12 +4,10 @@ on:
   push:
     branches:
       - 'dev/wireguard-go-bridge'
-    paths-ignore:
-      - '.github/**'
   workflow_call:
 
 env:
-  GO_VERSION: '1.25'
+  GO_VERSION: '1.27.3'
 
 permissions:
   contents: read
@@ -17,7 +15,7 @@ permissions:
 jobs:
   build-linux-amd64:
     name: Build linux/amd64
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-26.04
     permissions:
       contents: read
     steps:
@@ -31,20 +29,13 @@ jobs:
         with:
           persist-credentials: false
 
-      - name: Setup Go
-        uses: actions/setup-go@3041bf56c941b39c61721a86cd11f3bb1338122a # v5.2.0
-        with:
-          go-version: ${{ env.GO_VERSION }}
-          cache: false
-
-      - name: Install build dependencies
-        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends libsqlite3-dev
-
-      - name: Download dependencies
-        run: make go-deps
-
       - name: Build linux/amd64
-        run: make build-linux-amd64
+        # Built in the trixie image the daemon runs on, so the .so links
+        # against the glibc it is loaded with.
+        run: |
+          docker run --rm -v "$PWD:/workspace" -w /workspace \
+            "golang:${GO_VERSION}-trixie" \
+            make build-linux-amd64
 
       - name: Generate checksum
         run: |
@@ -71,7 +62,7 @@ jobs:
 
   build-linux-arm64:
     name: Build linux/arm64
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-26.04-arm
     permissions:
       contents: read
     steps:
@@ -85,22 +76,13 @@ jobs:
         with:
           persist-credentials: false
 
-      - name: Setup Go
-        uses: actions/setup-go@3041bf56c941b39c61721a86cd11f3bb1338122a # v5.2.0
-        with:
-          go-version: ${{ env.GO_VERSION }}
-          cache: false
-
-      - name: Install cross-compiler and build deps
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y gcc-aarch64-linux-gnu libsqlite3-dev
-
-      - name: Download dependencies
-        run: make go-deps
-
       - name: Build linux/arm64
-        run: make build-linux-arm64
+        # Built in the trixie image the daemon runs on, so the .so links
+        # against the glibc it is loaded with.
+        run: |
+          docker run --rm -v "$PWD:/workspace" -w /workspace \
+            "golang:${GO_VERSION}-trixie" \
+            make build-linux-arm64
 
       - name: Generate checksum
         run: |

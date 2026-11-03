@@ -4,12 +4,7 @@ on:
   push:
     branches:
       - 'dev/wireguard-go-bridge'
-    paths-ignore:
-      - '.github/**'
   workflow_call:
-
-env:
-  GO_VERSION: '1.25'
 
 permissions:
   contents: read
@@ -17,7 +12,7 @@ permissions:
 jobs:
   test:
     name: Unit + integration tests (Docker)
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-26.04
     steps:
       - name: Harden runner
         uses: step-security/harden-runner@cb605e52c26070c328afc4562f0b4ada7618a84e # v2.10.4
