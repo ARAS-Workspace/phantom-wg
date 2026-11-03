@@ -32,13 +32,13 @@ from phantom_daemon.base.services.wireguard import WireGuardService, open_wiregu
 from phantom_daemon.base.wallet import Wallet, open_wallet
 
 __all__ = [
+    "LOGGER_NAME",
     "BackupError",
     "DaemonEnv",
     "ExitStore",
     "ExitStoreError",
     "FirewallError",
     "FirewallService",
-    "LOGGER_NAME",
     "SecretsError",
     "ServerKeys",
     "StartupError",

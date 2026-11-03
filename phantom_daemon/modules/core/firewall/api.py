@@ -15,14 +15,11 @@ Firewall read-only endpoints: groups, rules, routing, nftables table.
 
 from __future__ import annotations
 
-from typing import Optional
-
 from fastapi import APIRouter, Request
 from pydantic import BaseModel
 
 from phantom_daemon.base.errors import DaemonHTTPException
 from phantom_daemon.modules._envelope import ApiErr, ApiOk
-
 
 # ── Models ───────────────────────────────────────────────────────
 
@@ -36,7 +33,7 @@ class GroupNameRequest(BaseModel):
 class GroupFilterRequest(BaseModel):
     """Optional group filter — omit to list all rules."""
 
-    group: Optional[str] = None
+    group: str | None = None
 
 
 class GroupRecord(BaseModel):

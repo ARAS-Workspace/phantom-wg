@@ -15,20 +15,18 @@ Client CRUD endpoints: assign, list, get, revoke, config export.
 
 from __future__ import annotations
 
-import logging
-
 import base64
 import ipaddress
+import logging
 from typing import Literal
 
 from fastapi import APIRouter, Query, Request
 from pydantic import BaseModel, Field
 
 from phantom_daemon.base.errors import DaemonHTTPException
-from phantom_daemon.base.services.wireguard.config import build_client_config
 from phantom_daemon.base.logging import LOGGER_NAME
+from phantom_daemon.base.services.wireguard.config import build_client_config
 from phantom_daemon.modules._envelope import ApiErr, ApiOk
-
 
 log = logging.getLogger(LOGGER_NAME)
 

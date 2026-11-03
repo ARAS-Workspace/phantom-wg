@@ -19,10 +19,9 @@ import importlib.resources
 import sqlite3
 import uuid
 from pathlib import Path
-from typing import Optional
+from typing import Self
 
 from phantom_daemon.base.errors import ExitStoreError
-
 
 # ── Schema ───────────────────────────────────────────────────────
 
@@ -164,7 +163,7 @@ class ExitStore:
 
         self._conn.commit()
 
-    def get_exit(self, name: str) -> Optional[dict]:
+    def get_exit(self, name: str) -> dict | None:
         """Get exit by name, or None if not found."""
         row = self._conn.execute(
             f"{_EXIT_SELECT} WHERE name = ?", (name,)
@@ -215,7 +214,7 @@ class ExitStore:
         """Close the database connection."""
         self._conn.close()
 
-    def __enter__(self) -> ExitStore:
+    def __enter__(self) -> Self:
         return self
 
     def __exit__(self, *exc: object) -> None:

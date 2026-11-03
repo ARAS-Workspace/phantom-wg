@@ -18,11 +18,12 @@ from __future__ import annotations
 import logging
 
 from fastapi import APIRouter, Request
+from firewall_bridge import GroupNotFoundError
 from pydantic import BaseModel, Field
 
-from firewall_bridge import GroupNotFoundError
 from phantom_daemon.base.errors import DaemonHTTPException
 from phantom_daemon.base.exit_store import parse_wireguard_config
+from phantom_daemon.base.logging import LOGGER_NAME
 from phantom_daemon.base.services.firewall.service import (
     MULTIHOP_PRESET_NAME,
     MULTIHOP_V6_PRESET_NAME,
@@ -31,9 +32,7 @@ from phantom_daemon.base.services.firewall.service import (
 from phantom_daemon.base.services.wireguard import WG_INTERFACE_NAME_EXIT
 from phantom_daemon.base.services.wireguard.ipc import build_exit_config
 from phantom_daemon.base.services.wireguard.service import open_wireguard
-from phantom_daemon.base.logging import LOGGER_NAME
 from phantom_daemon.modules._envelope import ApiErr, ApiOk
-
 
 log = logging.getLogger(LOGGER_NAME)
 

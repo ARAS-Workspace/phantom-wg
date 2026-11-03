@@ -22,17 +22,17 @@ import math
 import os
 import sqlite3
 import uuid
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
-from typing import Optional
+from typing import Self
 
-from phantom_daemon.base.errors import WalletError, WalletFullError
 from wireguard_go_bridge.keys import (
     derive_public_key,
     generate_preshared_key,
     generate_private_key,
 )
 
+from phantom_daemon.base.errors import WalletError, WalletFullError
 
 # ── Key Generation ────────────────────────────────────────────────
 
@@ -175,7 +175,7 @@ class Wallet:
         self._conn = conn
         self._db_path = db_path
 
-    def get_config(self, key: str) -> Optional[str]:
+    def get_config(self, key: str) -> str | None:
         """Get a single config value by key."""
         row = self._conn.execute(
             "SELECT value FROM config WHERE key = ?", (key,)
@@ -232,7 +232,7 @@ class Wallet:
         ipv4, ipv6 = row
         client_id = uuid.uuid4().hex
         private_key, public_key, preshared_key = _generate_keys()
-        now = datetime.now(timezone.utc).isoformat()
+        now = datetime.now(UTC).isoformat()
 
         self._conn.execute(
             "UPDATE users SET id=?, name=?, private_key_hex=?, public_key_hex=?, "
@@ -298,7 +298,7 @@ class Wallet:
         "created_at, updated_at"
     )
 
-    def get_client(self, name: str) -> Optional[dict]:
+    def get_client(self, name: str) -> dict | None:
         """Get client by name, or None if not found."""
         row = self._conn.execute(
             f"SELECT {self._CLIENT_COLUMNS} FROM users WHERE name = ?",
@@ -427,7 +427,7 @@ class Wallet:
 
         # Rebuild pool (intentional full clear before re-populate)
         # noinspection SqlWithoutWhere
-        self._conn.execute("DELETE FROM users")  # noqa: S608
+        self._conn.execute("DELETE FROM users")
         _populate_ip_pool(self._conn, new_v4, new_v6)
 
         # Restore clients into first free slots
@@ -517,7 +517,7 @@ class Wallet:
         """Close the database connection."""
         self._conn.close()
 
-    def __enter__(self) -> Wallet:
+    def __enter__(self) -> Self:
         return self
 
     def __exit__(self, *exc: object) -> None:

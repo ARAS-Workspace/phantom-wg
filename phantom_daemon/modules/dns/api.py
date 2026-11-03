@@ -16,7 +16,6 @@ DNS configuration endpoints: read and update per address family.
 from __future__ import annotations
 
 import logging
-
 from typing import Literal
 
 from fastapi import APIRouter, Request
@@ -24,7 +23,6 @@ from pydantic import BaseModel
 
 from phantom_daemon.base.logging import LOGGER_NAME
 from phantom_daemon.modules._envelope import ApiErr, ApiOk
-
 
 log = logging.getLogger(LOGGER_NAME)
 

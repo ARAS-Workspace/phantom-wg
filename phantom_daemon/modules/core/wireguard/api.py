@@ -21,7 +21,6 @@ from pydantic import BaseModel, Field
 from phantom_daemon.base.errors import DaemonHTTPException
 from phantom_daemon.modules._envelope import ApiErr, ApiOk
 
-
 # ── Models ───────────────────────────────────────────────────────
 
 

@@ -19,13 +19,11 @@ import logging
 import sys
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
-from typing import Optional
 
 import uvicorn
 from fastapi import FastAPI, HTTPException
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
-
 from firewall_bridge import BridgeError as FirewallBridgeError
 from wireguard_go_bridge.types import BridgeError as WireGuardBridgeError
 
@@ -153,7 +151,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 
 
 def create_app(
-    lifespan_func: Optional[object] = lifespan,
+    lifespan_func: object | None = lifespan,
 ) -> FastAPI:
     app = FastAPI(
         title="phantom-daemon",
