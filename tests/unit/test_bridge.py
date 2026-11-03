@@ -165,11 +165,12 @@ class TestClose:
         mock_lib.DeviceClose.return_value = -5
         with pytest.raises(DeviceNotFoundError):
             bridge.close()
-        # The handle stays until a close succeeds.
-        assert bridge.handle == 1
-        mock_lib.DeviceClose.return_value = 0
-        bridge.close()
+        # DeviceClose takes the handle out of the registry before it
+        # closes the device; the handle is 0 and a second close makes no
+        # call.
         assert bridge.handle == 0
+        bridge.close()
+        mock_lib.DeviceClose.assert_called_once_with(1)
 
 
 class TestContextManager:

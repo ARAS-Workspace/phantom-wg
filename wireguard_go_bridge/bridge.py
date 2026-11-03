@@ -15,7 +15,7 @@ Bridge — PersistentDevice Python wrapper.
 A Bridge requires a pre-existing device.db to start. The DB holds
 the IPC state dump that wireguard-go uses. On creation, previous
 state is automatically restored. Every ipc_set call persists the
-full device state to DB.
+device state, without the fields filterIpcDump removes, to DB.
 
 Usage:
     bridge = WireGuardBridge(ifname="wg0", mtu=1420, db_path="/path/to/device.db")
@@ -87,10 +87,11 @@ class WireGuardBridge:
         self._check(self._lib.DeviceDown(self._handle))
 
     def close(self) -> None:
-        """Close device and state DB. Handle becomes invalid."""
+        """Close device and state DB. The handle is 0 after the call,
+        whether DeviceClose succeeded or not."""
         if self._handle > 0:
-            self._check(self._lib.DeviceClose(self._handle))
-            self._handle = 0
+            handle, self._handle = self._handle, 0
+            self._check(self._lib.DeviceClose(handle))
 
     def __enter__(self) -> WireGuardBridge:
         return self
