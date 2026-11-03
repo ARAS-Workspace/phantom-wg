@@ -4,8 +4,6 @@ on:
   push:
     branches:
       - dev/daemon
-    paths-ignore:
-      - '.github/**'
   workflow_call:
 
 permissions:
