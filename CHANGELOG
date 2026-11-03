@@ -5,6 +5,45 @@ passwords, TOTP MFA, RBAC, audit log, authenticated reverse proxy
 to the daemon UDS.
 
 
+v1.1.8 - 2026-11-03
+-------------------
+
+  Platform release. Both images build their own platform from
+  debian:trixie-slim, as the daemon's images do, and the interpreter
+  moves from 3.12.13 to Debian trixie's 3.13.5. No code path changes.
+
+  * The platform stage. Dockerfile and dev.Dockerfile start from
+    debian:trixie-20261027-slim pinned by its index digest, install
+    Debian's python3 with ca-certificates, netbase and tzdata, and
+    create a venv at /opt/venv: Debian's python3 refuses pip installs
+    into the system (PEP 668). apt, mount and the venv packages are
+    then purged and the tree is copied into a single layer.
+    requirements.txt installs into /opt/venv, which leads PATH, so
+    `python -m auth_service` and tools/bootstrap.py run as before.
+    On arm64 the production image is 53.1 MB in five layers, against
+    60.4 MB in eight; it holds 83 Debian packages, each with its
+    copyright file, and neither apt-get nor mount.
+
+  * Python 3.13. requirements.txt already carried cp313 or abi3
+    hashes for every compiled distribution on x86_64 and aarch64, so
+    the lock is unchanged and the same 25 distributions install.
+    auth_service imports no module 3.13 removed. One auth.db was
+    carried through 3.12, 3.13, 3.12 and 3.13 images in turn; each
+    time login, /auth/me and the audit log read the records the
+    other interpreter had written.
+
+  * THIRD_PARTY_LICENSES. generate_licenses.py resolves the inventory
+    for 3.13 and the DEPENDENCIES table is unchanged. BUNDLED NATIVE
+    CODE is remeasured on the cp313 x86_64 wheels. PyNaCl's row now
+    reads 3627 KiB, the manylinux_2_34 wheel pip installs on trixie
+    under either interpreter; the 5189 KiB it read before is the
+    manylinux2014 wheel's extension. SYSTEM LIBRARIES AND BASE IMAGE
+    names debian:trixie-20261027-slim and Debian's python3.13.
+
+  No API, schema, or migration impact. The image needs a rebuild for
+  the platform to take effect.
+
+
 v1.1.7 - 2026-10-15
 -------------------
 
