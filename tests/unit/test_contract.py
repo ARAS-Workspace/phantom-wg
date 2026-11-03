@@ -135,11 +135,11 @@ def test_each_thread_reads_the_record_of_its_own_call():
     def first():
         lib.DeviceIpcGet(999999)
         failed.set()
-        succeeded.wait(5)
+        seen.append(("second succeeded", succeeded.wait(5)))
         seen.append(last_error(lib))
 
     def second():
-        failed.wait(5)
+        seen.append(("first failed", failed.wait(5)))
         _read_and_free(lib.GeneratePrivateKey())
         succeeded.set()
 
@@ -148,7 +148,12 @@ def test_each_thread_reads_the_record_of_its_own_call():
         t.start()
     for t in threads:
         t.join(10)
-    assert seen == [(-5, "device handle 999999 not found")]
+    assert not any(t.is_alive() for t in threads)
+    assert seen == [
+        ("first failed", True),
+        ("second succeeded", True),
+        (-5, "device handle 999999 not found"),
+    ]
 
 
 def test_a_tun_failure_is_tun_create(tmp_path):
