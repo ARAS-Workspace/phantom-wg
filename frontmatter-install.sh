@@ -38,7 +38,7 @@ CERTBOT_LINK="/usr/local/bin/frontmatter-certbot"
 UNINSTALL_LINK="/usr/local/sbin/frontmatter-uninstall"
 
 SUPPORTED_DEBIAN_VERSIONS=("12" "13")
-SUPPORTED_UBUNTU_VERSIONS=("22.04" "24.04")
+SUPPORTED_UBUNTU_VERSIONS=("22.04" "24.04" "26.04")
 
 # Source layout (where this script lives before install)
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -95,8 +95,8 @@ check_os() {
 
     # shellcheck disable=SC1091
     source /etc/os-release
-    OS_ID="$ID"
-    OS_VERSION_ID="$VERSION_ID"
+    OS_ID="${ID:-}"
+    OS_VERSION_ID="${VERSION_ID:-}"
 
     local supported=0
     case "$OS_ID" in
@@ -117,7 +117,9 @@ check_os() {
         log "Supported: Debian ${SUPPORTED_DEBIAN_VERSIONS[*]}, Ubuntu ${SUPPORTED_UBUNTU_VERSIONS[*]}" "$YELLOW"
         printf "Continue anyway? [y/N]: "
         read -r confirm
-        [[ "$confirm" != "y" && "$confirm" != "Y" ]] && exit 1
+        if [[ "$confirm" != "y" && "$confirm" != "Y" ]]; then
+            exit 1
+        fi
     else
         log "OS check passed: ${PRETTY_NAME:-$OS_ID $OS_VERSION_ID}" "$GREEN"
     fi
