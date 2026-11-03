@@ -31,9 +31,11 @@ jobs:
 
       - name: Build linux/amd64
         # Built in the trixie image the daemon runs on, so the .so links
-        # against the glibc it is loaded with.
+        # against the glibc it is loaded with. The container runs as the
+        # runner's user, who owns the checkout and the build directory.
         run: |
-          docker run --rm -v "$PWD:/workspace" -w /workspace \
+          docker run --rm --user "$(id -u):$(id -g)" -e HOME=/tmp \
+            -v "$PWD:/workspace" -w /workspace \
             "golang:${GO_VERSION}-trixie" \
             make build-linux-amd64
 
@@ -78,9 +80,11 @@ jobs:
 
       - name: Build linux/arm64
         # Built in the trixie image the daemon runs on, so the .so links
-        # against the glibc it is loaded with.
+        # against the glibc it is loaded with. The container runs as the
+        # runner's user, who owns the checkout and the build directory.
         run: |
-          docker run --rm -v "$PWD:/workspace" -w /workspace \
+          docker run --rm --user "$(id -u):$(id -g)" -e HOME=/tmp \
+            -v "$PWD:/workspace" -w /workspace \
             "golang:${GO_VERSION}-trixie" \
             make build-linux-arm64
 
