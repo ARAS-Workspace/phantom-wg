@@ -4,6 +4,118 @@ nftables + netlink routing bridge for Linux. Python owns rules, state,
 and presets; Rust is a kernel-only FFI surface.
 
 
+v2.2.0 - 2026-11-03
+-------------------
+
+  nft runs as a child process in place of the libnftables link, and
+  the bridge writes its table to the kernel in one nft transaction:
+  on start and on each change to a started bridge's rules and
+  groups. The C ABI and the Python API add to v2.1.8 and keep its
+  signatures, and the database schema is the same; a consumer meets
+  the change in what the library needs from its environment and in
+  the input it accepts.
+
+  Requirements (README, Requirements):
+
+  * The nft program from the nftables package, at /usr/sbin/nft or
+    at the absolute path in FIREWALL_BRIDGE_NFT_PATH. The .so has no
+    link to libnftables.
+  * CAP_NET_ADMIN that nft inherits: the loading process runs as
+    root or holds it as an ambient capability. A capability given to
+    the interpreter with setcap stays in the loading process.
+  * SIGCHLD at its default disposition. The bridge waits for every
+    nft it starts; with SIG_IGN the kernel reaps the child, and the
+    call returns an error although the command was applied.
+  * A writable /etc/iproute2. Routing table names go to the bridge's
+    own file, /etc/iproute2/rt_tables.d/phantom.conf, and
+    /etc/iproute2/rt_tables is left as it is.
+
+  The table:
+
+  * New C export nft_replace_rules, with the fw_nft_rule struct: one
+    nft run adds, deletes and adds the table and its chains, then
+    adds the rules, and returns their handles from nft's echo. When
+    the kernel refuses a rule, the table is as it was.
+  * start applies the enabled groups' rules with it, by group
+    priority, then position and id. Adding a rule, removing one, and
+    enabling, disabling or deleting a group rebuild the table the
+    same way; stop replaces it with a table that holds no rules.
+  * When the kernel refuses a rule, start removes what it applied
+    and the bridge stays stopped, add_firewall_rule and
+    add_routing_rule drop the refused row, and apply_preset and
+    enable_group undo the group.
+  * nft_init creates the table and its chains in one nft run, and
+    start calls it first.
+  * nft reads its command on stdin (-f -), so a command can be
+    longer than the 128 KiB one argument holds. nft_add_rule and
+    nft_remove_rule send nft JSON; an unknown action, an address of
+    the other family or a bad prefix length returns InvalidParam.
+
+  Input:
+
+  * add_firewall_rule checks its fields before storing them, with
+    the checks of a preset rule: an address is taken as well as a
+    network, and a comment is limited to 128 bytes with no double
+    quote, backslash or control character. A field that fails
+    raises InvalidParamError.
+  * A rule's addresses and its dnat target are of the rule's family.
+  * A rule names tcp or udp together with a port, or neither; icmp
+    is refused.
+  * create_group raises GroupExistsError for a name that is taken,
+    and the package exports GroupExistsError.
+  * enable_group leaves a group that is enabled as it is.
+
+  Routing:
+
+  * rt_table_ensure refuses an empty name, a name with whitespace or
+    of digits alone, and an entry longer than the 511 bytes of a
+    line ip reads.
+  * A policy rule or a route with an address of the other family is
+    refused.
+  * Policy and route rows use the table id of their group's ensure
+    row.
+  * Routes are added with link scope, the v4 default route too, and
+    deleted with RT_SCOPE_NOWHERE, which takes a route of any scope.
+    A delete with an empty device sends no device, protocol or type
+    and matches destination and table; it is sent for a route in a
+    table its group ensures, and a route row with no device in
+    another table is not deleted.
+  * While stopped, delete_group removes the group's routing rows
+    from the kernel before the group is deleted, and
+    remove_routing_rule removes its row whether applied or not.
+  * flush_cache returns a failed write to
+    /proc/sys/net/ipv4/route/flush as an error.
+
+  Build and CI:
+
+  * Rust 1.99.1 and edition 2024: every export is unsafe(no_mangle),
+    and the exports that read caller pointers are unsafe extern "C"
+    with a Safety section. The C symbols are those of v2.1.8 and
+    nft_replace_rules.
+  * Images on Rust 1.99.1 and Debian trixie, nftables and
+    libnftables1 pinned to 1.1.3-1, the Python test dependencies in
+    /opt/venv. The release .so is built in rust:1.99.1-trixie and
+    requires GLIBC_2.39.
+  * Clippy runs in the dev image with every warning an error
+    (dev/clippy.sh).
+  * Test and build run on every push to dev/firewall-bridge; publish
+    runs on ubuntu-26.04.
+  * kernel-matrix-firewall-bridge.yml runs the test steps in KVM
+    guests of Ubuntu 22.04 GA (5.15), Debian 12.0 (6.1) and Debian
+    13.0 (6.12) on a self-hosted runner, each step's output in the
+    job log as it runs. Debian 11.0 (5.10) was run and is out of the
+    matrix. README, Kernel Compatibility, has the table and the runs.
+
+  84 Rust tests, the kernel tests among them in their own network
+  and mount namespace; 312 Python unit tests; E2E in three stages,
+  topology, rules and rules-caps (the daemon's capabilities, no
+  network), the last two with 256 tests each that check nft, the
+  database and the processes after every step. API impact:
+  nft_replace_rules and fw_nft_rule in the C ABI, GroupExistsError
+  in Python; input v2.1.8 accepted can be refused (Input, above). No
+  schema impact.
+
+
 v2.1.8 - 2026-10-15
 -------------------
 
