@@ -85,7 +85,7 @@ Stage 4 — Package workflow
                                   credentials (persist-credentials:
                                   true).
 
-      Setup Python 3.12
+      Setup Python 3.13
 
       Extract version             Reads __version__ from
                                   auth-service-src/auth_service/__init__.py
