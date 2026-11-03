@@ -11,7 +11,7 @@ Copyright (c) 2025 Rıza Emre ARAS <r.emrearas@proton.me>
 Licensed under AGPL-3.0 - see LICENSE file for details
 WireGuard® is a registered trademark of Jason A. Donenfeld.
 
-Test runner for wireguard-go-bridge v2.1.0.
+Test runner for wireguard-go-bridge.
 
 Three containers:
     bridge-test  — Go .so + Python code, runs pytest (Docker socket mounted)
@@ -38,9 +38,9 @@ logging.basicConfig(level=logging.INFO, format=LOG_FMT, handlers=[logging.Stream
 log = logging.getLogger("test_runner")
 
 ROOT = Path(__file__).parent
-BRIDGE_IMAGE = "wireguard-go-bridge-test:v2.1.0"
-EXIT_IMAGE = "wireguard-go-bridge-exit:v2.1.0"
-CLIENT_IMAGE = "wireguard-go-bridge-client:v2.1.0"
+BRIDGE_IMAGE = "wireguard-go-bridge-test"
+EXIT_IMAGE = "wireguard-go-bridge-exit"
+CLIENT_IMAGE = "wireguard-go-bridge-client"
 NETWORK_NAME = "wg-bridge-test-net"
 BRIDGE_NAME = "wg-bridge-test"
 EXIT_NAME = "wg-exit-server"
@@ -74,14 +74,8 @@ def get_docker_client():
 
 
 def build_image(client, dockerfile: str, tag: str) -> bool:
-    from docker.errors import ImageNotFound
-    try:
-        client.images.get(tag)
-        log.info("  Image exists: %s", tag)
-        return True
-    except ImageNotFound:
-        pass
-
+    """Builds tag from dockerfile on every run; Docker's layer cache keeps
+    the steps whose inputs are unchanged."""
     log.info("  Building: %s (dockerfile=%s)", tag, dockerfile)
     try:
         for line in client.api.build(
@@ -367,7 +361,7 @@ def main():
     step(f"OVERALL: {status} ({duration:.1f}s)")
 
     summary = [
-        "wireguard-go-bridge v2.1.0 — Test Results",
+        "wireguard-go-bridge — Test Results",
         "=" * 50,
         f"Timestamp: {datetime.now().isoformat()}",
         f"Duration:  {duration:.1f}s",
