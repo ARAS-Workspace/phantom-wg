@@ -48,16 +48,20 @@ Stage 2 — Push
 
   git push origin dev/wireguard-go-bridge
 
-  Two workflows fire on the bump commit (and on every push to this
-  branch that touches non-.github paths):
+  Two workflows fire on the bump commit and on every push to this
+  branch:
 
-      test-wireguard-go-bridge.yml    pytest inside Docker, 3-container
-                                      topology (bridge + exit-server +
-                                      client). 51 unit + 1 integration
-                                      test. Artifact: test-results (30d).
+      test-wireguard-go-bridge.yml    two jobs: go test -race in
+                                      golang:<GO_VERSION>-trixie as the
+                                      runner's user, and pytest inside
+                                      Docker, 3-container topology
+                                      (bridge + exit-server + client).
+                                      Artifact: test-results (30d).
 
-      build-wireguard-go-bridge.yml   cgo cross-compile for linux-amd64
-                                      and linux-arm64. Artifacts:
+      build-wireguard-go-bridge.yml   linux-amd64 on ubuntu-26.04 and
+                                      linux-arm64 on ubuntu-26.04-arm,
+                                      each in golang:<GO_VERSION>-trixie
+                                      as the runner's user. Artifacts:
                                       wireguard-go-bridge-linux-amd64
                                       and -arm64 (90d).
 
@@ -88,21 +92,23 @@ Stage 4 — Publish trigger
 Stage 5 — Publish workflow
 --------------------------
 
-  publish-wireguard-go-bridge.yml runs four jobs in sequence:
+  publish-wireguard-go-bridge.yml runs four jobs:
 
-      version    Extracts the version from __init__.py.
-                 Validates that src/version.go matches.
-                 Aborts the entire run on mismatch.
+      version    Extracts the version from __init__.py and validates
+                 that src/version.go matches. A mismatch fails this
+                 job, and publish does not run.
 
-      test       Re-runs the full test suite via workflow_call.
-                 Treated as a release gate — failure stops the publish.
+      test       Re-runs the full test suite via workflow_call, at the
+                 same time as version. Treated as a release gate —
+                 failure stops build and publish.
 
       build      Re-runs the linux-amd64 and linux-arm64 builds via
-                 workflow_call.
+                 workflow_call, after test.
 
-      publish    Packages each architecture into a zip, verifies
-                 sha256 checksums, and creates the release with both
-                 zips attached.
+      publish    Runs after version and build. Packages each
+                 architecture into a zip, verifies sha256 checksums,
+                 and creates the release with both zips attached; a
+                 re-run for a released version replaces its zips.
 
 
 Stage 6 — Release

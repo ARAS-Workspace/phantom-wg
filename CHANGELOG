@@ -4,6 +4,94 @@ Python FFI bindings for wireguard-go. PersistentDevice with automatic
 IPC state persistence and key generation.
 
 
+v2.2.0 - 2026-11-03
+-------------------
+
+  A failed call returns its code, or NULL for a string, as before, and
+  records the code and the reason as the calling thread's last error,
+  which LastError reads; the exceptions of WireGuardBridge carry both,
+  those of the key functions the reason. The library exports its own
+  functions only, a device holds a lock across an IpcSet and the persist
+  of that state, and the build moves to Go 1.27.3 and Debian trixie.
+
+  Errors:
+
+  * New export LastError(int32_t* code): a copy of the message of the
+    calling thread's last error, freed with FreeString, and its code in
+    *code; NULL and WG_OK after a guarded call that succeeded.
+    BridgeVersion, FreeString and LastError leave the record as it is.
+    Every guarded export clears the calling thread's record when it
+    starts and writes it when it fails; a recovered panic is recorded as
+    WG_ERR_INTERNAL with "panic in <export>: <value>". A cgo export runs
+    on the thread of its C caller and ctypes releases the GIL during a
+    call, so the record is kept per OS thread, as errno is.
+  * A TUN device that cannot be created returns WG_ERR_TUN_CREATE
+    (-2); v2.1.4 returned WG_ERR_DEVICE_CREATE. New WG_ERR_INVALID_ARG
+    (-10) from DerivePublicKey for a key that is not hex or not 32
+    bytes, and from HexToBase64 for a string that is not hex.
+  * Python: BridgeError has a code, and every WireGuardBridge method
+    raises the exception of the code with the bridge's message.
+    TunCreateError is a DeviceCreateError, so except DeviceCreateError
+    catches a TUN failure as in v2.1.4. New InvalidArgumentError
+    (-10), a BridgeError and a ValueError. ipc_get raises for a call
+    that fails; v2.1.4 returned "". close sets the handle to 0
+    whether DeviceClose succeeded or not; v2.1.4 kept it after a
+    failure, and DeviceClose answers a second call for that handle
+    with WG_ERR_NOT_FOUND. The key functions raise RuntimeError and
+    ValueError as before, and InvalidArgumentError for a refused key,
+    with the bridge's message when the bridge recorded one.
+
+  Device and library:
+
+  * A device holds a lock across an IpcSet and the persist of its
+    state, and close waits for an IpcSet in progress. A persist that
+    fails after the config was applied reads "config applied, state
+    not persisted: ...".
+  * DeviceClose takes the device out of the registry before it closes
+    it: of two calls for one handle, one closes the device and the
+    other returns WG_ERR_NOT_FOUND.
+  * src/exports.map, the linker version script the Makefile and the
+    test image pass, leaves the 13 exports global and every other
+    symbol local; the .so of v2.1.4 also exported 266 sqlite3_*
+    functions of go-sqlite3's SQLite.
+
+  Build and CI:
+
+  * Go 1.27.3; Go 1.25 is out of support. x/crypto v0.58.0, x/net
+    v0.62.0, x/sys v0.49.0, go-sqlite3 v1.14.52. go.mod reads go
+    1.26.0.
+  * wireguard-go at b3bc704, its master of 2026-10-24, three commits
+    after the latest tag 0.0.20250522: noise checks the local
+    ephemeral key before it takes a handshake response, the receive
+    path adds the IPv6 header to the payload length in 32 bits, and
+    the TUN GRO table clears the virtio header of a packet it
+    deletes.
+  * The .so builds in golang:1.27.3-trixie on a runner of its
+    architecture, ubuntu-26.04 and ubuntu-26.04-arm, as the runner's
+    user, and the arm64 build needs GLIBC_2.34 at most; the test
+    images run on debian:trixie-slim. Test and build run on every
+    push.
+  * Go tests run in a job of their own in the test workflow, go test
+    -race in golang:1.27.3-trixie as the runner's user; the test
+    image builds the .so without them. test_runner builds its three
+    images on every run, with no version in their tags; v2.1.4 used
+    an image whose tag existed.
+  * govulncheck v1.9.0: no finding at symbol or package level, one at
+    module level, GO-2026-5932 for x/crypto/openpgp, which the bridge
+    does not import.
+
+  17 Go tests, among them the error record (per thread, cleared by a
+  call that succeeds, the code of an error, a panic), Take, the device
+  lock with a fake device, and filterIpcDump; 69 Python unit tests, 8 of
+  them against the built library: its exports, the ctypes signatures and
+  the cgo prototypes with their arity, the header's codes against the
+  Python map, and the records of real calls. Each new test fails on a
+  mutation of what it covers (23 mutants). API impact: LastError and
+  WG_ERR_INVALID_ARG added, -2 for a TUN failure, ipc_get raises on
+  failure, close sets the handle to 0 on failure too, and exception
+  messages carry the bridge's reason. No schema impact.
+
+
 v2.1.4 - 2026-10-15
 -------------------
 

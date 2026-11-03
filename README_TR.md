@@ -2,7 +2,7 @@
 
 Userspace WireGuard — Go backend, SQLite IPC state persistence, Python FFI.
 
-- Go backend: wireguard-go TUN device + IPC protocol, her state değişikliği SQLite'a persist edilir.
+- Go backend: wireguard-go TUN device + IPC protocol, her `ipc_set` SQLite'a persist edilir.
 - Python katmanı: ctypes FFI binding, key generation, bridge lifecycle.
 - Kernel modülü gerektirmez — tamamen userspace.
 
@@ -71,7 +71,7 @@ CREATE TABLE IF NOT EXISTS ipc_state (
 );
 ```
 
-`dump` kolonu WireGuard IPC protocol formatında tam device state'i tutar (private key, listen port, peer'lar). Her `ipc_set` çağrısında üzerine yazılır, `restore()` ile geri yüklenir.
+`dump` kolonu WireGuard IPC protocol formatında device state'i tutar (private key, listen port, peer'lar); handshake zamanı, bayt sayaçları ve `protocol_version` hariç. Her `ipc_set` çağrısında üzerine yazılır, açılışta `restore()` ile geri yüklenir.
 
 ## Katmanlar
 
@@ -127,14 +127,42 @@ psk     = generate_preshared_key()     # PSK (hex)
 
 ## Hata Türleri
 
-| Exception           | Durum                            |
-|---------------------|----------------------------------|
-| `BridgeError`       | Temel hata sınıfı                |
-| `TunCreateError`    | TUN arayüz oluşturma hatası      |
-| `DeviceCreateError` | Cihaz oluşturma hatası           |
-| `IpcError`          | IPC iletişim hatası              |
-| `DeviceUpError`     | Arayüz etkinleştirme hatası      |
-| `DeviceDownError`   | Arayüz devre dışı bırakma hatası |
+Başarısız olan bir köprü çağrısı negatif bir kod, string döndüren
+çağrılarda NULL döndürür ve kodu bir mesajla birlikte çağıran thread'in
+son hatası olarak kaydeder; başarılı bir çağrı bu kaydı siler.
+`BridgeVersion`, `FreeString` ve `LastError` kayda dokunmaz.
+`LastError(int32_t* code)` mesajın bir kopyasını döndürür (`FreeString`
+ile serbest bırakılır) ve kodu yazar.
+Kayıt thread'e aittir: ctypes çağrı sırasında GIL'i bırakır ve her Python
+thread'i kendi çağrısının kaydını okur. Python katmanı başarısız bir
+çağrıdan sonra kaydı okur ve kodun istisnasını köprünün mesajıyla
+yükseltir:
+
+```python
+try:
+    bridge.up()
+except DeviceNotFoundError as e:
+    e.code   # -5
+    str(e)   # "device handle 7 not found"
+```
+
+| Kod | Exception              | Durum                                                                 |
+|-----|------------------------|-----------------------------------------------------------------------|
+|     | `BridgeError`          | Temel hata sınıfı; `code` köprünün kodunu taşır                       |
+| -2  | `TunCreateError`       | TUN arayüz oluşturma hatası, bir `DeviceCreateError`                  |
+| -3  | `DeviceCreateError`    | Cihaz oluşturma hatası                                                |
+| -4  | `IpcError`             | IPC set ya da get hatası                                              |
+| -5  | `DeviceNotFoundError`  | Handle'a ait cihaz yok                                                |
+| -7  | `DeviceUpError`        | Arayüz etkinleştirme hatası                                           |
+| -8  | `DeviceDownError`      | Arayüz devre dışı bırakma hatası                                      |
+| -10 | `InvalidArgumentError` | Reddedilen argüman, örneğin hex olmayan bir anahtar; bir `ValueError` |
+| -99 | `BridgeError`          | İç hata, kurtarılan panikler dahil                                    |
+
+Köprünün reddettiği bir anahtar -10 koduyla `InvalidArgumentError`
+yükseltir; bu bir `ValueError`'dır. Anahtar fonksiyonlarının diğer
+hataları üretim fonksiyonlarında `RuntimeError`, `derive_public_key` ve
+`hex_to_base64`'te `ValueError` yükseltir; köprü bir mesaj kaydettiyse
+istisna o mesajı taşır.
 
 ## State Persistence
 
@@ -147,7 +175,7 @@ sequenceDiagram
     participant TUN as /dev/net/tun
 
     App->>Bridge: WireGuardBridge(ifname, mtu, db_path)
-    Bridge->>Go: DeviceCreate(ifname, mtu, db_path)
+    Bridge->>Go: NewPersistentDevice(ifname, mtu, db_path)
     Go->>TUN: TUN device oluştur
     Go->>DB: Önceki state var mı?
     DB-->>Go: evet → IPC state restore
@@ -156,7 +184,7 @@ sequenceDiagram
     App->>Bridge: ipc_set(config)
     Bridge->>Go: DeviceIpcSet(handle, config)
     Go->>Go: WireGuard IPC uygula
-    Go->>DB: Tüm device state persist
+    Go->>DB: Device state persist (filterIpcDump)
 ```
 
 ## Lifecycle
@@ -178,9 +206,13 @@ wireguard-go-bridge/
 │   ├── exports.go              # C FFI exports
 │   ├── persistent_device.go    # Device + SQLite persistence
 │   ├── handle_registry.go      # Device handle management
-│   ├── errors.go               # Error codes
+│   ├── guards.go               # Panic containment + error record
+│   ├── lasterror.go            # Calling thread's last error
+│   ├── thread_id.go            # pthread_self, the record's key (cgo)
+│   ├── errors.go               # Errors with the code of their export
 │   ├── version.go              # BridgeVersionStr
-│   ├── wireguard_go_bridge.h   # C FFI header
+│   ├── wireguard_go_bridge.h   # C FFI header (error codes)
+│   ├── exports.map             # Linker version script: exported symbols
 │   └── core/
 │       ├── keys.go             # Curve25519 key ops
 │       └── registry.go         # Handle registry
@@ -199,6 +231,9 @@ wireguard-go-bridge/
 ## Geliştirme
 
 ```bash
+# Go testleri, CI'ın koştuğu imajda
+docker run --rm -v "$PWD:/workspace" -w /workspace/src golang:1.27.3-trixie go test -race -v ./...
+
 # Test (Docker container içinde Go build + pytest)
 python test_runner.py
 
