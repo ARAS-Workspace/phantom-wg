@@ -115,14 +115,17 @@ Upstream dependency:
 DOCKER BASE IMAGES
 ================================================================================
 
-| Image                      | License          | URL                             |
-|----------------------------|------------------|---------------------------------|
-| python:3.12.13-slim-trixie | PSF-2.0 + Debian | https://hub.docker.com/_/python |
-| nginx:1-alpine             | BSD 2-Clause     | https://hub.docker.com/_/nginx  |
+| Image                       | License          | URL                             |
+|-----------------------------|------------------|---------------------------------|
+| debian:trixie-20261027-slim | Debian           | https://hub.docker.com/_/debian |
+| python:3.12.13-slim-trixie  | PSF-2.0 + Debian | https://hub.docker.com/_/python |
 
-CPython is PSF-2.0. The Debian packages underneath it carry their own
-licences, which Debian keeps inside the image as
-/usr/share/doc/<package>/copyright.
+The daemon and nginx images start from debian:trixie-slim; the daemon's
+CPython is Debian's python3.13 package, PSF-2.0, and nginx is Debian's
+nginx package, BSD 2-Clause. The auth-service image starts from
+python:3.12.13-slim-trixie, whose CPython is PSF-2.0. In both, the
+Debian packages carry their own licences, which Debian keeps inside the
+image as /usr/share/doc/<package>/copyright.
 
 ================================================================================
 SYSTEM LIBRARIES (installed in container)
@@ -136,14 +139,20 @@ Daemon container:
 | nftables           | GPL-2.0      | GPL-2.0-only    | Netfilter management     |
 | iproute2           | GPL-2.0      | GPL-2.0-only    | Network routing          |
 
-The auth-service and nginx containers install no system library of their own.
+Nginx container:
+
+| Library            | License      | SPDX Identifier | Purpose                  |
+|--------------------|--------------|-----------------|--------------------------|
+| nginx              | BSD 2-Clause | BSD-2-Clause    | TLS front, SPA, proxy    |
+
+The auth-service container installs no system library of its own.
 
 Usage Note:
 iproute2 and nftables are installed as separate programs; the daemon
-invokes ip as a subprocess. libnftables1 is the library firewall-bridge
-loads at runtime, and its use is stated in firewall-bridge's own notice.
-All three are installed from Debian's package repository when the user
-builds the image and are not bundled with this project.
+invokes ip as a subprocess, and firewall-bridge runs nft as one, as its
+own notice states. libnftables1 is the library nft is linked against.
+These and nginx are installed from Debian's package repository when the
+user builds the images and are not bundled with this project.
 
 ================================================================================
 TRADEMARK NOTICES
