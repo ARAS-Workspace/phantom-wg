@@ -142,8 +142,8 @@ def get_bridge_version() -> str:
 
 def last_error(lib: ctypes.CDLL) -> tuple[int, str]:
     """The calling thread's last error: the code and the message the
-    bridge recorded for this thread's last call, or (0, "") when that
-    call succeeded."""
+    bridge recorded for this thread's last guarded call, or (0, "") when
+    that call succeeded."""
     code = ctypes.c_int32(0)
     ptr = lib.LastError(ctypes.byref(code))
     message = ""

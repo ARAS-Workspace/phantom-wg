@@ -4,7 +4,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends libsqlite3-dev
 
 WORKDIR /build
 COPY src/ /build/
-# Go unit tests (guards_test.go: panic containment at the FFI boundary)
+# Go unit tests
 RUN CGO_ENABLED=1 go test ./...
 RUN CGO_ENABLED=1 \
     go build -buildmode=c-shared -trimpath \

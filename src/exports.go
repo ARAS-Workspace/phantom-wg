@@ -34,8 +34,8 @@ import (
 	"wireguard-go-bridge/core"
 )
 
-// Compile-time drift checks: wgOK and wgErrInternal (guards.go, pure Go)
-// must equal WG_OK and WG_ERR_INTERNAL from the header. Either drift
+// Compile-time drift checks: wgOK and wgErrInternal (guards.go, which
+// has no import "C") must equal WG_OK and WG_ERR_INTERNAL from the header. Either drift
 // direction makes one of these conversions negative and fails the build.
 const _ = uint(C.WG_OK - wgOK)
 const _ = uint(wgOK - C.WG_OK)
@@ -213,8 +213,8 @@ func FreeString(s *C.char) {
 
 // LastError returns a copy of the message of the calling thread's last
 // error, to be freed with FreeString, and writes its code to *code
-// unless code is NULL; after a call that succeeded it returns NULL and
-// writes WG_OK.
+// unless code is NULL; after a guarded call that succeeded it returns
+// NULL and writes WG_OK.
 //
 //export LastError
 func LastError(code *C.int32_t) *C.char {

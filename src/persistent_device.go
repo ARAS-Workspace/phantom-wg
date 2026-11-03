@@ -11,8 +11,9 @@
 // WireGuard® is a registered trademark of Jason A. Donenfeld.
 //
 // persistent_device.go — WireGuard device with IPC state persistence.
-// Every IpcSet automatically persists the full device state to SQLite.
-// On creation, if a previous state exists in DB, it is restored.
+// Every IpcSet persists the device's IpcGet state, without the fields
+// filterIpcDump removes, to SQLite. On creation, if a previous state
+// exists in DB, it is restored.
 
 package main
 
@@ -45,11 +46,11 @@ type persistentDevice struct {
 	// waits for an ipcSet in progress.
 	mu  sync.Mutex
 	dev wgDevice
-	tun tun.Device
 	db  *sql.DB
 }
 
-// openStateDB opens the state DB at dbPath, which must already exist.
+// openStateDB opens the state DB at dbPath; SQLite creates the file when
+// it is missing.
 func openStateDB(dbPath string) (*sql.DB, error) {
 	db, err := sql.Open("sqlite3", dbPath+"?_journal_mode=WAL&_busy_timeout=5000")
 	if err != nil {
@@ -62,8 +63,9 @@ func openStateDB(dbPath string) (*sql.DB, error) {
 	return db, nil
 }
 
-// newPersistentDevice creates a TUN device, WireGuard device, opens the state DB,
-// and restores previous IPC state if available. DB must already exist.
+// newPersistentDevice opens the state DB, creates a TUN device and a
+// WireGuard device, and restores previous IPC state if available. The DB
+// holds the ipc_state table, which the Python layer creates.
 func newPersistentDevice(ifname string, mtu int, dbPath string) (*persistentDevice, error) {
 	db, err := openStateDB(dbPath)
 	if err != nil {
@@ -79,13 +81,7 @@ func newPersistentDevice(ifname string, mtu int, dbPath string) (*persistentDevi
 
 	logger := newFilteredLogger(ifname)
 	dev := device.NewDevice(tunDev, conn.NewDefaultBind(), logger)
-	if dev == nil {
-		_ = tunDev.Close()
-		_ = db.Close()
-		return nil, fmt.Errorf("create device")
-	}
-
-	pd := &persistentDevice{dev: dev, tun: tunDev, db: db}
+	pd := &persistentDevice{dev: dev, db: db}
 
 	// Restore previous state if exists
 	if err := pd.restore(); err != nil {
@@ -115,8 +111,8 @@ func (pd *persistentDevice) ipcGet() (string, error) {
 	return pd.dev.IpcGet()
 }
 
-// persist writes the settable IpcGet state to the state DB.
-// Filters out read-only fields that IpcSet rejects.
+// persist writes the IpcGet state, without the fields filterIpcDump
+// removes, to the state DB.
 func (pd *persistentDevice) persist() error {
 	dump, err := pd.dev.IpcGet()
 	if err != nil {
@@ -128,8 +124,8 @@ func (pd *persistentDevice) persist() error {
 	return err
 }
 
-// filterIpcDump removes read-only fields from IpcGet output
-// so the dump can be fed back into IpcSet without errors.
+// filterIpcDump removes the handshake time, the byte counts and
+// protocol_version from IpcGet output; the rest is a config IpcSet takes.
 func filterIpcDump(dump string) string {
 	var result []byte
 	for line := range strings.SplitSeq(dump, "\n") {

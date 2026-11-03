@@ -10,7 +10,7 @@ Copyright (c) 2025 Rıza Emre ARAS <r.emrearas@proton.me>
 Licensed under AGPL-3.0 - see LICENSE file for details
 WireGuard® is a registered trademark of Jason A. Donenfeld.
 
-Unit tests for FFI library discovery — v2.1.0.
+Unit tests for FFI library discovery.
 Platform resolution, environment variable paths, sibling path, system fallback.
 """
 

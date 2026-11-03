@@ -19,10 +19,11 @@
 // helper clears the calling thread's last error, runs the body and,
 // when the body returns an error or panics, records the code and the
 // message as the thread's last error (lasterror.go); a panic is also
-// logged with its stack to stderr. This file is pure Go (no cgo) so
-// guards_test.go can run it with plain `go test`; the recovered panic
-// can only cover code on the export's own goroutine — panics inside
-// wireguard-go's internal goroutines are out of its reach.
+// logged with its stack to stderr. This file has no import "C"; the
+// thread id the record is kept under comes from thread_id.go, which
+// does. The recovered panic can only cover code on the export's own
+// goroutine — panics inside wireguard-go's internal goroutines are out
+// of its reach.
 
 package main
 

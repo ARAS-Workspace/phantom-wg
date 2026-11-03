@@ -74,7 +74,7 @@ go-deps:
 
 inspect-symbols:
 	@echo "=== Exported symbols ==="
-	nm -D $(BUILD_DIR)/linux-amd64/$(BINARY_NAME).so 2>/dev/null | grep " T wg_" || true
+	nm -D --defined-only $(BUILD_DIR)/linux-amd64/$(BINARY_NAME).so 2>/dev/null | grep " T " || true
 	@echo ""
 	@echo "=== Library info ==="
 	file $(BUILD_DIR)/linux-amd64/$(BINARY_NAME).so 2>/dev/null || true

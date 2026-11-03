@@ -50,8 +50,8 @@ func setLastError(code int32, msg string) {
 	lastErrMu.Unlock()
 }
 
-// getLastError reads the calling thread's record; ok is false when the
-// thread's last guarded call succeeded or it has made none.
+// getLastError reads the record kept under the calling thread's id; ok
+// is false when that id has none.
 func getLastError() (code int32, msg string, ok bool) {
 	tid := threadID()
 	lastErrMu.Lock()
