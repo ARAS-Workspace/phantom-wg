@@ -14,7 +14,6 @@ from phantom_daemon.base.exit_store.parser import (
     parse_wireguard_config,
 )
 
-
 # ── Helper ──────────────────────────────────────────────────────
 
 def _make_key_b64() -> str:

@@ -7,7 +7,6 @@ import pytest
 from phantom_daemon.base.errors import WalletError
 from phantom_daemon.base.wallet import open_wallet
 
-
 # ── Assign ────────────────────────────────────────────────────────
 
 
@@ -61,9 +60,11 @@ class TestRevokeClient:
             assert w.count_free() == free_before + 1
 
     def test_revoke_not_found(self, tmp_path):
-        with open_wallet(str(tmp_path)) as w:
-            with pytest.raises(WalletError, match="not found"):
-                w.revoke_client("ghost")
+        with (
+            open_wallet(str(tmp_path)) as w,
+            pytest.raises(WalletError, match="not found"),
+        ):
+            w.revoke_client("ghost")
 
     def test_revoke_then_reassign(self, tmp_path):
         with open_wallet(str(tmp_path)) as w:

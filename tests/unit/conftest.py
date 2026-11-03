@@ -16,15 +16,15 @@ import functools
 import os
 import random
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 import pytest
+from wireguard_go_bridge.keys import derive_public_key, generate_private_key
 
 from phantom_daemon.base.env import DaemonEnv
 from phantom_daemon.base.secrets.secrets import ServerKeys
 from phantom_daemon.base.wallet import Wallet, open_wallet
-from wireguard_go_bridge.keys import derive_public_key, generate_private_key
 
 # noinspection PyShadowingBuiltins
 print = functools.partial(print, flush=True)
@@ -52,7 +52,7 @@ class UnitTestEnvironment:
 @pytest.fixture(scope="session")
 def test_env():
     """Session-scoped unit test environment."""
-    ts = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S")
+    ts = datetime.now(UTC).strftime("%Y%m%dT%H%M%S")
     port = random.randint(51800, 51899)
 
     # Wallet

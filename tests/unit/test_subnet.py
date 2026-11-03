@@ -7,7 +7,6 @@ import pytest
 from phantom_daemon.base.errors import WalletError
 from phantom_daemon.base.wallet import open_wallet
 
-
 # ── Change CIDR ──────────────────────────────────────────────────
 
 

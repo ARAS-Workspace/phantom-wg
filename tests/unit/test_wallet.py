@@ -3,12 +3,12 @@
 from __future__ import annotations
 
 import json
+import sqlite3
 
 import pytest
 
 from phantom_daemon.base.errors import WalletError
 from phantom_daemon.base.wallet import Wallet, _calculate_terazi, open_wallet
-
 
 # ── Terazi ───────────────────────────────────────────────────────
 
@@ -104,7 +104,7 @@ class TestWalletContextManager:
         with open_wallet(str(tmp_path)) as w:
             w.count_users()
         # After exit, connection should be closed
-        with pytest.raises(Exception):
+        with pytest.raises(sqlite3.ProgrammingError, match="closed database"):
             w.count_users()
 
 

@@ -7,7 +7,6 @@ import pytest
 from phantom_daemon.base.errors import ExitStoreError
 from phantom_daemon.base.exit_store.store import ExitStore, open_exit_store
 
-
 _SAMPLE_EXIT = {
     "endpoint": "1.2.3.4:51820",
     "address": "10.0.0.2/32",
@@ -133,9 +132,11 @@ class TestRemoveExit:
 
     def test_remove_not_found(self, test_env):
         d = test_env.sub("exit-rm-nf")
-        with open_exit_store(db_dir=d) as store:
-            with pytest.raises(ExitStoreError, match="not found"):
-                store.remove_exit("nonexistent")
+        with (
+            open_exit_store(db_dir=d) as store,
+            pytest.raises(ExitStoreError, match="not found"),
+        ):
+            store.remove_exit("nonexistent")
 
     def test_remove_active_raises(self, test_env):
         d = test_env.sub("exit-rm-active")
@@ -157,9 +158,11 @@ class TestActivateDeactivate:
 
     def test_activate_not_found(self, test_env):
         d = test_env.sub("exit-activate-nf")
-        with open_exit_store(db_dir=d) as store:
-            with pytest.raises(ExitStoreError, match="not found"):
-                store.activate("nonexistent")
+        with (
+            open_exit_store(db_dir=d) as store,
+            pytest.raises(ExitStoreError, match="not found"),
+        ):
+            store.activate("nonexistent")
 
     def test_deactivate(self, test_env):
         d = test_env.sub("exit-deactivate")

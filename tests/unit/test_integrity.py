@@ -10,13 +10,13 @@ import functools
 import ipaddress
 import os
 import time
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 import pytest
+from wireguard_go_bridge.keys import derive_public_key
 
 from phantom_daemon.base.errors import WalletFullError
 from phantom_daemon.base.wallet import open_wallet
-from wireguard_go_bridge.keys import derive_public_key
 
 # Force line-by-line flush so output streams live under pytest -s
 # noinspection PyShadowingBuiltins
@@ -120,7 +120,7 @@ _DB_DIR = "/var/lib/phantom/db/tests"
 def shared_db():
     """Shared DB directory for integrity tests within the class."""
     os.makedirs(_DB_DIR, exist_ok=True)
-    ts = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S")
+    ts = datetime.now(UTC).strftime("%Y%m%dT%H%M%S")
     return _DB_DIR, f"integrity-{ts}.db"
 
 
@@ -147,7 +147,7 @@ class TestIntegrity:
         db_path = os.path.join(db_dir, db_name)
         print(f"\n{_SEP}")
         print("  WALLET DATABASE — PROGRESSIVE EXPANSION TEST")
-        print(f"  /24 -> /22 -> /20 -> /18 -> /16  (Curve25519 keygen)")
+        print("  /24 -> /22 -> /20 -> /18 -> /16  (Curve25519 keygen)")
         print(f"  DB: {db_path}")
         print(f"{_SEP}")
 
@@ -223,7 +223,7 @@ class TestIntegrity:
                 assert final_free == 0, f"Expected 0 free, got {final_free}"
                 with pytest.raises(WalletFullError):
                     w.assign_client("overflow-probe")
-                print(f"  Exhaustion    : CONFIRMED (WalletFullError raised)")
+                print("  Exhaustion    : CONFIRMED (WalletFullError raised)")
 
                 # ── Post-fill validation ─────────────────────────────
                 t0 = time.perf_counter()
@@ -260,7 +260,7 @@ class TestIntegrity:
             # Config correctness
             assert w.get_config("ipv4_subnet") == "10.8.0.0/16"
             assert w.get_config("ipv6_subnet") == "fd00:70:68::/112"
-            print(f"  Config        : PASS")
+            print("  Config        : PASS")
 
             # Terazi: all IPs in range + v4_index == v6_index
             v4_net = ipaddress.ip_network("10.8.0.0/16", strict=False)
@@ -287,7 +287,7 @@ class TestIntegrity:
                 client = w.get_client(name)
                 assert client is not None, f"Lost client {name}"
                 assert client["id"] is not None
-            print(f"  Spot check    : PASS  (first client from each stage verified)")
+            print("  Spot check    : PASS  (first client from each stage verified)")
 
             # Summary
             print(f"\n{_THIN}")
@@ -296,7 +296,7 @@ class TestIntegrity:
             if total_sec > 0:
                 print(f"  Avg rate      : {cumulative_assigns / total_sec:,.0f} client/s (including expansions + key validation)")
             print(f"{_THIN}")
-            print(f"  ALL CHECKS PASSED")
+            print("  ALL CHECKS PASSED")
             print(f"  DB preserved  : {db_path}")
             print(f"{_SEP}\n")
 
@@ -317,7 +317,7 @@ class TestIntegrity:
         db_path = os.path.join(db_dir, db_name)
         print(f"\n{_SEP}")
         print("  WALLET DATABASE — PROGRESSIVE SHRINK TEST")
-        print(f"  /16 -> /18 -> /20 -> /22 -> /24 -> 0  (client revocation)")
+        print("  /16 -> /18 -> /20 -> /22 -> /24 -> 0  (client revocation)")
         print(f"  DB: {db_path}")
         print(f"{_SEP}")
 
@@ -375,7 +375,7 @@ class TestIntegrity:
                 assert new_free == 0, f"Expected 0 free, got {new_free}"
                 with pytest.raises(WalletFullError):
                     w.assign_client("overflow-probe")
-                print(f"  Exhaustion    : CONFIRMED (WalletFullError raised)")
+                print("  Exhaustion    : CONFIRMED (WalletFullError raised)")
 
                 # ── Post-shrink validation ──────────────────────────
                 t0 = time.perf_counter()
@@ -405,9 +405,9 @@ class TestIntegrity:
             assert w.count_assigned() == 0
             assert w.count_free() == w.count_users()
             assert w.list_clients() == []
-            print(f"  Assigned      : 0")
+            print("  Assigned      : 0")
             print(f"  Free          : {w.count_free()}")
-            print(f"  list_clients  : [] (empty)")
+            print("  list_clients  : [] (empty)")
 
             # Pool still valid after full drain
             t0 = time.perf_counter()
@@ -443,7 +443,7 @@ class TestIntegrity:
             assert w.get_config("ipv6_subnet") == "fd00:70:68::/120"
             assert final_assigned == 0
             assert final_free == 253
-            print(f"  Config        : PASS")
+            print("  Config        : PASS")
 
             # Terazi: all IPs in range + v4_index == v6_index
             v4_net = ipaddress.ip_network("10.8.0.0/24", strict=False)
@@ -466,7 +466,7 @@ class TestIntegrity:
 
             # All clients gone
             assert w.get_client("s0-00000") is None
-            print(f"  Client check  : PASS  (all clients revoked, s0-00000 = None)")
+            print("  Client check  : PASS  (all clients revoked, s0-00000 = None)")
 
             # Summary
             print(f"\n{_THIN}")
@@ -475,6 +475,6 @@ class TestIntegrity:
             if total_sec > 0:
                 print(f"  Avg rate      : {cumulative_revokes / total_sec:,.0f} revoke/s (including shrinks + key validation)")
             print(f"{_THIN}")
-            print(f"  ALL CHECKS PASSED — WALLET RESET TO ZERO")
+            print("  ALL CHECKS PASSED — WALLET RESET TO ZERO")
             print(f"  DB preserved  : {db_path}")
             print(f"{_SEP}\n")

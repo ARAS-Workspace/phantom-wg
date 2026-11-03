@@ -10,10 +10,10 @@ import base64
 
 import pytest
 from starlette.testclient import TestClient
+from wireguard_go_bridge.keys import hex_to_base64
 
 from phantom_daemon.base.env import DaemonEnv
 from phantom_daemon.main import create_app
-from wireguard_go_bridge.keys import hex_to_base64
 
 
 class TestClientEndpoints:

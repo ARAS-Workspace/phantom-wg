@@ -16,7 +16,6 @@ from phantom_daemon.base.errors import BackupError
 from phantom_daemon.base.exit_store import open_exit_store
 from phantom_daemon.base.wallet import open_wallet
 
-
 # ── Helpers ──────────────────────────────────────────────────────
 
 
@@ -134,10 +133,12 @@ class TestImport:
         bad_file = tmp_path / "bad.tar"
         bad_file.write_bytes(b"not a tar file")
 
-        with open_wallet(str(tmp_path)) as w, \
-             open_exit_store(str(tmp_path)) as es:
-            with pytest.raises(BackupError, match="Invalid backup file"):
-                restore_backup_tar(bad_file, w._conn, es._conn)
+        with (
+            open_wallet(str(tmp_path)) as w,
+            open_exit_store(str(tmp_path)) as es,
+            pytest.raises(BackupError, match="Invalid backup file"),
+        ):
+            restore_backup_tar(bad_file, w._conn, es._conn)
 
     def test_missing_db_in_tar(self, tmp_path):
         """Tar with manifest only — missing wallet.db and exit.db."""
@@ -148,10 +149,12 @@ class TestImport:
         with tarfile.open(str(tar_file), "w") as tf:
             tf.add(str(manifest_file), arcname="manifest.json")
 
-        with open_wallet(str(tmp_path)) as w, \
-             open_exit_store(str(tmp_path)) as es:
-            with pytest.raises(BackupError, match="Missing files"):
-                restore_backup_tar(tar_file, w._conn, es._conn)
+        with (
+            open_wallet(str(tmp_path)) as w,
+            open_exit_store(str(tmp_path)) as es,
+            pytest.raises(BackupError, match="Missing files"),
+        ):
+            restore_backup_tar(tar_file, w._conn, es._conn)
 
     def test_unexpected_files_in_tar(self, tmp_path):
         """Tar with extra unexpected file."""
@@ -172,10 +175,12 @@ class TestImport:
             tf.add(str(db_dir / "exit.db"), arcname="exit.db")
             tf.add(str(extra_file), arcname="evil.sh")
 
-        with open_wallet(str(tmp_path)) as w, \
-             open_exit_store(str(tmp_path)) as es:
-            with pytest.raises(BackupError, match="Unexpected files"):
-                restore_backup_tar(tar_file, w._conn, es._conn)
+        with (
+            open_wallet(str(tmp_path)) as w,
+            open_exit_store(str(tmp_path)) as es,
+            pytest.raises(BackupError, match="Unexpected files"),
+        ):
+            restore_backup_tar(tar_file, w._conn, es._conn)
 
     def test_bad_manifest_version(self, tmp_path):
         """Tar with unsupported manifest version."""
@@ -193,10 +198,12 @@ class TestImport:
             tf.add(str(db_dir / "exit.db"), arcname="exit.db")
             tf.add(str(manifest_file), arcname="manifest.json")
 
-        with open_wallet(str(tmp_path)) as w, \
-             open_exit_store(str(tmp_path)) as es:
-            with pytest.raises(BackupError, match="Unsupported backup version"):
-                restore_backup_tar(tar_file, w._conn, es._conn)
+        with (
+            open_wallet(str(tmp_path)) as w,
+            open_exit_store(str(tmp_path)) as es,
+            pytest.raises(BackupError, match="Unsupported backup version"),
+        ):
+            restore_backup_tar(tar_file, w._conn, es._conn)
 
     def test_corrupt_db(self, tmp_path):
         """Tar with corrupt wallet.db → integrity check fails."""
@@ -217,10 +224,12 @@ class TestImport:
             tf.add(str(db_dir / "exit.db"), arcname="exit.db")
             tf.add(str(manifest_file), arcname="manifest.json")
 
-        with open_wallet(str(tmp_path)) as w, \
-             open_exit_store(str(tmp_path)) as es:
-            with pytest.raises(BackupError, match="Integrity check failed"):
-                restore_backup_tar(tar_file, w._conn, es._conn)
+        with (
+            open_wallet(str(tmp_path)) as w,
+            open_exit_store(str(tmp_path)) as es,
+            pytest.raises(BackupError, match="Integrity check failed"),
+        ):
+            restore_backup_tar(tar_file, w._conn, es._conn)
 
     def test_schema_mismatch(self, tmp_path):
         """Tar with wallet.db that has wrong schema → schema check fails."""
@@ -245,10 +254,12 @@ class TestImport:
             tf.add(str(db_dir / "exit.db"), arcname="exit.db")
             tf.add(str(manifest_file), arcname="manifest.json")
 
-        with open_wallet(str(tmp_path)) as w, \
-             open_exit_store(str(tmp_path)) as es:
-            with pytest.raises(BackupError, match="missing table"):
-                restore_backup_tar(tar_file, w._conn, es._conn)
+        with (
+            open_wallet(str(tmp_path)) as w,
+            open_exit_store(str(tmp_path)) as es,
+            pytest.raises(BackupError, match="missing table"),
+        ):
+            restore_backup_tar(tar_file, w._conn, es._conn)
 
 
 # ── Roundtrip ─────────────────────────────────────────────────────

@@ -7,7 +7,6 @@ from pathlib import Path
 import pytest
 
 from phantom_daemon.base.errors import FirewallError
-from phantom_daemon.base.wallet import open_wallet
 from phantom_daemon.base.services.firewall.service import (
     CORE_PRESET_NAME,
     MULTIHOP_PRESET_NAME,
@@ -16,12 +15,12 @@ from phantom_daemon.base.services.firewall.service import (
     _read_core_preset,
     _read_multihop_preset,
     _resolve_core_preset,
+    open_firewall,
     resolve_multihop_preset,
     resolve_multihop_v6_preset,
-    open_firewall,
 )
 from phantom_daemon.base.services.wireguard import WG_INTERFACE_NAME
-
+from phantom_daemon.base.wallet import open_wallet
 
 # ── TestResolvePreset (pure — no FFI) ────────────────────────────
 

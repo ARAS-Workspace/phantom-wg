@@ -5,6 +5,7 @@ from __future__ import annotations
 import hashlib
 import os
 import sqlite3
+from pathlib import Path
 
 import pytest
 
@@ -16,8 +17,6 @@ from phantom_daemon.base.services.wireguard.service import (
     _split_addresses,
     open_wireguard,
 )
-from pathlib import Path
-
 
 # ── WG-specific helpers ──────────────────────────────────────────
 

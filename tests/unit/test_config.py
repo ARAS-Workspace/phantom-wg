@@ -5,7 +5,12 @@ from __future__ import annotations
 import base64
 import re
 
-from wireguard_go_bridge.keys import generate_preshared_key, generate_private_key, derive_public_key, hex_to_base64
+from wireguard_go_bridge.keys import (
+    derive_public_key,
+    generate_preshared_key,
+    generate_private_key,
+    hex_to_base64,
+)
 
 from phantom_daemon.base.services.wireguard.config import build_client_config
 

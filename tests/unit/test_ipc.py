@@ -4,7 +4,10 @@ from __future__ import annotations
 
 from wireguard_go_bridge.keys import derive_public_key, generate_private_key
 
-from phantom_daemon.base.services.wireguard import WG_INTERFACE_NAME, WG_INTERFACE_NAME_EXIT
+from phantom_daemon.base.services.wireguard import (
+    WG_INTERFACE_NAME,
+    WG_INTERFACE_NAME_EXIT,
+)
 from phantom_daemon.base.services.wireguard.ipc import (
     build_exit_config,
     build_full_config,

@@ -7,7 +7,6 @@ import pytest
 from phantom_daemon.base.errors import WalletError
 from phantom_daemon.base.wallet import open_wallet
 
-
 # ── get_dns ─────────────────────────────────────────────────────
 
 
@@ -23,9 +22,11 @@ class TestGetDns:
             assert dns == {"primary": "2620:fe::fe", "secondary": "2620:fe::9"}
 
     def test_get_invalid_family(self, tmp_path):
-        with open_wallet(str(tmp_path)) as w:
-            with pytest.raises(WalletError, match="Unknown DNS family"):
-                w.get_dns("v8")
+        with (
+            open_wallet(str(tmp_path)) as w,
+            pytest.raises(WalletError, match="Unknown DNS family"),
+        ):
+            w.get_dns("v8")
 
 
 # ── change_dns ──────────────────────────────────────────────────
@@ -62,19 +63,25 @@ class TestChangeDns:
             assert dns == {"primary": "9.9.9.9", "secondary": "149.112.112.112"}
 
     def test_invalid_v4_address(self, tmp_path):
-        with open_wallet(str(tmp_path)) as w:
-            with pytest.raises(WalletError, match="Invalid IPv4 address"):
-                w.change_dns("v4", "999.1.1.1", "8.8.4.4")
+        with (
+            open_wallet(str(tmp_path)) as w,
+            pytest.raises(WalletError, match="Invalid IPv4 address"),
+        ):
+            w.change_dns("v4", "999.1.1.1", "8.8.4.4")
 
     def test_invalid_v6_address(self, tmp_path):
-        with open_wallet(str(tmp_path)) as w:
-            with pytest.raises(WalletError, match="Invalid IPv6 address"):
-                w.change_dns("v6", "not::valid::ipv6::addr::x", "2620:fe::9")
+        with (
+            open_wallet(str(tmp_path)) as w,
+            pytest.raises(WalletError, match="Invalid IPv6 address"),
+        ):
+            w.change_dns("v6", "not::valid::ipv6::addr::x", "2620:fe::9")
 
     def test_invalid_family(self, tmp_path):
-        with open_wallet(str(tmp_path)) as w:
-            with pytest.raises(WalletError, match="Unknown DNS family"):
-                w.change_dns("v8", "1.1.1.1", "1.0.0.1")
+        with (
+            open_wallet(str(tmp_path)) as w,
+            pytest.raises(WalletError, match="Unknown DNS family"),
+        ):
+            w.change_dns("v8", "1.1.1.1", "1.0.0.1")
 
     def test_change_v4_then_v6(self, tmp_path):
         with open_wallet(str(tmp_path)) as w:
