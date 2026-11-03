@@ -19,9 +19,8 @@ permissions:
   actions: read
 
 env:
-  # Docker CE from download.docker.com, the same versions on every guest
-  # (bullseye's repository ends at docker-ce 29.8.0); each matrix entry
-  # gives the suffix its repository adds.
+  # Docker CE from download.docker.com, the same versions on every guest;
+  # each matrix entry gives the suffix its repository adds.
   DOCKER_CE: '5:29.8.0-1'
   CONTAINERD_IO: '2.3.4-2'
   BUILDX: '0.37.0-1'
@@ -32,14 +31,14 @@ jobs:
   kernel:
     name: Kernel ${{ matrix.name }}
     # The self-hosted bare-metal runners with KVM, labeled kvm: four runner
-    # instances on one host, one kernel each, at the same time.
+    # instances on one host, so the kernels run at the same time.
     runs-on: [self-hosted, linux, x64, kvm]
     timeout-minutes: 130
     strategy:
       fail-fast: false
       matrix:
         # The first kernel of each release: Ubuntu 22.04's, the lowest of the
-        # support matrix, and Debian 11's (below it), 12's and 13's.
+        # support matrix, and Debian 12's and 13's.
         include:
           - name: Ubuntu 22.04 GA (5.15)
             image: https://cloud-images.ubuntu.com/releases/jammy/release-20220420/ubuntu-22.04-server-cloudimg-amd64.img
@@ -49,14 +48,6 @@ jobs:
             docker_os: ubuntu
             docker_codename: jammy
             docker_suffix: '~ubuntu.22.04~jammy'
-          - name: Debian 11.0 (5.10)
-            image: https://cloud.debian.org/images/cloud/bullseye/20210814-734/debian-11-generic-amd64-20210814-734.qcow2
-            digest_tool: sha512sum
-            digest: ed680265ce925e3e02336b052bb476883e2d3b023f7b7d39d064d58ba5f1856869f75dca637c27c0303b731d082ff23a7e45ea2e3f9bcb8f3c4ce0c24332885d
-            kernel: 5.10.0-8-amd64
-            docker_os: debian
-            docker_codename: bullseye
-            docker_suffix: '~debian.11~bullseye'
           - name: Debian 12.0 (6.1)
             image: https://cloud.debian.org/images/cloud/bookworm/20230612-1409/debian-12-generic-amd64-20230612-1409.qcow2
             digest_tool: sha512sum
