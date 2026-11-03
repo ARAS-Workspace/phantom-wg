@@ -24,8 +24,7 @@
 #   5. Create Python virtual environment (.phantom-venv)
 #   6. Install Python dependencies
 #   7. Create global command (frontmatter-api)
-#   8. Install systemd service templates
-#   9. Verify installation and print next steps
+#   8. Verify installation and print next steps
 
 set -euo pipefail
 
