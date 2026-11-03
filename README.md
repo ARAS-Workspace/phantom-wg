@@ -43,6 +43,7 @@ Releases are listed at [https://github.com/ARAS-Workspace/phantom-wg/releases](h
 ## Requirements
 
 - glibc 2.39 or later
+- A Linux kernel: 5.15, 6.1 and 6.12 are tested, see [Kernel Compatibility](#kernel-compatibility)
 - The `nft` program from the `nftables` package (`/usr/sbin/nft`)
 - `CAP_NET_ADMIN` that child processes inherit
 - `SIGCHLD` left at its default disposition
@@ -50,7 +51,9 @@ Releases are listed at [https://github.com/ARAS-Workspace/phantom-wg/releases](h
 
 **glibc.** The release `.so` is built in the `rust:<version>-trixie` image (glibc 2.41) and
 requires `GLIBC_2.39`. Systems with an older glibc, such as Debian bookworm (glibc 2.36),
-therefore cannot load the library.
+therefore cannot load the library. This is the glibc of the system or container that loads the
+library, for example the daemon's container; the kernel is the host's. In the kernel matrix
+below, the library runs in Debian trixie containers on Ubuntu 22.04 and Debian 12 hosts.
 
 **The nft program.** By default the bridge applies nftables rules through `/usr/sbin/nft`. If
 the program is elsewhere, its location is given in the `FIREWALL_BRIDGE_NFT_PATH` environment
@@ -71,6 +74,50 @@ the call then returns an error even though the command was applied.
 **/etc/iproute2.** The bridge writes routing table names to `/etc/iproute2/rt_tables`. If the
 file does not exist, it is created as a copy of `/usr/share/iproute2/rt_tables` before the
 bridge's table names are added.
+
+## Kernel Compatibility
+
+The bridge works with the running kernel through nft and a netlink socket: the kernel is always
+the host's, while glibc and nft are those of the system or container that loads the library.
+[`kernel-matrix-firewall-bridge.yml`](.github/workflows/kernel-matrix-firewall-bridge.yml) boots
+each release in the table under KVM, from its first cloud image with that image's kernel, and
+runs the steps of the test workflow in it: the Rust tests in the dev container, the Python unit
+tests and the three E2E stages (topology, rules, rules-caps). On every host the containers are
+Debian trixie (`rust:1.99.1-trixie`, `debian:trixie-slim`) with nftables 1.1.3, and Docker CE is
+29.8.0. The workflow runs on each push to `dev/firewall-bridge`.
+
+| Host                  | Kernel                | Rust tests          | Python unit tests | E2E stages    | Status        |
+|-----------------------|-----------------------|---------------------|-------------------|---------------|---------------|
+| Ubuntu 22.04 (GA)     | `5.15.0-25-generic`   | 84 passed           | 312 passed        | 3 of 3 passed | in the matrix |
+| Debian 12.0           | `6.1.0-9-amd64`       | 84 passed           | 312 passed        | 3 of 3 passed | in the matrix |
+| Debian 13.0           | `6.12.38+deb13-amd64` | 84 passed           | 312 passed        | 3 of 3 passed | in the matrix |
+| Debian 11.0           | `5.10.0-8-amd64`      | 82 passed, 2 failed | 312 passed        | not run       | removed       |
+
+The first three rows are run
+[41551902856](https://github.com/ARAS-Workspace/phantom-wg/actions/runs/41551902856) at
+`aae7d5cb` (2026-11-03); its summary lists each guest's kernel, the exit code and seconds of each
+step, and the test results. The Debian 11 row is run
+[41542386316](https://github.com/ARAS-Workspace/phantom-wg/actions/runs/41542386316) at
+`6346d1b8` (2026-11-02).
+
+**Tested kernels.** Each release is tested with the kernel of its first image, and 5.15 is the
+lowest kernel in the matrix. Later kernels of these releases, such as Ubuntu 22.04's HWE kernels,
+and kernels between and after the three above are not in the matrix.
+
+**nft's messages depend on the kernel.** When the kernel refuses a chain that exists with another
+declaration, the same nft 1.1.3 reports `Error: Chain "output" already exists ...` on 6.12 and
+`Error: Could not process rule: File exists` on 5.10, 5.15 and 6.1. The bridge returns nft's
+message as its error text, so a caller sees either one.
+
+**Debian 11 (5.10), removed from the matrix.** In run 41542386316:
+
+- `kernel_nft_builds_what_nft_builds_from_text` failed: on 5.10, nft's `--echo --json --handle`
+  output for an added rule has no handle. The test takes its reference rule from that output; the
+  bridge's own call for the same rule returned a handle.
+- `kernel_nft_ensure_table_is_all_or_nothing` failed on the message above. Since `d4d4622e` the
+  test accepts it; its other checks have not run on 5.10.
+- The E2E stages did not run: the E2E runner on the host needs Python 3.10 (compose-bridge uses
+  `dataclass(slots=True)`), and Debian 11 has Python 3.9.
 
 ## Architecture
 

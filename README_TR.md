@@ -44,6 +44,7 @@ Release'ler [https://github.com/ARAS-Workspace/phantom-wg/releases](https://gith
 ## Gereksinimler
 
 - glibc 2.39 veya daha yeni bir sürüm
+- Bir Linux çekirdeği: 5.15, 6.1 ve 6.12 test edilir, bkz. [Çekirdek Uyumluluğu](#çekirdek-uyumluluğu)
 - `nftables` paketindeki `nft` programı (`/usr/sbin/nft`)
 - Alt süreçlere aktarılabilen `CAP_NET_ADMIN` yetkisi
 - Varsayılan davranışında bırakılmış `SIGCHLD` sinyali
@@ -51,7 +52,10 @@ Release'ler [https://github.com/ARAS-Workspace/phantom-wg/releases](https://gith
 
 **glibc.** Yayınlanan `.so` dosyası `rust:<sürüm>-trixie` imajında (glibc 2.41) derlenir ve
 `GLIBC_2.39` sürümünü gerektirir. Bu nedenle daha eski bir glibc'ye sahip sistemler, örneğin
-Debian bookworm (glibc 2.36), kütüphaneyi yükleyemez.
+Debian bookworm (glibc 2.36), kütüphaneyi yükleyemez. Buradaki glibc, kütüphaneyi yükleyen
+sistemin ya da konteynerin glibc'sidir, örneğin daemon konteynerinin; çekirdek ise ana makinenin
+çekirdeğidir. Aşağıdaki çekirdek matrisinde kütüphane, Ubuntu 22.04 ve Debian 12 ana
+makinelerinde Debian trixie konteynerlerinde çalışır.
 
 **nft programı.** Köprü, nftables kurallarını varsayılan olarak `/usr/sbin/nft` programıyla
 uygular. Program başka bir konumdaysa bu konum `FIREWALL_BRIDGE_NFT_PATH` ortam değişkeniyle
@@ -73,6 +77,50 @@ süreci kendisi toplar; bu durumda komut uygulanmış olsa bile çağrı hata d�
 **/etc/iproute2.** Köprü, yönlendirme tablolarının adlarını `/etc/iproute2/rt_tables` dosyasına
 yazar. Dosya yoksa, köprünün tablo adları eklenmeden önce `/usr/share/iproute2/rt_tables`
 dosyasının bir kopyası olarak oluşturulur.
+
+## Çekirdek Uyumluluğu
+
+Köprü, çalışan çekirdekle nft ve bir netlink soketi üzerinden çalışır: çekirdek her zaman ana
+makinenindir, glibc ve nft ise kütüphaneyi yükleyen sistemin ya da konteynerindir.
+[`kernel-matrix-firewall-bridge.yml`](.github/workflows/kernel-matrix-firewall-bridge.yml)
+tablodaki her sürümü KVM altında, ilk bulut imajından ve o imajın çekirdeğiyle açar ve test
+workflow'unun adımlarını içinde koşturur: dev konteynerinde Rust testleri, Python unit testleri ve
+üç E2E aşaması (topology, rules, rules-caps). Her ana makinede konteynerler nftables 1.1.3 ile
+Debian trixie'dir (`rust:1.99.1-trixie`, `debian:trixie-slim`), Docker CE ise 29.8.0'dır.
+Workflow, `dev/firewall-bridge` dalına yapılan her push'ta çalışır.
+
+| Ana makine            | Çekirdek              | Rust testleri       | Python unit testleri | E2E aşamaları | Durum         |
+|-----------------------|-----------------------|---------------------|----------------------|---------------|---------------|
+| Ubuntu 22.04 (GA)     | `5.15.0-25-generic`   | 84 geçti            | 312 geçti            | 3/3 geçti     | matriste      |
+| Debian 12.0           | `6.1.0-9-amd64`       | 84 geçti            | 312 geçti            | 3/3 geçti     | matriste      |
+| Debian 13.0           | `6.12.38+deb13-amd64` | 84 geçti            | 312 geçti            | 3/3 geçti     | matriste      |
+| Debian 11.0           | `5.10.0-8-amd64`      | 82 geçti, 2 düştü   | 312 geçti            | koşmadı       | çıkarıldı     |
+
+İlk üç satır, `aae7d5cb` üzerindeki
+[41551902856](https://github.com/ARAS-Workspace/phantom-wg/actions/runs/41551902856) koşusudur
+(2026-11-03); koşunun özeti her konuğun çekirdeğini, her adımın çıkış kodunu ve süresini ve test
+sonuçlarını listeler. Debian 11 satırı, `6346d1b8` üzerindeki
+[41542386316](https://github.com/ARAS-Workspace/phantom-wg/actions/runs/41542386316) koşusudur
+(2026-11-02).
+
+**Test edilen çekirdekler.** Her sürüm ilk imajının çekirdeğiyle test edilir ve matristeki en
+düşük çekirdek 5.15'tir. Bu sürümlerin sonraki çekirdekleri, örneğin Ubuntu 22.04'ün HWE
+çekirdekleri, ve yukarıdaki üç çekirdeğin arasındaki ve sonrasındaki çekirdekler matriste yoktur.
+
+**nft'nin iletileri çekirdeğe bağlıdır.** Çekirdek, başka bir tanımla zaten var olan bir zinciri
+reddettiğinde aynı nft 1.1.3, 6.12'de `Error: Chain "output" already exists ...`, 5.10, 5.15 ve
+6.1'de `Error: Could not process rule: File exists` iletisini verir. Köprü nft'nin iletisini hata
+metni olarak döndürür; bu nedenle çağıran taraf ikisinden birini görür.
+
+**Debian 11 (5.10), matristen çıkarıldı.** 41542386316 koşusunda:
+
+- `kernel_nft_builds_what_nft_builds_from_text` düştü: 5.10'da nft'nin eklenen bir kural için
+  `--echo --json --handle` çıktısında handle yoktur. Test referans kuralını bu çıktıdan alır;
+  köprünün aynı kural için yaptığı çağrı bir handle döndürdü.
+- `kernel_nft_ensure_table_is_all_or_nothing` yukarıdaki ileti yüzünden düştü. `d4d4622e`'den
+  bu yana test bu iletiyi kabul eder; testin diğer denetimleri 5.10'da koşmadı.
+- E2E aşamaları koşmadı: ana makinedeki E2E runner Python 3.10 gerektirir (compose-bridge
+  `dataclass(slots=True)` kullanır), Debian 11'de ise Python 3.9 vardır.
 
 ## Mimari
 
