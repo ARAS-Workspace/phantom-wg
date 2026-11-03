@@ -31,14 +31,14 @@ func (r *HandleRegistry) Get(handle int64) (interface{}, bool) {
 	return obj, ok
 }
 
-func (r *HandleRegistry) Remove(handle int64) bool {
+// Take removes the object of handle and returns it; of two calls for one
+// handle, one gets the object.
+func (r *HandleRegistry) Take(handle int64) (interface{}, bool) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	if _, ok := r.objects[handle]; ok {
-		delete(r.objects, handle)
-		return true
-	}
-	return false
+	obj, ok := r.objects[handle]
+	delete(r.objects, handle)
+	return obj, ok
 }
 
 func (r *HandleRegistry) Count() int {

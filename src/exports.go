@@ -117,17 +117,19 @@ func DeviceDown(handle C.int64_t) C.int32_t {
 	}))
 }
 
+// DeviceClose takes the device out of the registry before it closes it:
+// of two calls for one handle, one closes the device and the other
+// finds no device.
+//
 //export DeviceClose
 func DeviceClose(handle C.int64_t) C.int32_t {
 	h := int64(handle)
 	return C.int32_t(callGuardedCode("DeviceClose", func() int32 {
-		obj, ok := deviceRegistry.Get(h)
+		obj, ok := deviceRegistry.Take(h)
 		if !ok {
 			return int32(C.WG_ERR_NOT_FOUND)
 		}
-		pd := obj.(*persistentDevice)
-		pd.close()
-		deviceRegistry.Remove(h)
+		obj.(*persistentDevice).close()
 		return int32(C.WG_OK)
 	}))
 }
