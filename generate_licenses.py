@@ -36,9 +36,9 @@ REQUIREMENTS = "requirements.txt"
 TARGET = "THIRD_PARTY_LICENSES"
 RULE = "=" * 80
 
-# Dockerfile pins python:3.12.13-slim-trixie; the inventory is resolved for the
-# same minor version.
-PYTHON = "3.12"
+# The Dockerfile installs Debian trixie's python3, 3.13; the inventory is
+# resolved for the same minor version.
+PYTHON = "3.13"
 
 # pip-licenses is pinned so the report does not move with the host's tooling.
 TOOL = "pip-licenses==5.5.5"
@@ -165,19 +165,19 @@ HEADER = textwrap.dedent("""\
 
 BUNDLED = textwrap.dedent("""\
     Eight of the distributions ship a compiled extension, nine modules in all.
-    Measured on the manylinux x86_64 wheels, every one of them lists only
-    glibc and GCC runtime libraries in DT_NEEDED (libc, libpthread, librt,
-    libdl, libgcc_s and the loader), with no DT_RPATH and no DT_RUNPATH, so
-    whatever C or Rust each was built from is linked into the extension
-    rather than loaded from the image.
+    Measured on the manylinux x86_64 wheels pip installs on Python 3.13, every
+    one of them lists only glibc and GCC runtime libraries in DT_NEEDED (libc,
+    libpthread, librt, libdl, libgcc_s and the loader), with no DT_RPATH and
+    no DT_RUNPATH, so whatever C or Rust each was built from is linked into
+    the extension rather than loaded from the image.
 
     | Package       | Modules | Size      | Links in  | Licence in the wheel |
     |---------------|---------|-----------|-----------|----------------------|
-    | uvloop        |       1 | 15578 KiB | libuv     | no                   |
-    | PyNaCl        |       1 |  5189 KiB | libsodium | yes, ISC             |
-    | pydantic_core |       1 |  4769 KiB | Rust      | no                   |
-    | PyYAML        |       1 |  2616 KiB | libyaml   | no                   |
-    | httptools     |       2 |  1706 KiB | llhttp    | no                   |
+    | uvloop        |       1 | 15374 KiB | libuv     | no                   |
+    | pydantic_core |       1 |  4768 KiB | Rust      | no                   |
+    | PyNaCl        |       1 |  3627 KiB | libsodium | yes, ISC             |
+    | PyYAML        |       1 |  2590 KiB | libyaml   | no                   |
+    | httptools     |       2 |  1534 KiB | llhttp    | no                   |
     | watchfiles    |       1 |  1097 KiB | Rust      | no                   |
     | cffi          |       1 |   340 KiB | libffi    | no                   |
     | websockets    |       1 |    37 KiB | —         | —                    |
@@ -194,22 +194,24 @@ BUNDLED = textwrap.dedent("""\
 
 
 SYSTEM = textwrap.dedent("""\
-    Resolved from the base image rather than from a wheel, so pip-licenses
-    does not see them.
+    Installed from Debian rather than from a wheel, so pip-licenses does not
+    see them.
 
     | Component                      | License          | SPDX Identifier |
     |--------------------------------|------------------|-----------------|
-    | python:3.12.13-slim-trixie     | PSF-2.0 + Debian | PSF-2.0         |
+    | debian:trixie-20261027-slim    | Debian           | —               |
+    | python3.13 (Debian package)    | PSF-2.0          | PSF-2.0         |
 
-    The image installs no system library of its own. PyNaCl's manylinux wheel
-    has libsodium compiled in and declares only glibc's own libraries and the
-    loader among its needed objects, so cryptographic operations are served by
-    the bundled copy; its ISC licence travels in the wheel and is listed under
-    BUNDLED NATIVE CODE.
+    Apart from the Debian packages named here, the image installs no system
+    library. PyNaCl's manylinux wheel has libsodium compiled in and declares
+    only glibc's own libraries and the loader among its needed objects, so
+    cryptographic operations are served by the bundled copy; its ISC licence
+    travels in the wheel and is listed under BUNDLED NATIVE CODE.
 
-    CPython itself is PSF-2.0 and arrives with the base image; the Debian
-    packages underneath it carry their own licences, which Debian keeps
-    inside the image as /usr/share/doc/<package>/copyright.
+    CPython is Debian's python3.13 package, PSF-2.0, installed with
+    ca-certificates, netbase and tzdata; these and the other Debian packages
+    in the image carry their own licences, which Debian keeps inside the
+    image as /usr/share/doc/<package>/copyright.
     """)
 
 
