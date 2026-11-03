@@ -6,17 +6,17 @@ import "sync"
 // referenced by integer handles across the FFI boundary.
 type HandleRegistry struct {
 	mu      sync.RWMutex
-	objects map[int64]interface{}
+	objects map[int64]any
 	seq     int64
 }
 
 func NewHandleRegistry() *HandleRegistry {
 	return &HandleRegistry{
-		objects: make(map[int64]interface{}),
+		objects: make(map[int64]any),
 	}
 }
 
-func (r *HandleRegistry) Add(obj interface{}) int64 {
+func (r *HandleRegistry) Add(obj any) int64 {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	r.seq++
@@ -24,7 +24,7 @@ func (r *HandleRegistry) Add(obj interface{}) int64 {
 	return r.seq
 }
 
-func (r *HandleRegistry) Get(handle int64) (interface{}, bool) {
+func (r *HandleRegistry) Get(handle int64) (any, bool) {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 	obj, ok := r.objects[handle]
@@ -33,7 +33,7 @@ func (r *HandleRegistry) Get(handle int64) (interface{}, bool) {
 
 // Take removes the object of handle and returns it; of two calls for one
 // handle, one gets the object.
-func (r *HandleRegistry) Take(handle int64) (interface{}, bool) {
+func (r *HandleRegistry) Take(handle int64) (any, bool) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	obj, ok := r.objects[handle]

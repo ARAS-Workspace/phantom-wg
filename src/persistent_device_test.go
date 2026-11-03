@@ -131,3 +131,17 @@ func TestCloseWaitsForIpcSet(t *testing.T) {
 	}
 	<-closed
 }
+
+func TestFilterIpcDumpDropsTheReadOnlyFields(t *testing.T) {
+	// An IpcGet dump with one peer: the read-only fields go, the other
+	// lines stay in their order, and every line ends with a newline,
+	// the empty one after the dump's last newline too.
+	dump := "private_key=aa\nlisten_port=51820\npublic_key=bb\npreshared_key=cc\n" +
+		"protocol_version=1\nlast_handshake_time_sec=1700000000\nlast_handshake_time_nsec=5\n" +
+		"tx_bytes=20\nrx_bytes=10\npersistent_keepalive_interval=25\nallowed_ip=10.8.0.2/32\n"
+	want := "private_key=aa\nlisten_port=51820\npublic_key=bb\npreshared_key=cc\n" +
+		"persistent_keepalive_interval=25\nallowed_ip=10.8.0.2/32\n\n"
+	if got := filterIpcDump(dump); got != want {
+		t.Fatalf("got %q, want %q", got, want)
+	}
+}

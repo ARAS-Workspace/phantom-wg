@@ -132,7 +132,7 @@ func (pd *persistentDevice) persist() error {
 // so the dump can be fed back into IpcSet without errors.
 func filterIpcDump(dump string) string {
 	var result []byte
-	for _, line := range strings.Split(dump, "\n") {
+	for line := range strings.SplitSeq(dump, "\n") {
 		if strings.HasPrefix(line, "last_handshake_time_sec=") ||
 			strings.HasPrefix(line, "last_handshake_time_nsec=") ||
 			strings.HasPrefix(line, "rx_bytes=") ||
