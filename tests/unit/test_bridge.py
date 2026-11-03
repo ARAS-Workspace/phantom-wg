@@ -24,7 +24,16 @@ from wireguard_go_bridge.types import (
     DeviceUpError,
     DeviceDownError,
     DeviceNotFoundError,
+    TunCreateError,
 )
+
+
+@pytest.fixture(autouse=True)
+def recorded():
+    """The bridge's record of the last call, (code, message); no record
+    unless a test sets one."""
+    with patch("wireguard_go_bridge.bridge.last_error", return_value=(0, "")) as last_error:
+        yield last_error
 
 
 @pytest.fixture
@@ -61,6 +70,18 @@ class TestInit:
             with pytest.raises(DeviceCreateError):
                 WireGuardBridge(ifname="wg0", mtu=1420, db_path=str(db_file))
 
+    def test_tun_failure_is_a_device_create_error(self, mock_lib, recorded, tmp_path):
+        db_file = tmp_path / "device.db"
+        db_file.touch()
+        mock_lib.NewPersistentDevice.return_value = -2
+        recorded.return_value = (-2, "create tun: interface name too long")
+        with patch("wireguard_go_bridge.bridge.get_lib", return_value=mock_lib):
+            with pytest.raises(DeviceCreateError) as exc:
+                WireGuardBridge(ifname="x" * 20, mtu=1420, db_path=str(db_file))
+        assert type(exc.value) is TunCreateError
+        assert str(exc.value) == "create tun: interface name too long"
+        assert exc.value.code == -2
+
     def test_successful_init(self, bridge, mock_lib):
         assert bridge.handle == 1
         mock_lib.NewPersistentDevice.assert_called_once()
@@ -76,16 +97,34 @@ class TestIpcSet:
         with pytest.raises(IpcError):
             bridge.ipc_set("invalid")
 
+    def test_failure_carries_the_recorded_message(self, bridge, mock_lib, recorded):
+        mock_lib.DeviceIpcSet.return_value = -4
+        recorded.return_value = (-4, "config applied, state not persisted: disk full")
+        with pytest.raises(IpcError) as exc:
+            bridge.ipc_set("listen_port=51820\n")
+        assert str(exc.value) == "config applied, state not persisted: disk full"
+        assert exc.value.code == -4
+
 
 class TestIpcGet:
-    def test_returns_string(self, bridge, mock_lib):
-        mock_lib.DeviceIpcGet.return_value = None
-        result = bridge.ipc_get()
-        assert result == ""
-
-    def test_delegates_to_ffi(self, bridge, mock_lib):
-        bridge.ipc_get()
+    def test_returns_the_dump(self, bridge, mock_lib):
+        mock_lib.DeviceIpcGet.return_value = 0xDEAD
+        with patch("wireguard_go_bridge.bridge._read_and_free",
+                   return_value="listen_port=51820\n") as read:
+            assert bridge.ipc_get() == "listen_port=51820\n"
+        read.assert_called_once_with(0xDEAD)
         mock_lib.DeviceIpcGet.assert_called_once_with(1)
+
+    def test_null_raises_the_recorded_error(self, bridge, mock_lib, recorded):
+        mock_lib.DeviceIpcGet.return_value = None
+        recorded.return_value = (-5, "device handle 1 not found")
+        with pytest.raises(DeviceNotFoundError, match="device handle 1 not found"):
+            bridge.ipc_get()
+
+    def test_null_with_no_record_raises_ipc_error(self, bridge, mock_lib):
+        mock_lib.DeviceIpcGet.return_value = None
+        with pytest.raises(IpcError, match="no error recorded"):
+            bridge.ipc_get()
 
 
 class TestUpDown:
@@ -126,6 +165,11 @@ class TestClose:
         mock_lib.DeviceClose.return_value = -5
         with pytest.raises(DeviceNotFoundError):
             bridge.close()
+        # The handle stays until a close succeeds.
+        assert bridge.handle == 1
+        mock_lib.DeviceClose.return_value = 0
+        bridge.close()
+        assert bridge.handle == 0
 
 
 class TestContextManager:

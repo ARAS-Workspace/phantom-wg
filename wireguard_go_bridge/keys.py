@@ -10,43 +10,57 @@ Copyright (c) 2025 Rıza Emre ARAS <r.emrearas@proton.me>
 Licensed under AGPL-3.0 - see LICENSE file for details
 WireGuard® is a registered trademark of Jason A. Donenfeld.
 
-Curve25519 key generation via Go FFI.
+Curve25519 key generation via Go FFI. A failure raises RuntimeError for a
+key that could not be generated and ValueError for an argument the bridge
+refused, InvalidArgumentError when the bridge reported it, with the
+bridge's message.
 """
 
-from ._ffi import get_lib, _read_and_free
+from ._ffi import get_lib, _read_and_free, last_error
+from .types import InvalidArgumentError, _ERROR_MAP
+
+
+def _failure(lib, what: str, exc_type: type[Exception]) -> Exception:
+    """The exception for a failed call: what, then the message the bridge
+    recorded for this thread's call."""
+    code, message = last_error(lib)
+    text = f"{what}: {message}" if message else what
+    if _ERROR_MAP.get(code) is InvalidArgumentError:
+        return InvalidArgumentError(text, code)
+    return exc_type(text)
 
 
 def generate_private_key() -> str:
     """Generate a new Curve25519 private key. Returns hex string."""
-    result = _read_and_free(get_lib().GeneratePrivateKey())
+    lib = get_lib()
+    result = _read_and_free(lib.GeneratePrivateKey())
     if not result:
-        raise RuntimeError("Failed to generate private key")
+        raise _failure(lib, "Failed to generate private key", RuntimeError)
     return result
 
 
 def derive_public_key(private_key_hex: str) -> str:
     """Derive public key from private key. Returns hex string."""
-    result = _read_and_free(
-        get_lib().DerivePublicKey(private_key_hex.encode("utf-8"))
-    )
+    lib = get_lib()
+    result = _read_and_free(lib.DerivePublicKey(private_key_hex.encode("utf-8")))
     if not result:
-        raise ValueError("Failed to derive public key")
+        raise _failure(lib, "Failed to derive public key", ValueError)
     return result
 
 
 def generate_preshared_key() -> str:
     """Generate a random 32-byte preshared key. Returns hex string."""
-    result = _read_and_free(get_lib().GeneratePresharedKey())
+    lib = get_lib()
+    result = _read_and_free(lib.GeneratePresharedKey())
     if not result:
-        raise RuntimeError("Failed to generate preshared key")
+        raise _failure(lib, "Failed to generate preshared key", RuntimeError)
     return result
 
 
 def hex_to_base64(hex_str: str) -> str:
     """Convert hex-encoded key to base64 (WireGuard config format)."""
-    result = _read_and_free(
-        get_lib().HexToBase64(hex_str.encode("utf-8"))
-    )
+    lib = get_lib()
+    result = _read_and_free(lib.HexToBase64(hex_str.encode("utf-8")))
     if not result:
-        raise ValueError("Failed to convert hex to base64")
+        raise _failure(lib, "Failed to convert hex to base64", ValueError)
     return result

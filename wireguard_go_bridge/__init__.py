@@ -24,6 +24,7 @@ from .types import (
     DeviceNotFoundError,
     DeviceUpError,
     DeviceDownError,
+    InvalidArgumentError,
 )
 from ._ffi import get_lib, get_bridge_version
 from .bridge import WireGuardBridge
@@ -43,6 +44,7 @@ __all__ = [
     "DeviceNotFoundError",
     "DeviceUpError",
     "DeviceDownError",
+    "InvalidArgumentError",
     "get_lib",
     "get_bridge_version",
     "generate_private_key",

@@ -32,8 +32,8 @@ import os
 from types import TracebackType
 from typing import Optional, Type
 
-from ._ffi import get_lib, _read_and_free
-from .types import BridgeError, DeviceCreateError, check_result
+from ._ffi import get_lib, _read_and_free, last_error
+from .types import BridgeError, IpcError, check_result
 
 
 class WireGuardBridge:
@@ -56,29 +56,40 @@ class WireGuardBridge:
             mtu,
             db_path.encode("utf-8"),
         )
-        if self._handle < 0:
-            raise DeviceCreateError(f"NewPersistentDevice failed: {self._handle}")
+        self._check(self._handle)
+
+    def _check(self, code: int) -> None:
+        """Raise the exception of a negative code, with the message the
+        bridge recorded for this thread's call."""
+        if code < 0:
+            check_result(code, last_error(self._lib)[1])
 
     def ipc_set(self, config: str) -> None:
         """Apply IPC config. Automatically persists full state to DB."""
-        check_result(self._lib.DeviceIpcSet(self._handle, config.encode("utf-8")))
+        self._check(self._lib.DeviceIpcSet(self._handle, config.encode("utf-8")))
 
     def ipc_get(self) -> str:
         """Read current device state in IPC format."""
-        return _read_and_free(self._lib.DeviceIpcGet(self._handle))
+        ptr = self._lib.DeviceIpcGet(self._handle)
+        if not ptr:
+            code, message = last_error(self._lib)
+            if code >= 0:
+                raise IpcError("DeviceIpcGet returned NULL with no error recorded")
+            check_result(code, message)
+        return _read_and_free(ptr)
 
     def up(self) -> None:
         """Activate the device (bring interface up)."""
-        check_result(self._lib.DeviceUp(self._handle))
+        self._check(self._lib.DeviceUp(self._handle))
 
     def down(self) -> None:
         """Deactivate the device (bring interface down)."""
-        check_result(self._lib.DeviceDown(self._handle))
+        self._check(self._lib.DeviceDown(self._handle))
 
     def close(self) -> None:
         """Close device and state DB. Handle becomes invalid."""
         if self._handle > 0:
-            check_result(self._lib.DeviceClose(self._handle))
+            self._check(self._lib.DeviceClose(self._handle))
             self._handle = 0
 
     def __enter__(self) -> WireGuardBridge:

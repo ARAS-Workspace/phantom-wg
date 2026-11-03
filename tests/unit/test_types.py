@@ -23,6 +23,7 @@ from wireguard_go_bridge.types import (
     DeviceNotFoundError,
     DeviceUpError,
     DeviceDownError,
+    InvalidArgumentError,
     check_result,
 )
 
@@ -30,8 +31,15 @@ from wireguard_go_bridge.types import (
 class TestExceptionHierarchy:
     def test_all_inherit_from_bridge_error(self):
         for cls in (TunCreateError, DeviceCreateError, IpcError,
-                    DeviceNotFoundError, DeviceUpError, DeviceDownError):
+                    DeviceNotFoundError, DeviceUpError, DeviceDownError,
+                    InvalidArgumentError):
             assert issubclass(cls, BridgeError)
+
+    def test_tun_create_is_a_device_create_error(self):
+        assert issubclass(TunCreateError, DeviceCreateError)
+
+    def test_invalid_argument_is_a_value_error(self):
+        assert issubclass(InvalidArgumentError, ValueError)
 
     def test_bridge_error_is_exception(self):
         assert issubclass(BridgeError, Exception)
@@ -81,9 +89,24 @@ class TestCheckResult:
         with pytest.raises(DeviceDownError):
             check_result(-8)
 
+    def test_invalid_argument(self):
+        with pytest.raises(InvalidArgumentError):
+            check_result(-10)
+
     def test_internal(self):
         with pytest.raises(BridgeError):
             check_result(-99)
+
+    def test_message_and_code(self):
+        with pytest.raises(IpcError) as exc:
+            check_result(-4, "config applied, state not persisted: disk full")
+        assert str(exc.value) == "config applied, state not persisted: disk full"
+        assert exc.value.code == -4
+
+    def test_no_message_names_the_code(self):
+        with pytest.raises(DeviceUpError, match="FFI error code: -7") as exc:
+            check_result(-7)
+        assert exc.value.code == -7
 
     def test_unknown_code_raises_base(self):
         with pytest.raises(BridgeError, match="FFI error code: -42"):

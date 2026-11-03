@@ -10,7 +10,7 @@ Copyright (c) 2025 Rıza Emre ARAS <r.emrearas@proton.me>
 Licensed under AGPL-3.0 - see LICENSE file for details
 WireGuard® is a registered trademark of Jason A. Donenfeld.
 
-Low-level ctypes bindings to wireguard_go_bridge.so (v2.1.0 API).
+Low-level ctypes bindings to wireguard_go_bridge.so.
 PersistentDevice + Key generation + utility only.
 """
 
@@ -73,7 +73,7 @@ def get_lib() -> ctypes.CDLL:
 
 
 def _setup_signatures(lib: ctypes.CDLL) -> None:
-    """Define C function signatures for v2.1.0 API."""
+    """Define the C function signatures."""
 
     c_p = ctypes.c_char_p
     c_vp = ctypes.c_void_p
@@ -122,6 +122,9 @@ def _setup_signatures(lib: ctypes.CDLL) -> None:
     lib.FreeString.argtypes = [c_p]
     lib.FreeString.restype = None
 
+    lib.LastError.argtypes = [ctypes.POINTER(c_i32)]
+    lib.LastError.restype = c_vp
+
 
 def _read_and_free(ptr) -> str:
     """Read a Go-allocated C string and free it."""
@@ -135,3 +138,17 @@ def _read_and_free(ptr) -> str:
 
 def get_bridge_version() -> str:
     return _read_and_free(get_lib().BridgeVersion()) or "unknown"
+
+
+def last_error(lib: ctypes.CDLL) -> tuple[int, str]:
+    """The calling thread's last error: the code and the message the
+    bridge recorded for this thread's last call, or (0, "") when that
+    call succeeded."""
+    code = ctypes.c_int32(0)
+    ptr = lib.LastError(ctypes.byref(code))
+    message = ""
+    if ptr:
+        s = ctypes.cast(ptr, ctypes.c_char_p)
+        message = s.value.decode("utf-8", errors="replace") if s.value else ""
+        lib.FreeString(s)
+    return code.value, message

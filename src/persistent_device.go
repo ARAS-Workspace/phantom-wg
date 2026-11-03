@@ -74,7 +74,7 @@ func newPersistentDevice(ifname string, mtu int, dbPath string) (*persistentDevi
 	tunDev, err := tun.CreateTUN(ifname, mtu)
 	if err != nil {
 		_ = db.Close()
-		return nil, fmt.Errorf("create tun: %w", err)
+		return nil, fmt.Errorf("%w: %w", errTunCreate, err)
 	}
 
 	logger := newFilteredLogger(ifname)
