@@ -44,8 +44,7 @@ const (
 // code: the one withCode gave it, else WG_ERR_INTERNAL.
 func fail(err error) int32 {
 	code := wgErrInternal
-	var ce *codeError
-	if errors.As(err, &ce) {
+	if ce, ok := errors.AsType[*codeError](err); ok {
 		code = ce.code
 	}
 	setLastError(code, err.Error())
@@ -55,7 +54,7 @@ func fail(err error) int32 {
 // recovered logs a panic recovered in export and records it as the
 // calling thread's last error.
 func recovered(export string, r any) int32 {
-	fmt.Fprintf(os.Stderr, "[wireguard-go-bridge] panic recovered in %s: %v\n%s",
+	_, _ = fmt.Fprintf(os.Stderr, "[wireguard-go-bridge] panic recovered in %s: %v\n%s",
 		export, r, debug.Stack())
 	setLastError(wgErrInternal, fmt.Sprintf("panic in %s: %v", export, r))
 	return wgErrInternal
