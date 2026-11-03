@@ -41,7 +41,6 @@ import time
 import pytest
 import requests
 
-
 # Force line-by-line flush so output streams live under pytest -s
 # noinspection PyShadowingBuiltins
 print = functools.partial(print, flush=True)
@@ -180,7 +179,7 @@ class TestMultihop:
         print("  PHASE 2a — IMPORT EXIT CONFIG")
         print(f"{_SEP}")
 
-        print(f"\n  Exit config (from exit-server):")
+        print("\n  Exit config (from exit-server):")
         for line in exit_conf.strip().splitlines():
             print(f"    | {line}")
 
@@ -269,7 +268,7 @@ class TestMultihop:
         if resp.status_code == 200:
             table = resp.json().get("data", "")
             table_str = table if isinstance(table, str) else json.dumps(table, indent=2)
-            print(f"\n  nftables dump:")
+            print("\n  nftables dump:")
             for line in table_str.strip().splitlines()[:30]:
                 print(f"    | {line}")
             total_lines = len(table_str.strip().splitlines())
@@ -381,7 +380,7 @@ class TestMultihop:
         resp = api.get("/api/multihop/status")
         assert resp.json()["data"]["enabled"] is False
 
-        print(f"\n  Multihop      : disabled")
+        print("\n  Multihop      : disabled")
         print(f"  Phase time    : {time.perf_counter() - t0:.2f}s")
         print(f"{_THIN}")
 
@@ -401,7 +400,7 @@ class TestMultihop:
         assert "test-exit" not in names
 
         print(f"\n  Exits after   : {names}")
-        print(f"  Client        : e2e-client revoked")
+        print("  Client        : e2e-client revoked")
         print(f"  Phase time    : {time.perf_counter() - t0:.2f}s")
 
         print(f"\n{_SEP}")
@@ -450,7 +449,7 @@ class TestMultihopV6:
         print("  PHASE 2a (v6) — IMPORT EXIT CONFIG")
         print(f"{_SEP}")
 
-        print(f"\n  Exit config (IPv6):")
+        print("\n  Exit config (IPv6):")
         for line in exit_conf_v6.strip().splitlines():
             print(f"    | {line}")
 
@@ -637,7 +636,7 @@ class TestMultihopV6:
         resp = api.get("/api/multihop/status")
         assert resp.json()["data"]["enabled"] is False
 
-        print(f"\n  Multihop      : disabled")
+        print("\n  Multihop      : disabled")
         print(f"  Phase time    : {time.perf_counter() - t0:.2f}s")
         print(f"{_THIN}")
 
@@ -657,7 +656,7 @@ class TestMultihopV6:
         assert "test-exit-v6" not in names
 
         print(f"\n  Exits after   : {names}")
-        print(f"  Client        : e2e-client-v6 revoked")
+        print("  Client        : e2e-client-v6 revoked")
         print(f"  Phase time    : {time.perf_counter() - t0:.2f}s")
 
         print(f"\n{_SEP}")

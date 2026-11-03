@@ -44,7 +44,6 @@ import pyotp
 import pytest
 import requests
 
-
 # Force line-by-line flush so output streams live under pytest -s
 # noinspection PyShadowingBuiltins
 print = functools.partial(print, flush=True)
@@ -219,7 +218,7 @@ class TestUserJourney:
         assert resp.status_code == 200, f"change pw: {resp.status_code} {resp.text}"
         assert resp.json()["ok"] is True
 
-        print(f"\n  Password      : changed")
+        print("\n  Password      : changed")
         print(f"  Phase time    : {time.perf_counter() - t0:.2f}s")
         print(f"{_THIN}")
 
@@ -292,7 +291,7 @@ class TestUserJourney:
         assert resp.status_code == 200, f"totp confirm: {resp.status_code} {resp.text}"
         assert resp.json()["ok"] is True
 
-        print(f"  TOTP          : enabled")
+        print("  TOTP          : enabled")
         print(f"  Phase time    : {time.perf_counter() - t0:.2f}s")
         print(f"{_THIN}")
 
@@ -317,8 +316,8 @@ class TestUserJourney:
 
         api.token = None
 
-        print(f"\n  Session       : revoked")
-        print(f"  Old token     : rejected (401)")
+        print("\n  Session       : revoked")
+        print("  Old token     : rejected (401)")
         print(f"  Phase time    : {time.perf_counter() - t0:.2f}s")
         print(f"{_THIN}")
 
@@ -405,7 +404,7 @@ class TestUserJourney:
         print("  PHASE 9a — IMPORT EXIT CONFIG")
         print(f"{_SEP}")
 
-        print(f"\n  Exit config (from exit-server):")
+        print("\n  Exit config (from exit-server):")
         for line in exit_conf.strip().splitlines():
             print(f"    | {line}")
 
@@ -545,7 +544,7 @@ class TestUserJourney:
         resp = api.get("/api/multihop/status")
         assert resp.json()["data"]["enabled"] is False
 
-        print(f"\n  Multihop      : disabled")
+        print("\n  Multihop      : disabled")
         print(f"  Phase time    : {time.perf_counter() - t0:.2f}s")
         print(f"{_THIN}")
 
@@ -571,8 +570,8 @@ class TestUserJourney:
         assert resp.status_code == 200
 
         print(f"\n  Exits after   : {names}")
-        print(f"  Client        : e2e-scenario revoked")
-        print(f"  TOTP          : disabled")
+        print("  Client        : e2e-scenario revoked")
+        print("  TOTP          : disabled")
         print(f"  Phase time    : {time.perf_counter() - t0:.2f}s")
         print(f"{_THIN}")
 
@@ -689,13 +688,13 @@ class TestUserJourney:
         assert "status" in sample["detail"]
         assert "ip_address" in sample
         assert "timestamp" in sample
-        print(f"  Schema      : valid")
+        print("  Schema      : valid")
 
         # ── Check known paths exist in audit ──────────────────
         # Fetch all proxy entries (total may exceed single page due to pagination test)
         all_items = items
         if total > 100:
-            resp2 = api.get(f"/auth/audit?action=proxy_request&limit=100&order=asc")
+            resp2 = api.get("/auth/audit?action=proxy_request&limit=100&order=asc")
             assert resp2.status_code == 200
             all_items = all_items + resp2.json()["data"]["items"]
         paths = {item["detail"]["path"] for item in all_items}

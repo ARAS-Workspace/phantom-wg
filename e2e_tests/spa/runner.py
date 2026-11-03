@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """
 ██████╗ ██╗  ██╗ █████╗ ███╗   ██╗████████╗ ██████╗ ███╗   ███╗
 ██╔══██╗██║  ██║██╔══██╗████╗  ██║╚══██╔══╝██╔═══██╗████╗ ████║
@@ -40,7 +39,7 @@ sys.path.insert(0, str(REPO_ROOT))
 
 import base64
 
-from e2e_tests.environment import E2ETestEnvironment, step, LOG_FMT
+from e2e_tests.environment import LOG_FMT, E2ETestEnvironment, step
 
 logging.basicConfig(
     level=logging.INFO, format=LOG_FMT,
@@ -174,8 +173,8 @@ def main() -> None:
             sys.stdout.flush()
         rc = proc.wait()
 
-    except Exception as exc:
-        log.error("E2E FAILED: %s", exc)
+    except Exception:
+        log.exception("E2E FAILED")
         rc = 1
 
     finally:

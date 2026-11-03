@@ -35,9 +35,6 @@ from __future__ import annotations
 import functools
 import time
 
-import pytest
-
-
 # Force line-by-line flush so output streams live under pytest -s
 # noinspection PyShadowingBuiltins
 print = functools.partial(print, flush=True)
@@ -46,7 +43,6 @@ print = functools.partial(print, flush=True)
 from .helpers import (
     _SEP,
     _THIN,
-    _adapt_config,
     _elapsed,
     _exec_log,
     _gateway_ip_from_conf,
@@ -59,7 +55,6 @@ from .helpers import (
     _setup_client_wg,
     _teardown_client,
 )
-
 
 # -- Test class ------------------------------------------------------
 

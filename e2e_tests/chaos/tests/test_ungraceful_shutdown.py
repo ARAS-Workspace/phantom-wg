@@ -69,10 +69,9 @@ import ipaddress
 import random
 import threading
 import time
+from typing import ClassVar
 
-import pytest
 import requests
-
 
 # Force line-by-line flush so output streams live under pytest -s
 # noinspection PyShadowingBuiltins
@@ -82,7 +81,6 @@ print = functools.partial(print, flush=True)
 from .helpers import (
     _SEP,
     _THIN,
-    _adapt_config,
     _all_client_names,
     _bulk_assign,
     _bulk_revoke,
@@ -100,7 +98,6 @@ from .helpers import (
     _setup_client_wg,
     _teardown_client,
 )
-
 
 # ══════════════════════════════════════════════════════════════════
 #  SCENARIO A — SIGKILL RECOVERY
@@ -377,10 +374,10 @@ class TestMidflightKill:
     incomplete ones on recovery.
     """
 
-    _results: dict[str, int | str] = {}
-    _committed: list[str] = []
-    _lost: list[str] = []
-    _actual_committed: list[str] = []
+    _results: ClassVar[dict[str, int | str]] = {}
+    _committed: ClassVar[list[str]] = []
+    _lost: ClassVar[list[str]] = []
+    _actual_committed: ClassVar[list[str]] = []
 
     # Phase C1 — CIDR expansion to /16
     def test_expand_cidr(self, api):
@@ -465,7 +462,7 @@ class TestMidflightKill:
         self.__class__._lost = lost
 
         # Restart daemon
-        print(f"\n  >>> Restarting daemon...")
+        print("\n  >>> Restarting daemon...")
         recovery = start_daemon(timeout=90)
         _info("recovery time", f"{recovery:.2f}s")
 
@@ -517,7 +514,7 @@ class TestMidflightKill:
         _info("INCONSISTENT", str(len(inconsistent)))
 
         if inconsistent:
-            print(f"\n  !!! INCONSISTENT CLIENTS:")
+            print("\n  !!! INCONSISTENT CLIENTS:")
             for name, reason in inconsistent:
                 print(f"      {name}: {reason}")
 
@@ -643,7 +640,7 @@ class TestCidrExpansionLeak:
     masquerade) and resync_multihop (v4+v6 policy) at once, per family.
     """
 
-    _fill = [f"fill-{i:04d}" for i in range(253)]
+    _fill: ClassVar[list[str]] = [f"fill-{i:04d}" for i in range(253)]
     _OLD_V4 = ipaddress.ip_network("10.8.0.0/24")
     # The daemon's wg_main gateway is the subnet's first host. The base
     # (10.8.0.0) is fixed across the /24->/23 expansion, so the gateway
@@ -704,7 +701,7 @@ class TestCidrExpansionLeak:
         t0 = time.perf_counter()
         _phase("D3 — BASELINE (old-range client -> exit)")
 
-        conf = _setup_client_wg(
+        _setup_client_wg(
             api, container_exec, container_write_file,
             name="fill-0000", version="hybrid",
         )
@@ -758,7 +755,7 @@ class TestCidrExpansionLeak:
         t0 = time.perf_counter()
         _phase("D6 — TOOTH (new-range client -> exit)")
 
-        conf = _setup_client_wg(
+        _setup_client_wg(
             api, container_exec, container_write_file,
             name="tooth", version="hybrid",
         )
@@ -778,7 +775,7 @@ class TestCidrExpansionLeak:
         t0 = time.perf_counter()
         _phase("D7 — REGRESSION (old-range client still reaches exit)")
 
-        conf = _setup_client_wg(
+        _setup_client_wg(
             api, container_exec, container_write_file,
             name="fill-0000", version="hybrid",
         )

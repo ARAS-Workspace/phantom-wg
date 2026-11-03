@@ -220,8 +220,8 @@ def _health_check(
             pool = resp.json()["data"]["pool"]
             arithmetic_ok = pool["assigned"] + pool["free"] == pool["total"]
             checks.append(("pool", arithmetic_ok,
-                           f"assigned={pool['assigned']} free={pool['free']} "
-                           f"total={pool['total']}"))
+                           (f"assigned={pool['assigned']} free={pool['free']} "
+                            f"total={pool['total']}")))
         else:
             checks.append(("pool", False, f"HTTP {resp.status_code}"))
     except Exception as exc:

@@ -23,7 +23,8 @@ import logging
 import subprocess
 import time
 from pathlib import Path
-from typing import Optional, Type
+from types import TracebackType
+from typing import Self
 
 from lib.compose_bridge import ComposeBridge, ExecResult
 
@@ -40,7 +41,7 @@ def step(msg: str) -> None:
 class E2ETestEnvironment:
     """Host-side E2E test environment backed by compose-bridge."""
 
-    __slots__ = ("_bridge", "_compose_path", "name", "_started")
+    __slots__ = ("_bridge", "_compose_path", "_started", "name")
 
     def __init__(self, name: str, compose_path: str) -> None:
         self._compose_path = str(Path(compose_path).resolve())
@@ -131,13 +132,13 @@ class E2ETestEnvironment:
 
     # -- context manager --
 
-    def __enter__(self) -> E2ETestEnvironment:
+    def __enter__(self) -> Self:
         return self
 
     def __exit__(
         self,
-        exc_type: Optional[Type[BaseException]],
-        exc_val: Optional[BaseException],
-        exc_tb: Optional[object],
+        exc_type: type[BaseException] | None,
+        exc_val: BaseException | None,
+        exc_tb: TracebackType | None,
     ) -> None:
         self.close()
