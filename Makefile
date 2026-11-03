@@ -37,11 +37,11 @@ build-linux-arm64:
 
 docker-build-linux-amd64:
 	docker run --rm -v $(PWD):/workspace -w /workspace \
-		golang:1.24-bookworm make build-linux-amd64
+		golang:1.27.3-trixie make build-linux-amd64
 
 docker-build-linux-arm64:
 	docker run --rm -v $(PWD):/workspace -w /workspace \
-		golang:1.24-bookworm make build-linux-arm64
+		golang:1.27.3-trixie make build-linux-arm64
 
 clean:
 	rm -rf build/
