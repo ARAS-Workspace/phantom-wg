@@ -7,7 +7,8 @@ COPY src/ /build/
 # Go unit tests (guards_test.go: panic containment at the FFI boundary)
 RUN CGO_ENABLED=1 go test ./...
 RUN CGO_ENABLED=1 \
-    go build -buildmode=c-shared -trimpath -ldflags="-s -w" \
+    go build -buildmode=c-shared -trimpath \
+    -ldflags="-s -w -extldflags=-Wl,--version-script=/build/exports.map" \
     -o /wireguard_go_bridge.so .
 
 FROM debian:trixie-slim

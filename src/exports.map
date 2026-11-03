@@ -1,0 +1,23 @@
+/*
+ * Linker version script for wireguard_go_bridge.so: the bridge's exports
+ * are global, every other symbol of the library (go-sqlite3's SQLite, the
+ * Go runtime) is local. Passed by the Makefile and tests/Dockerfile with
+ * -extldflags=-Wl,--version-script=<path>.
+ */
+{
+  global:
+    NewPersistentDevice;
+    DeviceIpcSet;
+    DeviceIpcGet;
+    DeviceUp;
+    DeviceDown;
+    DeviceClose;
+    GeneratePrivateKey;
+    DerivePublicKey;
+    GeneratePresharedKey;
+    HexToBase64;
+    BridgeVersion;
+    FreeString;
+    LastError;
+  local: *;
+};

@@ -3,9 +3,10 @@ SRC_DIR     = src
 BUILD_DIR   = build
 GO          = go
 
-# Go build flags
+# Go build flags; src/exports.map leaves the bridge's exports global and
+# every other symbol of the .so local.
 GO_FLAGS    = -buildmode=c-shared -trimpath
-GO_LDFLAGS  = -s -w
+GO_LDFLAGS  = -s -w -extldflags=-Wl,--version-script=$(CURDIR)/$(SRC_DIR)/exports.map
 
 # Targets
 .PHONY: all build-linux-amd64 build-linux-arm64 checksum verify clean go-tidy
