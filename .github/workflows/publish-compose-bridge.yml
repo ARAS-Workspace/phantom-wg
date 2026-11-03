@@ -13,14 +13,14 @@ jobs:
   # ── 1. Extract version from source + validate Go match ──────────
   extract-version:
     name: Extract version
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-26.04
     permissions:
       contents: read
     outputs:
       version: ${{ steps.extract.outputs.version }}
     steps:
       - name: Checkout
-        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
           persist-credentials: false
 
@@ -54,7 +54,7 @@ jobs:
   # ── 2. Build Linux targets ──────────────────────────────────
   build-linux:
     name: Build Linux (${{ matrix.arch }})
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-26.04
     needs: extract-version
     permissions:
       contents: read
@@ -68,12 +68,12 @@ jobs:
             packages: gcc-aarch64-linux-gnu
     steps:
       - name: Checkout
-        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
           persist-credentials: false
 
       - name: Setup Go
-        uses: actions/setup-go@d35c59abb061a4a6fb18e82ac0862c26744d6ab5 # v5
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
           go-version-file: src/go.mod
           cache: false
@@ -86,7 +86,7 @@ jobs:
         run: make ${{ matrix.target }}
 
       - name: Upload artifact
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
         with:
           name: compose_bridge-linux-${{ matrix.arch }}
           path: build/linux-${{ matrix.arch }}/compose_bridge.so
@@ -111,12 +111,12 @@ jobs:
           echo "P12_PATH=$RUNNER_TEMP/certificate.p12" >> "$GITHUB_ENV"
 
       - name: Checkout
-        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
           persist-credentials: false
 
       - name: Setup Go
-        uses: actions/setup-go@d35c59abb061a4a6fb18e82ac0862c26744d6ab5 # v5
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
           go-version-file: src/go.mod
           cache: false
@@ -169,7 +169,7 @@ jobs:
             --wait
 
       - name: Upload artifact
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
         with:
           name: compose_bridge-darwin-arm64
           path: build/darwin-arm64/compose_bridge.dylib
@@ -184,7 +184,7 @@ jobs:
   # ── 4. Package (per-arch zips) ───────────────────────────────
   package:
     name: Package dist
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-26.04
     needs: [extract-version, build-linux, build-macos]
     permissions:
       contents: read
@@ -192,12 +192,12 @@ jobs:
       VERSION: ${{ needs.extract-version.outputs.version }}
     steps:
       - name: Checkout
-        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
           persist-credentials: false
 
       - name: Download all artifacts
-        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           path: artifacts
 
@@ -242,28 +242,28 @@ jobs:
           ls -lh dist/
 
       - name: Upload linux-amd64
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
         with:
           name: compose-bridge-${{ env.VERSION }}-linux-amd64
           path: dist/compose-bridge-${{ env.VERSION }}-linux-amd64.zip
           retention-days: 90
 
       - name: Upload linux-arm64
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
         with:
           name: compose-bridge-${{ env.VERSION }}-linux-arm64
           path: dist/compose-bridge-${{ env.VERSION }}-linux-arm64.zip
           retention-days: 90
 
       - name: Upload darwin-arm64
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
         with:
           name: compose-bridge-${{ env.VERSION }}-darwin-arm64
           path: dist/compose-bridge-${{ env.VERSION }}-darwin-arm64.zip
           retention-days: 90
 
       - name: Delete intermediate build artifacts
-        uses: geekyeggo/delete-artifact@f275313e70c08f6120db482d7a6b98377786765b # v5.1.0
+        uses: geekyeggo/delete-artifact@176a747ab7e287e3ff4787bf8a148716375ca118 # v6.0.0
         with:
           name: |
             compose_bridge-linux-amd64
