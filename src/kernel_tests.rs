@@ -441,7 +441,11 @@ fn kernel_nft_ensure_table_is_all_or_nothing() {
     let err = last_error();
     let lines: Vec<&str> = err.lines().collect();
     let (position, message) = lines[0].split_once(": ").expect("position");
-    assert!(message.starts_with("Error: Chain \"output\" already exists"), "{err}");
+    // The same nft gives the kernel's answer in other words: "Chain
+    // "output" already exists" on 6.12, "Could not process rule: File
+    // exists" on 5.10, 5.15 and 6.1.
+    assert!(message.starts_with("Error: Chain \"output\" already exists")
+                || message == "Error: Could not process rule: File exists", "{err}");
     let start = lines[1].find("add chain inet phantom output").expect("command line");
     let end = lines[1].find("; add chain inet phantom forward").expect("command line");
     let caret = lines[2].find('^').expect("caret line");
