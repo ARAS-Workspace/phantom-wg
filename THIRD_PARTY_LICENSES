@@ -101,9 +101,9 @@ Fetched by the Dockerfile at image build time and unpacked into
 
 | Component            | Version | Language | License           | Source             |
 |----------------------|---------|----------|-------------------|--------------------|
-| wireguard-go-bridge  | 2.1.4   | Go       | AGPL-3.0-or-later | Internal (wraps    |
+| wireguard-go-bridge  | 2.2.0   | Go       | AGPL-3.0-or-later | Internal (wraps    |
 |                      |         |          |                   | wireguard-go)      |
-| firewall-bridge      | 2.1.8   | Rust     | AGPL-3.0-or-later | Internal           |
+| firewall-bridge      | 2.2.0   | Rust     | AGPL-3.0-or-later | Internal           |
 
 Upstream dependency:
 
@@ -118,14 +118,13 @@ DOCKER BASE IMAGES
 | Image                       | License          | URL                             |
 |-----------------------------|------------------|---------------------------------|
 | debian:trixie-20261027-slim | Debian           | https://hub.docker.com/_/debian |
-| python:3.12.13-slim-trixie  | PSF-2.0 + Debian | https://hub.docker.com/_/python |
 
-The daemon and nginx images start from debian:trixie-slim; the daemon's
-CPython is Debian's python3.13 package, PSF-2.0, and nginx is Debian's
-nginx package, BSD 2-Clause. The auth-service image starts from
-python:3.12.13-slim-trixie, whose CPython is PSF-2.0. In both, the
-Debian packages carry their own licences, which Debian keeps inside the
-image as /usr/share/doc/<package>/copyright.
+The daemon, auth-service and nginx images start from debian:trixie-slim.
+The daemon's and auth-service's CPython is Debian's python3.13 package,
+PSF-2.0, installed with ca-certificates, netbase and tzdata; nginx is
+Debian's nginx package, BSD 2-Clause. The Debian packages carry their own
+licences, which Debian keeps inside each image as
+/usr/share/doc/<package>/copyright.
 
 ================================================================================
 SYSTEM LIBRARIES (installed in container)
@@ -145,7 +144,8 @@ Nginx container:
 |--------------------|--------------|-----------------|--------------------------|
 | nginx              | BSD 2-Clause | BSD-2-Clause    | TLS front, SPA, proxy    |
 
-The auth-service container installs no system library of its own.
+Beyond python3, the auth-service container installs no system library
+of its own.
 
 Usage Note:
 iproute2 and nftables are installed as separate programs; the daemon
