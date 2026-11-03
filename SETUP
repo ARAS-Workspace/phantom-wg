@@ -2,7 +2,7 @@ Phantom-WG Frontmatter — Setup Guide
 ======================================
 
 Prerequisites:
-  - Debian 12 / 13 or Ubuntu 22.04 / 24.04
+  - Debian 12 / 13 or Ubuntu 22.04 / 24.04 / 26.04
   - Root access (sudo)
   - A reachable backend UDP endpoint (any WireGuard server or
     arbitrary UDP service)
