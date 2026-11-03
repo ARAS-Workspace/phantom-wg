@@ -20,7 +20,7 @@ jobs:
           persist-credentials: false
 
       - name: Install Go for WireGuardKit
-        run: brew install go@1.25
+        run: brew install go@1.27
 
       - name: Install XcodeGen
         run: brew install xcodegen

@@ -191,7 +191,7 @@ jobs:
 
       # ── 6. Install tools ─────────────────────────────────────
       - name: Install Go & XcodeGen
-        run: brew install go@1.25 xcodegen
+        run: brew install go@1.27 xcodegen
 
       # ── 7. Generate ExportOptions.plist ──────────────────────
       - name: Generate ExportOptions.plist
