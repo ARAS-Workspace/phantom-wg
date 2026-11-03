@@ -71,9 +71,10 @@ left behind as a zombie, also when the process that loads the bridge runs as PID
 container without an init. If `SIGCHLD` is set to `SIG_IGN`, the kernel reaps the child itself;
 the call then returns an error even though the command was applied.
 
-**/etc/iproute2.** The bridge writes routing table names to `/etc/iproute2/rt_tables`. If the
-file does not exist, it is created as a copy of `/usr/share/iproute2/rt_tables` before the
-bridge's table names are added.
+**/etc/iproute2.** The bridge writes routing table names to its own file,
+`/etc/iproute2/rt_tables.d/phantom.conf`, one `<id> <name>` line per table, and creates the file
+and its directory when they are missing; `/etc/iproute2/rt_tables` is left as it is. `ip` reads
+the names from that file, so `ip rule` and `ip route` show the bridge's tables by name.
 
 ## Kernel Compatibility
 
@@ -164,12 +165,14 @@ sequenceDiagram
     participant Kernel as Linux Kernel
 
     App->>Bridge: apply_preset(yaml)
-    Bridge->>DB: create group + rules
-    Bridge->>Rust: nft_add_rule(chain, expr)
-    Rust->>Kernel: nft --echo -- add rule
-    Bridge->>Rust: rt_policy_add(from, table, family)
+    Bridge->>DB: create group (disabled) + rules
+    Bridge->>DB: enable group
+    Bridge->>Rust: nft_replace_rules(enabled groups' rules)
+    Rust->>Kernel: nft --echo --json --handle -f - (one transaction)
+    Rust-->>Bridge: rule handles
+    Bridge->>Rust: rt_table_ensure / rt_policy_add / rt_route_add
     Rust->>Kernel: netlink socket
-    Bridge->>DB: mark applied=true
+    Bridge->>DB: mark applied=true, store handles
 ```
 
 ## Crash Recovery
@@ -181,17 +184,20 @@ sequenceDiagram
     participant Rust as Rust FFI
 
     Note over Bridge: start() called
-    Bridge->>DB: state="stopped"?
-    DB-->>Bridge: yes
-    Bridge->>Rust: nft_init() — create table from scratch
-    Bridge->>DB: read all rules where applied=true
-    loop Each rule
-        Bridge->>Rust: nft_add_rule / rt_policy_add
+    Bridge->>DB: state="started"?
+    DB-->>Bridge: no
+    Bridge->>Rust: nft_init() — table and chains in one nft run
+    Bridge->>Rust: remove every routing row of the DB from kernel
+    Bridge->>DB: read the enabled groups' rules
+    Bridge->>Rust: nft_replace_rules(all of them) — one transaction
+    loop Each enabled group
+        Bridge->>Rust: rt_table_ensure / rt_policy_add / rt_route_add
     end
-    Bridge->>DB: state="running"
+    Bridge->>DB: state="started"
 ```
 
 DB is the source of truth. Kernel state is rebuilt from DB on every start. A daemon restart is sufficient after a crash.
+If the kernel refuses a rule, start removes what it applied, the bridge stays stopped and the error is raised.
 
 ## Preset Structure
 

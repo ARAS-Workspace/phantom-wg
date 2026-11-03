@@ -74,9 +74,10 @@ süreç zombi olarak kalmaz; köprüyü yükleyen süreç init'i olmayan bir kon
 çalıştığında da bu geçerlidir. `SIGCHLD` sinyali `SIG_IGN` olarak ayarlanırsa çekirdek alt
 süreci kendisi toplar; bu durumda komut uygulanmış olsa bile çağrı hata döndürür.
 
-**/etc/iproute2.** Köprü, yönlendirme tablolarının adlarını `/etc/iproute2/rt_tables` dosyasına
-yazar. Dosya yoksa, köprünün tablo adları eklenmeden önce `/usr/share/iproute2/rt_tables`
-dosyasının bir kopyası olarak oluşturulur.
+**/etc/iproute2.** Köprü, yönlendirme tablolarının adlarını kendi dosyasına,
+`/etc/iproute2/rt_tables.d/phantom.conf` dosyasına, her tablo için bir `<id> <ad>` satırı olarak
+yazar; dosya ya da dizini yoksa oluşturur. `/etc/iproute2/rt_tables` dosyasına dokunulmaz. `ip`
+adları bu dosyadan okur; böylece `ip rule` ve `ip route` köprünün tablolarını adlarıyla gösterir.
 
 ## Çekirdek Uyumluluğu
 
@@ -167,12 +168,14 @@ sequenceDiagram
     participant Kernel as Linux Kernel
 
     App->>Bridge: apply_preset(yaml)
-    Bridge->>DB: create group + rules
-    Bridge->>Rust: nft_add_rule(chain, expr)
-    Rust->>Kernel: nft --echo -- add rule
-    Bridge->>Rust: rt_policy_add(from, table, family)
+    Bridge->>DB: create group (disabled) + rules
+    Bridge->>DB: enable group
+    Bridge->>Rust: nft_replace_rules(enabled groups' rules)
+    Rust->>Kernel: nft --echo --json --handle -f - (one transaction)
+    Rust-->>Bridge: rule handles
+    Bridge->>Rust: rt_table_ensure / rt_policy_add / rt_route_add
     Rust->>Kernel: netlink socket
-    Bridge->>DB: mark applied=true
+    Bridge->>DB: mark applied=true, store handles
 ```
 
 ## Crash Recovery
@@ -184,17 +187,20 @@ sequenceDiagram
     participant Rust as Rust FFI
 
     Note over Bridge: start() çağrıldı
-    Bridge->>DB: state="stopped" mı?
-    DB-->>Bridge: evet
-    Bridge->>Rust: nft_init() — tabloyu sıfırdan oluştur
-    Bridge->>DB: applied=true olan tüm kuralları oku
-    loop Her kural
-        Bridge->>Rust: nft_add_rule / rt_policy_add
+    Bridge->>DB: state="started" mı?
+    DB-->>Bridge: hayır
+    Bridge->>Rust: nft_init() — tablo ve zincirler tek nft çalıştırmasında
+    Bridge->>Rust: DB'deki her routing satırını kernel'den kaldır
+    Bridge->>DB: etkin grupların kurallarını oku
+    Bridge->>Rust: nft_replace_rules(hepsi) — tek transaction
+    loop Her etkin grup
+        Bridge->>Rust: rt_table_ensure / rt_policy_add / rt_route_add
     end
-    Bridge->>DB: state="running"
+    Bridge->>DB: state="started"
 ```
 
 DB truth kaynağıdır. Kernel state her start'ta DB'den yeniden oluşturulur. Crash sonrası daemon restart yeterlidir.
+Kernel bir kuralı reddederse start uyguladığını geri kaldırır, köprü durmuş kalır ve hata yükseltilir.
 
 ## Preset Yapısı
 
