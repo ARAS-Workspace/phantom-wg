@@ -1,15 +1,52 @@
 # ──────────────────────────────────────────────────────────────────
 # phantom-daemon  ·  Production Image
 # ──────────────────────────────────────────────────────────────────
-# Multi-stage: build deps → slim runtime
+# Multi-stage: platform → vendor fetch, python deps → runtime
 #
 # Build:
 #   docker compose build
 #   docker build -t phantom-daemon:latest .
 # ──────────────────────────────────────────────────────────────────
 
+# ── Stage 0: platform ────────────────────────────────────────────
+# debian:trixie-slim with Debian's python3, a venv at /opt/venv for
+# pip, and the system packages the runtime runs with; dev.Dockerfile
+# builds the same platform with its own system packages.
+FROM debian:trixie-20261027-slim@sha256:f6b08b09a05725f9431502d3b5714f5c4576e82c1a84fa1debe0c24a7e0c3ec4 AS platform-apt
+
+# pip installs into /opt/venv; Debian's python3 refuses it (PEP 668).
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends \
+    python3 python3-venv ca-certificates netbase tzdata \
+ && python3 -m venv /opt/venv \
+ && rm -rf /var/lib/apt/lists/*
+
+# nft (nftables), the program the firewall bridge runs, and iproute2
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends libnftables1 nftables iproute2 \
+ && rm -rf /var/lib/apt/lists/* \
+ && mkdir -p /etc/iproute2
+
+# apt, the packages only apt depends on, mount, and the venv packages
+# /opt/venv was created with. apt marks itself essential;
+# --allow-remove-essential lets apt-get remove it. The __pycache__
+# directories are the bytecode the installs compiled.
+FROM platform-apt AS platform-pruned
+RUN apt-get purge -y --auto-remove --allow-remove-essential \
+    apt mount \
+    python3-venv python3.13-venv python3-pip-whl python3-setuptools-whl \
+ && rm -rf /var/lib/apt /var/cache/apt /var/log/apt \
+    /var/log/dpkg.log /var/log/alternatives.log \
+ && find /usr/lib/python3* /opt/venv -name __pycache__ -type d -prune -exec rm -rf {} +
+
+# One layer, without the files the purge removed.
+FROM scratch AS platform
+COPY --from=platform-pruned / /
+ENV PATH=/opt/venv/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+ENV LANG=C.UTF-8
+
 # ── Stage 1: vendor fetch ────────────────────────────────────────
-FROM python:3.12.13-slim-trixie AS vendor-fetch
+FROM platform-apt AS vendor-fetch
 
 ARG TARGETARCH
 ARG VENDOR_DIR=/opt/phantom/vendor
@@ -93,29 +130,22 @@ RUN set -e; \
     echo "Vendor bridges ready for ${TARGETARCH} (${FOUND} shared libraries verified)"
 
 # ── Stage 2: python deps ────────────────────────────────────────
-FROM python:3.12.13-slim-trixie AS deps
+FROM platform AS deps
 
 WORKDIR /app
 COPY requirements.txt ./
 RUN pip install --no-cache-dir -r requirements.txt
 
 # ── Stage 3: runtime ────────────────────────────────────────────
-FROM python:3.12.13-slim-trixie AS runtime
+FROM platform AS runtime
 
 ARG VENDOR_DIR=/opt/phantom/vendor
-
-# nft (nftables), the program the firewall bridge runs, and iproute2
-RUN apt-get update \
- && apt-get install -y --no-install-recommends libnftables1 nftables iproute2 \
- && rm -rf /var/lib/apt/lists/* \
- && mkdir -p /etc/iproute2
 
 # Copy vendor artifacts (no curl/unzip in final image)
 COPY --from=vendor-fetch ${VENDOR_DIR} ${VENDOR_DIR}
 
 # Copy installed Python packages
-COPY --from=deps /usr/local/lib/python3.12/site-packages /usr/local/lib/python3.12/site-packages
-COPY --from=deps /usr/local/bin /usr/local/bin
+COPY --from=deps /opt/venv /opt/venv
 
 # Bridge env vars — tier-1 FFI discovery
 ENV WIREGUARD_GO_BRIDGE_LIB_PATH="${VENDOR_DIR}/wireguard_go_bridge/wireguard_go_bridge.so"
