@@ -262,8 +262,9 @@ Bootstrap
 Container şekli
 ---------------
 
-  Dockerfile         python:3.12-slim + libsodium23 +
-                     requirements.txt. CMD `python -m auth_service`'i
+  Dockerfile         debian:trixie-slim + Debian'ın python3'ü ve
+                     /opt/venv'deki venv + requirements.txt.
+                     CMD `python -m auth_service`'i
                      çalıştırır. Burada source COPY yok — kaynağı
                      scripts/packager.py'nin ürettiği production
                      paketi daemon checkout'una yatırır (bkz.
