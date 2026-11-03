@@ -65,7 +65,7 @@ func openStateDB(dbPath string) (*sql.DB, error) {
 
 // newPersistentDevice opens the state DB, creates a TUN device and a
 // WireGuard device, and restores previous IPC state if available. The DB
-// holds the ipc_state table, which the Python layer creates.
+// holds the ipc_state table, which the daemon creates.
 func newPersistentDevice(ifname string, mtu int, dbPath string) (*persistentDevice, error) {
 	db, err := openStateDB(dbPath)
 	if err != nil {
@@ -93,7 +93,8 @@ func newPersistentDevice(ifname string, mtu int, dbPath string) (*persistentDevi
 	return pd, nil
 }
 
-// ipcSet applies config to the device and persists the full state.
+// ipcSet applies config to the device and persists its state, without the
+// fields filterIpcDump removes.
 func (pd *persistentDevice) ipcSet(config string) error {
 	pd.mu.Lock()
 	defer pd.mu.Unlock()

@@ -65,7 +65,8 @@ class WireGuardBridge:
             check_result(code, last_error(self._lib)[1])
 
     def ipc_set(self, config: str) -> None:
-        """Apply IPC config. Automatically persists full state to DB."""
+        """Apply IPC config. Persists the device state, without the fields
+        filterIpcDump removes, to DB."""
         self._check(self._lib.DeviceIpcSet(self._handle, config.encode("utf-8")))
 
     def ipc_get(self) -> str:

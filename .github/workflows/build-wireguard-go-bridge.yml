@@ -30,8 +30,8 @@ jobs:
           persist-credentials: false
 
       - name: Build linux/amd64
-        # Built in the trixie image the daemon runs on, so the .so links
-        # against the glibc it is loaded with. The container runs as the
+        # Built on Debian trixie, the release the daemon runs on, so the .so
+        # links against the glibc it is loaded with. The container runs as the
         # runner's user, who owns the checkout and the build directory.
         run: |
           docker run --rm --user "$(id -u):$(id -g)" -e HOME=/tmp \
@@ -79,8 +79,8 @@ jobs:
           persist-credentials: false
 
       - name: Build linux/arm64
-        # Built in the trixie image the daemon runs on, so the .so links
-        # against the glibc it is loaded with. The container runs as the
+        # Built on Debian trixie, the release the daemon runs on, so the .so
+        # links against the glibc it is loaded with. The container runs as the
         # runner's user, who owns the checkout and the build directory.
         run: |
           docker run --rm --user "$(id -u):$(id -g)" -e HOME=/tmp \

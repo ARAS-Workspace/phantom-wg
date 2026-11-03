@@ -15,12 +15,12 @@
 //
 // A Go panic that unwinds into the cgo boundary aborts the entire host
 // process — the daemon, and with it every client's tunnel. Each export
-// therefore runs its body through one of the callGuarded* helpers. A
-// helper clears the calling thread's last error, runs the body and,
-// when the body returns an error or panics, records the code and the
-// message as the thread's last error (lasterror.go); a panic is also
-// logged with its stack to stderr. This file has no import "C"; the
-// thread id the record is kept under comes from thread_id.go, which
+// with Go logic therefore runs its body through one of the callGuarded*
+// helpers. A helper clears the calling thread's last error, runs the
+// body and, when the body returns an error or panics, records the code
+// and the message as the thread's last error (lasterror.go); a panic is
+// also logged with its stack to stderr. This file has no import "C";
+// the thread id the record is kept under comes from thread_id.go, which
 // does. The recovered panic can only cover code on the export's own
 // goroutine — panics inside wireguard-go's internal goroutines are out
 // of its reach.
