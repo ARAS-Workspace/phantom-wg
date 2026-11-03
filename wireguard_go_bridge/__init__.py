@@ -14,7 +14,7 @@ wireguard_go_bridge — Python FFI bindings for wireguard-go-bridge.
 PersistentDevice with automatic IPC state persistence + key generation.
 """
 
-__version__ = "2.1.4"
+__version__ = "2.2.0"
 
 from .types import (
     BridgeError,
