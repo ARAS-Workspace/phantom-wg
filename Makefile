@@ -38,7 +38,7 @@ docker-build-linux-amd64:
 	docker run --rm \
 		-v $(PWD):/workspace \
 		-w /workspace \
-		golang:1.25-bookworm \
+		golang:1.27.3-trixie \
 		make build-linux-amd64
 
 docker-build-linux-arm64:
@@ -46,7 +46,7 @@ docker-build-linux-arm64:
 		--platform linux/arm64 \
 		-v $(PWD):/workspace \
 		-w /workspace \
-		golang:1.25-bookworm \
+		golang:1.27.3-trixie \
 		make build-linux-arm64
 
 # --- Checksum ---

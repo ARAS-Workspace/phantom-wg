@@ -1,4 +1,4 @@
-FROM golang:1.25-bookworm AS builder
+FROM golang:1.27.3-trixie AS builder
 
 RUN apt-get update && apt-get install -y --no-install-recommends libsqlite3-dev
 
@@ -10,7 +10,7 @@ RUN CGO_ENABLED=1 \
     go build -buildmode=c-shared -trimpath -ldflags="-s -w" \
     -o /wireguard_go_bridge.so .
 
-FROM debian:bookworm-slim
+FROM debian:trixie-slim
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
     python3 \
