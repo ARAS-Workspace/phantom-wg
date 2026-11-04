@@ -1,0 +1,255 @@
+name: Publish images
+
+# Builds each production image on a runner of its own architecture, pushes it
+# as <tag>-<arch>, joins the two under <tag>, reads the digests back from the
+# registry, and runs each image on each architecture with the code mounted as
+# compose mounts it. The caller grants packages: write.
+
+on:
+  workflow_call:
+    inputs:
+      tag:
+        description: Image tag
+        required: true
+        type: string
+      require_public:
+        description: Fail when an image needs a login to read
+        required: false
+        type: boolean
+        default: false
+    outputs:
+      daemon:
+        description: Daemon image reference, tag and digest
+        value: ${{ jobs.index.outputs.daemon }}
+      auth:
+        description: Auth service image reference, tag and digest
+        value: ${{ jobs.index.outputs.auth }}
+      nginx:
+        description: Nginx image reference, tag and digest
+        value: ${{ jobs.index.outputs.nginx }}
+
+permissions:
+  contents: read
+
+env:
+  REGISTRY: ghcr.io/aras-workspace
+  SOURCE: https://github.com/ARAS-Workspace/phantom-wg
+  BUILDKIT_IMAGE: moby/buildkit:v0.34.1@sha256:99368f3e46177c6405b9740e4461d91cee004128daeecca78d4ceac50ec1da5c
+
+jobs:
+  build:
+    name: Build ${{ matrix.target.image }} linux/${{ matrix.platform.arch }}
+    runs-on: ${{ matrix.platform.runner }}
+    permissions:
+      contents: read
+      packages: write
+    strategy:
+      fail-fast: false
+      matrix:
+        target:
+          - image: phantom-daemon
+            context: .
+            dockerfile: Dockerfile
+          - image: phantom-auth
+            context: services/auth-service
+            dockerfile: services/auth-service/Dockerfile
+          - image: phantom-nginx
+            context: .
+            dockerfile: nginx.Dockerfile
+        platform:
+          - arch: amd64
+            runner: ubuntu-26.04
+          - arch: arm64
+            runner: ubuntu-26.04-arm
+    steps:
+      - name: Harden runner
+        uses: step-security/harden-runner@46b06cea07f9e64621fdf066ba77ac6915163d43 # v2.22.3
+        with:
+          egress-policy: audit
+
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+
+      - name: Start the builder
+        run: |
+          set -euo pipefail
+          docker version
+          docker buildx version
+          docker buildx create --name phantom --driver docker-container \
+            --driver-opt "image=${BUILDKIT_IMAGE}" --use --bootstrap
+          docker buildx inspect
+
+      - name: Log in to the registry
+        env:
+          TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: printf "%s" "${TOKEN}" | docker login ghcr.io -u "${GITHUB_ACTOR}" --password-stdin
+
+      - name: Build and push
+        env:
+          IMAGE: ${{ matrix.target.image }}
+          CONTEXT: ${{ matrix.target.context }}
+          DOCKERFILE: ${{ matrix.target.dockerfile }}
+          ARCH: ${{ matrix.platform.arch }}
+          TAG: ${{ inputs.tag }}
+        run: |
+          set -euo pipefail
+          docker buildx build \
+            --progress=plain \
+            --platform "linux/${ARCH}" \
+            --provenance=false \
+            --sbom=false \
+            --label "org.opencontainers.image.source=${SOURCE}" \
+            --label "org.opencontainers.image.revision=${GITHUB_SHA}" \
+            --label "org.opencontainers.image.version=${TAG}" \
+            -f "${DOCKERFILE}" \
+            -t "${REGISTRY}/${IMAGE}:${TAG}-${ARCH}" \
+            --push \
+            "${CONTEXT}"
+
+  index:
+    name: Join the architectures
+    needs: build
+    runs-on: ubuntu-26.04
+    permissions:
+      contents: read
+      packages: write
+    outputs:
+      daemon: ${{ steps.read.outputs.daemon }}
+      auth: ${{ steps.read.outputs.auth }}
+      nginx: ${{ steps.read.outputs.nginx }}
+    steps:
+      - name: Harden runner
+        uses: step-security/harden-runner@46b06cea07f9e64621fdf066ba77ac6915163d43 # v2.22.3
+        with:
+          egress-policy: audit
+
+      - name: Log in to the registry
+        env:
+          TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: printf "%s" "${TOKEN}" | docker login ghcr.io -u "${GITHUB_ACTOR}" --password-stdin
+
+      - name: Join the architectures
+        env:
+          TAG: ${{ inputs.tag }}
+        run: |
+          set -euo pipefail
+          for IMAGE in phantom-daemon phantom-auth phantom-nginx; do
+            REF="${REGISTRY}/${IMAGE}:${TAG}"
+            docker buildx imagetools create \
+              --annotation "index:org.opencontainers.image.source=${SOURCE}" \
+              --annotation "index:org.opencontainers.image.revision=${GITHUB_SHA}" \
+              --annotation "index:org.opencontainers.image.version=${TAG}" \
+              -t "${REF}" "${REF}-amd64" "${REF}-arm64"
+          done
+
+      - name: Read the digests
+        id: read
+        env:
+          TAG: ${{ inputs.tag }}
+        run: |
+          set -euo pipefail
+          for ENTRY in daemon:phantom-daemon auth:phantom-auth nginx:phantom-nginx; do
+            REF="${REGISTRY}/${ENTRY#*:}:${TAG}"
+            docker buildx imagetools inspect "${REF}"
+            DIGEST=$(docker buildx imagetools inspect "${REF}" --format "{{.Manifest.Digest}}")
+            echo "${ENTRY%%:*}=${REF}@${DIGEST}" >> "${GITHUB_OUTPUT}"
+            echo "${REF}@${DIGEST}" >> "${GITHUB_STEP_SUMMARY}"
+          done
+
+      - name: Read the images without a login
+        env:
+          TAG: ${{ inputs.tag }}
+          REQUIRE_PUBLIC: ${{ inputs.require_public }}
+        run: |
+          set -euo pipefail
+          docker logout ghcr.io
+          for IMAGE in phantom-daemon phantom-auth phantom-nginx; do
+            REF="${REGISTRY}/${IMAGE}:${TAG}"
+            if docker buildx imagetools inspect "${REF}" > /dev/null; then
+              echo "${REF}: readable without a login"
+            elif [ "${REQUIRE_PUBLIC}" = true ]; then
+              echo "::error::${REF} needs a login"
+              exit 1
+            else
+              echo "::warning::${REF} needs a login"
+            fi
+          done
+
+  verify:
+    name: Run on linux/${{ matrix.arch }}
+    needs: index
+    runs-on: ${{ matrix.runner }}
+    permissions:
+      contents: read
+      packages: read
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: amd64
+            runner: ubuntu-26.04
+          - arch: arm64
+            runner: ubuntu-26.04-arm
+    env:
+      ARCH: ${{ matrix.arch }}
+      DAEMON_IMAGE: ${{ needs.index.outputs.daemon }}
+      AUTH_IMAGE: ${{ needs.index.outputs.auth }}
+      NGINX_IMAGE: ${{ needs.index.outputs.nginx }}
+    steps:
+      - name: Harden runner
+        uses: step-security/harden-runner@46b06cea07f9e64621fdf066ba77ac6915163d43 # v2.22.3
+        with:
+          egress-policy: audit
+
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+
+      - name: Log in to the registry
+        env:
+          TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: printf "%s" "${TOKEN}" | docker login ghcr.io -u "${GITHUB_ACTOR}" --password-stdin
+
+      - name: Run the daemon image
+        run: |
+          set -euo pipefail
+          docker run --rm --platform "linux/${ARCH}" \
+            -v "${PWD}/phantom_daemon:/app/phantom_daemon:ro" \
+            "${DAEMON_IMAGE}" sh -euc '
+              uname -m
+              python3 --version
+              python3 -c "
+          import ctypes, os
+          import phantom_daemon.main
+          for name in (\"WIREGUARD_GO_BRIDGE_LIB_PATH\", \"FIREWALL_BRIDGE_LIB_PATH\"):
+              ctypes.CDLL(os.environ[name])
+              print(\"loaded\", os.environ[name])
+          "
+              for TOOL in nft ip openssl; do command -v "${TOOL}"; done
+              for TOOL in curl unzip apt-get; do
+                if command -v "${TOOL}"; then echo "${TOOL} is in the image"; exit 1; fi
+              done
+            '
+
+      - name: Run the auth service image
+        run: |
+          set -euo pipefail
+          docker run --rm --platform "linux/${ARCH}" \
+            -v "${PWD}/services/auth-service/auth_service:/app/auth_service:ro" \
+            "${AUTH_IMAGE}" sh -euc '
+              uname -m
+              python3 --version
+              python3 -c "import auth_service.app; print(\"imported auth_service.app\")"
+            '
+
+      - name: Run the nginx image
+        run: |
+          set -euo pipefail
+          docker run --rm --platform "linux/${ARCH}" "${NGINX_IMAGE}" sh -euc '
+            uname -m
+            nginx -v
+            nginx -t
+          '
