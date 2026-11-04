@@ -10,7 +10,7 @@ import secrets
 import sqlite3
 import string
 import uuid
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 from nacl.pwhash import argon2id
@@ -110,7 +110,7 @@ def main() -> None:
 
     # 4. Create admin user
     user_id = uuid.uuid4().hex
-    now = datetime.now(timezone.utc).isoformat()
+    now = datetime.now(UTC).isoformat()
     pw_hash = argon2id.str(password.encode("utf-8")).decode("ascii")
     conn.execute(
         "INSERT INTO users (id, username, password_hash, role, created_at, updated_at) "

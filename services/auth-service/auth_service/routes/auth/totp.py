@@ -17,10 +17,10 @@ from __future__ import annotations
 
 import uuid
 
-from fastapi import APIRouter, Depends, Request
+from fastapi import APIRouter, Request
 
 from auth_service.audit import audit_log
-from auth_service.crypto.jwt import TokenPayload, decode_token_claims, encode_token
+from auth_service.crypto.jwt import decode_token_claims, encode_token
 from auth_service.crypto.password import verify_password
 from auth_service.crypto.totp import (
     build_totp_uri,
@@ -29,8 +29,12 @@ from auth_service.crypto.totp import (
     hash_backup_code,
     verify_totp,
 )
-from auth_service.errors import ApiException, AuthTokenExpiredError, AuthTokenInvalidError
-from auth_service.middleware.auth import require_auth
+from auth_service.errors import (
+    ApiException,
+    AuthTokenExpiredError,
+    AuthTokenInvalidError,
+)
+from auth_service.middleware.auth import AuthPayload
 from auth_service.models import (
     ActionResult,
     ApiOk,
@@ -50,7 +54,7 @@ router = APIRouter()
 def totp_setup(
     body: TOTPSetupRequest,
     request: Request,
-    payload: TokenPayload = Depends(require_auth),
+    payload: AuthPayload,
 ):
     """Start TOTP setup. Verify password, return setup token with secret and backup codes."""
     db = request.state.db
@@ -95,7 +99,7 @@ def totp_setup(
 def totp_confirm(
     body: TOTPConfirmRequest,
     request: Request,
-    payload: TokenPayload = Depends(require_auth),
+    payload: AuthPayload,
 ):
     """Confirm TOTP setup by verifying a code. Activates TOTP on success."""
     db = request.state.db
@@ -140,7 +144,7 @@ def totp_confirm(
 def totp_disable(
     body: TOTPDisableRequest,
     request: Request,
-    payload: TokenPayload = Depends(require_auth),
+    payload: AuthPayload,
 ):
     """Disable TOTP. Self: own password. Superadmin: any user with own password."""
     db = request.state.db

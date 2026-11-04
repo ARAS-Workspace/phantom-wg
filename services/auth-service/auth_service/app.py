@@ -19,7 +19,6 @@ import logging
 import sys
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
-from typing import Optional
 
 import httpx
 from fastapi import FastAPI, HTTPException, Request
@@ -77,8 +76,8 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         app.state.db_path = db_path
         app.state.proxy_client = proxy_client
         app.state.rate_limiter = rate_limiter
-    except Exception as exc:
-        log.critical("Auth service startup failed: %s", exc)
+    except Exception:
+        log.critical("Auth service startup failed", exc_info=True)
         sys.exit(1)
 
     yield
@@ -101,7 +100,7 @@ class _DBMiddleware(BaseHTTPMiddleware):
 
 
 def create_app(
-    lifespan_func: Optional[object] = lifespan,
+    lifespan_func: object | None = lifespan,
 ) -> FastAPI:
     """Create the FastAPI application."""
     app = FastAPI(

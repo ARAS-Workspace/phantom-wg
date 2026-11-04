@@ -15,12 +15,11 @@ Session management — logout and current user endpoints.
 
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, Request
+from fastapi import APIRouter, Request
 
 from auth_service.audit import audit_log
-from auth_service.crypto.jwt import TokenPayload
 from auth_service.errors import ApiException
-from auth_service.middleware.auth import require_auth
+from auth_service.middleware.auth import AuthPayload
 from auth_service.models import ActionResult, ApiOk
 from auth_service.routes.auth._helpers import user_info
 
@@ -28,7 +27,7 @@ router = APIRouter()
 
 
 @router.post("/logout")
-def logout(request: Request, payload: TokenPayload = Depends(require_auth)):
+def logout(request: Request, payload: AuthPayload):
     """Revoke current session."""
     db = request.state.db
     db.revoke_session(payload.jti)
@@ -37,7 +36,7 @@ def logout(request: Request, payload: TokenPayload = Depends(require_auth)):
 
 
 @router.get("/me")
-def me(request: Request, payload: TokenPayload = Depends(require_auth)):
+def me(request: Request, payload: AuthPayload):
     """Get current user info."""
     db = request.state.db
     user = db.get_user_by_username(payload.sub)
