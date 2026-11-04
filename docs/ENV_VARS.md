@@ -36,11 +36,13 @@ All variables are optional. Defaults are production-safe except where noted.
 
 ## Rate Limiting
 
-| Variable                 | Default | Type    | Description                                                               |
-|--------------------------|---------|---------|---------------------------------------------------------------------------|
-| `AUTH_RATE_LIMIT_WINDOW` | `60`    | int (s) | Sliding window duration                                                   |
-| `AUTH_RATE_LIMIT_MAX`    | `5`     | int     | Max attempts within window — exceeded → `RATE_LIMITED` (429)              |
-| `AUTH_TRUSTED_PROXIES`   | `172.28.0.0/24,fd00:d0ce::/64` | CIDR list | Peers whose `X-Forwarded-For` is honored (comma-separated) |
+| Variable                 | Default          | Type      | Description                                                  |
+|--------------------------|------------------|-----------|--------------------------------------------------------------|
+| `AUTH_RATE_LIMIT_WINDOW` | `60`             | int (s)   | Sliding window duration                                      |
+| `AUTH_RATE_LIMIT_MAX`    | `5`              | int       | Max attempts within window — exceeded → `RATE_LIMITED` (429) |
+| `PHANTOM_SUBNET_V4`      | `172.28.0.0/24`  | CIDR      | IPv4 subnet of `phantom-net`, trusted for `X-Forwarded-For`  |
+| `PHANTOM_SUBNET_V6`      | `fd00:d0ce::/64` | CIDR      | IPv6 subnet of `phantom-net`, trusted for `X-Forwarded-For`  |
+| `AUTH_TRUSTED_PROXIES`   | empty            | CIDR list | Additional trusted peers (comma-separated)                   |
 
 > Rate limiting applies to `POST /auth/login`, `POST /auth/mfa/verify` and
 > `POST /auth/totp/backup`, keyed by client IP and sharing one budget. The
@@ -48,9 +50,11 @@ All variables are optional. Defaults are production-safe except where noted.
 > with MFA still pending does not refill the budget.
 >
 > Client IP resolution: `X-Forwarded-For` is honored only when the
-> connecting peer is inside `AUTH_TRUSTED_PROXIES`. The default is exactly
-> the pinned `phantom-net` subnets from the daemon compose
-> (`networks.phantom-net.ipam`) — where nginx lives — nothing wider. If
-> you change the compose subnet, change this variable with it. Entries are
-> walked right to left, skipping trusted hops; the first untrusted address
-> is the client. A direct connection cannot spoof its own address.
+> connecting peer is inside a trusted network: `PHANTOM_SUBNET_V4`,
+> `PHANTOM_SUBNET_V6` and, when set, `AUTH_TRUSTED_PROXIES`. The two subnets
+> are the variables `networks.phantom-net.ipam` reads in the daemon compose
+> — where nginx lives — and their defaults are the compose defaults; an
+> empty value takes the default. `AUTH_TRUSTED_PROXIES` adds to the subnets
+> and does not replace them. Entries are walked right to left, skipping
+> trusted hops; the first untrusted address is the client. A direct
+> connection cannot spoof its own address.
