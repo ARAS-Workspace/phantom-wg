@@ -70,11 +70,6 @@ ARG WIREGUARD_GO_BRIDGE_VERSION=v2.2.0
 ARG WIREGUARD_GO_BRIDGE_SHA256_AMD64=c84cbd53ffe1f1b0e583b2903fdfa820ad99012f0a93aabd8452c543212c91c7
 ARG WIREGUARD_GO_BRIDGE_SHA256_ARM64=6fbdfe59f09e3a3773b8123771c12b5588323b8f4c8611ab8beb54804e5f16c3
 
-# A vendor/linux-<arch>/ tree in the context wins over the download, the same
-# way it does in Dockerfile. The trailing glob is what makes it optional — a
-# bare "COPY vendor/" fails the build when the directory is absent.
-COPY vendor*/ /tmp/vendor/
-
 # ── Download & unpack vendor bridges ─────────────────────────────
 RUN set -e; \
     case "${TARGETARCH}" in \
@@ -82,37 +77,28 @@ RUN set -e; \
         *) echo "Unsupported arch: ${TARGETARCH}" && exit 1 ;; \
     esac; \
     mkdir -p "${VENDOR_DIR}"; \
-    LOCAL="/tmp/vendor/linux-${TARGETARCH}"; \
-    if [ -d "${LOCAL}/firewall_bridge" ] && [ -d "${LOCAL}/wireguard_go_bridge" ]; then \
-        echo "Using the vendor tree from the build context: vendor/linux-${TARGETARCH}"; \
-        cp -a "${LOCAL}/." "${VENDOR_DIR}/"; \
-    else \
-        if [ -d "${LOCAL}" ]; then \
-            echo "vendor/linux-${TARGETARCH} is present but does not hold both bridges — fetching instead"; \
-        fi; \
-        for BRIDGE in firewall-bridge wireguard-go-bridge; do \
-            case "${BRIDGE}" in \
-                firewall-bridge) \
-                    VER="${FIREWALL_BRIDGE_VERSION}"; \
-                    case "${TARGETARCH}" in \
-                        amd64) SHA="${FIREWALL_BRIDGE_SHA256_AMD64}" ;; \
-                        arm64) SHA="${FIREWALL_BRIDGE_SHA256_ARM64}" ;; \
-                    esac ;; \
-                wireguard-go-bridge) \
-                    VER="${WIREGUARD_GO_BRIDGE_VERSION}"; \
-                    case "${TARGETARCH}" in \
-                        amd64) SHA="${WIREGUARD_GO_BRIDGE_SHA256_AMD64}" ;; \
-                        arm64) SHA="${WIREGUARD_GO_BRIDGE_SHA256_ARM64}" ;; \
-                    esac ;; \
-            esac; \
-            URL="https://github.com/${VENDOR_REPO}/releases/download/vendor-${BRIDGE}-${VER}/linux-${TARGETARCH}.zip"; \
-            echo "Fetching ${URL}"; \
-            curl -fSL --retry 3 --retry-delay 2 -o /tmp/bridge.zip "${URL}"; \
-            echo "${SHA}  /tmp/bridge.zip" | sha256sum -c -; \
-            unzip -o /tmp/bridge.zip -d "${VENDOR_DIR}"; \
-            rm /tmp/bridge.zip; \
-        done; \
-    fi; \
+    for BRIDGE in firewall-bridge wireguard-go-bridge; do \
+        case "${BRIDGE}" in \
+            firewall-bridge) \
+                VER="${FIREWALL_BRIDGE_VERSION}"; \
+                case "${TARGETARCH}" in \
+                    amd64) SHA="${FIREWALL_BRIDGE_SHA256_AMD64}" ;; \
+                    arm64) SHA="${FIREWALL_BRIDGE_SHA256_ARM64}" ;; \
+                esac ;; \
+            wireguard-go-bridge) \
+                VER="${WIREGUARD_GO_BRIDGE_VERSION}"; \
+                case "${TARGETARCH}" in \
+                    amd64) SHA="${WIREGUARD_GO_BRIDGE_SHA256_AMD64}" ;; \
+                    arm64) SHA="${WIREGUARD_GO_BRIDGE_SHA256_ARM64}" ;; \
+                esac ;; \
+        esac; \
+        URL="https://github.com/${VENDOR_REPO}/releases/download/vendor-${BRIDGE}-${VER}/linux-${TARGETARCH}.zip"; \
+        echo "Fetching ${URL}"; \
+        curl -fSL --retry 3 --retry-delay 2 -o /tmp/bridge.zip "${URL}"; \
+        echo "${SHA}  /tmp/bridge.zip" | sha256sum -c -; \
+        unzip -o /tmp/bridge.zip -d "${VENDOR_DIR}"; \
+        rm /tmp/bridge.zip; \
+    done; \
     EXPECT=$(case "${TARGETARCH}" in amd64) echo 62 ;; arm64) echo 183 ;; esac); \
     FOUND=0; \
     for SO in $(find "${VENDOR_DIR}" -name '*.so'); do \

@@ -20,7 +20,6 @@ Phantom-WG Modern vX.Y.Z
         ├── wireguard-go-bridge vA.B.C  ← bağımlılık
         ├── firewall-bridge vA.B.C      ← bağımlılık
         ├── react-spa (build artifact)  ← release ile birlikte paketlenir
-        ├── vendor/linux-{arch}/        ← iki bridge, release ile paketlenir
         └── nginx config                ← release ile birlikte paketlenir
 ```
 
@@ -85,9 +84,5 @@ değil depo için cevap verir, bu yüzden her tüketici bir etiket pinler. Daemo
 hem sürümleri hem her arşivin SHA-256'sını `Dockerfile` ve `dev.Dockerfile`
 içinde pinler; digest'i tutmayan bir indirme build'i kırar.
 
-Bridge'ler imaja iki yoldan ulaşır:
-
-- **Release paketi** — arşiv onları `vendor/linux-{arch}/` altında taşır,
-  oraya release workflow'u yazar. Build o ağacı kullanır ve ağ isteği yapmaz.
-- **`main` klonu** — `vendor/` yoktur, build pinli release'leri indirir.
+İmaj build'i pinli release'leri indirir.
 

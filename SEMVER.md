@@ -20,7 +20,6 @@ Phantom-WG Modern vX.Y.Z
         ├── wireguard-go-bridge vA.B.C  ← dependency
         ├── firewall-bridge vA.B.C      ← dependency
         ├── react-spa (build artifact)  ← bundled with release
-        ├── vendor/linux-{arch}/        ← the two bridges, bundled with release
         └── nginx config                ← bundled with release
 ```
 
@@ -85,11 +84,5 @@ the repository rather than for a component, so every consumer pins a tag. The
 daemon pins both versions and the SHA-256 of each archive in `Dockerfile` and
 `dev.Dockerfile`; a download that does not match the digest fails the build.
 
-The bridges reach the image two ways:
-
-- **Release package** — the archive carries them under `vendor/linux-{arch}/`,
-  written there by the release workflow. The build uses that tree and makes no
-  network request.
-- **Clone of `main`** — no `vendor/` is present, so the build downloads the
-  pinned releases.
+The image build downloads the pinned releases.
 

@@ -49,9 +49,8 @@ The other four are listed in their own notices:
 - firewall-bridge:     https://github.com/ARAS-Workspace/phantom-wg/blob/dev/firewall-bridge/THIRD_PARTY_LICENSES
 
 Each notice also travels with its component: auth-service and react-spa in
-the directories named above, and the two bridges inside the vendor archive —
-which the image unpacks into /opt/phantom/vendor, and which the release
-package ships under vendor/linux-<arch>/.
+the directories named above, and the two bridges inside the vendor archive,
+which the image unpacks into /opt/phantom/vendor.
 
 ================================================================================
 DAEMON — PYTHON DEPENDENCIES
