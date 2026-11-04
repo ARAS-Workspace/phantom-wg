@@ -5,6 +5,54 @@ passwords, TOTP MFA, RBAC, audit log, authenticated reverse proxy
 to the daemon UDS.
 
 
+v1.1.9 - 2026-11-04
+-------------------
+
+  Proxy access release. The proxy forwards a fixed table of daemon
+  routes instead of every path under /api, backup becomes superadmin
+  only, and the request body limit is set per route. The trusted
+  proxies follow the phantom-net subnets. Roles and the schema are
+  unchanged.
+
+  * Route table. routes/proxy.py lists the 26 daemon routes in ROUTES,
+    matched exactly on method and path, and sends the daemon the
+    table's path. A request outside the table is answered 404
+    NOT_FOUND and audited without reaching the daemon. Before this
+    release an admin reached /api/core/backup/export through spellings
+    such as core/x/../backup/export or core/%2562ackup/export; nginx
+    forwards them as written. Those spellings have no row now. A wrong
+    method is 404 where the daemon answered 405.
+
+  * Access levels. Each row names what the route asks of the caller:
+    VIEW reads state and carries no client key, OPERATE changes VPN
+    state or reads a client key, CUSTODY moves the whole data set.
+    GRANTS maps an access to roles in one place: VIEW and OPERATE stay
+    with admin and superadmin, CUSTODY is superadmin. A refusal is
+    403 SUPERADMIN_REQUIRED, audited, before the body is read.
+
+  * Body limits. AUTH_PROXY_MAX_BODY drops from 64 MiB to 64 KiB, and
+    AUTH_PROXY_BACKUP_MAX_BODY carries 64 MiB for the two backup
+    routes. The limit belongs to the route, not the role: a superadmin
+    has the small limit everywhere else. nginx.conf in the daemon
+    matches, with its own location for the backup routes.
+
+  * Trusted proxies. PHANTOM_SUBNET_V4 and PHANTOM_SUBNET_V6 name the
+    phantom-net subnets, the variables the daemon compose reads, and
+    an empty value takes the compose default. AUTH_TRUSTED_PROXIES
+    adds to them and no longer replaces them, so it is empty by
+    default and cannot remove the subnets from the list.
+
+  * Dependencies in routes. Depends() moves out of argument defaults
+    into two Annotated aliases in middleware/auth.py, AuthPayload and
+    SuperadminPayload. Route dependencies and the OpenAPI document are
+    unchanged. app.py and routes/proxy.py keep their broad handlers
+    and log the traceback. The rest of the tree follows ruff: imports,
+    datetime.UTC, __slots__ order.
+
+  No schema or migration impact. An admin loses backup in the panel
+  until the dashboard reflects it; the bootstrap account is superadmin.
+
+
 v1.1.8 - 2026-11-03
 -------------------
 
