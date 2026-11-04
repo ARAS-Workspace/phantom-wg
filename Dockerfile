@@ -17,7 +17,7 @@ FROM debian:trixie-20261027-slim@sha256:f6b08b09a05725f9431502d3b5714f5c4576e82c
 # pip installs into /opt/venv; Debian's python3 refuses it (PEP 668).
 RUN apt-get update \
  && apt-get install -y --no-install-recommends \
-    python3 python3-venv ca-certificates netbase tzdata \
+    python3 python3-venv ca-certificates netbase tzdata openssl \
  && python3 -m venv /opt/venv \
  && rm -rf /var/lib/apt/lists/*
 

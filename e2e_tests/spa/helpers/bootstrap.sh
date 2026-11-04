@@ -95,7 +95,7 @@ green "  Auth keys + DB generated."
 bold "Generating TLS certificate..."
 docker run --rm \
     -v "${SECRETS_DIR}:/secrets" \
-    alpine/openssl req -x509 -newkey ec -pkeyopt ec_paramgen_curve:prime256v1 \
+    "$DAEMON_IMAGE" openssl req -x509 -newkey ec -pkeyopt ec_paramgen_curve:prime256v1 \
         -days 365 -nodes \
         -keyout /secrets/tls_key \
         -out /secrets/tls_cert \

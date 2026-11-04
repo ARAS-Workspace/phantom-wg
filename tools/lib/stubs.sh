@@ -7,10 +7,7 @@ cmd_stubs() {
     local out_dir="typings"
     local vendor_dir="/opt/phantom/vendor"
 
-    if ! docker image inspect phantom-daemon:latest &>/dev/null; then
-        bold "Image phantom-daemon:latest not found. Building..."
-        docker build -t phantom-daemon:latest -f "$DAEMON_DOCKERFILE" .
-    fi
+    ensure_daemon_image
 
     rm -rf "$out_dir"
     mkdir -p "$out_dir"

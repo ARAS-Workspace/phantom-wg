@@ -3,6 +3,13 @@
 # Requires: DAEMON_DOCKERFILE, SECRETS_DIR
 # ──────────────────────────────────────────────────────────────────
 
+ensure_daemon_image() {
+    if ! docker image inspect phantom-daemon:latest &>/dev/null; then
+        bold "Image phantom-daemon:latest not found. Building..."
+        docker build -t phantom-daemon:latest -f "$DAEMON_DOCKERFILE" .
+    fi
+}
+
 cmd_gen_keys() {
     local force=false
     for arg in "$@"; do
@@ -17,10 +24,7 @@ cmd_gen_keys() {
         bold "Overwriting WG keys (--force)..."
     fi
 
-    if ! docker image inspect phantom-daemon:latest &>/dev/null; then
-        bold "Image phantom-daemon:latest not found. Building..."
-        docker build -t phantom-daemon:latest -f "$DAEMON_DOCKERFILE" .
-    fi
+    ensure_daemon_image
 
     bold "Generating WireGuard keypair..."
     local keys

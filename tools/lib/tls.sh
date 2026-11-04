@@ -1,6 +1,6 @@
 # ──────────────────────────────────────────────────────────────────
 # TLS certificate generation (self-signed)
-# Requires: SECRETS_DIR, TLS_SUBJECT, TLS_SAN
+# Requires: DAEMON_DOCKERFILE, SECRETS_DIR, TLS_SUBJECT, TLS_SAN
 # Optional: TLS_PRODUCTION (enables detail output)
 # ──────────────────────────────────────────────────────────────────
 
@@ -23,10 +23,12 @@ cmd_setup_tls() {
 
     mkdir -p "$SECRETS_DIR"
 
+    ensure_daemon_image
+
     bold "Generating self-signed TLS certificate..."
 
     local args=(
-        req -x509 -newkey ec -pkeyopt ec_paramgen_curve:prime256v1
+        openssl req -x509 -newkey ec -pkeyopt ec_paramgen_curve:prime256v1
         -days 365 -nodes
         -keyout /secrets/tls_key
         -out /secrets/tls_cert
@@ -39,7 +41,7 @@ cmd_setup_tls() {
 
     docker run --rm \
         -v "$(pwd)/${SECRETS_DIR}:/secrets" \
-        alpine/openssl "${args[@]}" \
+        phantom-daemon:latest "${args[@]}" \
         2>/dev/null
 
     chmod 600 "$key_path" "$cert_path" 2>/dev/null || true
@@ -51,6 +53,10 @@ cmd_setup_tls() {
     if [[ "${TLS_PRODUCTION:-false}" == true ]]; then
         echo ""
         bold "Certificate details:"
-        openssl x509 -in "$cert_path" -noout -subject -issuer -dates 2>/dev/null | sed 's/^/  /'
+        docker run --rm \
+            -v "$(pwd)/${SECRETS_DIR}:/secrets:ro" \
+            phantom-daemon:latest \
+            openssl x509 -in /secrets/tls_cert -noout -subject -issuer -dates \
+            2>/dev/null | sed 's/^/  /'
     fi
 }
