@@ -75,10 +75,12 @@ All responses use a code-only envelope.
 
 ### Proxy
 
-| Code                  | HTTP | Trigger                               |
-|-----------------------|------|---------------------------------------|
-| `BODY_TOO_LARGE`      | 413  | Request body exceeds `proxy_max_body` |
-| `SERVICE_UNAVAILABLE` | 502  | Daemon connection failed              |
+| Code                  | HTTP | Trigger                                     |
+|-----------------------|------|---------------------------------------------|
+| `NOT_FOUND`           | 404  | Method and path are outside the route table |
+| `SUPERADMIN_REQUIRED` | 403  | Role does not hold the route's access       |
+| `BODY_TOO_LARGE`      | 413  | Request body exceeds the route's limit      |
+| `SERVICE_UNAVAILABLE` | 502  | Daemon connection failed                    |
 
 ### Generic Fallbacks (framework-level)
 

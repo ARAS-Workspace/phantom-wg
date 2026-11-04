@@ -19,11 +19,12 @@ All variables are optional. Defaults are production-safe except where noted.
 
 ## Proxy
 
-| Variable              | Default                               | Type        | Description                                                    |
-|-----------------------|---------------------------------------|-------------|----------------------------------------------------------------|
-| `AUTH_PROXY_URL`      | `unix:///var/run/phantom/daemon.sock` | URL         | Daemon target. `unix://` prefix = UDS, otherwise plain HTTP    |
-| `AUTH_PROXY_TIMEOUT`  | `30.0`                                | float (s)   | Per-request timeout toward daemon                              |
-| `AUTH_PROXY_MAX_BODY` | `65536`                               | int (bytes) | Max forwarded request body — exceeded → `BODY_TOO_LARGE` (413) |
+| Variable                     | Default                               | Type        | Description                                                    |
+|------------------------------|---------------------------------------|-------------|----------------------------------------------------------------|
+| `AUTH_PROXY_URL`             | `unix:///var/run/phantom/daemon.sock` | URL         | Daemon target. `unix://` prefix = UDS, otherwise plain HTTP    |
+| `AUTH_PROXY_TIMEOUT`         | `30.0`                                | float (s)   | Per-request timeout toward daemon                              |
+| `AUTH_PROXY_MAX_BODY`        | `65536`                               | int (bytes) | Max forwarded request body — exceeded → `BODY_TOO_LARGE` (413) |
+| `AUTH_PROXY_BACKUP_MAX_BODY` | `67108864`                            | int (bytes) | The same limit on `/api/core/backup/*`                         |
 
 ## Token Lifetimes
 

@@ -120,10 +120,11 @@ Authorization
   Two roles:
 
     admin        /auth/me, /logout, /auth/password/* (own password),
-                 /auth/totp/* (own TOTP), and the /api/* proxy.
+                 /auth/totp/* (own TOTP), and the /api/* proxy
+                 except the backup routes.
     superadmin   Everything admin can do, plus /auth/users/* (create,
-                 list, delete, force-change password) and /auth/audit
-                 (read audit log).
+                 list, delete, force-change password), /auth/audit
+                 (read audit log) and the backup routes.
 
   Role enforcement uses require_superadmin — a thin-wrapper around
   require_auth that asserts payload.role == "superadmin"
@@ -155,24 +156,41 @@ Cryptography
 Reverse proxy
 -------------
 
-  routes/proxy.py owns /api/{path:path}. Every method
-  (GET POST PUT DELETE PATCH HEAD OPTIONS) is forwarded.
+  routes/proxy.py owns /api/{path:path} and forwards the daemon
+  routes in its ROUTES table, matched exactly on method and path. A
+  request outside the table does not reach the daemon, and the URL
+  sent to the daemon is the table's path: a path spelled another way
+  has no row.
+
+  Each row names the access the route needs:
+
+    VIEW       reads state, carries no client key
+    OPERATE    changes VPN state, or reads a client key
+    CUSTODY    moves the whole data set, every client key with it
+
+  GRANTS maps an access to the roles that hold it: VIEW and OPERATE
+  to admin and superadmin, CUSTODY to superadmin. CUSTODY is the two
+  backup routes, which also take the large body limit.
 
   Per-request flow:
     1. Apply require_auth (unauthenticated requests never reach the
        daemon).
-    2. Build the target URL from config.proxy_base_url + path +
-       query.
-    3. Resolve user_id from username for audit context.
-    4. Read the request body; reject with 413 if larger than
-       AUTH_PROXY_MAX_BODY.
-    5. Strip Host / Authorization / Content-Length /
+    2. Resolve user_id from username for audit context.
+    3. Look up method and path in ROUTES; 404 NOT_FOUND outside the
+       table, audited.
+    4. Check the token's role against GRANTS; 403
+       SUPERADMIN_REQUIRED if it is missing, audited, before the
+       body is read.
+    5. Read the request body; reject with 413 if larger than the
+       route's limit (AUTH_PROXY_MAX_BODY, or
+       AUTH_PROXY_BACKUP_MAX_BODY on backup).
+    6. Strip Host / Authorization / Content-Length /
        Transfer-Encoding from forwarded headers.
-    6. Forward via httpx AsyncClient (UDS transport in production).
-    7. Audit-log the request: method, path, query, response status.
-    8. Pass the response back, preserving content-type while
+    7. Forward via httpx AsyncClient (UDS transport in production).
+    8. Audit-log the request: method, path, query, response status.
+    9. Pass the response back, preserving content-type while
        stripping length/encoding headers (uvicorn re-computes them).
-    9. JSON responses are re-encoded as JSONResponse; binary
+   10. JSON responses are re-encoded as JSONResponse; binary
        responses pass through raw — fixed in a recent revision so
        endpoints that return tarballs (backup export) work
        end-to-end.
@@ -204,7 +222,12 @@ Configuration
     AUTH_INACTIVITY_TIMEOUT      1800   (30m sliding session)
     AUTH_MFA_TOKEN_LIFETIME      120    (2m MFA token)
     AUTH_TOTP_SETUP_LIFETIME     300    (5m enrollment QR window)
-    AUTH_PROXY_MAX_BODY          67108864 (64 MB — backup export)
+    AUTH_PROXY_MAX_BODY          65536    (64 KB)
+    AUTH_PROXY_BACKUP_MAX_BODY   67108864 (64 MB — backup routes)
+    PHANTOM_SUBNET_V4 / _V6      phantom-net subnets, trusted for
+                                 X-Forwarded-For
+    AUTH_TRUSTED_PROXIES         further trusted networks, empty by
+                                 default
     AUTH_RATE_LIMIT_WINDOW/MAX   60 / 5
 
 

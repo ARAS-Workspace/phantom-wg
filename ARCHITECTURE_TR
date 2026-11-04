@@ -123,10 +123,11 @@ Yetkilendirme
   İki rol:
 
     admin        /auth/me, /logout, /auth/password/* (kendi parolası),
-                 /auth/totp/* (kendi TOTP'si) ve /api/* proxy.
+                 /auth/totp/* (kendi TOTP'si) ve backup rotaları dışında
+                 /api/* proxy.
     superadmin   admin'in yapabildiği her şey + /auth/users/*
-                 (oluştur, listele, sil, parola zorla değiştir) ve
-                 /auth/audit (audit log oku).
+                 (oluştur, listele, sil, parola zorla değiştir),
+                 /auth/audit (audit log oku) ve backup rotaları.
 
   Rol uygulaması require_superadmin ile yapılır — require_auth'un
   payload.role == "superadmin" assertion'ı içeren thin-wrapper
@@ -160,23 +161,38 @@ Kriptografi
 Reverse proxy
 -------------
 
-  routes/proxy.py /api/{path:path}'in sahibidir. Her metot
-  (GET POST PUT DELETE PATCH HEAD OPTIONS) forward edilir.
+  routes/proxy.py /api/{path:path}'in sahibidir ve ROUTES tablosundaki
+  daemon rotalarını forward eder; eşleşme metot ve path üzerinde
+  birebirdir. Tablo dışındaki istek daemon'a ulaşmaz, daemon'a giden
+  URL tablodaki path'tir: başka biçimde yazılmış path'in satırı yoktur.
+
+  Her satır rotanın istediği yetkiyi adlandırır:
+
+    VIEW       durumu okur, istemci anahtarı taşımaz
+    OPERATE    VPN durumunu değiştirir ya da istemci anahtarı okur
+    CUSTODY    tüm veri setini taşır, bütün istemci anahtarlarıyla
+
+  GRANTS bir yetkiyi ona sahip rollerle eşler: VIEW ve OPERATE admin
+  ve superadmin'e, CUSTODY superadmin'e. CUSTODY iki backup rotasıdır;
+  büyük body limiti de onlardadır.
 
   Request başına akış:
     1. require_auth'u uygula (kimliği doğrulanmamış istekler asla
        daemon'a ulaşmaz).
-    2. Hedef URL'yi config.proxy_base_url + path + query'den oluştur.
-    3. Audit context için username'den user_id'yi resolve et.
-    4. Request body'yi oku; AUTH_PROXY_MAX_BODY'den büyükse 413 ile
-       reddet.
-    5. Forward edilecek header'lardan Host / Authorization /
+    2. Audit context için username'den user_id'yi resolve et.
+    3. Metot ve path'i ROUTES'ta ara; tablo dışındaysa 404 NOT_FOUND,
+       audit'lenir.
+    4. Token rolünü GRANTS ile denetle; yoksa 403 SUPERADMIN_REQUIRED,
+       audit'lenir, body okunmadan.
+    5. Request body'yi oku; rotanın limitinden büyükse 413 ile reddet
+       (AUTH_PROXY_MAX_BODY, backup'ta AUTH_PROXY_BACKUP_MAX_BODY).
+    6. Forward edilecek header'lardan Host / Authorization /
        Content-Length / Transfer-Encoding'i çıkar.
-    6. httpx AsyncClient ile forward et (production'da UDS transport).
-    7. İsteği audit-log'la: method, path, query, response status.
-    8. Response'u geri ver, content-type'ı koru ama length/encoding
+    7. httpx AsyncClient ile forward et (production'da UDS transport).
+    8. İsteği audit-log'la: method, path, query, response status.
+    9. Response'u geri ver, content-type'ı koru ama length/encoding
        header'larını çıkar (uvicorn onları yeniden hesaplar).
-    9. JSON yanıtlar JSONResponse olarak yeniden encode edilir;
+   10. JSON yanıtlar JSONResponse olarak yeniden encode edilir;
        binary yanıtlar raw geçer — backup export gibi tarball
        dönen daemon endpoint'lerinin uçtan uca çalışması için yakın
        zamanda düzeltildi.
@@ -209,7 +225,11 @@ Yapılandırma
     AUTH_INACTIVITY_TIMEOUT      1800   (30 dakikalık sliding session)
     AUTH_MFA_TOKEN_LIFETIME      120    (2 dakikalık MFA token)
     AUTH_TOTP_SETUP_LIFETIME     300    (5 dakikalık enrollment QR)
-    AUTH_PROXY_MAX_BODY          67108864 (64 MB — backup export için)
+    AUTH_PROXY_MAX_BODY          65536    (64 KB)
+    AUTH_PROXY_BACKUP_MAX_BODY   67108864 (64 MB — backup rotaları)
+    PHANTOM_SUBNET_V4 / _V6      phantom-net subnet'leri, X-Forwarded-For
+                                 için güvenilir
+    AUTH_TRUSTED_PROXIES         ek güvenilir ağlar, varsayılanı boş
     AUTH_RATE_LIMIT_WINDOW/MAX   60 / 5
 
 
