@@ -25,6 +25,7 @@ cmd_certbot() {
         -p 80:80 \
         -v "$(pwd)/${SECRETS_DIR}:/secrets" \
         -v "$(pwd)/${CERTBOT_STATE_DIR}:/etc/letsencrypt" \
+        -v "${CERTBOT_DOCKERFILE}/certbot_obtain.py:/app/certbot_obtain.py:ro" \
         ${CERTBOT_EMAIL:+-e CERTBOT_EMAIL="$CERTBOT_EMAIL"} \
         "$CERTBOT_IMAGE" \
         "$domain"
