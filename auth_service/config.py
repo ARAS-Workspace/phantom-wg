@@ -20,11 +20,13 @@ import os
 from dataclasses import dataclass, field
 
 # X-Forwarded-For is only honored when the connecting peer falls in one
-# of these networks. Default: the pinned phantom-net subnets from the
-# daemon compose (networks.phantom-net.ipam) — nginx always reaches us
-# from there, in prod and dev alike. Change the compose subnet, change
-# AUTH_TRUSTED_PROXIES with it.
-_DEFAULT_TRUSTED_PROXIES = "172.28.0.0/24,fd00:d0ce::/64"
+# of these networks: the phantom-net subnets nginx reaches us from, then
+# AUTH_TRUSTED_PROXIES when it is set. PHANTOM_SUBNET_V4 and
+# PHANTOM_SUBNET_V6 are the variables networks.phantom-net.ipam reads in
+# the daemon compose, and these defaults are the compose defaults.
+_DEFAULT_SUBNET_V4 = "172.28.0.0/24"
+_DEFAULT_SUBNET_V6 = "fd00:d0ce::/64"
+_DEFAULT_TRUSTED_PROXIES = f"{_DEFAULT_SUBNET_V4},{_DEFAULT_SUBNET_V6}"
 
 
 def _parse_trusted_proxies(raw: str) -> tuple[ipaddress.IPv4Network | ipaddress.IPv6Network, ...]:
@@ -35,6 +37,18 @@ def _parse_trusted_proxies(raw: str) -> tuple[ipaddress.IPv4Network | ipaddress.
         if part:
             networks.append(ipaddress.ip_network(part, strict=False))
     return tuple(networks)
+
+
+def _trusted_proxies_from_env() -> tuple[ipaddress.IPv4Network | ipaddress.IPv6Network, ...]:
+    """PHANTOM_SUBNET_V4, PHANTOM_SUBNET_V6, then AUTH_TRUSTED_PROXIES.
+
+    An empty subnet takes its default, as ${VAR:-default} does in compose.
+    """
+    return _parse_trusted_proxies(",".join((
+        os.environ.get("PHANTOM_SUBNET_V4") or _DEFAULT_SUBNET_V4,
+        os.environ.get("PHANTOM_SUBNET_V6") or _DEFAULT_SUBNET_V6,
+        os.environ.get("AUTH_TRUSTED_PROXIES", ""),
+    )))
 
 
 @dataclass(frozen=True, slots=True)
@@ -94,7 +108,5 @@ def load_auth_config() -> AuthConfig:
         proxy_max_body=int(os.environ.get("AUTH_PROXY_MAX_BODY", "67108864")),
         rate_limit_window=int(os.environ.get("AUTH_RATE_LIMIT_WINDOW", "60")),
         rate_limit_max=int(os.environ.get("AUTH_RATE_LIMIT_MAX", "5")),
-        trusted_proxies=_parse_trusted_proxies(
-            os.environ.get("AUTH_TRUSTED_PROXIES", _DEFAULT_TRUSTED_PROXIES),
-        ),
+        trusted_proxies=_trusted_proxies_from_env(),
     )

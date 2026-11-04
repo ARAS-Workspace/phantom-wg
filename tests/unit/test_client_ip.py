@@ -118,12 +118,72 @@ def test_default_is_exactly_the_compose_network():
         assert not any(ipaddress.ip_address(ip) in n for n in nets), ip
 
 
-def test_env_override(monkeypatch):
-    monkeypatch.setenv("AUTH_TRUSTED_PROXIES", "198.51.100.0/24")
+def _trusted_from_env(monkeypatch, **env: str) -> list[str]:
+    """Trusted proxies load_auth_config builds from exactly these variables."""
     from auth_service.config import load_auth_config
-    config = load_auth_config()
-    assert len(config.trusted_proxies) == 1
-    assert str(config.trusted_proxies[0]) == "198.51.100.0/24"
+    for name in ("PHANTOM_SUBNET_V4", "PHANTOM_SUBNET_V6", "AUTH_TRUSTED_PROXIES"):
+        monkeypatch.delenv(name, raising=False)
+    for name, value in env.items():
+        monkeypatch.setenv(name, value)
+    return [str(net) for net in load_auth_config().trusted_proxies]
+
+
+def test_unset_env_is_the_compose_default(monkeypatch):
+    assert _trusted_from_env(monkeypatch) == ["172.28.0.0/24", "fd00:d0ce::/64"]
+
+
+def test_subnets_come_from_env(monkeypatch):
+    assert _trusted_from_env(
+        monkeypatch,
+        PHANTOM_SUBNET_V4="10.20.0.0/24",
+        PHANTOM_SUBNET_V6="fd00:abcd::/64",
+    ) == ["10.20.0.0/24", "fd00:abcd::/64"]
+
+
+def test_auth_trusted_proxies_extends_the_default_subnets(monkeypatch):
+    assert _trusted_from_env(
+        monkeypatch,
+        AUTH_TRUSTED_PROXIES="198.51.100.0/24, 2001:db8::/32",
+    ) == ["172.28.0.0/24", "fd00:d0ce::/64", "198.51.100.0/24", "2001:db8::/32"]
+
+
+def test_auth_trusted_proxies_extends_custom_subnets(monkeypatch):
+    assert _trusted_from_env(
+        monkeypatch,
+        PHANTOM_SUBNET_V4="10.20.0.0/24",
+        PHANTOM_SUBNET_V6="fd00:abcd::/64",
+        AUTH_TRUSTED_PROXIES="198.51.100.0/24",
+    ) == ["10.20.0.0/24", "fd00:abcd::/64", "198.51.100.0/24"]
+
+
+def test_empty_subnet_is_the_compose_default(monkeypatch):
+    # ${PHANTOM_SUBNET_V4:-...} in compose treats empty as unset.
+    assert _trusted_from_env(
+        monkeypatch,
+        PHANTOM_SUBNET_V4="",
+        PHANTOM_SUBNET_V6="",
+    ) == ["172.28.0.0/24", "fd00:d0ce::/64"]
+
+
+def test_empty_extension_adds_nothing(monkeypatch):
+    assert _trusted_from_env(
+        monkeypatch,
+        AUTH_TRUSTED_PROXIES="",
+    ) == ["172.28.0.0/24", "fd00:d0ce::/64"]
+
+
+@pytest.mark.parametrize("name", ["PHANTOM_SUBNET_V4", "PHANTOM_SUBNET_V6", "AUTH_TRUSTED_PROXIES"])
+def test_invalid_network_fails_startup(monkeypatch, name):
+    with pytest.raises(ValueError):
+        _trusted_from_env(monkeypatch, **{name: "not-a-cidr"})
+
+
+def test_forwarded_address_is_honored_from_a_custom_subnet(monkeypatch):
+    custom = _trusted_from_env(monkeypatch, PHANTOM_SUBNET_V4="10.20.0.0/24")
+    default = _trusted_from_env(monkeypatch)
+    peer, client = "10.20.0.7", "203.0.113.9"
+    assert get_client_ip(_request(peer, client, ",".join(custom))) == client
+    assert get_client_ip(_request(peer, client, ",".join(default))) == peer
 
 
 # ── End-to-end: spoofed header never reaches the audit log ───────
