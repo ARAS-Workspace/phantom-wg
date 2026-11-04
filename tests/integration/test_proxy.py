@@ -163,7 +163,7 @@ def test_proxy_audit_upstream_error(auth_env, mock_daemon_404):
     auth_env.create_user("audit404", "auditpass1")
     token = auth_env.issue_token("audit404")
     client = _proxy_client(auth_env, mock_daemon_404)
-    resp = client.get("/api/core/nonexistent", headers=auth_env.bearer(token))
+    resp = client.get("/api/core/hello", headers=auth_env.bearer(token))
     assert resp.status_code == 404
 
     logs = auth_env.db.get_audit_logs()

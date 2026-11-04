@@ -36,10 +36,16 @@ Scenarios (executed in order):
   7. Superadmin cannot delete self
      Superadmin tries to delete self → 400.
 
-  8. Superadmin deletes admin
+  8. Proxy access by role
+     Admin is refused on backup (403) and keeps the other routes. Superadmin
+     passes the role check on backup. A path outside the route table is 404
+     for both, however it is spelled. Body limits hold per route. The service
+     runs without a daemon here: a route that passes the checks answers 502.
+
+  9. Superadmin deletes admin
      Superadmin deletes admin → admin token revoked → admin cannot login.
 
-  9. Role in JWT and /me response
+  10. Role in JWT and /me response
      Login returns role in /me → superadmin sees "superadmin",
      admin sees "admin".
 """
@@ -52,6 +58,7 @@ import hmac
 import os
 import struct
 import time
+from http.client import HTTPConnection
 from pathlib import Path
 
 import httpx
@@ -334,7 +341,105 @@ class TestSuperadminCannotDeleteSelf:
         assert resp.json()["error_code"] == "CANNOT_DELETE_SELF"
 
 
-# ── Scenario 8: Superadmin deletes admin ───────────────────────
+# ── Scenario 8: Proxy access by role ────────────────
+
+
+def _status_on_the_wire(path: str, token: str) -> int:
+    """POST with the path exactly as written; httpx normalizes dot segments."""
+    url = httpx.URL(BASE_URL)
+    conn = HTTPConnection(url.host, url.port, timeout=10)
+    try:
+        conn.request("POST", path, body=b"", headers=_bearer(token))
+        return conn.getresponse().status
+    finally:
+        conn.close()
+
+
+@pytest.fixture(scope="class")
+def admin_token(http):
+    resp = http.post("/auth/login", json={
+        "username": "rbac_admin", "password": "ResetPw123!",
+    })
+    assert resp.status_code == 200
+    return resp.json()["data"]["token"]
+
+
+class TestProxyAccessByRole:
+    BACKUP_ROUTES = ("/api/core/backup/export", "/api/core/backup/import")
+    # No daemon runs beside the service: 502 is a request that passed the checks.
+    PASSED = (200, 502)
+    OVER_THE_LIMIT = b"x" * 65537
+
+    def test_01_admin_is_refused_on_backup(self, http, admin_token):
+        for route in self.BACKUP_ROUTES:
+            resp = http.post(route, headers=_bearer(admin_token))
+            assert resp.status_code == 403
+            assert resp.json()["error_code"] == "SUPERADMIN_REQUIRED"
+
+    def test_02_superadmin_passes_on_backup(self, http, superadmin_token):
+        for route in self.BACKUP_ROUTES:
+            resp = http.post(route, headers=_bearer(superadmin_token))
+            assert resp.status_code in self.PASSED
+
+    def test_03_admin_keeps_the_other_routes(self, http, admin_token):
+        resp = http.get("/api/core/clients/list", headers=_bearer(admin_token))
+        assert resp.status_code in self.PASSED
+
+    def test_04_route_outside_the_table_is_404(self, http, admin_token, superadmin_token):
+        for token in (admin_token, superadmin_token):
+            resp = http.post("/api/core/nonexistent", headers=_bearer(token))
+            assert resp.status_code == 404
+            assert resp.json()["error_code"] == "NOT_FOUND"
+
+    def test_05_method_is_part_of_the_match(self, http, superadmin_token):
+        resp = http.get("/api/core/backup/export", headers=_bearer(superadmin_token))
+        assert resp.status_code == 404
+
+    def test_06_decoded_spelling_is_the_route_itself(self, admin_token):
+        assert _status_on_the_wire("/api/core/%62ackup/export", admin_token) == 403
+        assert _status_on_the_wire("/api/core%2Fbackup%2Fexport", admin_token) == 403
+
+    def test_07_other_spelling_is_not_a_route(self, superadmin_token):
+        for path in (
+            "/api/core/x/../backup/export",
+            "/api/core/./backup/export",
+            "/api/core/%2562ackup/export",
+            "/api/core//backup/export",
+            "/api/core/backup/export/",
+        ):
+            assert _status_on_the_wire(path, superadmin_token) == 404, path
+
+    def test_08_body_limit_holds_on_the_other_routes(self, http, superadmin_token):
+        resp = http.post(
+            "/api/core/clients/assign",
+            content=self.OVER_THE_LIMIT,
+            headers=_bearer(superadmin_token),
+        )
+        assert resp.status_code == 413
+        assert resp.json()["error_code"] == "BODY_TOO_LARGE"
+
+    def test_09_backup_takes_the_large_body(self, http, superadmin_token):
+        resp = http.post(
+            "/api/core/backup/import",
+            content=self.OVER_THE_LIMIT,
+            headers=_bearer(superadmin_token),
+        )
+        assert resp.status_code != 413
+
+    def test_10_refusal_is_in_the_audit_log(self, http, superadmin_token):
+        resp = http.get(
+            "/auth/audit?action=proxy_request&username=rbac_admin&limit=100",
+            headers=_bearer(superadmin_token),
+        )
+        assert resp.status_code == 200
+        refused = [
+            item["detail"]["path"] for item in resp.json()["data"]["items"]
+            if item["detail"]["status"] == 403
+        ]
+        assert "/api/core/backup/export" in refused
+
+
+# ── Scenario 9: Superadmin deletes admin ───────────────────────
 
 
 class TestSuperadminDeletesAdmin:
@@ -349,7 +454,7 @@ class TestSuperadminDeletesAdmin:
         assert resp.status_code == 401
 
 
-# ── Scenario 9: Role in /me response ──────────────────────────
+# ── Scenario 10: Role in /me response ──────────────────────────
 
 
 class TestRoleInResponse:

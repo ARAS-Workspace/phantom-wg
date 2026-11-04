@@ -164,6 +164,7 @@ def auth_env(tmp_path):
         totp_setup_lifetime=300,
         proxy_timeout=10.0,
         proxy_max_body=65536,
+        proxy_backup_max_body=131072,
         rate_limit_window=60,
         rate_limit_max=5,
     )

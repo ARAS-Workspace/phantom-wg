@@ -67,6 +67,7 @@ class AuthConfig:
     totp_setup_lifetime: int
     proxy_timeout: float
     proxy_max_body: int
+    proxy_backup_max_body: int
     rate_limit_window: int
     rate_limit_max: int
     trusted_proxies: tuple[ipaddress.IPv4Network | ipaddress.IPv6Network, ...] = field(
@@ -105,7 +106,8 @@ def load_auth_config() -> AuthConfig:
         mfa_token_lifetime=int(os.environ.get("AUTH_MFA_TOKEN_LIFETIME", "120")),
         totp_setup_lifetime=int(os.environ.get("AUTH_TOTP_SETUP_LIFETIME", "300")),
         proxy_timeout=float(os.environ.get("AUTH_PROXY_TIMEOUT", "30.0")),
-        proxy_max_body=int(os.environ.get("AUTH_PROXY_MAX_BODY", "67108864")),
+        proxy_max_body=int(os.environ.get("AUTH_PROXY_MAX_BODY", "65536")),
+        proxy_backup_max_body=int(os.environ.get("AUTH_PROXY_BACKUP_MAX_BODY", "67108864")),
         rate_limit_window=int(os.environ.get("AUTH_RATE_LIMIT_WINDOW", "60")),
         rate_limit_max=int(os.environ.get("AUTH_RATE_LIMIT_MAX", "5")),
         trusted_proxies=_trusted_proxies_from_env(),
