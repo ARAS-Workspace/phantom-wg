@@ -17,12 +17,11 @@ from __future__ import annotations
 
 import logging
 
-from fastapi import APIRouter, Depends, Request
+from fastapi import APIRouter, Request
 from fastapi.responses import JSONResponse, Response
 
 from auth_service.audit import audit_log
-from auth_service.crypto.jwt import TokenPayload
-from auth_service.middleware.auth import require_auth
+from auth_service.middleware.auth import AuthPayload
 
 log = logging.getLogger("phantom-auth")
 router = APIRouter(prefix="/api", tags=["proxy"])
@@ -49,7 +48,7 @@ def _audit_detail(method: str, path: str, query: str, status: int) -> dict:
 async def proxy(
     path: str,
     request: Request,
-    payload: TokenPayload = Depends(require_auth),
+    payload: AuthPayload,
 ):
     """Forward authenticated request to daemon over UDS."""
     config = request.app.state.config
@@ -84,8 +83,8 @@ async def proxy(
             content=body if body else None,
             headers=headers,
         )
-    except Exception as exc:
-        log.error("Daemon proxy error: %s", exc)
+    except Exception:
+        log.exception("Daemon proxy error")
         audit_log(db, request, "proxy_request",
                   detail=_audit_detail(request.method, path, query, 502),
                   user_id=user_id)

@@ -15,10 +15,9 @@ Audit log endpoint — paginated, filterable, superadmin only.
 
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, Query, Request
+from fastapi import APIRouter, Query, Request
 
-from auth_service.crypto.jwt import TokenPayload
-from auth_service.middleware.auth import require_superadmin
+from auth_service.middleware.auth import SuperadminPayload
 from auth_service.models import ApiOk, AuditLogPage
 
 router = APIRouter()
@@ -27,7 +26,7 @@ router = APIRouter()
 @router.get("/audit", response_model=ApiOk[AuditLogPage])
 def get_audit_log(
     request: Request,
-    _payload: TokenPayload = Depends(require_superadmin),
+    _payload: SuperadminPayload,
     page: int = Query(1, ge=1, description="Page number (1-based)"),
     limit: int = Query(25, ge=1, le=100, description="Entries per page (max 100)"),
     action: str | None = Query(None, description="Filter by action type"),

@@ -15,14 +15,14 @@ In-memory sliding window rate limiter for login endpoint.
 
 from __future__ import annotations
 
-import time
 import threading
+import time
 
 
 class RateLimiter:
     """IP-based sliding window rate limiter."""
 
-    __slots__ = ("_window", "_max_attempts", "_attempts", "_lock")
+    __slots__ = ("_attempts", "_lock", "_max_attempts", "_window")
 
     def __init__(self, window: int = 60, max_attempts: int = 5) -> None:
         self._window = window

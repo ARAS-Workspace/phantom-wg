@@ -19,7 +19,7 @@ import json
 import sqlite3
 import uuid
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 from auth_service.db.connection import open_connection
@@ -27,7 +27,7 @@ from auth_service.errors import AuthDatabaseError
 
 
 def _now_iso() -> str:
-    return datetime.now(timezone.utc).isoformat()
+    return datetime.now(UTC).isoformat()
 
 
 @dataclass(frozen=True, slots=True)

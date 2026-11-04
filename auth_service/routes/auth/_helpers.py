@@ -16,7 +16,7 @@ Shared helpers for auth route modules.
 from __future__ import annotations
 
 import uuid
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 from fastapi import Request
 
@@ -46,7 +46,7 @@ def issue_access_token(request: Request, username: str, user_id: str, role: str 
         extra={"role": role},
     )
 
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     expires = now + timedelta(seconds=config.token_lifetime)
     db.create_session(
         user_id=user_id,

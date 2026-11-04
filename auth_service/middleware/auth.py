@@ -15,12 +15,17 @@ FastAPI auth dependency — Bearer extraction, JWT verify, inactivity check.
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
+from typing import Annotated
 
-from fastapi import Request
+from fastapi import Depends, Request
 
 from auth_service.crypto.jwt import TokenPayload, decode_token, token_hash
-from auth_service.errors import ApiException, AuthTokenExpiredError, AuthTokenInvalidError
+from auth_service.errors import (
+    ApiException,
+    AuthTokenExpiredError,
+    AuthTokenInvalidError,
+)
 
 
 def require_auth(request: Request) -> TokenPayload:
@@ -54,7 +59,7 @@ def require_auth(request: Request) -> TokenPayload:
 
     # Inactivity timeout check
     last_activity = datetime.fromisoformat(session.last_activity_at)
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     elapsed = (now - last_activity).total_seconds()
     if elapsed > config.inactivity_timeout:
         db.revoke_session(payload.jti)
@@ -72,3 +77,7 @@ def require_superadmin(request: Request) -> TokenPayload:
     if payload.role != "superadmin":
         raise ApiException(403, "SUPERADMIN_REQUIRED")
     return payload
+
+
+AuthPayload = Annotated[TokenPayload, Depends(require_auth)]
+SuperadminPayload = Annotated[TokenPayload, Depends(require_superadmin)]

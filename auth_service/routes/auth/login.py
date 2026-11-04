@@ -24,8 +24,17 @@ from auth_service.audit import audit_log, get_client_ip
 from auth_service.crypto.jwt import TokenPayload, decode_token, encode_token
 from auth_service.crypto.password import verify_password
 from auth_service.crypto.totp import hash_backup_code, verify_totp
-from auth_service.errors import ApiException, AuthTokenExpiredError, AuthTokenInvalidError
-from auth_service.models import ApiOk, MFARequiredResponse, MFAVerifyRequest, LoginRequest
+from auth_service.errors import (
+    ApiException,
+    AuthTokenExpiredError,
+    AuthTokenInvalidError,
+)
+from auth_service.models import (
+    ApiOk,
+    LoginRequest,
+    MFARequiredResponse,
+    MFAVerifyRequest,
+)
 from auth_service.routes.auth._helpers import issue_access_token
 
 router = APIRouter()
