@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from auth_service.crypto.totp import generate_secret, hash_backup_code
 
-
 # ── Login ────────────────────────────────────────────────────────
 
 
@@ -145,7 +144,11 @@ def test_login_with_totp_returns_mfa_required(auth_env):
 
 
 def test_mfa_verify_success(auth_env):
-    import base64, hashlib, hmac, struct, time
+    import base64
+    import hashlib
+    import hmac
+    import struct
+    import time
 
     user = auth_env.create_user("mfaver", "mfapass12")
     secret = generate_secret()

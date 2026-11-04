@@ -3,7 +3,7 @@ from __future__ import annotations
 import os
 import uuid
 from dataclasses import dataclass
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 import pytest
 from fastapi.testclient import TestClient
@@ -53,7 +53,7 @@ class AuthTestEnvironment:
         jti = uuid.uuid4().hex
         token = encode_token(self.signing_key, sub=username, jti=jti, lifetime=lt, extra={"role": user.role})
 
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         self.db.create_session(
             user_id=user.id,
             token_jti=jti,
@@ -87,7 +87,11 @@ class AuthTestEnvironment:
         setup_token = setup_data["setup_token"]
 
         # Generate valid TOTP code from secret
-        import base64, hashlib, hmac as hmac_mod, struct, time as time_mod
+        import base64
+        import hashlib
+        import hmac as hmac_mod
+        import struct
+        import time as time_mod
         key = base64.b32decode(secret)
         counter = struct.pack(">Q", int(time_mod.time()) // 30)
         mac = hmac_mod.new(key, counter, hashlib.sha1).digest()

@@ -15,7 +15,6 @@ from auth_service.errors import (
 )
 from auth_service.models import ActionResult, ApiErr
 
-
 # ── ApiException ─────────────────────────────────────────────────
 
 

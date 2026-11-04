@@ -13,7 +13,6 @@ from __future__ import annotations
 from auth_service.crypto.totp import generate_secret
 from auth_service.middleware.rate_limit import RateLimiter
 
-
 # ── Helpers ───────────────────────────────────────────────────────
 
 
@@ -88,6 +87,7 @@ def test_token_invalid_code(auth_env):
 
 def test_token_expired_code(auth_env):
     import time
+
     from auth_service.crypto.jwt import encode_token
     auth_env.create_user("expuser", "exppass12")
     token = encode_token(auth_env.signing_key, sub="expuser", jti="t1", lifetime=1)
@@ -279,7 +279,11 @@ def test_totp_enabled_success_code(auth_env):
     resp = client.post("/auth/totp/setup", json={"password": "TotpSc12!"}, headers=auth_env.bearer(token))
     setup_data = resp.json()["data"]
 
-    import base64, hashlib, hmac, struct, time
+    import base64
+    import hashlib
+    import hmac
+    import struct
+    import time
     key = base64.b32decode(setup_data["secret"])
     counter = struct.pack(">Q", int(time.time()) // 30)
     mac = hmac.new(key, counter, hashlib.sha1).digest()
