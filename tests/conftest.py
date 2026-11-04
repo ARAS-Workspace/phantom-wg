@@ -10,7 +10,7 @@ from fastapi.testclient import TestClient
 from nacl.signing import SigningKey, VerifyKey
 
 from auth_service.app import create_app
-from auth_service.config import AuthConfig
+from auth_service.config import AuthConfig, _parse_trusted_proxies
 from auth_service.crypto.jwt import encode_token, token_hash
 from auth_service.crypto.keys import AuthSigningKeys
 from auth_service.crypto.password import hash_password
@@ -167,6 +167,7 @@ def auth_env(tmp_path):
         proxy_backup_max_body=131072,
         rate_limit_window=60,
         rate_limit_max=5,
+        trusted_proxies=_parse_trusted_proxies("172.28.0.0/24,fd00:d0ce::/64"),
     )
 
     keys = AuthSigningKeys(signing_key_hex=signing_hex, verify_key_hex=verify_hex)

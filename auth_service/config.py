@@ -17,7 +17,7 @@ from __future__ import annotations
 
 import ipaddress
 import os
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 
 # X-Forwarded-For is only honored when the connecting peer falls in one
 # of these networks: the phantom-net subnets nginx reaches us from, then
@@ -26,7 +26,6 @@ from dataclasses import dataclass, field
 # the daemon compose, and these defaults are the compose defaults.
 _DEFAULT_SUBNET_V4 = "172.28.0.0/24"
 _DEFAULT_SUBNET_V6 = "fd00:d0ce::/64"
-_DEFAULT_TRUSTED_PROXIES = f"{_DEFAULT_SUBNET_V4},{_DEFAULT_SUBNET_V6}"
 
 
 def _parse_trusted_proxies(raw: str) -> tuple[ipaddress.IPv4Network | ipaddress.IPv6Network, ...]:
@@ -70,9 +69,7 @@ class AuthConfig:
     proxy_backup_max_body: int
     rate_limit_window: int
     rate_limit_max: int
-    trusted_proxies: tuple[ipaddress.IPv4Network | ipaddress.IPv6Network, ...] = field(
-        default_factory=lambda: _parse_trusted_proxies(_DEFAULT_TRUSTED_PROXIES),
-    )
+    trusted_proxies: tuple[ipaddress.IPv4Network | ipaddress.IPv6Network, ...]
 
     @property
     def proxy_is_uds(self) -> bool:

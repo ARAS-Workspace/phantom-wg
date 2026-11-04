@@ -6,11 +6,13 @@ import pytest
 from starlette.requests import Request
 
 from auth_service.audit import get_client_ip
-from auth_service.config import _DEFAULT_TRUSTED_PROXIES, _parse_trusted_proxies
+from auth_service.config import _parse_trusted_proxies
+
+COMPOSE_SUBNETS = "172.28.0.0/24,fd00:d0ce::/64"
 
 
 def _request(peer: str | None, xff: str | None = None,
-             trusted: str = _DEFAULT_TRUSTED_PROXIES) -> Request:
+             trusted: str = COMPOSE_SUBNETS) -> Request:
     """Build a minimal Starlette Request with a given peer and XFF header."""
     headers = []
     if xff is not None:
@@ -108,9 +110,9 @@ def test_parse_trusted_proxies_invalid_raises():
         _parse_trusted_proxies("not-a-cidr")
 
 
-def test_default_is_exactly_the_compose_network():
+def test_default_is_exactly_the_compose_network(monkeypatch):
     # networks.phantom-net.ipam in the daemon compose — nothing wider.
-    nets = _parse_trusted_proxies(_DEFAULT_TRUSTED_PROXIES)
+    nets = _parse_trusted_proxies(",".join(_trusted_from_env(monkeypatch)))
     import ipaddress
     for ip in ("172.28.0.2", "fd00:d0ce::5"):
         assert any(ipaddress.ip_address(ip) in n for n in nets), ip
