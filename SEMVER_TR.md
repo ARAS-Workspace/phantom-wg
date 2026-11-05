@@ -77,6 +77,7 @@ yeni bir release kilometre taşına ulaştığında gerçekleşir.
 | **auth-service**        | semver               | dev/auth-service        |
 | **wireguard-go-bridge** | semver               | dev/wireguard-go-bridge |
 | **firewall-bridge**     | semver               | dev/firewall-bridge     |
+| **base images**         | semver               | dev/daemon (tag)        |
 | **react-spa**           | package.json version | dev/daemon (embedded)   |
 
 ### Test Bağımlılıkları

@@ -9,28 +9,28 @@ Prerequisites:
 
 Directory Structure:
   phantom-wg/
-  ├── Dockerfile                  Daemon image (multi-stage build)
-  ├── nginx.Dockerfile            Nginx image
-  ├── docker-compose.yml          Production stack (3 services)
+  ├── Dockerfile                           Daemon image (multi-stage build)
+  ├── nginx.Dockerfile                     Nginx image
+  ├── docker-compose.yml                   Production stack (3 services)
   ├── docker-compose.override.yml.example  Compose override template
-  ├── .env.example                Image source and network subnets
-  ├── .env.daemon.example         Daemon environment template
-  ├── .env.auth-service.example   Auth service environment template
-  ├── requirements.txt            Python dependencies (pinned, hashed)
-  ├── SETUP                       This file
-  ├── UPDATE                      Update and maintenance guide
-  ├── LICENSE                     AGPL-3.0
-  ├── THIRD_PARTY_LICENSES        Dependency licenses
-  ├── phantom_daemon/             Daemon source
+  ├── .env.example                         Image source and network subnets
+  ├── .env.daemon.example                  Daemon environment template
+  ├── .env.auth-service.example            Auth service environment template
+  ├── requirements.txt                     Python dependencies (pinned, hashed)
+  ├── SETUP                                This file
+  ├── UPDATE                               Update and maintenance guide
+  ├── LICENSE                              AGPL-3.0
+  ├── THIRD_PARTY_LICENSES                 Dependency licenses
+  ├── phantom_daemon/                      Daemon source
   ├── services/
-  │   ├── auth-service/           Authentication service
-  │   ├── nginx/                  TLS reverse proxy config
-  │   └── react-spa/dist/         Web dashboard (pre-built)
+  │   ├── auth-service/                    Authentication service
+  │   ├── nginx/                           TLS reverse proxy config
+  │   └── react-spa/dist/                  Web dashboard (pre-built)
   └── tools/
-      ├── prod.sh                 Production CLI
-      ├── prod.vars               Environment variables
-      ├── compose/                Image sources (registry, build)
-      └── lib/                    Shell libraries
+      ├── prod.sh                          Production CLI
+      ├── prod.vars                        Environment variables
+      ├── compose/                         Image sources (registry, build)
+      └── lib/                             Shell libraries
 
 Quick Start:
   1. Setup (first time only):

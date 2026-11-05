@@ -13,33 +13,36 @@ WireGuard® is a registered trademark of Jason A. Donenfeld.
 Production packager — copies deployment-ready files into dist/phantom-wg-modern/.
 
 Included:
-    SETUP                   Setup and usage guide
-    LICENSE                 AGPL-3.0 license
-    THIRD_PARTY_LICENSES    Dependency licenses
-    Dockerfile              Production image build
-    nginx.Dockerfile        Nginx image build
-    docker-compose.yml      Production compose stack
-    docker-compose.override.yml.example Compose override template
-    .env.example            Compose environment template
-    .env.daemon.example     Daemon environment template
-    .env.auth-service.example Auth service environment template
-    requirements.txt        Python dependencies
-    phantom_daemon/         Daemon source
-    services/auth-service/  Auth service (full)
-    services/nginx/         Nginx config
-    services/react-spa/dist/ SPA build output only
-    tools/prod.sh           Production CLI
-    tools/prod.vars         Production variables
-    tools/compose/build.yml Local image build
-    tools/compose/registry.yml Registry images
-    tools/compose/MANIFEST.json Contents of the registry images
-    tools/lib/common.sh     Color helpers
-    tools/lib/images.sh     Image source and references
-    tools/lib/keys.sh       WireGuard key generation
-    tools/lib/auth.sh       Auth service bootstrap
-    tools/lib/tls.sh        TLS certificate generation
-    tools/lib/compose.sh    Docker Compose operations
-    tools/lib/helpers/update/ Update hook
+    SETUP                                   Setup and usage guide
+    UPDATE                                  Update and maintenance guide
+    LICENSE                                 AGPL-3.0 license
+    THIRD_PARTY_LICENSES                    Dependency licenses
+    Dockerfile                              Production image build
+    nginx.Dockerfile                        Nginx image build
+    docker-compose.yml                      Production compose stack
+    docker-compose.override.yml.example     Compose override template
+    .env.example                            Compose environment template
+    .env.daemon.example                     Daemon environment template
+    .env.auth-service.example               Auth service environment template
+    requirements.txt                        Python dependencies
+    phantom_daemon/                         Daemon source
+    services/auth-service/                  Auth service (full)
+    services/nginx/                         Nginx config
+    services/react-spa/dist/                SPA build output only
+    tools/prod.sh                           Production CLI
+    tools/prod.vars                         Production variables
+    tools/compose/build.yml                 Local image build
+    tools/compose/registry.yml              Registry images
+    tools/compose/MANIFEST.json             Contents of the registry images
+    tools/lib/common.sh                     Color helpers
+    tools/lib/images.sh                     Image source and references
+    tools/lib/keys.sh                       WireGuard key generation
+    tools/lib/auth.sh                       Auth service bootstrap
+    tools/lib/tls.sh                        TLS certificate generation
+    tools/lib/compose.sh                    Docker Compose operations
+    tools/lib/certbot.sh                    Let's Encrypt certificates
+    tools/lib/helpers/certbot/              Certbot image and script
+    tools/lib/helpers/update/               Update hook
 
 Excluded:
     dev.Dockerfile, docker-compose-dev.yml, e2e_tests/, lib/,
@@ -47,7 +50,8 @@ Excluded:
     services/react-spa/src, services/react-spa/node_modules,
     tools/dev.sh, tools/dev.vars, tools/compose/dev.yml, tools/lib/db.sh,
     tools/lib/test.sh, tools/lib/spa.sh, tools/lib/stubs.sh,
-    tools/lib/openapi.sh, tools/lib/package.sh, tools/lib/helpers/,
+    tools/lib/openapi.sh, tools/lib/package.sh,
+    tools/lib/helpers/packager.py, tools/lib/helpers/gen_stubs.py,
     tools/lib/templates/, __pycache__, *.pyc, .gitkeep
 
 Templates:

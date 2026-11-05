@@ -42,14 +42,12 @@ Rollback:
 
     git fetch --tags
     git checkout v2.0.0
+    ./tools/prod.sh images sync
+    ./tools/prod.sh up
     ./tools/prod.sh restart
 
-  If the images may have changed between versions:
-
-    git checkout v2.0.0
-    ./tools/prod.sh pull       (registry source)
-    ./tools/prod.sh rebuild    (build source)
-    ./tools/prod.sh up
+  up applies the images and docker-compose.yml of that version, restart loads
+  its code.
 
   This creates a detached HEAD state — you are pinned to that tag.
   To resume receiving updates, switch back to main:
@@ -70,19 +68,19 @@ Hard Reset:
     ./tools/prod.sh setup
 
 What Gets Preserved on Update:
-  docker-compose.override.yml Always preserved (not tracked by git)
-  .env                       Always preserved (not tracked by git)
-  .env.daemon                Always preserved (not tracked by git)
-  .env.auth-service          Always preserved (not tracked by git)
-  container-data/            Always preserved (runtime data, not in git)
+  docker-compose.override.yml   Always preserved (not tracked by git)
+  .env                          Always preserved (not tracked by git)
+  .env.daemon                   Always preserved (not tracked by git)
+  .env.auth-service             Always preserved (not tracked by git)
+  container-data/               Always preserved (runtime data, not in git)
 
 What Gets Updated:
-  phantom_daemon/            Daemon source code
-  services/auth-service/     Auth service source
-  services/react-spa/dist/   Web dashboard build
-  services/nginx/            Reverse proxy config
-  tools/                     Production CLI, libraries and image pins
-  docker-compose.yml         Production stack
+  phantom_daemon/                      Daemon source code
+  services/auth-service/               Auth service source
+  services/react-spa/dist/             Web dashboard build
+  services/nginx/                      Reverse proxy config
+  tools/                               Production CLI, libraries and image pins
+  docker-compose.yml                   Production stack
   docker-compose.override.yml.example  Override template
-  Dockerfile, nginx.Dockerfile  Image definitions
-  requirements.txt           Python dependencies
+  Dockerfile, nginx.Dockerfile         Image definitions
+  requirements.txt                     Python dependencies
