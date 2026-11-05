@@ -188,6 +188,7 @@ cmd_setup() {
         echo "  Terazi subnet: ${terazi_subnet}"
     fi
 
+    _code_version > "$APPLIED_VERSION_FILE"
     green "Production setup complete."
     echo ""
     echo "  Environment:  .env, .env.daemon, .env.auth-service"
@@ -201,7 +202,20 @@ cmd_setup() {
     bold "Start with: ./tools/prod.sh up"
 }
 
-cmd_update() {
+_code_version() {
+    sed -n 's/^__version__ = "\(.*\)"$/\1/p' "${TOOLS_DIR}/../phantom_daemon/__init__.py"
+}
+
+_version_newer() {
+    local a1 a2 a3 b1 b2 b3
+    IFS='.' read -r a1 a2 a3 <<< "$1"
+    IFS='.' read -r b1 b2 b3 <<< "$2"
+    if ((a1 != b1)); then ((a1 > b1)); return; fi
+    if ((a2 != b2)); then ((a2 > b2)); return; fi
+    ((a3 > b3))
+}
+
+_update_pull() {
     if ! git diff --quiet docker-compose.yml 2>/dev/null; then
         red "docker-compose.yml has local changes."
         echo ""
@@ -213,7 +227,31 @@ cmd_update() {
 
     bold "Pulling latest changes..."
     git pull origin main
+}
 
+# The code on disk against the version this host last applied.
+_update_check_version() {
+    local applied code
+    code="$(_code_version)"
+    applied="$(cat "$APPLIED_VERSION_FILE" 2>/dev/null || true)"
+
+    if [[ -z "$code" ]]; then
+        red "phantom_daemon/__init__.py holds no version."
+        exit 1
+    elif [[ -z "$applied" ]]; then
+        bold "Version: ${code}"
+    elif [[ "$applied" == "$code" ]]; then
+        bold "Version: ${code}, applied already, applying again."
+    elif _version_newer "$code" "$applied"; then
+        bold "Version: ${applied} -> ${code}"
+    else
+        red "This package is ${code}, this host applied ${applied}."
+        echo "  update moves forward. To go back, see Rollback in UPDATE."
+        exit 1
+    fi
+}
+
+_update_apply() {
     _images_sync
 
     # A separate process: this one still runs the code from before the pull.
@@ -222,7 +260,20 @@ cmd_update() {
     # Source is bind-mounted: every service starts again, changed or not.
     bold "Recreating stack..."
     $COMPOSE up -d --force-recreate
+
+    _code_version > "$APPLIED_VERSION_FILE"
     green "Update complete."
+}
+
+cmd_update() {
+    if [[ -e "${TOOLS_DIR}/../.git" ]]; then
+        _update_pull
+    else
+        bold "Not a git clone, nothing to pull: the code comes from the release zip."
+    fi
+
+    _update_check_version
+    _update_apply
 }
 
 _wipe_dir() {
@@ -253,7 +304,7 @@ cmd_hard_reset() {
     rm -f container-data/state/db/firewall.db
     rm -rf container-data/state/db/wireguard/
 
-    rm -f "${TOOLS_DIR}/../.terazi-subnet"
+    rm -f "${TOOLS_DIR}/../.terazi-subnet" "$APPLIED_VERSION_FILE"
 
     green "Hard reset complete. Run './tools/prod.sh setup' to start fresh."
 }
@@ -290,7 +341,7 @@ Usage: ./tools/prod.sh <command>
     exec <svc> <cmd>    Execute command in service
 
   Update:
-    update              Pull latest, sync images, recreate the stack
+    update              Pull latest (git clone), sync images, recreate the stack
 
   Danger:
     hard-reset          Wipe ALL data (secrets + auth DB + volumes)
