@@ -11,13 +11,16 @@
 #
 # Environment: .env + .env.daemon + .env.auth-service (see .example files)
 # Set WIREGUARD_ENDPOINT_V4 to your server's public IP.
+#
+# Images: PHANTOM_IMAGE_SOURCE in .env selects tools/compose/registry.yml
+# or tools/compose/build.yml.
 # ──────────────────────────────────────────────────────────────────
 
 services:
   daemon:
-    build:
-      context: .
-      dockerfile: Dockerfile
+    extends:
+      file: tools/compose/${PHANTOM_IMAGE_SOURCE:-registry}.yml
+      service: daemon
     container_name: phantom-daemon
     command: ["python", "-m", "phantom_daemon.main", "/var/run/phantom/daemon.sock"]
     networks:
@@ -43,9 +46,9 @@ services:
       - /dev/net/tun:/dev/net/tun
 
   auth-service:
-    build:
-      context: ./services/auth-service
-      dockerfile: Dockerfile
+    extends:
+      file: tools/compose/${PHANTOM_IMAGE_SOURCE:-registry}.yml
+      service: auth-service
     container_name: phantom-auth
     depends_on:
       - daemon
@@ -63,9 +66,9 @@ services:
       - .env.auth-service
 
   nginx:
-    build:
-      context: .
-      dockerfile: nginx.Dockerfile
+    extends:
+      file: tools/compose/${PHANTOM_IMAGE_SOURCE:-registry}.yml
+      service: nginx
     container_name: phantom-nginx
     depends_on:
       - auth-service

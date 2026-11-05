@@ -30,6 +30,8 @@ Included:
     services/react-spa/dist/ SPA build output only
     tools/prod.sh           Production CLI
     tools/prod.vars         Production variables
+    tools/compose/build.yml Local image build
+    tools/compose/registry.yml Registry images
     tools/lib/common.sh     Color helpers
     tools/lib/keys.sh       WireGuard key generation
     tools/lib/auth.sh       Auth service bootstrap
@@ -83,6 +85,8 @@ INCLUDE = [
     "services/react-spa/dist",
     "tools/prod.sh",
     "tools/prod.vars",
+    "tools/compose/build.yml",
+    "tools/compose/registry.yml",
     "tools/lib/common.sh",
     "tools/lib/keys.sh",
     "tools/lib/auth.sh",

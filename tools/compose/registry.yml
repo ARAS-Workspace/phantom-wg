@@ -1,0 +1,16 @@
+# ──────────────────────────────────────────────────────────────────
+# phantom-daemon  ·  Registry Images
+# ──────────────────────────────────────────────────────────────────
+# Images CI builds from the Dockerfiles of this tree.
+# PHANTOM_IMAGE_SOURCE=registry in .env selects this file.
+# ──────────────────────────────────────────────────────────────────
+
+services:
+  daemon:
+    image: ghcr.io/aras-workspace/phantom-daemon:registry-probe-2@sha256:4a953d292715e560c5874ab87911bf26727ef2d3acf0fc8446b99fdc5f05e806
+
+  auth-service:
+    image: ghcr.io/aras-workspace/phantom-auth:registry-probe-2@sha256:46a6277b393fe0fa9c9b2685ac6220aeb27bfcb20077b5c52ba7fb3e46071a38
+
+  nginx:
+    image: ghcr.io/aras-workspace/phantom-nginx:registry-probe-2@sha256:0b24a4b6d77d0d1022b211b644876b58ff063b7c12b93ad7942edd811947157c

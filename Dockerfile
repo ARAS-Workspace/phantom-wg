@@ -4,7 +4,7 @@
 # Multi-stage: platform → vendor fetch, python deps → runtime
 #
 # Build:
-#   docker compose build
+#   PHANTOM_IMAGE_SOURCE=build docker compose build
 #   docker build -t phantom-daemon:latest .
 # ──────────────────────────────────────────────────────────────────
 

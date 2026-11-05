@@ -1,0 +1,28 @@
+# ──────────────────────────────────────────────────────────────────
+# phantom-daemon  ·  Local Image Build
+# ──────────────────────────────────────────────────────────────────
+# The Dockerfiles of this tree, built on this machine.
+# PHANTOM_IMAGE_SOURCE=build in .env selects this file.
+# ──────────────────────────────────────────────────────────────────
+
+services:
+  daemon:
+    image: phantom-daemon:local
+    pull_policy: never
+    build:
+      context: ../..
+      dockerfile: Dockerfile
+
+  auth-service:
+    image: phantom-auth:local
+    pull_policy: never
+    build:
+      context: ../../services/auth-service
+      dockerfile: Dockerfile
+
+  nginx:
+    image: phantom-nginx:local
+    pull_policy: never
+    build:
+      context: ../..
+      dockerfile: nginx.Dockerfile
