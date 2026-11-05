@@ -38,6 +38,7 @@ Included:
     tools/lib/auth.sh       Auth service bootstrap
     tools/lib/tls.sh        TLS certificate generation
     tools/lib/compose.sh    Docker Compose operations
+    tools/lib/helpers/update/ Update hook
 
 Excluded:
     dev.Dockerfile, docker-compose-dev.yml, e2e_tests/, lib/,
@@ -96,6 +97,7 @@ INCLUDE = [
     "tools/lib/compose.sh",
     "tools/lib/certbot.sh",
     "tools/lib/helpers/certbot",
+    "tools/lib/helpers/update",
 ]
 
 # (template_source, package_destination) pairs

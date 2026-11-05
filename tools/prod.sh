@@ -216,6 +216,9 @@ cmd_update() {
 
     _images_sync
 
+    # A separate process: this one still runs the code from before the pull.
+    bash "$TOOLS_DIR/lib/helpers/update/update_hook.sh"
+
     # Source is bind-mounted: every service starts again, changed or not.
     bold "Recreating stack..."
     $COMPOSE up -d --force-recreate
