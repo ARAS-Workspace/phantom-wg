@@ -76,6 +76,9 @@ _bootstrap_env() {
 _images_status() {
     local service ref state
     bold "Image source: $(image_source)"
+    if [[ "$(image_source)" == archive && -f "${TOOLS_DIR}/../images/VERSION" ]]; then
+        echo "  images/ version: $(cat "${TOOLS_DIR}/../images/VERSION")"
+    fi
     for service in daemon auth-service nginx; do
         ref="$(image_ref "$service")"
         state="missing"
@@ -87,9 +90,9 @@ _images_status() {
 _images_use() {
     local value="${1:-}" env_file
     case "$value" in
-        registry|build) ;;
+        registry|build|archive) ;;
         *)
-            red "Usage: prod.sh images use {registry|build}"
+            red "Usage: prod.sh images use {registry|build|archive}"
             exit 1
             ;;
     esac
@@ -101,6 +104,8 @@ _images_use() {
         exit 1
     fi
 
+    [[ "$value" != archive ]] || archive_check
+
     if grep -q '^PHANTOM_IMAGE_SOURCE=' "$env_file"; then
         sed "s/^PHANTOM_IMAGE_SOURCE=.*/PHANTOM_IMAGE_SOURCE=${value}/" "$env_file" > "${env_file}.tmp"
         mv "${env_file}.tmp" "$env_file"
@@ -109,15 +114,15 @@ _images_use() {
     fi
 
     green "Image source: ${value}"
-    echo "  Apply it with: ./tools/prod.sh up"
+    echo "  Apply it with: ./tools/prod.sh images sync, then ./tools/prod.sh up"
 }
 
 _images_sync() {
-    if [[ "$(image_source)" == registry ]]; then
-        cmd_pull
-    else
-        cmd_build
-    fi
+    case "$(image_source)" in
+        registry) cmd_pull ;;
+        archive)  archive_load ;;
+        *)        cmd_build ;;
+    esac
 }
 
 cmd_images() {
@@ -129,7 +134,7 @@ cmd_images() {
         sync)   _images_sync ;;
         *)
             red "Unknown action: $action"
-            echo "Usage: prod.sh images [status|use {registry|build}|sync]"
+            echo "Usage: prod.sh images [status|use {registry|build|archive}|sync]"
             exit 1
             ;;
     esac
@@ -137,7 +142,7 @@ cmd_images() {
 
 cmd_pull() {
     if [[ "$(image_source)" != registry ]]; then
-        bold "Images are built here, nothing to pull."
+        bold "Image source is $(image_source), nothing to pull."
         echo "  Pull from the registry: ./tools/prod.sh images use registry"
         return 0
     fi
@@ -324,8 +329,8 @@ Usage: ./tools/prod.sh <command>
 
   Images:
     images              Show the image source and its images
-    images use <source> Select registry (pull) or build (build here)
-    images sync         Pull or build the images of the selected source
+    images use <source> Select registry (pull), build (build here) or archive (images/)
+    images sync         Pull, build or load the images of the selected source
     pull                Pull the registry images
     build               Build the images here (build source)
     rebuild             Rebuild them from scratch (no-cache, build source)

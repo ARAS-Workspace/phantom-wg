@@ -1,0 +1,19 @@
+# ──────────────────────────────────────────────────────────────────
+# phantom-daemon  ·  Archive Images
+# ──────────────────────────────────────────────────────────────────
+# Images a release zip carries in images/, loaded on this machine.
+# PHANTOM_IMAGE_SOURCE=archive in .env selects this file.
+# ──────────────────────────────────────────────────────────────────
+
+services:
+  daemon:
+    image: phantom-daemon-base:archive
+    pull_policy: never
+
+  auth-service:
+    image: phantom-auth-base:archive
+    pull_policy: never
+
+  nginx:
+    image: phantom-nginx-base:archive
+    pull_policy: never

@@ -13,6 +13,7 @@ container-data/
 # Backup artifacts
 *.tar
 dist/
+images/
 
 # Editor / OS
 .DS_Store

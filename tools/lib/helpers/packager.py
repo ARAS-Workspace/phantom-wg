@@ -31,6 +31,7 @@ Included:
     services/react-spa/dist/                SPA build output only
     tools/prod.sh                           Production CLI
     tools/prod.vars                         Production variables
+    tools/compose/archive.yml               Images of the release zip
     tools/compose/build.yml                 Local image build
     tools/compose/registry.yml              Registry images
     tools/compose/MANIFEST.json             Contents of the registry images
@@ -92,6 +93,7 @@ INCLUDE = [
     "services/react-spa/dist",
     "tools/prod.sh",
     "tools/prod.vars",
+    "tools/compose/archive.yml",
     "tools/compose/build.yml",
     "tools/compose/registry.yml",
     "tools/compose/MANIFEST.json",

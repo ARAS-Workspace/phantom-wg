@@ -15,6 +15,7 @@ __pycache__/
 *.egg-info/
 .venv/
 dist/
+images/
 build/
 
 # Environment (user-specific, created from .example files)
