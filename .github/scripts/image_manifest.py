@@ -3,7 +3,7 @@
 
 Usage: image_manifest.py <contents dir> <output file>
 
-Environment: TAG, GITHUB_SHA, DAEMON_IMAGE, AUTH_IMAGE, NGINX_IMAGE.
+Environment: TAG, GITHUB_SHA, DAEMON_IMAGE, AUTH_IMAGE, NGINX_IMAGE, SOURCES_IMAGE.
 
 Contents dir, per image and architecture:
     <image>.<arch>.digest   Image digest
@@ -126,6 +126,7 @@ def main(argv: list[str]) -> int:
     manifest = {
         "version": os.environ["TAG"],
         "commit": os.environ["GITHUB_SHA"],
+        "sources_image": os.environ["SOURCES_IMAGE"],
         "images": images,
         "sources": [
             {"name": name, "version": version, "files": sorted(sources[name, version], key=lambda f: f["name"])}

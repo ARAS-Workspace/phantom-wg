@@ -66,6 +66,12 @@ jobs:
               exit 1
             fi
           done < <(sed -n 's/^    image: //p' "${PINS}")
+          VERSION=$(sed -n 's/.*:\([0-9.]*\)@sha256:.*/\1/p' "${PINS}" | sort -u)
+          SOURCES="\"sources_image\": \"ghcr\.io/aras-workspace/phantom-sources:${VERSION//./\\.}@sha256:[0-9a-f]{64}\""
+          if ! grep -qE "${SOURCES}" "${MANIFEST}"; then
+            echo "::error::${MANIFEST} does not name the sources of ${VERSION}"
+            exit 1
+          fi
 
       - name: Set up Node
         uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # v6.3.0

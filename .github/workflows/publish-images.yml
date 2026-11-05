@@ -3,10 +3,11 @@ name: Publish images
 # Builds each production image on a runner of its own architecture, pushes it
 # as <tag>-<arch>, joins the two under <tag>, reads the digests back from the
 # registry, and runs each image on each architecture with the code mounted as
-# compose mounts it. The caller grants packages: write. The base-images
-# artifact holds registry.yml with these images and MANIFEST.json with their
-# contents, under their paths in the tree; committing them belongs to the
-# caller.
+# compose mounts it. phantom-sources carries the Debian source files of these
+# images under the same tag, each file checked against its SHA-256. The caller
+# grants packages: write. The base-images artifact holds registry.yml with
+# these images and MANIFEST.json with their contents, under their paths in the
+# tree; committing them belongs to the caller.
 
 on:
   workflow_call:
@@ -290,11 +291,12 @@ jobs:
           if-no-files-found: error
 
   pins:
-    name: Write the pins and the manifest
+    name: Write the pins, the sources and the manifest
     needs: [index, verify]
     runs-on: ubuntu-26.04
     permissions:
       contents: read
+      packages: write
     env:
       DAEMON_IMAGE: ${{ needs.index.outputs.daemon }}
       AUTH_IMAGE: ${{ needs.index.outputs.auth }}
@@ -363,6 +365,64 @@ jobs:
               fi
             done < /contents/sources.txt
           '
+
+      - name: Copy the sources
+        run: |
+          set -euo pipefail
+          mkdir -p sources
+          while IFS=$'\t' read -r _ _ LINE; do
+            read -r URL NAME _ HASH <<< "${LINE}"
+            curl -fsSL --retry 3 -o "sources/${NAME}" "${URL//\'/}"
+            printf '%s  %s\n' "${HASH#SHA256:}" "${NAME}" >> sources/SHA256SUMS
+          done < contents/uris.txt
+          sort -u -o sources/SHA256SUMS sources/SHA256SUMS
+          (cd sources && sha256sum -c --quiet SHA256SUMS)
+          du -sh sources
+
+      - name: Start the builder
+        run: |
+          set -euo pipefail
+          docker buildx create --name phantom --driver docker-container \
+            --driver-opt "image=${BUILDKIT_IMAGE}" --use --bootstrap
+
+      - name: Log in to the registry
+        env:
+          TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: printf "%s" "${TOKEN}" | docker login ghcr.io -u "${GITHUB_ACTOR}" --password-stdin
+
+      - name: Publish the sources
+        run: |
+          set -euo pipefail
+          REF="${REGISTRY}/phantom-sources:${TAG}"
+          printf 'FROM scratch\nCOPY . /sources/\n' | docker buildx build \
+            --progress=plain \
+            --platform linux/amd64,linux/arm64 \
+            --provenance=false \
+            --sbom=false \
+            --label "org.opencontainers.image.source=${SOURCE}" \
+            --label "org.opencontainers.image.revision=${GITHUB_SHA}" \
+            --label "org.opencontainers.image.version=${TAG}" \
+            -f - \
+            -t "${REF}" \
+            --push \
+            sources
+          DIGEST=$(docker buildx imagetools inspect "${REF}" --format "{{.Manifest.Digest}}")
+          echo "SOURCES_IMAGE=${REF}@${DIGEST}" >> "${GITHUB_ENV}"
+
+      - name: Read the sources without a login
+        env:
+          REQUIRE_PUBLIC: ${{ inputs.require_public }}
+        run: |
+          set -euo pipefail
+          docker logout ghcr.io
+          if docker buildx imagetools inspect "${SOURCES_IMAGE}" > /dev/null; then
+            echo "${SOURCES_IMAGE}: readable without a login"
+          elif [ "${REQUIRE_PUBLIC}" = true ]; then
+            echo "::error::${SOURCES_IMAGE} needs a login"
+            exit 1
+          else
+            echo "::warning::${SOURCES_IMAGE} needs a login"
+          fi
 
       - name: Write the manifest
         run: python3 .github/scripts/image_manifest.py contents artifact/tools/compose/MANIFEST.json
