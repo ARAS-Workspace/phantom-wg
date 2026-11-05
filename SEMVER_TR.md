@@ -43,8 +43,8 @@ Yeni bir Phantom-WG Modern release'i çıkarıldığında, daemon versiyonunu ta
 
 ## İmaj Versiyonları
 
-Üretim imajları ürün versiyonunu taşır. Bir release `phantom-daemon`,
-`phantom-auth` ve `phantom-nginx` imajlarını `ghcr.io/aras-workspace` altına
+Üretim imajları ürün versiyonunu taşır. Bir release `phantom-daemon-base`,
+`phantom-auth-base` ve `phantom-nginx-base` imajlarını `ghcr.io/aras-workspace` altına
 `X.Y.Z` etiketiyle yayımlar; bu etiket `X.Y.Z-amd64` ve `X.Y.Z-arm64`'ü birleştirir.
 İmajlar release başına yayımlanır ve `latest` etiketi yoktur.
 

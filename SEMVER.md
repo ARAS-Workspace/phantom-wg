@@ -44,7 +44,7 @@ When a new Phantom-WG Modern release is cut, it carries the daemon version.
 ## Image Versions
 
 The production images carry the product version. A release publishes
-`phantom-daemon`, `phantom-auth` and `phantom-nginx` to `ghcr.io/aras-workspace`
+`phantom-daemon-base`, `phantom-auth-base` and `phantom-nginx-base` to `ghcr.io/aras-workspace`
 under the tag `X.Y.Z`, joining `X.Y.Z-amd64` and `X.Y.Z-arm64`. Images are
 published per release, and there is no `latest`.
 
