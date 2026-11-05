@@ -1,6 +1,7 @@
 import React from 'react';
 import { createBrowserRouter, RouterProvider, Navigate } from 'react-router-dom';
 import { useAuth } from '@shared/contexts/AuthContext';
+import { useUser } from '@shared/contexts/UserContext';
 import LoadingSpinner from '@shared/components/ui/LoadingSpinner';
 import ProtectedLayout from '@shared/components/layout/ProtectedLayout';
 import PublicLayout from '@shared/components/layout/PublicLayout';
@@ -36,6 +37,13 @@ const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) =
 
   if (initializing) return <LoadingSpinner fullscreen />;
   if (!isAuthenticated) return <Navigate to="/login" replace />;
+  return <>{children}</>;
+};
+
+const SuperadminRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  const { isSuperadmin } = useUser();
+
+  if (!isSuperadmin) return <Navigate to="/" replace />;
   return <>{children}</>;
 };
 
@@ -85,7 +93,14 @@ const router = createBrowserRouter([
       { path: '/vpn/firewall', element: <FirewallPage /> },
       { path: '/vpn/dns', element: <DnsPage /> },
       { path: '/vpn/network', element: <NetworkPage /> },
-      { path: '/vpn/backup', element: <BackupPage /> },
+      {
+        path: '/vpn/backup',
+        element: (
+          <SuperadminRoute>
+            <BackupPage />
+          </SuperadminRoute>
+        ),
+      },
       { path: '/vpn/multihop', element: <MultihopPage /> },
 
     ],

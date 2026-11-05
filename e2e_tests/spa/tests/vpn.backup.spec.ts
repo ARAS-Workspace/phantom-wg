@@ -4,6 +4,8 @@ import * as path from "path";
 import * as os from "os";
 
 const ADMIN_USER = "admin";
+const ROLE_USER = "e2e-backup-role";
+const ROLE_PASSWORD = "E2e-Backup-Role-2026!";
 
 test.describe.serial("VPN Backup", () => {
   let adminPassword: string;
@@ -36,6 +38,7 @@ test.describe.serial("VPN Backup", () => {
   test("Backup page shows export and import tiles", async ({ page }) => {
     await loginAndGoBackup(page);
 
+    await expect(page.getByTestId("nav-vpn-backup")).toHaveCount(1);
     await expect(page.getByTestId("vpn-backup-tile-export")).toBeVisible();
     await expect(page.getByTestId("vpn-backup-tile-import")).toBeVisible();
     await expect(page.getByTestId("vpn-backup-export-btn")).toBeVisible();
@@ -133,5 +136,34 @@ test.describe.serial("VPN Backup", () => {
 
     // Back to idle
     await expect(page.getByTestId("vpn-backup-import-btn")).toBeVisible();
+  });
+
+  // ── 6. Admin role: no menu item, the page sends back ──────────
+  test("Admin role has no backup menu item or page", async ({
+    page,
+    request,
+  }) => {
+    const login = await request.post("/auth/login", {
+      data: { username: ADMIN_USER, password: adminPassword },
+    });
+    const { data } = await login.json();
+    const created = await request.post("/auth/users", {
+      headers: { Authorization: `Bearer ${data.token}` },
+      data: { username: ROLE_USER, password: ROLE_PASSWORD },
+    });
+    expect([200, 409]).toContain(created.status());
+
+    await page.goto("/login");
+    await page.getByTestId("login-username").fill(ROLE_USER);
+    await page.getByTestId("login-password").fill(ROLE_PASSWORD);
+    await page.getByTestId("login-submit").click();
+    await expect(page).toHaveURL("/");
+
+    await expect(page.getByTestId("nav-vpn-clients")).toHaveCount(1);
+    await expect(page.getByTestId("nav-vpn-backup")).toHaveCount(0);
+
+    await page.goto("/vpn/backup");
+    await expect(page).toHaveURL("/");
+    await expect(page.getByTestId("vpn-backup-tile-export")).toHaveCount(0);
   });
 });

@@ -217,6 +217,7 @@ const ProtectedHeader: React.FC = () => {
                         <SideNavMenuItem
                           key={child.href}
                           href={child.href}
+                          data-testid={`nav${child.href!.replace(/\//g, '-')}`}
                           isActive={child.href ? isActive(child.href) : false}
                           onClick={(e: React.MouseEvent) =>
                             nav(e, child.href!, onClickSideNavExpand)

@@ -45,7 +45,7 @@
         {
           "label": "Yedekleme",
           "href": "/vpn/backup",
-          "roles": ["admin", "superadmin"]
+          "roles": ["superadmin"]
         }
       ]
     },
