@@ -4,8 +4,9 @@ name: Publish images
 # as <tag>-<arch>, joins the two under <tag>, reads the digests back from the
 # registry, and runs each image on each architecture with the code mounted as
 # compose mounts it. The caller grants packages: write. The base-images
-# artifact holds registry.yml with these images, under its path in the tree;
-# committing it belongs to the caller.
+# artifact holds registry.yml with these images and MANIFEST.json with their
+# contents, under their paths in the tree; committing them belongs to the
+# caller.
 
 on:
   workflow_call:
@@ -256,8 +257,40 @@ jobs:
             nginx -t
           '
 
+      - name: Read the image contents
+        run: |
+          set -euo pipefail
+          mkdir -p contents
+          PYTHON='import importlib.metadata as m
+          for d in m.distributions():
+              print(d.metadata["Name"], d.version, sep="\t")'
+          for ENTRY in "phantom-daemon-base=${DAEMON_IMAGE}" "phantom-auth-base=${AUTH_IMAGE}" "phantom-nginx-base=${NGINX_IMAGE}"; do
+            NAME="${ENTRY%%=*}"
+            IMAGE="${ENTRY#*=}"
+            STEM="contents/${NAME}.${ARCH}"
+            docker buildx imagetools inspect "${IMAGE%@*}-${ARCH}" --format "{{.Manifest.Digest}}" > "${STEM}.digest"
+            docker run --rm --platform "linux/${ARCH}" "${IMAGE}" dpkg-query -W \
+              -f '${Package}\t${Version}\t${source:Package}\t${source:Version}\n' > "${STEM}.dpkg"
+          done
+          for ENTRY in "phantom-daemon-base=${DAEMON_IMAGE}" "phantom-auth-base=${AUTH_IMAGE}"; do
+            docker run --rm --platform "linux/${ARCH}" "${ENTRY#*=}" python3 -c "${PYTHON}" \
+              > "contents/${ENTRY%%=*}.${ARCH}.python"
+          done
+          docker run --rm --platform "linux/${ARCH}" "${DAEMON_IMAGE}" sh -euc '
+            for NAME in firewall_bridge wireguard_go_bridge; do
+              printf "%s\t%s\n" "${NAME}" "$(cat "/opt/phantom/vendor/${NAME}/VERSION")"
+            done
+          ' > "contents/phantom-daemon-base.${ARCH}.bridges"
+
+      - name: Upload the image contents
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
+        with:
+          name: contents-${{ matrix.arch }}
+          path: contents/
+          if-no-files-found: error
+
   pins:
-    name: Write the image pins
+    name: Write the pins and the manifest
     needs: [index, verify]
     runs-on: ubuntu-26.04
     permissions:
@@ -266,6 +299,7 @@ jobs:
       DAEMON_IMAGE: ${{ needs.index.outputs.daemon }}
       AUTH_IMAGE: ${{ needs.index.outputs.auth }}
       NGINX_IMAGE: ${{ needs.index.outputs.nginx }}
+      TAG: ${{ inputs.tag }}
     steps:
       - name: Harden runner
         uses: step-security/harden-runner@46b06cea07f9e64621fdf066ba77ac6915163d43 # v2.22.3
@@ -302,7 +336,38 @@ jobs:
             fi
           done
 
-      - name: Upload the pins
+      - name: Download the image contents
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          pattern: contents-*
+          path: contents
+          merge-multiple: true
+
+      - name: Read the source packages
+        run: |
+          set -euo pipefail
+          BASE=$(sed -n 's/^FROM \(debian:[^ ]*\).*/\1/p' Dockerfile | head -n 1)
+          cut -f3,4 contents/*.dpkg | sort -u > contents/sources.txt
+          docker run --rm -v "${PWD}/contents:/contents" "${BASE}" bash -euc '
+            sed -i "s/^Types: deb$/Types: deb deb-src/" /etc/apt/sources.list.d/debian.sources
+            apt-get update -qq
+            while IFS=$'"'"'\t'"'"' read -r NAME VERSION; do
+              apt-get source --print-uris --only-source "${NAME}=${VERSION}" 2>/dev/null \
+                | grep "^'"'"'" > /tmp/uris || true
+              if [ -s /tmp/uris ]; then
+                while read -r LINE; do
+                  printf "%s\t%s\t%s\n" "${NAME}" "${VERSION}" "${LINE}"
+                done < /tmp/uris >> /contents/uris.txt
+              else
+                printf "%s\t%s\n" "${NAME}" "${VERSION}" >> /contents/missing.txt
+              fi
+            done < /contents/sources.txt
+          '
+
+      - name: Write the manifest
+        run: python3 .github/scripts/image_manifest.py contents artifact/tools/compose/MANIFEST.json
+
+      - name: Upload the pins and the manifest
         uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
         with:
           name: base-images

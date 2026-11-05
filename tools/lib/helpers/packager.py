@@ -32,6 +32,7 @@ Included:
     tools/prod.vars         Production variables
     tools/compose/build.yml Local image build
     tools/compose/registry.yml Registry images
+    tools/compose/MANIFEST.json Contents of the registry images
     tools/lib/common.sh     Color helpers
     tools/lib/images.sh     Image source and references
     tools/lib/keys.sh       WireGuard key generation
@@ -89,6 +90,7 @@ INCLUDE = [
     "tools/prod.vars",
     "tools/compose/build.yml",
     "tools/compose/registry.yml",
+    "tools/compose/MANIFEST.json",
     "tools/lib/common.sh",
     "tools/lib/images.sh",
     "tools/lib/keys.sh",
