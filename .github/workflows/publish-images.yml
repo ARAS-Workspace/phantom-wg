@@ -3,7 +3,9 @@ name: Publish images
 # Builds each production image on a runner of its own architecture, pushes it
 # as <tag>-<arch>, joins the two under <tag>, reads the digests back from the
 # registry, and runs each image on each architecture with the code mounted as
-# compose mounts it. The caller grants packages: write.
+# compose mounts it. The caller grants packages: write. The base-images
+# artifact holds registry.yml with these images, under its path in the tree;
+# committing it belongs to the caller.
 
 on:
   workflow_call:
@@ -47,13 +49,13 @@ jobs:
       fail-fast: false
       matrix:
         target:
-          - image: phantom-daemon
+          - image: phantom-daemon-base
             context: .
             dockerfile: Dockerfile
-          - image: phantom-auth
+          - image: phantom-auth-base
             context: services/auth-service
             dockerfile: services/auth-service/Dockerfile
-          - image: phantom-nginx
+          - image: phantom-nginx-base
             context: .
             dockerfile: nginx.Dockerfile
         platform:
@@ -135,7 +137,7 @@ jobs:
           TAG: ${{ inputs.tag }}
         run: |
           set -euo pipefail
-          for IMAGE in phantom-daemon phantom-auth phantom-nginx; do
+          for IMAGE in phantom-daemon-base phantom-auth-base phantom-nginx-base; do
             REF="${REGISTRY}/${IMAGE}:${TAG}"
             docker buildx imagetools create \
               --annotation "index:org.opencontainers.image.source=${SOURCE}" \
@@ -150,7 +152,7 @@ jobs:
           TAG: ${{ inputs.tag }}
         run: |
           set -euo pipefail
-          for ENTRY in daemon:phantom-daemon auth:phantom-auth nginx:phantom-nginx; do
+          for ENTRY in daemon:phantom-daemon-base auth:phantom-auth-base nginx:phantom-nginx-base; do
             REF="${REGISTRY}/${ENTRY#*:}:${TAG}"
             docker buildx imagetools inspect "${REF}"
             DIGEST=$(docker buildx imagetools inspect "${REF}" --format "{{.Manifest.Digest}}")
@@ -165,7 +167,7 @@ jobs:
         run: |
           set -euo pipefail
           docker logout ghcr.io
-          for IMAGE in phantom-daemon phantom-auth phantom-nginx; do
+          for IMAGE in phantom-daemon-base phantom-auth-base phantom-nginx-base; do
             REF="${REGISTRY}/${IMAGE}:${TAG}"
             if docker buildx imagetools inspect "${REF}" > /dev/null; then
               echo "${REF}: readable without a login"
@@ -253,3 +255,56 @@ jobs:
             nginx -v
             nginx -t
           '
+
+  pins:
+    name: Write the image pins
+    needs: [index, verify]
+    runs-on: ubuntu-26.04
+    permissions:
+      contents: read
+    env:
+      DAEMON_IMAGE: ${{ needs.index.outputs.daemon }}
+      AUTH_IMAGE: ${{ needs.index.outputs.auth }}
+      NGINX_IMAGE: ${{ needs.index.outputs.nginx }}
+    steps:
+      - name: Harden runner
+        uses: step-security/harden-runner@46b06cea07f9e64621fdf066ba77ac6915163d43 # v2.22.3
+        with:
+          egress-policy: audit
+
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+
+      - name: Write the pins
+        run: |
+          set -euo pipefail
+          mkdir -p artifact/tools/compose
+          awk -v daemon="${DAEMON_IMAGE}" -v auth="${AUTH_IMAGE}" -v nginx="${NGINX_IMAGE}" '
+            /^  daemon:$/       { ref = daemon }
+            /^  auth-service:$/ { ref = auth }
+            /^  nginx:$/        { ref = nginx }
+            ref != "" && /^    image: / { print "    image: " ref; ref = ""; next }
+            { print }
+          ' tools/compose/registry.yml > artifact/tools/compose/registry.yml
+          cat artifact/tools/compose/registry.yml
+
+      - name: Check the pins
+        run: |
+          set -euo pipefail
+          FILE=artifact/tools/compose/registry.yml
+          for ENTRY in "daemon=${DAEMON_IMAGE}" "auth-service=${AUTH_IMAGE}" "nginx=${NGINX_IMAGE}"; do
+            ACTUAL=$(docker compose -f "${FILE}" config --images "${ENTRY%%=*}")
+            if [ "${ACTUAL}" != "${ENTRY#*=}" ]; then
+              echo "::error::${ENTRY%%=*} holds ${ACTUAL}"
+              exit 1
+            fi
+          done
+
+      - name: Upload the pins
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
+        with:
+          name: base-images
+          path: artifact/
+          if-no-files-found: error

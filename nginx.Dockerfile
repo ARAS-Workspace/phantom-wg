@@ -5,7 +5,7 @@
 # and the TLS secrets are mounted by compose.
 #
 # Build:
-#   docker build -f nginx.Dockerfile -t phantom-nginx:latest .
+#   docker build -f nginx.Dockerfile -t phantom-nginx-base:local .
 # ──────────────────────────────────────────────────────────────────
 
 # ── Platform ─────────────────────────────────────────────────────

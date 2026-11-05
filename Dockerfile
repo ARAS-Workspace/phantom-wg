@@ -5,7 +5,7 @@
 #
 # Build:
 #   PHANTOM_IMAGE_SOURCE=build docker compose build
-#   docker build -t phantom-daemon:latest .
+#   docker build -t phantom-daemon-base:local .
 # ──────────────────────────────────────────────────────────────────
 
 # ── Stage 0: platform ────────────────────────────────────────────

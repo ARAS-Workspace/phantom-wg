@@ -7,21 +7,21 @@
 
 services:
   daemon:
-    image: phantom-daemon:local
+    image: phantom-daemon-base:local
     pull_policy: never
     build:
       context: ../..
       dockerfile: Dockerfile
 
   auth-service:
-    image: phantom-auth:local
+    image: phantom-auth-base:local
     pull_policy: never
     build:
       context: ../../services/auth-service
       dockerfile: Dockerfile
 
   nginx:
-    image: phantom-nginx:local
+    image: phantom-nginx-base:local
     pull_policy: never
     build:
       context: ../..

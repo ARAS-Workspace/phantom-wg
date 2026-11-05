@@ -1,0 +1,86 @@
+name: Release base images
+
+# Publishes the production images under the version of the tag, then commits
+# the pins publish-images.yml leaves as an artifact to dev/daemon. The product
+# release takes the pins from the tree.
+
+on:
+  push:
+    tags:
+      - 'base-images-v*'
+
+permissions:
+  contents: read
+
+jobs:
+  version:
+    name: Read the version
+    runs-on: ubuntu-26.04
+    outputs:
+      number: ${{ steps.read.outputs.number }}
+    steps:
+      - name: Harden runner
+        uses: step-security/harden-runner@46b06cea07f9e64621fdf066ba77ac6915163d43 # v2.22.3
+        with:
+          egress-policy: audit
+
+      - name: Read the version
+        id: read
+        run: |
+          set -euo pipefail
+          NUMBER="${GITHUB_REF_NAME#base-images-v}"
+          if ! echo "${NUMBER}" | grep -qE '^[0-9]+\.[0-9]+\.[0-9]+$'; then
+            echo "::error::Invalid version: ${NUMBER}"
+            exit 1
+          fi
+          echo "number=${NUMBER}" >> "${GITHUB_OUTPUT}"
+
+  publish:
+    name: Publish images
+    needs: version
+    permissions:
+      contents: read
+      packages: write
+    uses: ./.github/workflows/publish-images.yml
+    with:
+      tag: ${{ needs.version.outputs.number }}
+      require_public: true
+
+  pin:
+    name: Commit the pins
+    needs: [version, publish]
+    runs-on: ubuntu-26.04
+    permissions:
+      contents: write
+    steps:
+      - name: Harden runner
+        uses: step-security/harden-runner@46b06cea07f9e64621fdf066ba77ac6915163d43 # v2.22.3
+        with:
+          egress-policy: audit
+
+      - name: Checkout dev/daemon
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          ref: dev/daemon
+          persist-credentials: true
+
+      - name: Download the pins
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: base-images
+          path: .
+
+      - name: Commit and push
+        env:
+          VERSION: ${{ needs.version.outputs.number }}
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add tools/compose/registry.yml
+          if git diff --cached --quiet; then
+            echo "No changes to commit"
+            exit 0
+          fi
+          git commit -m "Build: Update base images to v${VERSION}"
+          git push origin dev/daemon
