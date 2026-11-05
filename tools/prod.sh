@@ -285,6 +285,11 @@ cmd_update() {
     green "Update complete."
 }
 
+_wipe_dir() {
+    [[ -d "$1" ]] || return 0
+    find "$1" -mindepth 1 ! -name '.gitkeep' -delete
+}
+
 cmd_hard_reset() {
     bold "This will destroy ALL data: secrets, auth DB, and Docker volumes."
     printf "Type 'yes' to confirm: "
@@ -298,10 +303,10 @@ cmd_hard_reset() {
     $COMPOSE down -v 2>/dev/null || true
 
     bold "Removing secrets..."
-    rm -rf "$SECRETS_DIR"
+    _wipe_dir "$SECRETS_DIR"
 
     bold "Removing auth database..."
-    rm -rf "$AUTH_DB_DIR"
+    _wipe_dir "$AUTH_DB_DIR"
 
     bold "Removing daemon databases..."
     rm -f container-data/db/*.db
