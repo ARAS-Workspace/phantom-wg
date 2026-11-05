@@ -23,14 +23,12 @@ import {
   OverflowMenuItem,
 } from '@carbon/react';
 import { Filter, FilterRemove } from '@carbon/icons-react';
-import { useUser } from '@shared/contexts/UserContext';
 import { useLocale } from '@shared/hooks';
 import { translate } from '@shared/translations';
 import { apiClient } from '@shared/api/client';
 import { formatDateTime } from '@shared/utils/dateUtils';
 import TableLoader from '@shared/components/data/TableLoader';
 import AuditDetailModal from './modals/AuditDetailModal';
-import { Navigate } from 'react-router-dom';
 import './styles/AuditLog.scss';
 
 // ── Constants ─────────────────────────────────────────────────────
@@ -115,11 +113,8 @@ const formatDetail = (detail: Record<string, unknown>): string => {
 // ── Component ─────────────────────────────────────────────────────
 
 const AuditLog: React.FC = () => {
-  const { user } = useUser();
   const { locale } = useLocale();
   const t = translate(locale);
-
-  if (user?.role !== 'superadmin') return <Navigate to="/" replace />;
 
   // ── Server state ──────────────────────────────────────────────
   const [data, setData] = useState<AuditPage | null>(null);

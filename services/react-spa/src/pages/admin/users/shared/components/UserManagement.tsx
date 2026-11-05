@@ -23,7 +23,6 @@ import { useUser, type UserInfo } from '@shared/contexts/UserContext';
 import { useApi, useLocale } from '@shared/hooks';
 import { translate } from '@shared/translations';
 import { formatDateTime } from '@shared/utils/dateUtils';
-import { Navigate } from 'react-router-dom';
 import TableLoader from '@shared/components/data/TableLoader';
 import CreateUserModal from './modals/CreateUserModal';
 import ChangePasswordModal from './modals/ChangePasswordModal';
@@ -46,8 +45,6 @@ const UserManagement: React.FC = () => {
   const { user, mutateUser } = useUser();
   const { locale } = useLocale();
   const t = translate(locale);
-
-  if (user?.role !== 'superadmin') return <Navigate to="/" replace />;
 
   const { data: usersData, loading, refetch: refetchUsers } = useApi<UserInfo[]>('/auth/users');
   const users = usersData ?? [];

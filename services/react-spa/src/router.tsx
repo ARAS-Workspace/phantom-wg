@@ -84,8 +84,22 @@ const router = createBrowserRouter([
       { path: '/account/password-change', element: <PasswordChangePage /> },
 
       // admin
-      { path: '/admin/users', element: <UsersPage /> },
-      { path: '/admin/audit', element: <AuditPage /> },
+      {
+        path: '/admin/users',
+        element: (
+          <SuperadminRoute>
+            <UsersPage />
+          </SuperadminRoute>
+        ),
+      },
+      {
+        path: '/admin/audit',
+        element: (
+          <SuperadminRoute>
+            <AuditPage />
+          </SuperadminRoute>
+        ),
+      },
 
       // vpn
       { path: '/vpn/clients', element: <ClientsPage /> },
