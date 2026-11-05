@@ -1,13 +1,13 @@
 {
-  "version": "0.0.2",
-  "commit": "c8096d73866c9664a68e30826d2b70af70599805",
-  "sources_image": "ghcr.io/aras-workspace/phantom-sources:0.0.2@sha256:5804d51438fdaa933a2369dacbcd3cfc7f2c1ffe437e174c0120c17581f5cfb8",
+  "version": "1.0.0",
+  "commit": "59421c571eb345f1229c7a070c4201fa2f796d62",
+  "sources_image": "ghcr.io/aras-workspace/phantom-sources:1.0.0@sha256:de25a04f005562feaa653df5dc7e231693bffad3db3ae85efa08da393f9edded",
   "images": {
     "phantom-daemon-base": {
-      "reference": "ghcr.io/aras-workspace/phantom-daemon-base:0.0.2@sha256:b42ec40c68e66728a171f96312eec6ddcff7ca5ba4c9f035afe9811fcde9eeda",
+      "reference": "ghcr.io/aras-workspace/phantom-daemon-base:1.0.0@sha256:7e2d1069b61caa24f49a9c8c816f8828ede195c9762a030a7cebbf583e26101c",
       "architectures": {
         "amd64": {
-          "digest": "sha256:b10db7e94b82dad538c1b098e2a1f0a4ec7385c729bb647b481a877cd5bf8d29",
+          "digest": "sha256:9abe8b51cc46fdc6066d2f1372c5cd9569c5791beaf0b3c0fffbc2a45e7eff39",
           "packages": [
             {
               "name": "base-files",
@@ -700,7 +700,7 @@
           ]
         },
         "arm64": {
-          "digest": "sha256:302a186ce8fc9ffc5d9b048e5fa4a6dc6653b6acdee7363e6f9e1b89a3d82493",
+          "digest": "sha256:fc0d20356ddbd91c8fb04abda0bb102d99d7c8920c4b851bb9e94c8c39872a5a",
           "packages": [
             {
               "name": "base-files",
@@ -1395,10 +1395,10 @@
       }
     },
     "phantom-auth-base": {
-      "reference": "ghcr.io/aras-workspace/phantom-auth-base:0.0.2@sha256:bf7c8d8301efcdb06fdb797adc4e9cd7df92faff720e9052a8abdb9169f2187b",
+      "reference": "ghcr.io/aras-workspace/phantom-auth-base:1.0.0@sha256:61b2a0fdb6e9c5a20d77e4cd9d2afc4d24a307b695562e02b700222554e364a6",
       "architectures": {
         "amd64": {
-          "digest": "sha256:2a8a1d69b404325910d3e555ffb4e94bf61cffd338bc3be81798e461812e7b6f",
+          "digest": "sha256:7fef328544eb8010b6b08d8102ef10b120eb8149838acffe5632f9fd0de05d3d",
           "packages": [
             {
               "name": "base-files",
@@ -2007,7 +2007,7 @@
           ]
         },
         "arm64": {
-          "digest": "sha256:b718cb198c4e258075ea3dce69fcaf4cf5fecbcff450100b4c272d6470b9b69d",
+          "digest": "sha256:1e334f893a1d21f86597d2adee93900f45398e6ea3e696d2ac1e8062c738a7b4",
           "packages": [
             {
               "name": "base-files",
@@ -2618,10 +2618,10 @@
       }
     },
     "phantom-nginx-base": {
-      "reference": "ghcr.io/aras-workspace/phantom-nginx-base:0.0.2@sha256:260f0e43bc5c23373c27056d2421527ae92d9caa2ff15a59d1b45410f8370251",
+      "reference": "ghcr.io/aras-workspace/phantom-nginx-base:1.0.0@sha256:76e232110c71b43dc0afbc49eea89d3ffd2a4eb0af16aa7e2a603c3dfe01f563",
       "architectures": {
         "amd64": {
-          "digest": "sha256:914889a6e15eb0a0ff74a030df84389712bbb4b901278657c37f68ce74504bf1",
+          "digest": "sha256:6c99c9451483b2edcdf83f8819b04bc97f97a37ef4f635afd59861e9ee08492f",
           "packages": [
             {
               "name": "base-files",
@@ -3124,7 +3124,7 @@
           ]
         },
         "arm64": {
-          "digest": "sha256:a8eda6934d2187be705b4d339c363280a0c81790ca91adb57b56d97b1bbaff96",
+          "digest": "sha256:02c33f4a20e336a5b1fa488c7fb7ba67dd3f2162ff0527f87193f21687f8bc3b",
           "packages": [
             {
               "name": "base-files",
