@@ -45,6 +45,9 @@ Quick Start:
        - Auth service keypair + admin account + database
        - Self-signed TLS certificate
 
+     Setup refuses a complete install and otherwise creates only what is
+     missing. To start over, use ./tools/prod.sh hard-reset.
+
      Credentials are written to:
        container-data/secrets/production/
        container-data/secrets/production/.admin_password
@@ -61,13 +64,35 @@ Quick Start:
      Dashboard:  https://<server-ip>
      WireGuard:  UDP port 51820
 
+Custom Client Subnet:
+  VPN clients get their addresses from 10.8.0.0/24 by default. Terazi pairs
+  every IPv4 address with an IPv6 address by index, so this one value sets
+  both pools. A /24 holds 253 clients. To start with another subnet, pass it
+  to the first setup:
+
+    ./tools/prod.sh setup --terazi-ipv4-subnet=10.9.0.0/24
+
+  The value is used once: the first ./tools/prod.sh up creates wallet.db and
+  fills it with the pool, and from then on the subnet lives there. To move to
+  another subnet, start over with ./tools/prod.sh hard-reset. The prefix length
+  alone can be changed from the dashboard (/16 to /30); every WireGuard client
+  config must then be exported again.
+
+  Use a private subnet with a prefix between /16 and /30.
+
 Images:
   The stack runs the release images from the registry by default.
   They are built by CI from the Dockerfiles in this directory.
-  To build the same Dockerfiles on this machine instead:
+  To build the same Dockerfiles on this machine instead, after setup:
 
     ./tools/prod.sh images use build
     ./tools/prod.sh up
+
+  To stay off the registry from the first step, choose before setup:
+
+    cp .env.example .env
+    (set PHANTOM_IMAGE_SOURCE=build in .env)
+    ./tools/prod.sh setup
 
   The choice is PHANTOM_IMAGE_SOURCE in .env (registry or build).
 
@@ -78,7 +103,7 @@ Environment Files:
 
   These files are created from .example templates during setup.
   They are NOT tracked by git — safe for user-specific values.
-  Edit them to customize ports, timeouts, or any service parameter.
+  Edit them to customize subnets, timeouts, or any service parameter.
 
 Compose Override:
   docker-compose.override.yml is created from its .example during setup.
@@ -87,8 +112,8 @@ Compose Override:
 
 Commands:
   ./tools/prod.sh help             Show all commands
-  ./tools/prod.sh setup            Full setup (env + keys + auth + TLS)
-  ./tools/prod.sh up               Start stack (fetches missing images)
+  ./tools/prod.sh setup            First setup (env + keys + auth + TLS)
+  ./tools/prod.sh up               Start stack (stops if setup is incomplete)
   ./tools/prod.sh down             Stop stack
   ./tools/prod.sh restart          Restart all services
   ./tools/prod.sh images           Show the image source and its images
@@ -114,6 +139,8 @@ Ports:
   443/tcp     HTTPS (nginx → auth-service → daemon)
   51820/udp   WireGuard
 
+  The published ports are set in docker-compose.override.yml.
+
 Data Directories (created at runtime):
   container-data/
   ├── secrets/production/         Keys and certificates
@@ -137,6 +164,7 @@ Updating:
   Quick reference:
     ./tools/prod.sh update
 
-  If you have local docker-compose.yml changes, lock them first:
+  Keep server-specific changes in docker-compose.override.yml. If you have
+  local docker-compose.yml changes, lock them first:
     ./tools/prod.sh compose lock
     ./tools/prod.sh update
