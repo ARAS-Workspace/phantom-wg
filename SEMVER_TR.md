@@ -41,6 +41,21 @@ Yeni bir Phantom-WG Modern release'i çıkarıldığında, daemon versiyonunu ta
 - `GET /api/core/hello` → `version` alanı
 - Dashboard durum kartı → kullanıcıya gösterilir
 
+## İmaj Versiyonları
+
+Üretim imajları ürün versiyonunu taşır. Bir release `phantom-daemon`,
+`phantom-auth` ve `phantom-nginx` imajlarını `ghcr.io/aras-workspace` altına
+`X.Y.Z` etiketiyle yayımlar; bu etiket `X.Y.Z-amd64` ve `X.Y.Z-arm64`'ü birleştirir.
+İmajlar release başına yayımlanır ve `latest` etiketi yoktur.
+
+`tools/compose/registry.yml` her imajı `X.Y.Z@sha256:<digest>` olarak sabitler.
+Çalışacak imajı digest belirler, yani host yeni imajlara ancak bir release bu
+sabitlemeyi değiştirdiğinde geçer.
+
+İmaj yalnız çalışma ortamını taşır: daemon ve auth-service kodu çalışma anında
+bağlanır. Build kaynağı aynı Dockerfile'ları host üzerinde kurar. İki kaynak
+tarifi paylaşır, baytları değil, çünkü apt paketleri sabitlenmez.
+
 ## Bağımlılık Versiyonları
 
 Bağımlılıklar kendi semver'lerini bağımsız olarak yönetir. Versiyonları

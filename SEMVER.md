@@ -41,6 +41,22 @@ When a new Phantom-WG Modern release is cut, it carries the daemon version.
 - `GET /api/core/hello` → `version` field
 - Dashboard status card → displayed to the user
 
+## Image Versions
+
+The production images carry the product version. A release publishes
+`phantom-daemon`, `phantom-auth` and `phantom-nginx` to `ghcr.io/aras-workspace`
+under the tag `X.Y.Z`, joining `X.Y.Z-amd64` and `X.Y.Z-arm64`. Images are
+published per release, and there is no `latest`.
+
+`tools/compose/registry.yml` pins each image as `X.Y.Z@sha256:<digest>`. The
+digest decides what runs, so a host moves to new images only when a release
+moves the pin.
+
+An image holds the operating environment only: the daemon and auth-service
+code is mounted at runtime. The build source builds the same Dockerfiles on
+the host. The two sources share the recipe, not the bytes, because the apt
+packages are not pinned.
+
 ## Dependency Versions
 
 Dependencies maintain their own semver independently. Their versions
