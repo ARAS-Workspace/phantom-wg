@@ -8,44 +8,31 @@ Standard Update:
   Environment files (.env, .env.daemon, .env.auth-service) and
   docker-compose.override.yml are always preserved.
 
-  Alternatively:
-    git pull
-    ./tools/prod.sh restart
-
 Local Changes:
   Server-specific changes (ports, resource limits, extra volumes) belong in
   docker-compose.override.yml. It is not tracked by git, so updates leave
   it as it is.
 
-Compose Lock:
-  An update stops if docker-compose.yml has local changes. To update with
-  them in place, use compose lock:
+  docker-compose.yml comes with each release. An update stops if it has local
+  changes: move them to the override, then discard them:
 
-    ./tools/prod.sh compose lock
-
-  The lock persists across sessions. A release that changes docker-compose.yml
-  itself still stops the update: unlock, move your changes to
-  docker-compose.override.yml, and update again.
-
-    ./tools/prod.sh compose status    Check if locked
-    ./tools/prod.sh compose unlock    Release to pull upstream changes
-
-  How it works:
-    Compose lock uses git update-index --assume-unchanged to tell git
-    to ignore local changes to docker-compose.yml during pull.
+    git checkout -- docker-compose.yml
 
 Dependency Updates:
-  Registry source: the release pins its images, pull them and start:
+  ./tools/prod.sh update handles a changed Dockerfile or requirements.txt: the
+  build source rebuilds the affected images, the registry source starts the
+  images of the release.
+
+  A release can also change only the pinned images. To apply them on the
+  registry source:
 
     ./tools/prod.sh pull
     ./tools/prod.sh up
 
-  Build source: if requirements.txt or a Dockerfile changed after an update:
+  To rebuild from scratch on the build source:
 
     ./tools/prod.sh rebuild
     ./tools/prod.sh up
-
-  This rebuilds the images from scratch with the new dependencies.
 
 Version Check:
   ./tools/prod.sh show-versions
@@ -57,12 +44,12 @@ Rollback:
   To roll back to a previous version:
 
     git fetch --tags
-    git checkout v1.0.7
+    git checkout v2.0.0
     ./tools/prod.sh restart
 
   If the images may have changed between versions:
 
-    git checkout v1.0.7
+    git checkout v2.0.0
     ./tools/prod.sh pull       (registry source)
     ./tools/prod.sh rebuild    (build source)
     ./tools/prod.sh up
@@ -90,7 +77,6 @@ What Gets Preserved on Update:
   .env                       Always preserved (not tracked by git)
   .env.daemon                Always preserved (not tracked by git)
   .env.auth-service          Always preserved (not tracked by git)
-  docker-compose.yml         Preserved only when compose lock is active
   container-data/            Always preserved (runtime data, not in git)
 
 What Gets Updated:
@@ -99,5 +85,7 @@ What Gets Updated:
   services/react-spa/dist/   Web dashboard build
   services/nginx/            Reverse proxy config
   tools/                     Production CLI, libraries and image pins
-  Dockerfile                 Image definition
+  docker-compose.yml         Production stack
+  docker-compose.override.yml.example  Override template
+  Dockerfile, nginx.Dockerfile  Image definitions
   requirements.txt           Python dependencies

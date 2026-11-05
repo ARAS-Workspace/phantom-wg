@@ -5,7 +5,7 @@ Prerequisites:
   - Docker Engine 20.10+
   - Docker Compose v2
   - bash
-  - git (required for update mechanism and compose lock)
+  - git (required for the update mechanism)
 
 Directory Structure:
   phantom-wg/
@@ -113,6 +113,9 @@ Compose Override:
 Commands:
   ./tools/prod.sh help             Show all commands
   ./tools/prod.sh setup            First setup (env + keys + auth + TLS)
+  ./tools/prod.sh gen-keys [-f]    Generate the WireGuard keypair
+  ./tools/prod.sh setup-auth [-f]  Bootstrap the auth service
+  ./tools/prod.sh setup-tls [-f]   Generate a self-signed TLS certificate
   ./tools/prod.sh up               Start stack (stops if setup is incomplete)
   ./tools/prod.sh down             Stop stack
   ./tools/prod.sh restart          Restart all services
@@ -130,10 +133,9 @@ Commands:
   ./tools/prod.sh certbot <domain> Obtain Let's Encrypt TLS certificate
   ./tools/prod.sh hard-reset       Wipe ALL data (destructive)
 
-  Compose Lock:
-  ./tools/prod.sh compose lock     Preserve local docker-compose.yml on update
-  ./tools/prod.sh compose unlock   Release lock to pull upstream changes
-  ./tools/prod.sh compose status   Show current lock state
+  With -f, gen-keys, setup-auth and setup-tls regenerate what exists.
+  gen-keys -f invalidates every WireGuard client config. setup-auth -f moves
+  auth.db aside as auth.db.<time>.bak and creates a new admin account.
 
 Ports:
   443/tcp     HTTPS (nginx → auth-service → daemon)
@@ -164,7 +166,4 @@ Updating:
   Quick reference:
     ./tools/prod.sh update
 
-  Keep server-specific changes in docker-compose.override.yml. If you have
-  local docker-compose.yml changes, lock them first:
-    ./tools/prod.sh compose lock
-    ./tools/prod.sh update
+  Keep server-specific changes in docker-compose.override.yml.
