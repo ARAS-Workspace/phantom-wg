@@ -17,10 +17,11 @@ fail() {
 wait_api() {
     local code=000
     for _ in $(seq 1 60); do
-        code="$(curl -sk -o /dev/null -m 3 -w '%{http_code}' https://localhost/api/core/hello || true)"
+        code="$(curl -sk -o /dev/null -m 3 -w '%{http_code}' https://127.0.0.1/api/core/hello || true)"
         [ "${code}" = 401 ] && return 0
         sleep 1
     done
+    docker compose ps || true
     docker compose logs --tail 20 || true
     fail "the API answers ${code}"
 }
@@ -42,7 +43,7 @@ sed 's/^WIREGUARD_ENDPOINT_V4=.*/WIREGUARD_ENDPOINT_V4=127.0.0.1/' .env.daemon >
 mv .env.daemon.tmp .env.daemon
 ./tools/prod.sh up
 wait_api
-[ "$(curl -sk -o /dev/null -m 5 -w '%{http_code}' https://localhost/)" = 200 ] || fail "the dashboard does not answer"
+[ "$(curl -sk -o /dev/null -m 5 -w '%{http_code}' https://127.0.0.1/)" = 200 ] || fail "the dashboard does not answer"
 
 # The zip of the next release, laid over this install.
 rm -rf phantom_daemon services tools images
