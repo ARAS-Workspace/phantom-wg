@@ -29,7 +29,8 @@ Local Changes:
 Dependency Updates:
   Every update syncs the images of the source selected in .env: the registry
   source pulls the images pinned by the release, the build source builds the
-  Dockerfiles of the release. To run this step alone:
+  Dockerfiles of the release, the archive source loads images/ of the package
+  after checking it. To run this step alone:
 
     ./tools/prod.sh images sync
 

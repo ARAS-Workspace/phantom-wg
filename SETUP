@@ -29,7 +29,7 @@ Directory Structure:
   └── tools/
       ├── prod.sh                          Production CLI
       ├── prod.vars                        Environment variables
-      ├── compose/                         Image sources (registry, build)
+      ├── compose/                         Image sources (registry, build, archive)
       └── lib/                             Shell libraries
 
 Quick Start:
@@ -94,7 +94,15 @@ Images:
     (set PHANTOM_IMAGE_SOURCE=build in .env)
     ./tools/prod.sh setup
 
-  The choice is PHANTOM_IMAGE_SOURCE in .env (registry or build).
+  A release zip carries the images in images/ and starts on the archive
+  source, so it installs without reaching the registry. Each of the three
+  sources can be selected at any time:
+
+    ./tools/prod.sh images use <source>
+    ./tools/prod.sh images sync
+    ./tools/prod.sh up
+
+  The choice is PHANTOM_IMAGE_SOURCE in .env (registry, build or archive).
 
 Environment Files:
   .env                      Image source and network subnets
@@ -120,8 +128,8 @@ Commands:
   ./tools/prod.sh down             Stop stack
   ./tools/prod.sh restart          Restart all services
   ./tools/prod.sh images           Show the image source and its images
-  ./tools/prod.sh images use <src> Select registry or build
-  ./tools/prod.sh images sync      Pull or build the selected images
+  ./tools/prod.sh images use <src> Select registry, build or archive
+  ./tools/prod.sh images sync      Pull, build or load the selected images
   ./tools/prod.sh pull             Pull the registry images
   ./tools/prod.sh build            Build images (build source)
   ./tools/prod.sh rebuild          Rebuild from scratch (build source)
