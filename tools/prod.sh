@@ -112,15 +112,24 @@ _images_use() {
     echo "  Apply it with: ./tools/prod.sh up"
 }
 
+_images_sync() {
+    if [[ "$(image_source)" == registry ]]; then
+        cmd_pull
+    else
+        cmd_build
+    fi
+}
+
 cmd_images() {
     local action="${1:-status}"
 
     case "$action" in
         status) _images_status ;;
         use)    _images_use "${2:-}" ;;
+        sync)   _images_sync ;;
         *)
             red "Unknown action: $action"
-            echo "Usage: prod.sh images [status|use {registry|build}]"
+            echo "Usage: prod.sh images [status|use {registry|build}|sync]"
             exit 1
             ;;
     esac
@@ -203,37 +212,13 @@ cmd_update() {
     fi
 
     bold "Pulling latest changes..."
-
-    local before after
-    before=$(git rev-parse HEAD)
     git pull origin main
-    after=$(git rev-parse HEAD)
 
-    # Detect build-affecting changes between the pre-/post-pull HEADs.
-    # Source (phantom_daemon/, auth_service/) is bind-mounted, so a plain
-    # restart picks it up — but image-baked inputs (Dockerfile, requirements)
-    # need a rebuild + recreate to take effect. Rebuild only what changed.
-    local rebuild=()
-    if ! git diff --quiet "$before" "$after" -- Dockerfile requirements.txt; then
-        rebuild+=(daemon)
-    fi
-    if ! git diff --quiet "$before" "$after" -- \
-            services/auth-service/Dockerfile services/auth-service/requirements.txt; then
-        rebuild+=(auth-service)
-    fi
-    if ! git diff --quiet "$before" "$after" -- nginx.Dockerfile; then
-        rebuild+=(nginx)
-    fi
+    _images_sync
 
-    if [[ ${#rebuild[@]} -gt 0 ]]; then
-        bold "Build inputs changed (${rebuild[*]}) — rebuilding..."
-        $COMPOSE build "${rebuild[@]}"
-        bold "Recreating stack..."
-        $COMPOSE up -d
-    else
-        bold "Restarting stack..."
-        $COMPOSE restart
-    fi
+    # Source is bind-mounted: every service starts again, changed or not.
+    bold "Recreating stack..."
+    $COMPOSE up -d --force-recreate
     green "Update complete."
 }
 
@@ -286,6 +271,7 @@ Usage: ./tools/prod.sh <command>
   Images:
     images              Show the image source and its images
     images use <source> Select registry (pull) or build (build here)
+    images sync         Pull or build the images of the selected source
     pull                Pull the registry images
     build               Build the images here (build source)
     rebuild             Rebuild them from scratch (no-cache, build source)
@@ -301,7 +287,7 @@ Usage: ./tools/prod.sh <command>
     exec <svc> <cmd>    Execute command in service
 
   Update:
-    update              Pull latest + restart
+    update              Pull latest, sync images, recreate the stack
 
   Danger:
     hard-reset          Wipe ALL data (secrets + auth DB + volumes)
