@@ -208,6 +208,14 @@ cmd_setup() {
         exit 1
     fi
 
+    if [[ -n "$terazi_subnet" ]]; then
+        ensure_image "$DAEMON"
+        terazi_subnet="$(docker run --rm \
+            -v "$(pwd)/phantom_daemon:/app/phantom_daemon:ro" \
+            "$(image_ref "$DAEMON")" \
+            python -m phantom_daemon.base.wallet.subnet_check "$terazi_subnet")"
+    fi
+
     bold "Full production setup..."
     _bootstrap_env
     cmd_gen_keys "${pass_args[@]}"
