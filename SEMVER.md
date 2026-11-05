@@ -53,8 +53,9 @@ three share one version under the tag `X.Y.Z`, joining `X.Y.Z-amd64` and
 The workflow commits two files to `dev/daemon`. `tools/compose/registry.yml`
 pins each image as `X.Y.Z@sha256:<digest>`, and `tools/compose/MANIFEST.json`
 lists what the images hold: Debian packages with their source files, Python
-packages and the bridges. A product release packages both as they stand in the
-tree. The digest decides what runs, so a host moves to new images only when a
+packages and the bridges. `phantom-sources` carries a copy of those source
+files under the same version. A product release packages the two files as they
+stand in the tree. The digest decides what runs, so a host moves to new images only when a
 product release carries a new pin.
 
 An image holds the operating environment only: the daemon and auth-service

@@ -53,7 +53,8 @@ birleştirir. `latest` etiketi yoktur.
 Workflow `dev/daemon`'a iki dosya commit'ler. `tools/compose/registry.yml` her
 imajı `X.Y.Z@sha256:<digest>` olarak sabitler, `tools/compose/MANIFEST.json` ise
 imajların içeriğini listeler: kaynak dosyalarıyla Debian paketleri, Python
-paketleri ve köprüler. Ürün release'i ikisini ağaçtaki haliyle paketler. Çalışacak
+paketleri ve köprüler. `phantom-sources` aynı versiyonla bu kaynak dosyaların bir
+kopyasını taşır. Ürün release'i bu iki dosyayı ağaçtaki haliyle paketler. Çalışacak
 imajı digest belirler, yani host yeni imajlara ancak yeni sabitlemeyi taşıyan bir
 ürün release'iyle geçer.
 

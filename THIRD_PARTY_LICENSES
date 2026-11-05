@@ -151,7 +151,10 @@ iproute2 and nftables are installed as separate programs; the daemon
 invokes ip as a subprocess, and firewall-bridge runs nft as one, as its
 own notice states. libnftables1 is the library nft is linked against.
 These and nginx are installed from Debian's package repository when the
-user builds the images and are not bundled with this project.
+images are built, and the published images carry them. MANIFEST.json in
+tools/compose lists every Debian package in the images with its source
+files; ghcr.io/aras-workspace/phantom-sources holds those files under the
+image version.
 
 ================================================================================
 TRADEMARK NOTICES
@@ -170,9 +173,9 @@ notice states the licences in its own dependency set and whether they are
 compatible with this project.
 
 GPL-2.0 system packages (libnftables1, nftables, iproute2) are installed
-from Debian when the user builds the image and are not bundled with this
-project. iproute2 and nftables run as separate programs; libnftables1 is
-covered in firewall-bridge's notice.
+from Debian when the images are built and ship in the published images,
+with their source in phantom-sources. iproute2 and nftables run as separate
+programs; libnftables1 is covered in firewall-bridge's notice.
 
 ================================================================================
 
