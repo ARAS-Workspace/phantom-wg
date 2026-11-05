@@ -33,6 +33,7 @@ Included:
     tools/compose/build.yml Local image build
     tools/compose/registry.yml Registry images
     tools/lib/common.sh     Color helpers
+    tools/lib/images.sh     Image source and references
     tools/lib/keys.sh       WireGuard key generation
     tools/lib/auth.sh       Auth service bootstrap
     tools/lib/tls.sh        TLS certificate generation
@@ -88,6 +89,7 @@ INCLUDE = [
     "tools/compose/build.yml",
     "tools/compose/registry.yml",
     "tools/lib/common.sh",
+    "tools/lib/images.sh",
     "tools/lib/keys.sh",
     "tools/lib/auth.sh",
     "tools/lib/tls.sh",

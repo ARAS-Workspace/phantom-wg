@@ -22,6 +22,7 @@ TOOLS_DIR="$(cd "$(dirname "$0")" && pwd)"
 source "$TOOLS_DIR/prod.vars"
 
 source "$TOOLS_DIR/lib/common.sh"
+source "$TOOLS_DIR/lib/images.sh"
 source "$TOOLS_DIR/lib/keys.sh"
 source "$TOOLS_DIR/lib/auth.sh"
 source "$TOOLS_DIR/lib/tls.sh"

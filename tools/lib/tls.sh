@@ -1,6 +1,6 @@
 # ──────────────────────────────────────────────────────────────────
 # TLS certificate generation (self-signed)
-# Requires: DAEMON_DOCKERFILE, SECRETS_DIR, TLS_SUBJECT, TLS_SAN
+# Requires: DAEMON, SECRETS_DIR, TLS_SUBJECT, TLS_SAN, tools/lib/images.sh
 # Optional: TLS_PRODUCTION (enables detail output)
 # ──────────────────────────────────────────────────────────────────
 
@@ -23,7 +23,10 @@ cmd_setup_tls() {
 
     mkdir -p "$SECRETS_DIR"
 
-    ensure_daemon_image
+    ensure_image "$DAEMON"
+
+    local image
+    image="$(image_ref "$DAEMON")"
 
     bold "Generating self-signed TLS certificate..."
 
@@ -41,7 +44,7 @@ cmd_setup_tls() {
 
     docker run --rm \
         -v "$(pwd)/${SECRETS_DIR}:/secrets" \
-        phantom-daemon:latest "${args[@]}" \
+        "$image" "${args[@]}" \
         2>/dev/null
 
     chmod 600 "$key_path" "$cert_path" 2>/dev/null || true
@@ -55,7 +58,7 @@ cmd_setup_tls() {
         bold "Certificate details:"
         docker run --rm \
             -v "$(pwd)/${SECRETS_DIR}:/secrets:ro" \
-            phantom-daemon:latest \
+            "$image" \
             openssl x509 -in /secrets/tls_cert -noout -subject -issuer -dates \
             2>/dev/null | sed 's/^/  /'
     fi

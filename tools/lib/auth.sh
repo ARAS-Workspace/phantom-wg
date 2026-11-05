@@ -1,6 +1,6 @@
 # ──────────────────────────────────────────────────────────────────
 # Auth service bootstrap
-# Requires: SECRETS_DIR, AUTH_DB_DIR
+# Requires: SECRETS_DIR, AUTH_DB_DIR, tools/lib/images.sh
 # ──────────────────────────────────────────────────────────────────
 
 cmd_setup_auth() {
@@ -30,10 +30,7 @@ cmd_setup_auth() {
 
     mkdir -p "$SECRETS_DIR" "$AUTH_DB_DIR"
 
-    if ! docker image inspect phantom-auth:latest &>/dev/null; then
-        bold "Building auth image..."
-        docker build -t phantom-auth:latest -f "${auth_dir}/Dockerfile" "$auth_dir"
-    fi
+    ensure_image auth-service
 
     bold "Bootstrapping auth service..."
     local output
@@ -41,7 +38,7 @@ cmd_setup_auth() {
         -v "$(pwd)/${SECRETS_DIR}:/secrets" \
         -v "$(pwd)/${AUTH_DB_DIR}:/db" \
         -v "$(pwd)/${auth_dir}/tools/bootstrap.py:/tmp/bootstrap.py:ro" \
-        phantom-auth:latest \
+        "$(image_ref auth-service)" \
         python /tmp/bootstrap.py \
             --secrets-dir /secrets \
             --db-dir /db \
