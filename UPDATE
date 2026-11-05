@@ -4,9 +4,10 @@ Phantom-WG Modern — Update Guide
 Standard Update:
   ./tools/prod.sh update
 
-  This pulls the latest code from upstream and restarts all services.
-  Environment files (.env, .env.daemon, .env.auth-service) and
-  docker-compose.override.yml are always preserved.
+  This pulls the latest release, syncs the images of the selected source and
+  recreates all services. Environment files (.env, .env.daemon,
+  .env.auth-service) and docker-compose.override.yml are always preserved.
+  If an update stops halfway, run it again.
 
 Local Changes:
   Server-specific changes (ports, resource limits, extra volumes) belong in
@@ -19,15 +20,11 @@ Local Changes:
     git checkout -- docker-compose.yml
 
 Dependency Updates:
-  ./tools/prod.sh update handles a changed Dockerfile or requirements.txt: the
-  build source rebuilds the affected images, the registry source starts the
-  images of the release.
+  Every update syncs the images of the source selected in .env: the registry
+  source pulls the images pinned by the release, the build source builds the
+  Dockerfiles of the release. To run this step alone:
 
-  A release can also change only the pinned images. To apply them on the
-  registry source:
-
-    ./tools/prod.sh pull
-    ./tools/prod.sh up
+    ./tools/prod.sh images sync
 
   To rebuild from scratch on the build source:
 
