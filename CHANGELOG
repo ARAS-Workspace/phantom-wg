@@ -5,6 +5,19 @@ passwords, TOTP MFA, RBAC, audit log, authenticated reverse proxy
 to the daemon UDS.
 
 
+v1.1.11 - 2026-11-05
+--------------------
+
+  Bootstrap output release. The keys stay in their files. The code the
+  service runs, the schema and the configuration are unchanged.
+
+  * Bootstrap output. tools/bootstrap.py printed the signing key and
+    the verify key, so a setup left them in the terminal and in any log
+    that captured it. The two lines now read [REDACTED]. The keys are
+    written to the secrets directory as before, and BOOTSTRAP_OK=1, the
+    line setup.sh reads, stays.
+
+
 v1.1.10 - 2026-11-05
 --------------------
 
