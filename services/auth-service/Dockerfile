@@ -4,7 +4,9 @@
 FROM debian:trixie-20261027-slim@sha256:f6b08b09a05725f9431502d3b5714f5c4576e82c1a84fa1debe0c24a7e0c3ec4 AS platform-apt
 
 # pip installs into /opt/venv; Debian's python3 refuses it (PEP 668).
+# apt-get upgrade: every package at the version Debian serves, source included.
 RUN apt-get update \
+ && apt-get upgrade -y \
  && apt-get install -y --no-install-recommends \
     python3 python3-venv ca-certificates netbase tzdata \
  && python3 -m venv /opt/venv \
