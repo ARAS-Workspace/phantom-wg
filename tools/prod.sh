@@ -138,54 +138,6 @@ cmd_pull() {
     green "Images pulled."
 }
 
-_is_compose_locked() {
-    # assume-unchanged: git ls-files -v shows lowercase 'h' when set.
-    # skip-worktree ('S') is broken in blob:none partial clones —
-    # the flag is set but git ignores it. assume-unchanged works
-    # reliably in both normal and sparse/partial clones.
-    git ls-files -v docker-compose.yml 2>/dev/null | grep -q '^h'
-}
-
-cmd_compose() {
-    local action="${1:-status}"
-
-    case "$action" in
-        lock)
-            if _is_compose_locked; then
-                echo "  Compose already locked."
-                return 0
-            fi
-            git update-index --assume-unchanged docker-compose.yml
-            green "Compose locked."
-            echo "  Future 'prod.sh update' calls will preserve local docker-compose.yml changes."
-            echo "  Run 'prod.sh compose unlock' to release."
-            ;;
-        unlock)
-            if ! _is_compose_locked; then
-                echo "  Compose already unlocked."
-                return 0
-            fi
-            git update-index --no-assume-unchanged docker-compose.yml
-            green "Compose unlocked."
-            echo "  Next 'prod.sh update' will pull upstream docker-compose.yml."
-            ;;
-        status)
-            if _is_compose_locked; then
-                bold "Compose: LOCKED"
-                echo "  Local docker-compose.yml changes are preserved on update."
-            else
-                bold "Compose: UNLOCKED"
-                echo "  docker-compose.yml will be pulled from upstream on update."
-            fi
-            ;;
-        *)
-            red "Unknown action: $action"
-            echo "Usage: prod.sh compose {lock|unlock|status}"
-            exit 1
-            ;;
-    esac
-}
-
 cmd_setup() {
     local terazi_subnet=""
     local pass_args=()
@@ -241,28 +193,16 @@ cmd_setup() {
 }
 
 cmd_update() {
-    local locked=false
-    if _is_compose_locked; then
-        locked=true
-    fi
-
-    # Sanity check: unlocked + uncommitted changes → hard stop
-    if [[ "$locked" == false ]]; then
-        if ! git diff --quiet docker-compose.yml 2>/dev/null; then
-            red "docker-compose.yml has uncommitted local changes."
-            echo ""
-            echo "  Options:"
-            echo "    Preserve changes permanently: ./tools/prod.sh compose lock"
-            echo "    Discard changes:              git checkout -- docker-compose.yml"
-            exit 1
-        fi
+    if ! git diff --quiet docker-compose.yml 2>/dev/null; then
+        red "docker-compose.yml has local changes."
+        echo ""
+        echo "  Server-specific changes belong in docker-compose.override.yml."
+        echo "  Move them there, then discard them here:"
+        echo "    git checkout -- docker-compose.yml"
+        exit 1
     fi
 
     bold "Pulling latest changes..."
-
-    if [[ "$locked" == true ]]; then
-        echo "  Compose locked, docker-compose.yml preserved."
-    fi
 
     local before after
     before=$(git rev-parse HEAD)
@@ -360,13 +300,8 @@ Usage: ./tools/prod.sh <command>
     shell [service]     Open shell (default: daemon)
     exec <svc> <cmd>    Execute command in service
 
-  Compose Lock:
-    compose lock        Preserve local docker-compose.yml on update
-    compose unlock      Release lock to pull upstream changes
-    compose status      Show current lock state
-
   Update:
-    update              Pull latest + restart (honors compose lock)
+    update              Pull latest + restart
 
   Danger:
     hard-reset          Wipe ALL data (secrets + auth DB + volumes)
@@ -406,7 +341,6 @@ case "${1:-help}" in
     shell)      shift; cmd_shell "$@" ;;
     exec)       shift; cmd_exec "$@" ;;
 
-    compose)    shift; cmd_compose "$@" ;;
     update)     cmd_update ;;
     hard-reset) cmd_hard_reset ;;
 
