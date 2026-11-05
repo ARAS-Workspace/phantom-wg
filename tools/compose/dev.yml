@@ -1,0 +1,43 @@
+# ──────────────────────────────────────────────────────────────────
+# phantom-daemon  ·  Development Images
+# ──────────────────────────────────────────────────────────────────
+# Built on this machine; development has no registry source.
+# docker-compose-dev.yml extends this file and tools/dev.vars selects
+# it for the tools.
+# ──────────────────────────────────────────────────────────────────
+
+services:
+  daemon:
+    image: phantom-daemon:dev
+    pull_policy: never
+    build:
+      context: ../..
+      dockerfile: dev.Dockerfile
+
+  gateway:
+    image: phantom-gateway:dev
+    pull_policy: never
+    build:
+      context: ../..
+      dockerfile: socat.Dockerfile
+
+  auth-service:
+    image: phantom-auth:dev
+    pull_policy: never
+    build:
+      context: ../../services/auth-service
+      dockerfile: Dockerfile
+
+  nginx:
+    image: phantom-nginx:dev
+    pull_policy: never
+    build:
+      context: ../..
+      dockerfile: nginx.Dockerfile
+
+  exit-server:
+    image: phantom-exit-server:dev
+    pull_policy: never
+    build:
+      context: ../../services/exit-server
+      dockerfile: Dockerfile

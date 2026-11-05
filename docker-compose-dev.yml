@@ -14,13 +14,15 @@
 #
 # gateway (socat) UDS → TCP wrapper:
 #   daemon.sock ← socat → :9080
+#
+# Images: tools/compose/dev.yml
 # ──────────────────────────────────────────────────────────────────
 
 services:
   daemon:
-    build:
-      context: .
-      dockerfile: dev.Dockerfile
+    extends:
+      file: tools/compose/dev.yml
+      service: daemon
     container_name: phantom-daemon-dev
     restart: unless-stopped
     command: ["python", "-m", "phantom_daemon.main", "/var/run/phantom/daemon.sock"]
@@ -57,9 +59,9 @@ services:
       - WIREGUARD_ENDPOINT_V6=2001:db8::10
 
   gateway:
-    build:
-      context: .
-      dockerfile: socat.Dockerfile
+    extends:
+      file: tools/compose/dev.yml
+      service: gateway
     container_name: phantom-gateway
     restart: unless-stopped
     depends_on:
@@ -71,9 +73,9 @@ services:
       - phantom-sock:/var/run/phantom
 
   auth-service:
-    build:
-      context: ./services/auth-service
-      dockerfile: Dockerfile
+    extends:
+      file: tools/compose/dev.yml
+      service: auth-service
     container_name: phantom-auth-dev
     restart: unless-stopped
     depends_on:
@@ -92,9 +94,9 @@ services:
       - "8443:8443"
 
   nginx:
-    build:
-      context: .
-      dockerfile: nginx.Dockerfile
+    extends:
+      file: tools/compose/dev.yml
+      service: nginx
     container_name: phantom-nginx-dev
     restart: unless-stopped
     depends_on:
@@ -109,9 +111,9 @@ services:
       - "443:443"
 
   exit-server:
-    build:
-      context: ./services/exit-server
-      dockerfile: Dockerfile
+    extends:
+      file: tools/compose/dev.yml
+      service: exit-server
     container_name: phantom-exit-dev
     restart: unless-stopped
     cap_add:

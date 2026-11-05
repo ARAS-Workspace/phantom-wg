@@ -42,7 +42,7 @@ Excluded:
     dev.Dockerfile, docker-compose-dev.yml, e2e_tests/, lib/,
     scripts/, tests/, typings/, container-data/,
     services/react-spa/src, services/react-spa/node_modules,
-    tools/dev.sh, tools/dev.vars, tools/lib/db.sh,
+    tools/dev.sh, tools/dev.vars, tools/compose/dev.yml, tools/lib/db.sh,
     tools/lib/test.sh, tools/lib/spa.sh, tools/lib/stubs.sh,
     tools/lib/openapi.sh, tools/lib/package.sh, tools/lib/helpers/,
     tools/lib/templates/, __pycache__, *.pyc, .gitkeep
