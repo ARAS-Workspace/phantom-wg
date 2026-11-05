@@ -18,6 +18,7 @@ dist/
 build/
 
 # Environment (user-specific, created from .example files)
+.env
 .env.daemon
 .env.auth-service
 .terazi-subnet

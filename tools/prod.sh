@@ -45,32 +45,20 @@ _check_secrets() {
 }
 
 _bootstrap_env() {
-    local root
+    local root name
     root="$(cd "$TOOLS_DIR/.." && pwd)"
 
-    if [[ ! -f "$root/.env.daemon" ]]; then
-        if [[ -f "$root/.env.daemon.example" ]]; then
-            cp "$root/.env.daemon.example" "$root/.env.daemon"
-            green "Created .env.daemon from .env.daemon.example"
+    for name in .env .env.daemon .env.auth-service; do
+        if [[ -f "$root/$name" ]]; then
+            echo "  $name already exists, skipping."
+        elif [[ -f "$root/$name.example" ]]; then
+            cp "$root/$name.example" "$root/$name"
+            green "Created $name from $name.example"
         else
-            red "Missing .env.daemon.example"
+            red "Missing $name.example"
             exit 1
         fi
-    else
-        echo "  .env.daemon already exists, skipping."
-    fi
-
-    if [[ ! -f "$root/.env.auth-service" ]]; then
-        if [[ -f "$root/.env.auth-service.example" ]]; then
-            cp "$root/.env.auth-service.example" "$root/.env.auth-service"
-            green "Created .env.auth-service from .env.auth-service.example"
-        else
-            red "Missing .env.auth-service.example"
-            exit 1
-        fi
-    else
-        echo "  .env.auth-service already exists, skipping."
-    fi
+    done
 }
 
 _is_compose_locked() {
@@ -145,7 +133,7 @@ cmd_setup() {
 
     green "Production setup complete."
     echo ""
-    echo "  Environment:  .env.daemon, .env.auth-service"
+    echo "  Environment:  .env, .env.daemon, .env.auth-service"
     echo "  WG keys:      ${SECRETS_DIR}/"
     echo "  Auth keys:    ${SECRETS_DIR}/"
     echo "  TLS cert:     ${SECRETS_DIR}/tls_cert"

@@ -9,7 +9,7 @@
 #   Internet → :443 (nginx, TLS) → auth-service → daemon (UDS)
 #   Internet → :51820/udp (WireGuard) → daemon
 #
-# Environment: .env.daemon + .env.auth-service (see .example files)
+# Environment: .env + .env.daemon + .env.auth-service (see .example files)
 # Set WIREGUARD_ENDPOINT_V4 to your server's public IP.
 # ──────────────────────────────────────────────────────────────────
 
@@ -20,7 +20,6 @@ services:
       dockerfile: Dockerfile
     container_name: phantom-daemon
     command: ["python", "-m", "phantom_daemon.main", "/var/run/phantom/daemon.sock"]
-    restart: unless-stopped
     networks:
       - phantom-net
     volumes:
@@ -42,15 +41,12 @@ services:
       - net.ipv6.conf.all.forwarding=1
     devices:
       - /dev/net/tun:/dev/net/tun
-    ports:
-      - "51820:51820/udp"
 
   auth-service:
     build:
       context: ./services/auth-service
       dockerfile: Dockerfile
     container_name: phantom-auth
-    restart: unless-stopped
     depends_on:
       - daemon
     networks:
@@ -62,14 +58,15 @@ services:
     secrets:
       - auth_signing_key
       - auth_verify_key
-    env_file: .env.auth-service
+    env_file:
+      - .env
+      - .env.auth-service
 
   nginx:
     build:
       context: .
       dockerfile: nginx.Dockerfile
     container_name: phantom-nginx
-    restart: unless-stopped
     depends_on:
       - auth-service
     networks:
@@ -80,30 +77,6 @@ services:
     secrets:
       - tls_cert
       - tls_key
-    ports:
-      - "443:443"
-
-secrets:
-  wg_private_key:
-    file: ./container-data/secrets/production/wg_private_key
-  wg_public_key:
-    file: ./container-data/secrets/production/wg_public_key
-  auth_signing_key:
-    file: ./container-data/secrets/production/auth_signing_key
-  auth_verify_key:
-    file: ./container-data/secrets/production/auth_verify_key
-  tls_cert:
-    file: ./container-data/secrets/production/tls_cert
-  tls_key:
-    file: ./container-data/secrets/production/tls_key
-
-networks:
-  phantom-net:
-    enable_ipv6: true
-    ipam:
-      config:
-        - subnet: "172.28.0.0/24"
-        - subnet: "fd00:d0ce::/64"
 
 volumes:
   phantom-sock:

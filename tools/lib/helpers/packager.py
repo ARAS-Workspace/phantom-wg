@@ -19,6 +19,8 @@ Included:
     Dockerfile              Production image build
     nginx.Dockerfile        Nginx image build
     docker-compose.yml      Production compose stack
+    docker-compose.override.yml Production stack override
+    .env.example            Compose environment template
     .env.daemon.example     Daemon environment template
     .env.auth-service.example Auth service environment template
     requirements.txt        Python dependencies
@@ -70,6 +72,8 @@ INCLUDE = [
     "Dockerfile",
     "nginx.Dockerfile",
     "docker-compose.yml",
+    "docker-compose.override.yml",
+    ".env.example",
     ".env.daemon.example",
     ".env.auth-service.example",
     "requirements.txt",

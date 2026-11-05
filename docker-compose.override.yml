@@ -1,0 +1,43 @@
+# ──────────────────────────────────────────────────────────────────
+# phantom-daemon  ·  Production Compose Override
+# ──────────────────────────────────────────────────────────────────
+# Applied over docker-compose.yml.
+# ──────────────────────────────────────────────────────────────────
+
+services:
+  daemon:
+    restart: unless-stopped
+    # The container port is WIREGUARD_LISTEN_PORT in .env.daemon, and client
+    # configs carry that value as the endpoint port.
+    ports:
+      - "51820:51820/udp"
+
+  auth-service:
+    restart: unless-stopped
+
+  nginx:
+    restart: unless-stopped
+    ports:
+      - "443:443"
+
+secrets:
+  wg_private_key:
+    file: ./container-data/secrets/production/wg_private_key
+  wg_public_key:
+    file: ./container-data/secrets/production/wg_public_key
+  auth_signing_key:
+    file: ./container-data/secrets/production/auth_signing_key
+  auth_verify_key:
+    file: ./container-data/secrets/production/auth_verify_key
+  tls_cert:
+    file: ./container-data/secrets/production/tls_cert
+  tls_key:
+    file: ./container-data/secrets/production/tls_key
+
+networks:
+  phantom-net:
+    enable_ipv6: true
+    ipam:
+      config:
+        - subnet: "${PHANTOM_SUBNET_V4:-172.28.0.0/24}"
+        - subnet: "${PHANTOM_SUBNET_V6:-fd00:d0ce::/64}"
