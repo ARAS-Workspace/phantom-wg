@@ -19,6 +19,7 @@ Phantom-WG Modern vX.Y.Z
         ├── auth-service vA.B.C         ← bağımlılık
         ├── wireguard-go-bridge vA.B.C  ← bağımlılık
         ├── firewall-bridge vA.B.C      ← bağımlılık
+        ├── base images vA.B.C          ← bağımlılık
         ├── react-spa (build artifact)  ← release ile birlikte paketlenir
         └── nginx config                ← release ile birlikte paketlenir
 ```
@@ -43,14 +44,18 @@ Yeni bir Phantom-WG Modern release'i çıkarıldığında, daemon versiyonunu ta
 
 ## İmaj Versiyonları
 
-Üretim imajları ürün versiyonunu taşır. Bir release `phantom-daemon-base`,
-`phantom-auth-base` ve `phantom-nginx-base` imajlarını `ghcr.io/aras-workspace` altına
-`X.Y.Z` etiketiyle yayımlar; bu etiket `X.Y.Z-amd64` ve `X.Y.Z-arm64`'ü birleştirir.
-İmajlar release başına yayımlanır ve `latest` etiketi yoktur.
+Üretim imajlarının ürün versiyonundan ayrı, kendi semver döngüsü vardır. Bir
+`base-images-vX.Y.Z` etiketi `phantom-daemon-base`, `phantom-auth-base` ve
+`phantom-nginx-base` imajlarını `ghcr.io/aras-workspace` altına yayımlar: üçü tek
+versiyonu `X.Y.Z` etiketiyle paylaşır, bu etiket `X.Y.Z-amd64` ve `X.Y.Z-arm64`'ü
+birleştirir. `latest` etiketi yoktur.
 
-`tools/compose/registry.yml` her imajı `X.Y.Z@sha256:<digest>` olarak sabitler.
-Çalışacak imajı digest belirler, yani host yeni imajlara ancak bir release bu
-sabitlemeyi değiştirdiğinde geçer.
+Workflow `dev/daemon`'a iki dosya commit'ler. `tools/compose/registry.yml` her
+imajı `X.Y.Z@sha256:<digest>` olarak sabitler, `tools/compose/MANIFEST.json` ise
+imajların içeriğini listeler: kaynak dosyalarıyla Debian paketleri, Python
+paketleri ve köprüler. Ürün release'i ikisini ağaçtaki haliyle paketler. Çalışacak
+imajı digest belirler, yani host yeni imajlara ancak yeni sabitlemeyi taşıyan bir
+ürün release'iyle geçer.
 
 İmaj yalnız çalışma ortamını taşır: daemon ve auth-service kodu çalışma anında
 bağlanır. Build kaynağı aynı Dockerfile'ları host üzerinde kurar. İki kaynak

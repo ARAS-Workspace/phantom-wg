@@ -19,6 +19,7 @@ Phantom-WG Modern vX.Y.Z
         ├── auth-service vA.B.C         ← dependency
         ├── wireguard-go-bridge vA.B.C  ← dependency
         ├── firewall-bridge vA.B.C      ← dependency
+        ├── base images vA.B.C          ← dependency
         ├── react-spa (build artifact)  ← bundled with release
         └── nginx config                ← bundled with release
 ```
@@ -43,14 +44,18 @@ When a new Phantom-WG Modern release is cut, it carries the daemon version.
 
 ## Image Versions
 
-The production images carry the product version. A release publishes
-`phantom-daemon-base`, `phantom-auth-base` and `phantom-nginx-base` to `ghcr.io/aras-workspace`
-under the tag `X.Y.Z`, joining `X.Y.Z-amd64` and `X.Y.Z-arm64`. Images are
-published per release, and there is no `latest`.
+The production images have a semver cycle of their own, apart from the product
+version. A `base-images-vX.Y.Z` tag publishes `phantom-daemon-base`,
+`phantom-auth-base` and `phantom-nginx-base` to `ghcr.io/aras-workspace`: the
+three share one version under the tag `X.Y.Z`, joining `X.Y.Z-amd64` and
+`X.Y.Z-arm64`. There is no `latest`.
 
-`tools/compose/registry.yml` pins each image as `X.Y.Z@sha256:<digest>`. The
-digest decides what runs, so a host moves to new images only when a release
-moves the pin.
+The workflow commits two files to `dev/daemon`. `tools/compose/registry.yml`
+pins each image as `X.Y.Z@sha256:<digest>`, and `tools/compose/MANIFEST.json`
+lists what the images hold: Debian packages with their source files, Python
+packages and the bridges. A product release packages both as they stand in the
+tree. The digest decides what runs, so a host moves to new images only when a
+product release carries a new pin.
 
 An image holds the operating environment only: the daemon and auth-service
 code is mounted at runtime. The build source builds the same Dockerfiles on
