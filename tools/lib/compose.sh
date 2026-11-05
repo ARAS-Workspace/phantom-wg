@@ -1,10 +1,12 @@
 # ──────────────────────────────────────────────────────────────────
 # Docker Compose operations
-# Requires: COMPOSE, DAEMON
+# Requires: COMPOSE, DAEMON, tools/lib/images.sh
 # Optional: GATEWAY_PORT (for curl and up message)
 # ──────────────────────────────────────────────────────────────────
 
 cmd_build() {
+    images_built_here || return 0
+
     bold "Building images..."
     $COMPOSE build
     green "Images built."
@@ -35,6 +37,8 @@ cmd_restart() {
 }
 
 cmd_rebuild() {
+    images_built_here || return 0
+
     bold "Rebuilding (no-cache)..."
     $COMPOSE down
     $COMPOSE build --no-cache

@@ -35,3 +35,11 @@ ensure_image() {
         docker compose -f "$(_image_file)" build "$service"
     fi
 }
+
+images_built_here() {
+    [[ "$(image_source)" != registry ]] && return 0
+    bold "Images come from the registry here, nothing to build."
+    echo "  Fetch them:  ./tools/prod.sh pull"
+    echo "  Build here:  ./tools/prod.sh images use build"
+    return 1
+}

@@ -62,6 +62,66 @@ _bootstrap_env() {
     done
 }
 
+_images_status() {
+    local service ref state
+    bold "Image source: $(image_source)"
+    for service in daemon auth-service nginx; do
+        ref="$(image_ref "$service")"
+        state="missing"
+        docker image inspect "$ref" &>/dev/null && state="present"
+        printf '  %-13s %-8s %s\n' "$service" "$state" "$ref"
+    done
+}
+
+_images_use() {
+    local value="${1:-}" env_file
+    case "$value" in
+        registry|build) ;;
+        *)
+            red "Usage: prod.sh images use {registry|build}"
+            exit 1
+            ;;
+    esac
+
+    _bootstrap_env
+    env_file="$(cd "$TOOLS_DIR/.." && pwd)/.env"
+    if grep -q '^PHANTOM_IMAGE_SOURCE=' "$env_file"; then
+        sed "s/^PHANTOM_IMAGE_SOURCE=.*/PHANTOM_IMAGE_SOURCE=${value}/" "$env_file" > "${env_file}.tmp"
+        mv "${env_file}.tmp" "$env_file"
+    else
+        echo "PHANTOM_IMAGE_SOURCE=${value}" >> "$env_file"
+    fi
+
+    green "Image source: ${value}"
+    echo "  Apply it with: ./tools/prod.sh up"
+}
+
+cmd_images() {
+    local action="${1:-status}"
+
+    case "$action" in
+        status) _images_status ;;
+        use)    _images_use "${2:-}" ;;
+        *)
+            red "Unknown action: $action"
+            echo "Usage: prod.sh images [status|use {registry|build}]"
+            exit 1
+            ;;
+    esac
+}
+
+cmd_pull() {
+    if [[ "$(image_source)" != registry ]]; then
+        bold "Images are built here, nothing to pull."
+        echo "  Pull from the registry: ./tools/prod.sh images use registry"
+        return 0
+    fi
+
+    bold "Pulling images..."
+    $COMPOSE pull
+    green "Images pulled."
+}
+
 _is_compose_locked() {
     # assume-unchanged: git ls-files -v shows lowercase 'h' when set.
     # skip-worktree ('S') is broken in blob:none partial clones —
@@ -266,9 +326,14 @@ Usage: ./tools/prod.sh <command>
     setup-tls           Generate self-signed TLS certificate
     certbot <domain>    Obtain Let's Encrypt TLS certificate
 
+  Images:
+    images              Show the image source and its images
+    images use <source> Select registry (pull) or build (build here)
+    pull                Pull the registry images
+    build               Build the images here (build source)
+    rebuild             Rebuild them from scratch (no-cache, build source)
+
   Stack:
-    build               Build production images
-    rebuild             Rebuild images from scratch (no-cache)
     up                  Start production stack
     down                Stop production stack
     restart [service]   Restart all or specific service
@@ -304,6 +369,8 @@ case "${1:-help}" in
     setup-tls)  shift; cmd_setup_tls "$@" ;;
     certbot)    shift; cmd_certbot "$@" ;;
 
+    images)     shift; cmd_images "$@" ;;
+    pull)       cmd_pull ;;
     build)      cmd_build ;;
     rebuild)    cmd_rebuild ;;
     up)
