@@ -31,25 +31,36 @@ source "$TOOLS_DIR/lib/certbot.sh"
 
 # ── Production-specific ─────────────────────────────────────────
 
-_check_secrets() {
-    local missing=false
-    for key in wg_private_key wg_public_key auth_signing_key auth_verify_key tls_cert tls_key; do
-        if [[ ! -s "${SECRETS_DIR}/${key}" ]]; then
-            red "Missing: ${SECRETS_DIR}/${key}"
-            missing=true
-        fi
+LOCAL_FILES=(.env .env.daemon .env.auth-service docker-compose.override.yml)
+
+_missing_requirements() {
+    local name key
+    for name in "${LOCAL_FILES[@]}"; do
+        [[ -f "${TOOLS_DIR}/../${name}" ]] || echo "$name"
     done
-    if [[ "$missing" == true ]]; then
-        red "Run './tools/prod.sh setup' first."
-        exit 1
-    fi
+    for key in wg_private_key wg_public_key auth_signing_key auth_verify_key tls_cert tls_key; do
+        [[ -s "${SECRETS_DIR}/${key}" ]] || echo "${SECRETS_DIR}/${key}"
+    done
+    [[ -f "${AUTH_DB_DIR}/auth.db" ]] || echo "${AUTH_DB_DIR}/auth.db"
+}
+
+_check_requirements() {
+    local missing name
+    missing="$(_missing_requirements)"
+    [[ -z "$missing" ]] && return 0
+
+    while IFS= read -r name; do
+        red "Missing: ${name}"
+    done <<< "$missing"
+    red "Run './tools/prod.sh setup' first."
+    exit 1
 }
 
 _bootstrap_env() {
     local root name
     root="$(cd "$TOOLS_DIR/.." && pwd)"
 
-    for name in .env .env.daemon .env.auth-service; do
+    for name in "${LOCAL_FILES[@]}"; do
         if [[ -f "$root/$name" ]]; then
             echo "  $name already exists, skipping."
         elif [[ -f "$root/$name.example" ]]; then
@@ -83,8 +94,13 @@ _images_use() {
             ;;
     esac
 
-    _bootstrap_env
     env_file="$(cd "$TOOLS_DIR/.." && pwd)/.env"
+    if [[ ! -f "$env_file" ]]; then
+        red "Missing: .env"
+        red "Run './tools/prod.sh setup' first."
+        exit 1
+    fi
+
     if grep -q '^PHANTOM_IMAGE_SOURCE=' "$env_file"; then
         sed "s/^PHANTOM_IMAGE_SOURCE=.*/PHANTOM_IMAGE_SOURCE=${value}/" "$env_file" > "${env_file}.tmp"
         mv "${env_file}.tmp" "$env_file"
@@ -177,9 +193,20 @@ cmd_setup() {
     for arg in "$@"; do
         case "$arg" in
             --terazi-ipv4-subnet=*) terazi_subnet="${arg#*=}" ;;
+            -f|--force)
+                red "setup does not overwrite. Start over with './tools/prod.sh hard-reset'."
+                exit 1
+                ;;
             *) pass_args+=("$arg") ;;
         esac
     done
+
+    if [[ -z "$(_missing_requirements)" ]]; then
+        red "Setup is already complete."
+        echo "  Start the stack: ./tools/prod.sh up"
+        echo "  Start over:      ./tools/prod.sh hard-reset"
+        exit 1
+    fi
 
     bold "Full production setup..."
     _bootstrap_env
@@ -355,7 +382,7 @@ case "${1:-help}" in
     build)      cmd_build ;;
     rebuild)    cmd_rebuild ;;
     up)
-        _bootstrap_env; _check_secrets
+        _check_requirements
         if [[ -f "${TOOLS_DIR}/../.terazi-subnet" ]]; then
             DEFAULT_IPV4_SUBNET="$(cat "${TOOLS_DIR}/../.terazi-subnet")"
             export DEFAULT_IPV4_SUBNET

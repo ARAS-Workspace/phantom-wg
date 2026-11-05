@@ -1,4 +1,5 @@
 # Runtime environment files
+docker-compose.override.yml
 .env
 .env.daemon
 .env.auth-service

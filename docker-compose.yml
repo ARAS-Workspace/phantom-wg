@@ -22,6 +22,7 @@ services:
       file: tools/compose/${PHANTOM_IMAGE_SOURCE:-registry}.yml
       service: daemon
     container_name: phantom-daemon
+    restart: unless-stopped
     command: ["python", "-m", "phantom_daemon.main", "/var/run/phantom/daemon.sock"]
     networks:
       - phantom-net
@@ -50,6 +51,7 @@ services:
       file: tools/compose/${PHANTOM_IMAGE_SOURCE:-registry}.yml
       service: auth-service
     container_name: phantom-auth
+    restart: unless-stopped
     depends_on:
       - daemon
     networks:
@@ -70,6 +72,7 @@ services:
       file: tools/compose/${PHANTOM_IMAGE_SOURCE:-registry}.yml
       service: nginx
     container_name: phantom-nginx
+    restart: unless-stopped
     depends_on:
       - auth-service
     networks:
@@ -81,5 +84,27 @@ services:
       - tls_cert
       - tls_key
 
+secrets:
+  wg_private_key:
+    file: ./container-data/secrets/production/wg_private_key
+  wg_public_key:
+    file: ./container-data/secrets/production/wg_public_key
+  auth_signing_key:
+    file: ./container-data/secrets/production/auth_signing_key
+  auth_verify_key:
+    file: ./container-data/secrets/production/auth_verify_key
+  tls_cert:
+    file: ./container-data/secrets/production/tls_cert
+  tls_key:
+    file: ./container-data/secrets/production/tls_key
+
 volumes:
   phantom-sock:
+
+networks:
+  phantom-net:
+    enable_ipv6: true
+    ipam:
+      config:
+        - subnet: "${PHANTOM_SUBNET_V4:-172.28.0.0/24}"
+        - subnet: "${PHANTOM_SUBNET_V6:-fd00:d0ce::/64}"

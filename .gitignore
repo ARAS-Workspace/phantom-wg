@@ -18,6 +18,7 @@ dist/
 build/
 
 # Environment (user-specific, created from .example files)
+docker-compose.override.yml
 .env
 .env.daemon
 .env.auth-service

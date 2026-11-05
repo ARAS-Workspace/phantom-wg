@@ -12,7 +12,7 @@ Directory Structure:
   ├── Dockerfile                  Daemon image (multi-stage build)
   ├── nginx.Dockerfile            Nginx image
   ├── docker-compose.yml          Production stack (3 services)
-  ├── docker-compose.override.yml Restart policy, ports, secrets, network
+  ├── docker-compose.override.yml.example  Compose override template
   ├── .env.example                Image source and network subnets
   ├── .env.daemon.example         Daemon environment template
   ├── .env.auth-service.example   Auth service environment template
@@ -38,6 +38,7 @@ Quick Start:
 
      This generates:
        - .env from .env.example (if not exists)
+       - docker-compose.override.yml from its .example (if not exists)
        - .env.daemon from .env.daemon.example (if not exists)
        - .env.auth-service from .env.auth-service.example (if not exists)
        - WireGuard server keypair
@@ -78,6 +79,11 @@ Environment Files:
   These files are created from .example templates during setup.
   They are NOT tracked by git — safe for user-specific values.
   Edit them to customize ports, timeouts, or any service parameter.
+
+Compose Override:
+  docker-compose.override.yml is created from its .example during setup.
+  It is NOT tracked by git and belongs to this machine. Compose applies it
+  over docker-compose.yml: edit it to change anything specific to this server.
 
 Commands:
   ./tools/prod.sh help             Show all commands

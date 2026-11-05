@@ -77,6 +77,7 @@ Hard Reset:
     ./tools/prod.sh setup
 
 What Gets Preserved on Update:
+  docker-compose.override.yml Always preserved (not tracked by git)
   .env                       Always preserved (not tracked by git)
   .env.daemon                Always preserved (not tracked by git)
   .env.auth-service          Always preserved (not tracked by git)
