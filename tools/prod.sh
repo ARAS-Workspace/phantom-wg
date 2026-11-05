@@ -206,31 +206,18 @@ cmd_setup() {
 }
 
 cmd_update() {
-    local legacy_skip=false
-    for arg in "$@"; do
-        case "$arg" in
-            --skip-compose) legacy_skip=true ;;
-        esac
-    done
-
-    if [[ "$legacy_skip" == true ]]; then
-        red "WARNING: --skip-compose is deprecated."
-        echo "  Use 'prod.sh compose lock' to permanently preserve docker-compose.yml changes."
-    fi
-
     local locked=false
     if _is_compose_locked; then
         locked=true
     fi
 
     # Sanity check: unlocked + uncommitted changes → hard stop
-    if [[ "$locked" == false && "$legacy_skip" == false ]]; then
+    if [[ "$locked" == false ]]; then
         if ! git diff --quiet docker-compose.yml 2>/dev/null; then
             red "docker-compose.yml has uncommitted local changes."
             echo ""
             echo "  Options:"
             echo "    Preserve changes permanently: ./tools/prod.sh compose lock"
-            echo "    Skip once (deprecated):       ./tools/prod.sh update --skip-compose"
             echo "    Discard changes:              git checkout -- docker-compose.yml"
             exit 1
         fi
@@ -242,20 +229,10 @@ cmd_update() {
         echo "  Compose locked, docker-compose.yml preserved."
     fi
 
-    # One-shot legacy skip (doesn't persist)
-    if [[ "$legacy_skip" == true && "$locked" == false ]]; then
-        git update-index --assume-unchanged docker-compose.yml
-        echo "  One-shot skip applied to docker-compose.yml."
-    fi
-
     local before after
     before=$(git rev-parse HEAD)
     git pull origin main
     after=$(git rev-parse HEAD)
-
-    if [[ "$legacy_skip" == true && "$locked" == false ]]; then
-        git update-index --no-assume-unchanged docker-compose.yml
-    fi
 
     # Detect build-affecting changes between the pre-/post-pull HEADs.
     # Source (phantom_daemon/, auth_service/) is bind-mounted, so a plain
@@ -354,8 +331,7 @@ Usage: ./tools/prod.sh <command>
     compose status      Show current lock state
 
   Update:
-    update                 Pull latest + restart (honors compose lock)
-    update --skip-compose  One-shot compose skip (deprecated)
+    update              Pull latest + restart (honors compose lock)
 
   Danger:
     hard-reset          Wipe ALL data (secrets + auth DB + volumes)
@@ -396,7 +372,7 @@ case "${1:-help}" in
     exec)       shift; cmd_exec "$@" ;;
 
     compose)    shift; cmd_compose "$@" ;;
-    update)     shift; cmd_update "$@" ;;
+    update)     cmd_update ;;
     hard-reset) cmd_hard_reset ;;
 
     help|*)     cmd_help ;;
