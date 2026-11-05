@@ -157,6 +157,36 @@ files; ghcr.io/aras-workspace/phantom-sources holds those files under the
 image version.
 
 ================================================================================
+SOURCE CODE OF THE IMAGES
+================================================================================
+
+ghcr.io/aras-workspace/phantom-sources holds the Debian source files of the
+published images, one tag per image version. tools/compose/MANIFEST.json
+lists every package in the images and names the matching sources_image.
+
+This image is an archive, not a program. It is built from scratch and holds
+files only, so docker run has nothing to start and no shell to open. It is
+not needed to run Phantom-WG, and the stack does not pull it.
+
+To read it, create a container without starting it and copy the files out.
+Replace <version> with the image version in tools/compose/registry.yml. The
+word none is a placeholder: docker create asks for a command, and this one
+never runs.
+
+    docker create --name phantom-src \
+      ghcr.io/aras-workspace/phantom-sources:<version> none
+    docker cp phantom-src:/sources ./sources
+    docker container rm phantom-src
+
+./sources holds the .dsc, .orig.tar and .debian.tar files of each source
+package, with SHA256SUMS next to them. To check the files, then unpack a
+package on Debian (dpkg-source comes with dpkg-dev):
+
+    cd sources
+    sha256sum -c SHA256SUMS
+    dpkg-source -x <package>_<version>.dsc
+
+================================================================================
 TRADEMARK NOTICES
 ================================================================================
 
