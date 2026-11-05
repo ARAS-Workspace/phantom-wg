@@ -3,10 +3,22 @@
 # Requires: SECRETS_DIR, AUTH_DB_DIR, tools/lib/images.sh
 # ──────────────────────────────────────────────────────────────────
 
+_archive_auth_db() {
+    local target suffix
+    target="${AUTH_DB_DIR}/auth.db.$(date +%Y%m%d-%H%M%S).bak"
+    for suffix in "" "-wal" "-shm"; do
+        if [[ -f "${AUTH_DB_DIR}/auth.db${suffix}" ]]; then
+            mv "${AUTH_DB_DIR}/auth.db${suffix}" "${target}${suffix}"
+        fi
+    done
+    echo "$target"
+}
+
 cmd_setup_auth() {
     local auth_dir="services/auth-service"
     local admin_username="admin"
     local force=false
+    local archived=""
 
     while [[ $# -gt 0 ]]; do
         case "$1" in
@@ -21,10 +33,15 @@ cmd_setup_auth() {
         exit 1
     fi
 
-    if [[ -f "${SECRETS_DIR}/auth_signing_key" && -f "${AUTH_DB_DIR}/auth.db" ]]; then
-        if [[ "$force" != true ]]; then
+    if [[ -f "${AUTH_DB_DIR}/auth.db" ]]; then
+        if [[ "$force" == true ]]; then
+            archived="$(_archive_auth_db)"
+        elif [[ -f "${SECRETS_DIR}/auth_signing_key" ]]; then
             green "Auth service already bootstrapped. Use -f to overwrite."
             return 0
+        else
+            red "${AUTH_DB_DIR}/auth.db exists without its keys. Use -f to start over."
+            exit 1
         fi
     fi
 
@@ -53,4 +70,9 @@ cmd_setup_auth() {
     echo "  Keys:     ${SECRETS_DIR}/"
     echo "  DB:       ${AUTH_DB_DIR}/auth.db"
     echo "  Password: ${SECRETS_DIR}/.admin_password"
+
+    if [[ -n "$archived" ]]; then
+        echo "  Previous: ${archived}"
+        bold "Restart auth-service if the stack is running."
+    fi
 }
