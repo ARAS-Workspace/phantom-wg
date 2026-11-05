@@ -10,7 +10,10 @@ Prerequisites:
 Directory Structure:
   phantom-wg/
   ├── Dockerfile                  Daemon image (multi-stage build)
+  ├── nginx.Dockerfile            Nginx image
   ├── docker-compose.yml          Production stack (3 services)
+  ├── docker-compose.override.yml Restart policy, ports, secrets, network
+  ├── .env.example                Image source and network subnets
   ├── .env.daemon.example         Daemon environment template
   ├── .env.auth-service.example   Auth service environment template
   ├── requirements.txt            Python dependencies (pinned, hashed)
@@ -26,6 +29,7 @@ Directory Structure:
   └── tools/
       ├── prod.sh                 Production CLI
       ├── prod.vars               Environment variables
+      ├── compose/                Image sources (registry, build)
       └── lib/                    Shell libraries
 
 Quick Start:
@@ -33,6 +37,7 @@ Quick Start:
      ./tools/prod.sh setup
 
      This generates:
+       - .env from .env.example (if not exists)
        - .env.daemon from .env.daemon.example (if not exists)
        - .env.auth-service from .env.auth-service.example (if not exists)
        - WireGuard server keypair
@@ -55,7 +60,18 @@ Quick Start:
      Dashboard:  https://<server-ip>
      WireGuard:  UDP port 51820
 
+Images:
+  The stack runs the release images from the registry by default.
+  They are built by CI from the Dockerfiles in this directory.
+  To build the same Dockerfiles on this machine instead:
+
+    ./tools/prod.sh images use build
+    ./tools/prod.sh up
+
+  The choice is PHANTOM_IMAGE_SOURCE in .env (registry or build).
+
 Environment Files:
+  .env                      Image source and network subnets
   .env.daemon               Daemon configuration (WireGuard, storage)
   .env.auth-service         Auth service configuration (JWT, rate limiting)
 
@@ -66,11 +82,14 @@ Environment Files:
 Commands:
   ./tools/prod.sh help             Show all commands
   ./tools/prod.sh setup            Full setup (env + keys + auth + TLS)
-  ./tools/prod.sh up               Start stack (builds images on first run)
+  ./tools/prod.sh up               Start stack (fetches missing images)
   ./tools/prod.sh down             Stop stack
   ./tools/prod.sh restart          Restart all services
-  ./tools/prod.sh build            Build images
-  ./tools/prod.sh rebuild          Rebuild images from scratch (no-cache)
+  ./tools/prod.sh images           Show the image source and its images
+  ./tools/prod.sh images use <src> Select registry or build
+  ./tools/prod.sh pull             Pull the registry images
+  ./tools/prod.sh build            Build images (build source)
+  ./tools/prod.sh rebuild          Rebuild from scratch (build source)
   ./tools/prod.sh update           Pull latest + restart
   ./tools/prod.sh show-versions    Show daemon + bridge versions
   ./tools/prod.sh logs             Follow logs

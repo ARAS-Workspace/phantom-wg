@@ -5,7 +5,7 @@ Standard Update:
   ./tools/prod.sh update
 
   This pulls the latest code from upstream and restarts all services.
-  Environment files (.env.daemon, .env.auth-service) are always preserved.
+  Environment files (.env, .env.daemon, .env.auth-service) are always preserved.
 
   Alternatively:
     git pull
@@ -28,12 +28,17 @@ Compose Lock:
     to ignore local changes to docker-compose.yml during pull.
 
 Dependency Updates:
-  If requirements.txt or the Dockerfile changed after an update:
+  Registry source: the release pins its images, pull them and start:
+
+    ./tools/prod.sh pull
+    ./tools/prod.sh up
+
+  Build source: if requirements.txt or a Dockerfile changed after an update:
 
     ./tools/prod.sh rebuild
-    ./tools/prod.sh restart
+    ./tools/prod.sh up
 
-  This rebuilds the Docker image from scratch with new dependencies.
+  This rebuilds the images from scratch with the new dependencies.
 
 Version Check:
   ./tools/prod.sh show-versions
@@ -52,7 +57,7 @@ Rollback:
 
     git checkout v1.0.7
     ./tools/prod.sh rebuild
-    ./tools/prod.sh restart
+    ./tools/prod.sh up
 
   This creates a detached HEAD state — you are pinned to that tag.
   To resume receiving updates, switch back to main:
@@ -72,6 +77,7 @@ Hard Reset:
     ./tools/prod.sh setup
 
 What Gets Preserved on Update:
+  .env                       Always preserved (not tracked by git)
   .env.daemon                Always preserved (not tracked by git)
   .env.auth-service          Always preserved (not tracked by git)
   docker-compose.yml         Preserved only when compose lock is active
@@ -82,6 +88,6 @@ What Gets Updated:
   services/auth-service/     Auth service source
   services/react-spa/dist/   Web dashboard build
   services/nginx/            Reverse proxy config
-  tools/                     Production CLI and libraries
+  tools/                     Production CLI, libraries and image pins
   Dockerfile                 Image definition
   requirements.txt           Python dependencies
