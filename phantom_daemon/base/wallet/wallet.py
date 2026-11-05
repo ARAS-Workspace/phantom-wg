@@ -400,7 +400,9 @@ class Wallet:
     def change_cidr(self, new_prefix: int) -> None:
         """Change the CIDR prefix length, re-creating the IP pool.
 
-        Base network address is preserved from current config.
+        The new subnet starts from the current base address and aligns to the
+        new prefix, so widening can lower the base: 192.168.77.0/24 becomes
+        192.168.0.0/16.
         Assigned clients are preserved and re-slotted into the new pool.
         Raises WalletError if the new prefix cannot hold existing clients.
         """
