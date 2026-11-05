@@ -7,10 +7,10 @@
 
 services:
   daemon:
-    image: ghcr.io/aras-workspace/phantom-daemon-base:0.0.1@sha256:aba7916f9ec3954eef009d8ede051e22d0bbbd2ca05c41fe55c6639ac31b0c13
+    image: ghcr.io/aras-workspace/phantom-daemon-base:0.0.2@sha256:b42ec40c68e66728a171f96312eec6ddcff7ca5ba4c9f035afe9811fcde9eeda
 
   auth-service:
-    image: ghcr.io/aras-workspace/phantom-auth-base:0.0.1@sha256:bdf549e832f13d4ad1db2c5a57292701bf95d649da261e56b86a0594b113656d
+    image: ghcr.io/aras-workspace/phantom-auth-base:0.0.2@sha256:bf7c8d8301efcdb06fdb797adc4e9cd7df92faff720e9052a8abdb9169f2187b
 
   nginx:
-    image: ghcr.io/aras-workspace/phantom-nginx-base:0.0.1@sha256:18d1c9e8e7c4be44f166233b92b02af2ecb47e43f6ba08b0a67c68ed64ff6a94
+    image: ghcr.io/aras-workspace/phantom-nginx-base:0.0.2@sha256:260f0e43bc5c23373c27056d2421527ae92d9caa2ff15a59d1b45410f8370251
