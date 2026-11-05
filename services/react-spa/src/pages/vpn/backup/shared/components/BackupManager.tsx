@@ -62,6 +62,9 @@ interface FileValidation {
 
 type ImportStep = 'idle' | 'validating' | 'preview' | 'importing' | 'done' | 'failed';
 
+// Matches client_max_body_size in nginx.conf and AUTH_PROXY_BACKUP_MAX_BODY.
+const MAX_BACKUP_BYTES = 64 * 1024 * 1024;
+
 // ── Component ─────────────────────────────────────────────────────
 
 const BackupManager: React.FC = () => {
@@ -79,6 +82,14 @@ const BackupManager: React.FC = () => {
   const [importError, setImportError] = useState<string | null>(null);
   const [restoreResult, setRestoreResult] = useState<RestoreResult | null>(null);
 
+  const apiErrorMessage = (
+    body: { code?: string; error_code?: string },
+    fallback: string
+  ): string =>
+    (t.auth_service_api_codes as Record<string, string>)[body.error_code ?? ''] ??
+    (t.daemon_api_codes as Record<string, string>)[body.code ?? ''] ??
+    fallback;
+
   // ── Export ────────────────────────────────────────────────────
 
   const handleExport = async () => {
@@ -93,7 +104,8 @@ const BackupManager: React.FC = () => {
       });
 
       if (!resp.ok) {
-        setExportError(t.backup.exportFailed);
+        const body = await resp.json().catch(() => ({}));
+        setExportError(apiErrorMessage(body, t.backup.exportFailed));
         setExporting(false);
         return;
       }
@@ -150,8 +162,8 @@ const BackupManager: React.FC = () => {
       return;
     }
 
-    // Size check (max 256 MB)
-    if (file.size > 256 * 1024 * 1024) {
+    // Size check
+    if (file.size > MAX_BACKUP_BYTES) {
       fail(t.backup.validation.tooLarge);
       return;
     }
@@ -227,10 +239,7 @@ const BackupManager: React.FC = () => {
         setRestoreResult(data.data);
         setImportStep('done');
       } else {
-        const msg =
-          (t.daemon_api_codes as Record<string, string>)[data.code ?? ''] ??
-          t.backup.importFailed;
-        setImportError(msg);
+        setImportError(apiErrorMessage(data, t.backup.importFailed));
         setImportStep('failed');
       }
     } catch {

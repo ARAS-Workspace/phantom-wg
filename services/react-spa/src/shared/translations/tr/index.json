@@ -300,7 +300,7 @@
     "retry": "Tekrar Dene",
     "validation": {
       "invalidFormat": "Geçersiz dosya formatı. Sadece .tar dosyaları kabul edilir.",
-      "tooLarge": "Dosya çok büyük. Maksimum 256 MB.",
+      "tooLarge": "Dosya çok büyük. Maksimum 64 MiB.",
       "missingFiles": "Yedek dosyasında eksik bileşenler",
       "invalidManifest": "Geçersiz yedek manifest dosyası.",
       "unsupportedVersion": "Desteklenmeyen yedek sürümü."

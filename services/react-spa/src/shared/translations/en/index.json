@@ -300,7 +300,7 @@
     "retry": "Try Again",
     "validation": {
       "invalidFormat": "Invalid file format. Only .tar files are accepted.",
-      "tooLarge": "File too large. Maximum 256 MB.",
+      "tooLarge": "File too large. Maximum 64 MiB.",
       "missingFiles": "Missing components in backup file",
       "invalidManifest": "Invalid backup manifest file.",
       "unsupportedVersion": "Unsupported backup version."
