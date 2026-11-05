@@ -70,7 +70,8 @@ Hard Reset:
 
   Destroys ALL data: secrets, auth database, client databases,
   and Docker volumes. Requires typing 'yes' to confirm. Environment files
-  and docker-compose.override.yml stay.
+  and docker-compose.override.yml stay. The daemon writes its data as root,
+  so run it as root or with sudo.
 
   After hard reset, run setup again:
     ./tools/prod.sh setup

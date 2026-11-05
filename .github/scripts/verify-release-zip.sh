@@ -57,5 +57,4 @@ wait_api
 PULLS="$(docker events --since "${START}" --until "$(date +%s)" --filter type=image --filter event=pull --format '{{.Action}}' | wc -l)"
 [ "${PULLS}" -eq 0 ] || fail "${PULLS} images came from a registry"
 
-echo yes | ./tools/prod.sh hard-reset
 echo "The zip installed and updated without a registry."
