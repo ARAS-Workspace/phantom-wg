@@ -121,8 +121,8 @@ def main() -> None:
     conn.close()
 
     # 5. Output summary (setup.sh parses this)
-    print(f"SIGNING_KEY={signing_hex}")
-    print(f"VERIFY_KEY={verify_hex}")
+    print("SIGNING_KEY=[REDACTED]")
+    print("VERIFY_KEY=[REDACTED]")
     print(f"PASSWORD_FILE={password_file}")
     print(f"DB_PATH={db_dir / 'auth.db'}")
     print(f"ADMIN_USERNAME={args.admin_username}")
