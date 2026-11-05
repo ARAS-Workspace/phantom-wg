@@ -5,6 +5,21 @@ passwords, TOTP MFA, RBAC, audit log, authenticated reverse proxy
 to the daemon UDS.
 
 
+v1.1.10 - 2026-11-05
+--------------------
+
+  Platform release. The image is built with every Debian package at
+  the version Debian serves that day. The code, the schema and the
+  configuration are unchanged.
+
+  * Platform. The Dockerfile runs apt-get upgrade -y before it
+    installs the packages. Packages the base image brings used to stay
+    at the version of the base after Debian replaced them. Their
+    security updates now reach the image, and the source of every
+    installed package can be found when the image is built, which the
+    manifest of the base images needs.
+
+
 v1.1.9 - 2026-11-04
 -------------------
 
