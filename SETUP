@@ -125,7 +125,7 @@ Commands:
   ./tools/prod.sh pull             Pull the registry images
   ./tools/prod.sh build            Build images (build source)
   ./tools/prod.sh rebuild          Rebuild from scratch (build source)
-  ./tools/prod.sh update           Pull latest, sync images, recreate stack
+  ./tools/prod.sh update           Pull latest (git clone), recreate stack
   ./tools/prod.sh show-versions    Show daemon + bridge versions
   ./tools/prod.sh logs             Follow logs
   ./tools/prod.sh status           Container status
