@@ -1,0 +1,122 @@
+name: Package release
+
+# Builds the release package: the tree main receives, and one zip per
+# architecture that adds the pinned images to it. Each zip is installed and
+# updated on a runner of its own architecture before it is kept. Publishing
+# belongs to the caller.
+
+on:
+  workflow_call:
+    outputs:
+      version:
+        description: Product version of the package
+        value: ${{ jobs.tree.outputs.version }}
+
+permissions:
+  contents: read
+
+jobs:
+  tree:
+    name: Build the package tree
+    runs-on: ubuntu-26.04
+    outputs:
+      version: ${{ steps.version.outputs.number }}
+    steps:
+      - name: Harden runner
+        uses: step-security/harden-runner@46b06cea07f9e64621fdf066ba77ac6915163d43 # v2.22.3
+        with:
+          egress-policy: audit
+
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+
+      - name: Check the image pins
+        run: bash .github/scripts/check-image-pins.sh
+
+      - name: Read the version
+        id: version
+        run: |
+          set -euo pipefail
+          NUMBER=$(sed -n 's/^__version__ = "\(.*\)"$/\1/p' phantom_daemon/__init__.py)
+          echo "number=${NUMBER}" >> "${GITHUB_OUTPUT}"
+
+      - name: Set up Node
+        uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # v6.3.0
+        with:
+          node-version: '24'
+          cache: ''
+
+      - name: Install SPA dependencies
+        run: npm ci
+        working-directory: services/react-spa
+
+      - name: Build SPA
+        run: npm run build
+        working-directory: services/react-spa
+
+      - name: Run packager
+        run: python3 tools/lib/helpers/packager.py --clean
+
+      # An artifact keeps neither file modes nor hidden files.
+      - name: Pack the tree
+        run: tar -czf release-tree.tar.gz -C dist phantom-wg-modern
+
+      - name: Upload the tree
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
+        with:
+          name: release-tree
+          path: release-tree.tar.gz
+          if-no-files-found: error
+
+  archive:
+    name: Archive linux/${{ matrix.arch }}
+    needs: tree
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: amd64
+            runner: ubuntu-26.04
+          - arch: arm64
+            runner: ubuntu-26.04-arm
+    env:
+      ARCH: ${{ matrix.arch }}
+      ZIP: phantom-wg-modern-v${{ needs.tree.outputs.version }}-${{ matrix.arch }}.zip
+    steps:
+      - name: Harden runner
+        uses: step-security/harden-runner@46b06cea07f9e64621fdf066ba77ac6915163d43 # v2.22.3
+        with:
+          egress-policy: audit
+
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+
+      - name: Download the tree
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: release-tree
+
+      - name: Unpack the tree
+        run: tar -xzf release-tree.tar.gz
+
+      - name: Add the images
+        run: bash .github/scripts/archive-images.sh phantom-wg-modern "${ARCH}"
+
+      - name: Create the archive
+        run: zip -rq "${ZIP}" phantom-wg-modern
+
+      - name: Install from the archive
+        run: bash .github/scripts/verify-release-zip.sh "${ZIP}"
+
+      - name: Upload the archive
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
+        with:
+          name: release-${{ matrix.arch }}
+          path: ${{ env.ZIP }}
+          if-no-files-found: error
+          compression-level: 0
