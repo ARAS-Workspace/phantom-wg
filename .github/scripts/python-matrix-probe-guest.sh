@@ -22,7 +22,9 @@ INSTALL=/opt/phantom-wg
 PROBE="$WORK/.github/scripts/python_matrix_probe.py"
 
 mkdir -p "$RESULTS"
-. "$WORK/matrix.env"
+while IFS= read -r line; do
+    export "${line//\'/}"
+done < "$WORK/matrix.env"
 cp "$WORK/matrix.env" "$RESULTS/"
 export PYTHONUNBUFFERED=1
 
@@ -48,9 +50,26 @@ finish() {
 }
 trap finish EXIT
 
+# Each line of a step, with the step's name before it.
+label() {
+    local text
+    while IFS= read -r text || [ -n "$text" ]; do
+        printf '%s | %s\n' "$1" "$text"
+    done
+}
+
+run_step() {
+    case "$1" in
+        python) probe_python ;;
+        gate) install_python ;;
+        docker) install_docker ;;
+        tree) make_tree ;;
+        flow) run_flow ;;
+    esac
+}
+
 step() {
     local name=$1 t0=$SECONDS rc tick
-    shift
     mark "step-start $name"
     # A note every five minutes while the step runs.
     (
@@ -59,7 +78,7 @@ step() {
         done
     ) &
     tick=$!
-    "$@" 2>&1 | tee -a "$RESULTS/$name.log" | sed -u -e "s/^/$name | /" -e '$a\' >> "$LOG"
+    run_step "$name" 2>&1 | tee -a "$RESULTS/$name.log" | label "$name" >> "$LOG"
     rc=${PIPESTATUS[0]}
     kill "$tick" 2>/dev/null
     wait "$tick" 2>/dev/null
@@ -147,7 +166,11 @@ install_docker_arch() {
 }
 
 install_docker() {
-    "install_docker_$FAMILY" || return
+    case "$FAMILY" in
+        deb) install_docker_deb ;;
+        rpm) install_docker_rpm ;;
+        arch) install_docker_arch ;;
+    esac || return
     docker version || return
     docker compose version
 }
@@ -173,12 +196,15 @@ run_flow() {
     return "$rc"
 }
 
-mark "note kernel $(uname -r), role $ROLE"
-cd "$WORK" || exit 1
-step python probe_python
-[ "$ROLE" = below-floor ] && exit 0
-step gate install_python
-step docker install_docker || exit 1
-step tree make_tree || exit 1
-step flow run_flow
-exit 0
+main() {
+    mark "note kernel $(uname -r), role $ROLE"
+    cd "$WORK" || return
+    step python
+    [ "$ROLE" = below-floor ] && return
+    step gate
+    step docker || return
+    step tree || return
+    step flow
+}
+
+main
