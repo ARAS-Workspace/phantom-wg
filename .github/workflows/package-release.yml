@@ -57,7 +57,7 @@ jobs:
         working-directory: services/react-spa
 
       - name: Run packager
-        run: python3 tools/lib/helpers/packager.py --clean
+        run: ./tools/dev.sh generate-production-package --no-spa
 
       # An artifact keeps neither file modes nor hidden files.
       - name: Pack the tree

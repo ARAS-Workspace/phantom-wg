@@ -17,6 +17,7 @@ __pycache__/
 dist/
 /images/
 build/
+!tools/stack/dev/flows/stack/build/
 
 # Environment (user-specific, created from .example files)
 docker-compose.override.yml

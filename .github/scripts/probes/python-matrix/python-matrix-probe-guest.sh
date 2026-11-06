@@ -189,11 +189,11 @@ install_docker() {
 
 make_tree() {
     useradd -m -s /bin/bash -G docker "$OPERATOR" || return
-    python3 -I -B "$WORK/tools/lib/helpers/packager.py" --clean || return
+    mkdir -p "$WORK/services/react-spa/dist" || return
+    echo ok > "$WORK/services/react-spa/dist/index.html" || return
+    "$WORK/tools/dev.sh" generate-production-package --no-spa || return
     mkdir -p "$INSTALL" || return
     cp -a "$WORK/dist/phantom-wg-modern/." "$INSTALL/" || return
-    mkdir -p "$INSTALL/services/react-spa/dist" || return
-    echo ok > "$INSTALL/services/react-spa/dist/index.html" || return
     chown -R "$OPERATOR:$OPERATOR" "$INSTALL" || return
     id "$OPERATOR"
     ls -ld "$INSTALL" /dev/net/tun

@@ -2,8 +2,7 @@
 # phantom-daemon  ·  Development Images
 # ──────────────────────────────────────────────────────────────────
 # Built on this machine; development has no registry source.
-# docker-compose-dev.yml extends this file and tools/dev.vars selects
-# it for the tools.
+# docker-compose-dev.yml extends this file, the tools read its images.
 # ──────────────────────────────────────────────────────────────────
 
 services:

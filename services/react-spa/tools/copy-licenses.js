@@ -4,7 +4,7 @@
  *
  * dist/ is what travels. It is gitignored, the production compose mounts it
  * into nginx, and the release workflow copies it wholesale into the published
- * package (tools/lib/helpers/packager.py lists services/react-spa/dist). So
+ * package (generate-production-package lists services/react-spa/dist). So
  * putting the notices inside dist/ is what makes them reach whoever holds the
  * artifact, by either path, with no change anywhere else.
  *
