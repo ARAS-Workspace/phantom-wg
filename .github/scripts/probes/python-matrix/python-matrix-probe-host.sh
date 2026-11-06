@@ -15,7 +15,7 @@ cd "${2:?disk dir}" || exit 1
 # a -device with bootindex=0: a disk given with -drive if=virtio comes after the
 # -device disks in PCI order. With cache=unsafe QEMU does not pass the guest's
 # flushes of the root disk on to the host's disk: the guest is thrown away after
-# the run.
+# the run. A reboot of the guest keeps QEMU running; its poweroff ends QEMU.
 timeout 50m qemu-system-x86_64 -accel kvm -cpu host -smp 2 -m 6144 \
     -drive file=disk.qcow2,if=none,id=root,format=qcow2,cache=unsafe \
     -device virtio-blk-pci,drive=root,bootindex=0 \
@@ -27,7 +27,7 @@ timeout 50m qemu-system-x86_64 -accel kvm -cpu host -smp 2 -m 6144 \
     -nic user,model=virtio-net-pci \
     -device virtio-serial-pci -chardev file,id=probelog,path=guest.log \
     -device virtserialport,chardev=probelog,name=probe.log \
-    -display none -monitor none -serial file:serial.log -no-reboot &
+    -display none -monitor none -serial file:serial.log &
 qemu=$!
 
 # Ten minutes with no line from the guest's script: the end of the serial

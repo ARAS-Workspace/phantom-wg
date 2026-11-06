@@ -6,20 +6,26 @@
 # operator, install Docker, lay the package at /opt/phantom-wg and run the flow
 # of the tools as a user of the docker group, without root.
 #
+# A kernel that comes with Docker starts at the next boot. When Docker does not
+# start and a newer kernel is installed, the guest reboots once and cloud-init
+# runs this script again: the steps repeat on the new kernel.
+#
 # Each step's output goes, line by line, to /results/<step>.log and, with
 # "<step> | " before each line, to the virtio port probe.log, which the runner
 # shows while the step runs (to /dev/ttyS0 when the port is absent). Lines of
 # the script itself start with "@@probe ": "step-start <step>",
 # "step-end <step> <exit code> <seconds>" and "note <text>". A line
-# "<step> <exit code> <seconds>" goes to /results/steps. On exit /results is
-# written as a tar to the results disk and the guest powers off.
+# "<step> <exit code> <seconds>" goes to /results/steps, where the last line of
+# a step counts. On exit /results is written as a tar to the results disk and
+# the guest powers off.
 set -uo pipefail
 
 WORK=/work
 RESULTS=/results
 OPERATOR=phantomop
 INSTALL=/opt/phantom-wg
-PROBE="$WORK/.github/scripts/probes/python-matrix/python_matrix_probe.py"
+SCRIPTS="$WORK/.github/scripts/probes/python-matrix"
+PROBE="$SCRIPTS/python_matrix_probe.py"
 
 mkdir -p "$RESULTS"
 while IFS= read -r line; do
@@ -42,10 +48,14 @@ mark() {
     echo "@@probe $*" >> "$LOG"
 }
 
-finish() {
-    mark "note writing results"
+save_results() {
     tar -cf /dev/disk/by-id/virtio-results -C "$RESULTS" .
     sync
+}
+
+finish() {
+    mark "note writing results"
+    save_results
     poweroff
 }
 trap finish EXIT
@@ -114,7 +124,8 @@ install_python() {
 }
 
 probe_python() {
-    local preinstalled=yes
+    local preinstalled=yes rebooted=no
+    [ -e "$RESULTS/rebooted" ] && rebooted=yes
     grep -E '^(PRETTY_NAME|VERSION_ID)=' /etc/os-release
     if ! command -v python3 > /dev/null; then
         preinstalled=no
@@ -124,7 +135,8 @@ probe_python() {
     python_dependents > "$RESULTS/python-dependents"
     echo "packages that need python3: $(wc -l < "$RESULTS/python-dependents")"
     head -n 12 "$RESULTS/python-dependents"
-    PYTHON_PREINSTALLED=$preinstalled python3 -I -B "$PROBE" host "$RESULTS/host.json"
+    PROBE_REBOOTED=$rebooted PYTHON_PREINSTALLED=$preinstalled \
+        python3 -I -B "$PROBE" host "$RESULTS/host.json"
 }
 
 install_docker_deb() {
@@ -196,13 +208,35 @@ run_flow() {
     return "$rc"
 }
 
+newer_kernel() {
+    local latest
+    latest=$(printf '%s\n' /lib/modules/* | sort -V | tail -n 1)
+    [ "${latest##*/}" != "$(uname -r)" ]
+}
+
+reboot_once() {
+    touch "$RESULTS/rebooted"
+    install -m 0755 "$SCRIPTS/python-matrix-probe-guest.sh" \
+        /var/lib/cloud/scripts/per-boot/python-matrix-probe.sh || return
+    mark "note a newer kernel came with Docker, rebooting"
+    trap - EXIT
+    save_results
+    systemctl reboot
+    exit 0
+}
+
 main() {
     mark "note kernel $(uname -r), role $ROLE"
     cd "$WORK" || return
     step python
     [ "$ROLE" = below-floor ] && return
     step gate
-    step docker || return
+    if ! step docker; then
+        if [ ! -e "$RESULTS/rebooted" ] && newer_kernel; then
+            reboot_once
+        fi
+        return 1
+    fi
     step tree || return
     step flow
 }

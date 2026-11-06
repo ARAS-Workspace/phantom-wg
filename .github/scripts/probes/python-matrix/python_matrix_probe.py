@@ -104,6 +104,7 @@ def cmd_host(out: str) -> int:
         "python_floor": sys.version_info[:2] >= PYTHON_FLOOR,
         "python_path": sys.executable,
         "python_preinstalled": os.environ.get("PYTHON_PREINSTALLED") == "yes",
+        "rebooted": os.environ.get("PROBE_REBOOTED") == "yes",
     }
     write_json(out, result)
     for key in sorted(result):
@@ -333,6 +334,8 @@ def evaluate(role: str, host: dict, flow: dict, steps: dict) -> tuple[list[str],
         failures.append(f"missing modules: {', '.join(host['modules_missing'])}")
     if not host["python_preinstalled"]:
         warnings.append("python3 did not come with the image")
+    if host.get("rebooted"):
+        warnings.append("Docker started after a reboot into the kernel it brought")
 
     for name in EXPECTED_STEPS:
         if name not in steps:
@@ -398,6 +401,7 @@ def report_row(results: Path) -> tuple[int, str]:
         host.get("kernel", "?"),
         host.get("python", "?"),
         "yes" if host.get("python_preinstalled") else "no",
+        "yes" if host.get("rebooted") else "no",
         str(held_by),
         ", ".join(host.get("modules_missing", [])) or "none",
         flow.get("docker", {}).get("version", "-"),
@@ -418,11 +422,11 @@ def cmd_report(directory: str) -> int:
         f"Python {'.'.join(map(str, PYTHON_FLOOR))}.\n"
     )
     print(
-        "| Host | Role | Kernel | Python | With the image | Packages on python3 "
+        "| Host | Role | Kernel | Python | With the image | Reboot | Packages on python3 "
         "| Missing modules | Docker | Flow | `hard-reset` exit | Secrets others read "
         "| `DAC_OVERRIDE` | Result |"
     )
-    print("|" + "---|" * 13)
+    print("|" + "---|" * 14)
     for _, row in sorted(report_row(path) for path in Path(directory).glob("*/results")):
         print(row)
     return 0
