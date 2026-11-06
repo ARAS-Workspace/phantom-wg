@@ -2,7 +2,7 @@
 # Installs a release zip as a user does, on the archive source, then lays the
 # zip over the install and updates it. Stops on the first failure; no image may
 # come from a registry.
-# Usage: .github/scripts/verify-release-zip.sh <zip>
+# Usage: .github/scripts/distribution/verify-release-zip.sh <zip>
 set -euo pipefail
 
 ZIP="$(cd "$(dirname "${1:?zip}")" && pwd)/$(basename "$1")"

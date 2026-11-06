@@ -2,7 +2,7 @@
 # Boots the guest of one job of verify-linux-distribution-python-matrix-probe.yml
 # under KVM, from the directory that holds its disks, and shows the guest's
 # lines as they come. The lines are described in python-matrix-probe-guest.sh.
-# Usage: .github/scripts/python-matrix-probe-host.sh <name> <disk dir>
+# Usage: .github/scripts/probes/python-matrix/python-matrix-probe-host.sh <name> <disk dir>
 set -uo pipefail
 
 NAME="${1:?name}"

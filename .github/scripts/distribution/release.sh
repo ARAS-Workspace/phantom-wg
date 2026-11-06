@@ -2,11 +2,11 @@
 # Trigger the release-modern workflow.
 # Version is read from phantom_daemon/__init__.py (single source of truth).
 # Creates release-v{version} tag and pushes it.
-# Usage: .github/scripts/release.sh
+# Usage: .github/scripts/distribution/release.sh
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-REPO_ROOT="$(cd "${SCRIPT_DIR}/../.." && pwd)"
+REPO_ROOT="$(cd "${SCRIPT_DIR}/../../.." && pwd)"
 
 VERSION=$(python3 -c "
 import re, pathlib

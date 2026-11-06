@@ -2,13 +2,13 @@
 # Trigger the Verify release mechanics workflow.
 # The tag verify-release-dynamics moves to HEAD on every run; the workflow
 # leaves the release packages as artifacts, nothing reaches main.
-# Usage: .github/scripts/verify-release.sh
+# Usage: .github/scripts/distribution/verify-release.sh
 set -euo pipefail
 
 TAG="verify-release-dynamics"
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-REPO_ROOT="$(cd "${SCRIPT_DIR}/../.." && pwd)"
+REPO_ROOT="$(cd "${SCRIPT_DIR}/../../.." && pwd)"
 
 if [[ -n "$(git -C "${REPO_ROOT}" status --porcelain)" ]]; then
     echo "The tree has changes: the tag would not match what you see."

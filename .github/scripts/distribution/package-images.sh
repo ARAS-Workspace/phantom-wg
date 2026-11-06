@@ -4,11 +4,11 @@
 # Creates base-images-v{version} tag on the pushed head of dev/daemon and
 # pushes it. The workflow commits the new pins: pull them afterwards.
 # Usage:
-#   .github/scripts/package-images.sh           → 1.0.0 → 1.0.1
-#   .github/scripts/package-images.sh minor     → 1.0.0 → 1.1.0
-#   .github/scripts/package-images.sh major     → 1.0.0 → 2.0.0
-#   .github/scripts/package-images.sh 1.0.0     → the given version
-#   .github/scripts/package-images.sh --dry ... → the plan and the checks only
+#   .github/scripts/distribution/package-images.sh           → 1.0.0 → 1.0.1
+#   .github/scripts/distribution/package-images.sh minor     → 1.0.0 → 1.1.0
+#   .github/scripts/distribution/package-images.sh major     → 1.0.0 → 2.0.0
+#   .github/scripts/distribution/package-images.sh 1.0.0     → the given version
+#   .github/scripts/distribution/package-images.sh --dry ... → the plan and the checks only
 set -euo pipefail
 
 BRANCH="dev/daemon"
@@ -16,7 +16,7 @@ TAG_PREFIX="base-images-v"
 VERSION_RE='^[0-9]+\.[0-9]+\.[0-9]+$'
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-REPO_ROOT="$(cd "${SCRIPT_DIR}/../.." && pwd)"
+REPO_ROOT="$(cd "${SCRIPT_DIR}/../../.." && pwd)"
 PINS="${REPO_ROOT}/tools/compose/registry.yml"
 
 DRY=false

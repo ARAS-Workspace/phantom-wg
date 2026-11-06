@@ -425,7 +425,7 @@ jobs:
           fi
 
       - name: Write the manifest
-        run: python3 .github/scripts/image_manifest.py contents artifact/tools/compose/MANIFEST.json
+        run: python3 .github/scripts/images/image_manifest.py contents artifact/tools/compose/MANIFEST.json
 
       - name: Upload the pins and the manifest
         uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0

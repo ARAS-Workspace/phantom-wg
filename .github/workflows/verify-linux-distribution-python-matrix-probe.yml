@@ -1,7 +1,7 @@
 name: Verify Linux Distribution Python Matrix Probe
 
 # Proves the hosts the operator tools can run on: each job boots a pinned cloud
-# image under KVM, and the guest runs .github/scripts/python-matrix-probe-guest.sh
+# image under KVM, and the guest runs .github/scripts/probes/python-matrix/python-matrix-probe-guest.sh
 # on the repository it gets on a payload disk. It reads the system Python and
 # the kernel as the image left them, then runs the tools as a user of the docker
 # group. The last job gathers the hosts in one table.
@@ -9,7 +9,7 @@ name: Verify Linux Distribution Python Matrix Probe
 # required hosts must pass. observe hosts report without failing the run.
 # below-floor is the control: that host must be found under a floor, one for
 # each package family that has such a release.
-# .github/scripts/verify-python-matrix.sh moves the tag and starts the run.
+# .github/scripts/probes/python-matrix/verify-python-matrix.sh moves the tag and starts the run.
 
 on:
   push:
@@ -193,7 +193,7 @@ jobs:
           cat > "$vm/user-data" <<'EOF'
           #cloud-config
           runcmd:
-            - [sh, -c, 'mkdir -p /work && tar -xf /dev/disk/by-id/virtio-payload -C /work && exec bash /work/.github/scripts/python-matrix-probe-guest.sh || { echo "PROBE | payload unreadable" > /dev/ttyS0; poweroff; }']
+            - [sh, -c, 'mkdir -p /work && tar -xf /dev/disk/by-id/virtio-payload -C /work && exec bash /work/.github/scripts/probes/python-matrix/python-matrix-probe-guest.sh || { echo "PROBE | payload unreadable" > /dev/ttyS0; poweroff; }']
           EOF
           echo "instance-id: python-matrix-probe" > "$vm/meta-data"
           cloud-localds "$vm/seed.img" "$vm/user-data" "$vm/meta-data"
@@ -201,12 +201,12 @@ jobs:
       - name: Run the probe in the guest
         env:
           NAME: ${{ matrix.name }}
-        run: bash .github/scripts/python-matrix-probe-host.sh "$NAME" "$RUNNER_TEMP/vm"
+        run: bash .github/scripts/probes/python-matrix/python-matrix-probe-host.sh "$NAME" "$RUNNER_TEMP/vm"
 
       - name: Summary
         if: always()
         shell: bash
-        run: python3 -I -B .github/scripts/python_matrix_probe.py check "$RUNNER_TEMP/vm/results" | tee -a "$GITHUB_STEP_SUMMARY"
+        run: python3 -I -B .github/scripts/probes/python-matrix/python_matrix_probe.py check "$RUNNER_TEMP/vm/results" | tee -a "$GITHUB_STEP_SUMMARY"
 
       - name: Keep the guest's logs
         if: always()
@@ -244,7 +244,7 @@ jobs:
 
       - name: Write the report
         shell: bash
-        run: python3 -I -B .github/scripts/python_matrix_probe.py report probes | tee python-matrix.md >> "$GITHUB_STEP_SUMMARY"
+        run: python3 -I -B .github/scripts/probes/python-matrix/python_matrix_probe.py report probes | tee python-matrix.md >> "$GITHUB_STEP_SUMMARY"
 
       - name: Keep the report
         uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0

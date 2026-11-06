@@ -19,7 +19,7 @@ WORK=/work
 RESULTS=/results
 OPERATOR=phantomop
 INSTALL=/opt/phantom-wg
-PROBE="$WORK/.github/scripts/python_matrix_probe.py"
+PROBE="$WORK/.github/scripts/probes/python-matrix/python_matrix_probe.py"
 
 mkdir -p "$RESULTS"
 while IFS= read -r line; do

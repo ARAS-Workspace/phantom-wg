@@ -33,7 +33,7 @@ jobs:
           persist-credentials: false
 
       - name: Check the image pins
-        run: bash .github/scripts/check-image-pins.sh
+        run: bash .github/scripts/images/check-image-pins.sh
 
       - name: Read the version
         id: version
@@ -105,13 +105,13 @@ jobs:
         run: tar -xzf release-tree.tar.gz
 
       - name: Add the images
-        run: bash .github/scripts/archive-images.sh phantom-wg-modern "${ARCH}"
+        run: bash .github/scripts/images/archive-images.sh phantom-wg-modern "${ARCH}"
 
       - name: Create the archive
         run: zip -rq "${ZIP}" phantom-wg-modern
 
       - name: Install from the archive
-        run: bash .github/scripts/verify-release-zip.sh "${ZIP}"
+        run: bash .github/scripts/distribution/verify-release-zip.sh "${ZIP}"
 
       - name: Upload the archive
         uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0

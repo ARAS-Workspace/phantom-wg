@@ -2,7 +2,7 @@ name: Verify release mechanics
 
 # Runs the release package without cutting a release. The artifacts are the
 # package itself: the tree main would receive and the zip of each architecture.
-# Nothing reaches main or the releases. .github/scripts/verify-release.sh moves
+# Nothing reaches main or the releases. .github/scripts/distribution/verify-release.sh moves
 # the tag and starts the run.
 
 on:

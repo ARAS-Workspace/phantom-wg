@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Adds images/ to a package tree: the pinned images of one architecture, with
 # VERSION and SHA256SUMS, and selects the archive source for the package.
-# Usage: .github/scripts/archive-images.sh <package dir> <amd64|arm64>
+# Usage: .github/scripts/images/archive-images.sh <package dir> <amd64|arm64>
 set -euo pipefail
 
 PACKAGE="${1:?package dir}"

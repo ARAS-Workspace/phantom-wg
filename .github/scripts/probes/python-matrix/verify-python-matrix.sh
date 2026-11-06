@@ -2,13 +2,13 @@
 # Trigger the Verify Linux Distribution Python Matrix Probe workflow.
 # The tag verify-python-matrix moves to HEAD on every run; the workflow leaves
 # its report and each guest's logs as artifacts.
-# Usage: .github/scripts/verify-python-matrix.sh
+# Usage: .github/scripts/probes/python-matrix/verify-python-matrix.sh
 set -euo pipefail
 
 TAG="verify-python-matrix"
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-REPO_ROOT="$(cd "${SCRIPT_DIR}/../.." && pwd)"
+REPO_ROOT="$(cd "${SCRIPT_DIR}/../../../.." && pwd)"
 
 if [[ -n "$(git -C "${REPO_ROOT}" status --porcelain)" ]]; then
     echo "The tree has changes: the tag would not match what you see."

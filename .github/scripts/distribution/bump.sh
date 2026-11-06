@@ -1,13 +1,13 @@
 #!/usr/bin/env bash
 # Bump daemon version (patch by default).
 # Usage:
-#   .github/scripts/bump.sh          → 1.0.2 → 1.0.3
-#   .github/scripts/bump.sh minor    → 1.0.2 → 1.1.0
-#   .github/scripts/bump.sh major    → 1.0.2 → 2.0.0
+#   .github/scripts/distribution/bump.sh          → 1.0.2 → 1.0.3
+#   .github/scripts/distribution/bump.sh minor    → 1.0.2 → 1.1.0
+#   .github/scripts/distribution/bump.sh major    → 1.0.2 → 2.0.0
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-REPO_ROOT="$(cd "${SCRIPT_DIR}/../.." && pwd)"
+REPO_ROOT="$(cd "${SCRIPT_DIR}/../../.." && pwd)"
 INIT_FILE="${REPO_ROOT}/phantom_daemon/__init__.py"
 PART="${1:-patch}"
 
@@ -44,4 +44,4 @@ git -C "${REPO_ROOT}" add "${INIT_FILE}"
 git -C "${REPO_ROOT}" commit -m "Bump v${NEW}"
 
 echo ""
-echo "Push, wait for CI, then run: .github/scripts/release.sh"
+echo "Push, wait for CI, then run: .github/scripts/distribution/release.sh"
