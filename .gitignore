@@ -18,6 +18,7 @@ dist/
 /images/
 build/
 !tools/stack/dev/flows/stack/build/
+!tools/stack/prod/flows/images/build/
 
 # Environment (user-specific, created from .example files)
 docker-compose.override.yml

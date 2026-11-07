@@ -18,10 +18,12 @@ from __future__ import annotations
 from core.commands import argument
 from core.runner import ToolError
 from stack.prod.libs import (
+    archive,
     auth,
     environment,
     gates,
     host,
+    images,
     keys,
     paths,
     terazi,
@@ -43,6 +45,8 @@ def run(terazi_ipv4_subnet: str) -> None:
             "  Start over:      ./tools/prod.sh hard-reset"
         )
     tls.require_whole()
+    if images.source() == "archive":
+        archive.load()
     subnet = terazi.check(terazi_ipv4_subnet) if terazi_ipv4_subnet else ""
 
     print("Full production setup...")
