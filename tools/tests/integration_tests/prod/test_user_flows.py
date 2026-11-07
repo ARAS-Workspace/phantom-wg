@@ -20,7 +20,6 @@ import time
 
 import pytest
 from prod_host import (
-    APPLIED,
     AUTH_DB,
     AUTH_SOURCE,
     BOUND,
@@ -100,7 +99,6 @@ def test_setup_builds_the_host():
         assert path.stat().st_size > 0, name
         assert path.stat().st_mode & 0o777 == 0o600, name
     assert AUTH_DB.is_file()
-    assert APPLIED.read_text(encoding="utf-8").strip() == code_version()
 
 
 def test_setup_refuses_a_complete_host():
@@ -411,7 +409,6 @@ def test_hard_reset_clears_the_host_and_keeps_its_local_files():
     assert done.returncode == 0, done.stdout
     for name in BOUND:
         assert not [path.name for path in (ROOT / name).iterdir() if path.name != ".gitkeep"], name
-    assert not APPLIED.exists()
     for name in LOCAL_FILES:
         assert (ROOT / name).is_file(), name
 

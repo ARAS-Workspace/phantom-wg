@@ -23,7 +23,6 @@ ENTRY = "./tools/prod.sh"
 SECRETS = ROOT / "container-data/secrets/production"
 AUTH_DB = ROOT / "container-data/auth-db/auth.db"
 AUTH_SOURCE = ROOT / "services/auth-service"
-APPLIED = ROOT / "container-data/.applied-version"
 WALLET = ROOT / "container-data/db/wallet.db"
 SPA_INDEX = ROOT / "services/react-spa/dist/index.html"
 ENV_DAEMON = ROOT / ".env.daemon"
@@ -124,7 +123,7 @@ def emptied(path: Path):
 def assert_the_operator_owns_the_host() -> None:
     paths = [
         *(ROOT / name for name in LOCAL_FILES), *(SECRETS / name for name in SECRET_FILES),
-        SECRETS, AUTH_DB.parent, AUTH_DB, APPLIED,
+        SECRETS, AUTH_DB.parent, AUTH_DB,
     ]
     assert not [str(path) for path in paths if path.stat().st_uid != os.getuid()]
 

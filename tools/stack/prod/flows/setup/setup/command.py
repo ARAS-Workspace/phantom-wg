@@ -28,7 +28,6 @@ from stack.prod.libs import (
     paths,
     terazi,
     tls,
-    versions,
 )
 
 ABOUT = "Full setup (env + keys + auth + TLS)"
@@ -64,7 +63,6 @@ def run(terazi_ipv4_subnet: str) -> None:
         tls.generate()
     if not terazi.present():
         terazi.create(subnet)
-    versions.record()
 
     print("Production setup complete.\n")
     print("  Environment:  .env, .env.daemon, .env.auth-service")

@@ -1,7 +1,6 @@
 #!/usr/bin/env bash
-# Installs a release zip as a user does, on the archive source, then lays the
-# zip over the install and updates it. Stops on the first failure; no image may
-# come from a registry.
+# Installs a release zip as a user does, on the archive source, without a
+# registry. Stops on the first failure; no image may come from a registry.
 # Usage: .github/scripts/distribution/verify-release-zip.sh <zip>
 set -euo pipefail
 
@@ -45,16 +44,14 @@ mv .env.daemon.tmp .env.daemon
 wait_api
 [ "$(curl -sk -o /dev/null -m 5 -w '%{http_code}' https://127.0.0.1/)" = 200 ] || fail "the dashboard does not answer"
 
-# The zip of the next release, laid over this install.
-rm -rf phantom_daemon services tools images
-(cd .. && unzip -qo "${ZIP}")
-./tools/prod.sh update
+# A package has no git remote: update stops and the stack runs on.
+if UPDATE="$(./tools/prod.sh update 2>&1)"; then
+    fail "update ran in a package"
+fi
+grep -q 'no git remote' <<< "${UPDATE}" || fail "update said: ${UPDATE}"
 wait_api
-
-[ "$(cat container-data/.applied-version)" = "$(sed -n 's/^__version__ = "\(.*\)"$/\1/p' phantom_daemon/__init__.py)" ] \
-    || fail "update left another version in .applied-version"
 
 PULLS="$(docker events --since "${START}" --until "$(date +%s)" --filter type=image --filter event=pull --format '{{.Action}}' | wc -l)"
 [ "${PULLS}" -eq 0 ] || fail "${PULLS} images came from a registry"
 
-echo "The zip installed and updated without a registry."
+echo "The zip installed without a registry."

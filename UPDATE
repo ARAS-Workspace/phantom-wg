@@ -9,12 +9,8 @@ Standard Update:
   .env.auth-service) and docker-compose.override.yml are always preserved.
   If an update stops halfway, run it again.
 
-  A package installed from the release zip has no git history, so there is
-  nothing to pull: the code comes from the new zip, and update applies it.
-
-  update moves forward only. It compares the code version with the one this
-  host last applied (container-data/.applied-version) and stops on an older
-  package. To go back, follow Rollback below.
+  update follows a git clone. A package installed from the release zip has no
+  git remote, and update stops there.
 
 Local Changes:
   Server-specific changes (ports, resource limits, extra volumes) belong in

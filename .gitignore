@@ -38,7 +38,6 @@ container-data/state/db/*
 container-data/auth-db/*
 !container-data/auth-db/.gitkeep
 container-data/certbot/
-container-data/.applied-version
 
 # Type stubs (generated)
 typings/
