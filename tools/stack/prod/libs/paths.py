@@ -23,7 +23,8 @@ SECRETS_DIR = "container-data/secrets/production"
 AUTH_DB_DIR = "container-data/auth-db"
 DB_DIR = "container-data/db"
 STATE_DIR = "container-data/state/db"
-BOUND_DIRS = (SECRETS_DIR, AUTH_DB_DIR, DB_DIR, STATE_DIR)
+CERTBOT_DIR = "container-data/certbot"
+BOUND_DIRS = (SECRETS_DIR, AUTH_DB_DIR, DB_DIR, STATE_DIR, CERTBOT_DIR)
 
 
 def filled(path: Path) -> bool:

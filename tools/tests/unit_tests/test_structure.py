@@ -9,7 +9,7 @@ import pytest
 from support import TOOLCHAIN, run
 
 HEADER_LINES = 11
-SKIPPED = {".venv", ".idea", "__pycache__", "tests"}
+SKIPPED = {".venv", ".idea", "__pycache__", "tests", "helper"}
 LOCAL_ONLY = {".venv", ".idea", ".ruff_cache", ".pytest_cache", "__pycache__", ".DS_Store"}
 MODULES = sorted(
     path.relative_to(TOOLCHAIN)

@@ -32,7 +32,7 @@ LOCAL_FILES = (".env", ".env.daemon", ".env.auth-service", "docker-compose.overr
 STACK_SECRETS = ("wg_private_key", "wg_public_key", "auth_signing_key", "auth_verify_key", "tls_cert", "tls_key")
 SECRET_FILES = (*STACK_SECRETS, ".admin_password")
 COMMANDS = (
-    "setup", "gen-keys", "setup-auth", "setup-tls", "up", "down", "restart", "logs", "status",
+    "setup", "gen-keys", "setup-auth", "setup-tls", "certbot", "up", "down", "restart", "logs", "status",
     "show-versions", "shell", "exec", "hard-reset", "gates", "images", "pull", "build", "rebuild",
 )
 SERVICES = ("phantom-daemon", "phantom-auth", "phantom-nginx")
