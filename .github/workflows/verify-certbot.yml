@@ -1,0 +1,115 @@
+name: Verify certbot
+
+# Takes a real certificate with tools/prod.sh certbot: the job boots a pinned
+# Debian 13 image under KVM, port 80 of the runner goes to the guest, and the
+# guest runs .github/scripts/probes/certbot/certbot-probe-guest.sh on the
+# repository it gets on a payload disk. DOMAIN points to the runner.
+# .github/scripts/probes/certbot/verify-certbot.sh moves the tag and starts the run.
+
+on:
+  push:
+    tags:
+      - 'verify-certbot'
+
+permissions:
+  contents: read
+
+# The runners with KVM share one host, and so one port 80.
+concurrency:
+  group: verify-certbot
+
+env:
+  DOMAIN: baremetal-runner.phantom-wg.dev
+  IMAGE: https://cloud.debian.org/images/cloud/trixie/20261103-2651/debian-13-generic-amd64-20261103-2651.qcow2
+  IMAGE_DIGEST: 1207e6e3efaff8ee77ab7a32c156a3eea6a9e53f94cfc48efbd1f49ba554ca36ac62ab27395aa813a1775a8c0a393b1a1ce5377d9e5670f6113e3110c57fee4b
+  # Docker CE from download.docker.com, the versions of the Python matrix probe.
+  DOCKER_OS: debian
+  DOCKER_CODENAME: trixie
+  DOCKER_SUFFIX: '~debian.13~trixie'
+  DOCKER_CE: '5:29.9.3-1'
+  CONTAINERD_IO: '2.4.2-3'
+  BUILDX: '0.38.1-1'
+  COMPOSE: '5.7.0-1'
+
+jobs:
+  certbot:
+    name: Certificate in a Debian 13 guest
+    # The self-hosted bare-metal runners with KVM.
+    runs-on: [self-hosted, linux, x64, kvm]
+    timeout-minutes: 60
+    steps:
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+
+      - name: Check the host
+        run: |
+          for c in qemu-system-x86_64 qemu-img cloud-localds git curl python3 mawk; do
+            command -v "$c" > /dev/null || { echo "::error::$c is not installed on this runner"; exit 1; }
+          done
+          python3 -c 'import os; os.close(os.open("/dev/kvm", os.O_RDWR))' \
+            || { echo "::error::/dev/kvm cannot be opened by $(id -un)"; exit 1; }
+          echo "user $(id -un), kernel $(uname -r), $(nproc) cpus, $(df -h --output=avail "$RUNNER_TEMP" | tail -1 | tr -d ' ') free"
+
+      - name: Fetch the image
+        run: |
+          mkdir -p "$RUNNER_TEMP/vm"
+          curl -fSL --retry 3 --retry-delay 2 -o "$RUNNER_TEMP/vm/base.img" "$IMAGE"
+          echo "$IMAGE_DIGEST  $RUNNER_TEMP/vm/base.img" | sha512sum -c -
+          qemu-img create -f qcow2 -b base.img -F qcow2 "$RUNNER_TEMP/vm/disk.qcow2" 40G
+
+      - name: Make the payload, seed and results disks
+        run: |
+          vm="$RUNNER_TEMP/vm"
+          {
+            echo "DOMAIN='$DOMAIN'"
+            echo "DOCKER_OS='$DOCKER_OS'"
+            echo "DOCKER_CODENAME='$DOCKER_CODENAME'"
+            echo "DOCKER_SUFFIX='$DOCKER_SUFFIX'"
+            echo "DOCKER_CE='$DOCKER_CE'"
+            echo "CONTAINERD_IO='$CONTAINERD_IO'"
+            echo "BUILDX='$BUILDX'"
+            echo "COMPOSE='$COMPOSE'"
+          } > probe.env
+          git archive --format=tar -o "$vm/payload.tar" HEAD
+          tar -rf "$vm/payload.tar" probe.env
+          truncate -s 1G "$vm/results.img"
+          cat > "$vm/user-data" <<'EOF'
+          #cloud-config
+          runcmd:
+            - [sh, -c, 'mkdir -p /work && tar -xf /dev/disk/by-id/virtio-payload -C /work && exec bash /work/.github/scripts/probes/certbot/certbot-probe-guest.sh || { echo "PROBE | payload unreadable" > /dev/ttyS0; poweroff; }']
+          EOF
+          echo "instance-id: certbot-probe" > "$vm/meta-data"
+          cloud-localds "$vm/seed.img" "$vm/user-data" "$vm/meta-data"
+
+      - name: Run the guest
+        run: bash .github/scripts/probes/python-matrix/python-matrix-probe-host.sh "certbot" "$RUNNER_TEMP/vm" "tcp::80-:80"
+
+      - name: Check the steps
+        if: always()
+        shell: bash
+        run: |
+          steps="$RUNNER_TEMP/vm/results/steps"
+          {
+            echo '| Step | Exit | Seconds |'
+            echo '| --- | --- | --- |'
+            while read -r name code seconds; do
+              echo "| $name | $code | $seconds |"
+            done < "$steps"
+          } >> "$GITHUB_STEP_SUMMARY"
+          for name in docker tree stack certbot cron reset; do
+            grep -q "^$name 0 " "$steps" || { echo "::error::$name did not pass"; exit 1; }
+          done
+
+      - name: Keep the guest's logs
+        if: always()
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
+        with:
+          name: certbot-probe
+          path: |
+            ${{ runner.temp }}/vm/results
+            ${{ runner.temp }}/vm/guest.log
+            ${{ runner.temp }}/vm/serial.log
+          retention-days: 14
+          if-no-files-found: ignore

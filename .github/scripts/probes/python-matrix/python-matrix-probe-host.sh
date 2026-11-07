@@ -1,12 +1,15 @@
 #!/usr/bin/env bash
 # Boots the guest of one job of verify-linux-distribution-python-matrix-probe.yml
-# under KVM, from the directory that holds its disks, and shows the guest's
-# lines as they come. The lines are described in python-matrix-probe-guest.sh.
-# Usage: .github/scripts/probes/python-matrix/python-matrix-probe-host.sh <name> <disk dir>
+# or verify-certbot.yml under KVM, from the directory that holds its disks, and
+# shows the guest's lines as they come. The lines are described in
+# python-matrix-probe-guest.sh. A guest that takes traffic from outside gets a
+# hostfwd rule of QEMU as the third argument.
+# Usage: .github/scripts/probes/python-matrix/python-matrix-probe-host.sh <name> <disk dir> [hostfwd rule]
 set -uo pipefail
 
 NAME="${1:?name}"
 cd "${2:?disk dir}" || exit 1
+FORWARD="${3:-}"
 
 : > serial.log
 : > guest.log
@@ -24,7 +27,7 @@ timeout 50m qemu-system-x86_64 -accel kvm -cpu host -smp 2 -m 6144 \
     -device virtio-blk-pci,drive=payload,serial=payload \
     -drive file=results.img,if=none,id=results,format=raw \
     -device virtio-blk-pci,drive=results,serial=results \
-    -nic user,model=virtio-net-pci \
+    -nic "user,model=virtio-net-pci${FORWARD:+,hostfwd=$FORWARD}" \
     -device virtio-serial-pci -chardev file,id=probelog,path=guest.log \
     -device virtserialport,chardev=probelog,name=probe.log \
     -display none -monitor none -serial file:serial.log &
