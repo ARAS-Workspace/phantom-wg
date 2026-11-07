@@ -33,7 +33,7 @@ STACK_SECRETS = ("wg_private_key", "wg_public_key", "auth_signing_key", "auth_ve
 SECRET_FILES = (*STACK_SECRETS, ".admin_password")
 COMMANDS = (
     "setup", "gen-keys", "setup-auth", "setup-tls", "certbot", "up", "down", "restart", "logs", "status",
-    "show-versions", "shell", "exec", "hard-reset", "gates", "images", "pull", "build", "rebuild",
+    "show-versions", "shell", "exec", "hard-reset", "gates", "images", "pull", "build", "rebuild", "update",
 )
 SERVICES = ("phantom-daemon", "phantom-auth", "phantom-nginx")
 API = "https://127.0.0.1"

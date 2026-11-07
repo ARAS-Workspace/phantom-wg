@@ -32,6 +32,8 @@ from stack.prod.libs.gates import Gate, Reading
 # The floor of the firewall-bridge matrix: the containers run on this kernel.
 KERNEL = (5, 15)
 TUN_DEVICE = Path("/dev/net/tun")
+# An update takes the code and the images: a tree half written cannot be run again.
+FREE_SPACE = 1 << 30
 
 
 def dotted(version: Sequence[int]) -> str:
@@ -96,6 +98,13 @@ def read_git() -> Reading:
     return Reading(True, answer.text)
 
 
+def read_disk() -> Reading:
+    free = shutil.disk_usage(runner.ROOT).free
+    if free < FREE_SPACE:
+        return Reading(False, f"{free >> 20} MiB free, under {FREE_SPACE >> 20} MiB")
+    return Reading(True, f"{free >> 20} MiB free")
+
+
 PYTHON_GATE = Gate("Python", read_python, f"Install Python {dotted(PYTHON)} or newer.")
 DOCKER_GATE = Gate(
     "Docker",
@@ -107,9 +116,10 @@ COMPOSE_GATE = Gate("Compose", read_compose, "Install the Docker Compose plugin.
 KERNEL_GATE = Gate("Kernel", read_kernel, f"Use a host with kernel {dotted(KERNEL)} or newer.")
 TUN_GATE = Gate("TUN", read_tun, "Load the tun kernel module.")
 GIT_GATE = Gate("Git", read_git, "Install git: update runs it in a git clone.")
+DISK_GATE = Gate("Disk", read_disk, "Free some space on this disk.")
 
 DOCKER_GATES = (DOCKER_GATE, COMPOSE_GATE)
 SETUP_GATES = (*DOCKER_GATES, KERNEL_GATE, TUN_GATE)
-UPDATE_GATES = (*DOCKER_GATES, GIT_GATE)
+UPDATE_GATES = (*DOCKER_GATES, GIT_GATE, DISK_GATE)
 
-PROD_GATES = (PYTHON_GATE, *SETUP_GATES, GIT_GATE)
+PROD_GATES = (PYTHON_GATE, *SETUP_GATES, GIT_GATE, DISK_GATE)

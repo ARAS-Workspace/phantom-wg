@@ -26,6 +26,7 @@ def run() -> None:
 
     print("Starting stack...")
     compose.run("up", "-d")
+    compose.settled()
 
     compose.run("ps")
     print("Stack started.")
