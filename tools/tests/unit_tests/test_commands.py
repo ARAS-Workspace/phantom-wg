@@ -103,15 +103,71 @@ def test_help_names(stack, capsys, argv):
 def test_help_comes_from_the_commands(stack, capsys):
     dispatch(ENTRY, stack, ["help"])
     out = capsys.readouterr().out
-    for text in ("One:", "Two:", "plain", "Plain command", "args [-f] [service]", "help"):
+    for text in ("One:", "Two:", "plain", "Plain command", "args", "help", "See: ./t.sh help <command>"):
         assert text in out
     assert out.count("Two:") == 1
+    assert "[service]" not in out
+    assert "    through  As they came\n" in out
 
 
-def test_long_name_keeps_a_space_in_the_help(flows, capsys):
-    flows.add("one", "a_name_of_twenty_chars", PLAIN)
+def test_the_longest_name_sets_the_column_of_the_help(flows, capsys):
+    flows.add("one", "plain", PLAIN)
+    flows.add("two", "a_name_longer_than_the_column_of_any_other", PLAIN)
     dispatch(ENTRY, flows.package, ["help"])
-    assert "    a-name-of-twenty-chars Plain command\n" in capsys.readouterr().out
+    out = capsys.readouterr().out
+    abouts = ("Plain command", "Show this help")
+    assert len({line.index(about) for line in out.splitlines() for about in abouts if about in line}) == 1
+    assert "any-other  Plain command\n" in out
+
+
+@pytest.mark.parametrize(
+    "argv",
+    [
+        ["help", "args"],
+        ["-h", "args"],
+        ["--help", "args"],
+        ["args", "--help"],
+        ["args", "-h"],
+        ["args", "-f", "--help"],
+    ],
+)
+def test_a_command_shows_its_usage_and_does_not_run(stack, capsys, argv):
+    dispatch(ENTRY, stack, argv)
+    assert capsys.readouterr().out == "Usage: ./t.sh args [-f] [service]\n\n  With arguments\n"
+
+
+def test_a_command_without_a_usage_shows_its_name(stack, capsys):
+    dispatch(ENTRY, stack, ["help", "plain"])
+    assert capsys.readouterr().out == "Usage: ./t.sh plain\n\n  Plain command\n"
+
+
+def test_help_of_help_is_the_help(stack, capsys):
+    dispatch(ENTRY, stack, ["help", "help"])
+    assert capsys.readouterr().out.startswith("Usage: ./t.sh <command>")
+
+
+def test_help_of_an_unknown_command_stops(stack):
+    with pytest.raises(ToolError) as caught:
+        dispatch(ENTRY, stack, ["help", "nope"])
+    assert caught.value.code == 1
+    assert str(caught.value) == "Unknown command: nope\nSee: ./t.sh help"
+
+
+def test_help_takes_one_command(stack):
+    with pytest.raises(ToolError) as caught:
+        dispatch(ENTRY, stack, ["help", "plain", "args"])
+    assert caught.value.code == 1
+    assert str(caught.value) == "Usage: ./t.sh help [command]"
+
+
+def test_help_shows_a_passthrough_command(stack, capsys):
+    dispatch(ENTRY, stack, ["help", "through"])
+    assert capsys.readouterr().out == "Usage: ./t.sh through\n\n  As they came\n"
+
+
+def test_passthrough_takes_help_as_it_came(stack, capsys):
+    dispatch(ENTRY, stack, ["through", "--help"])
+    assert capsys.readouterr().out == "ran through ['--help']\n"
 
 
 def test_unknown_command_stops(stack):
@@ -140,7 +196,6 @@ def test_passthrough_takes_the_arguments_as_they_came(stack, capsys):
     ("argv", "usage"),
     [
         (["plain", "--foo"], "plain"),
-        (["plain", "--help"], "plain"),
         (["args", "--forc"], "args [-f] [service]"),
         (["args", "a", "b"], "args [-f] [service]"),
     ],

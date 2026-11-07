@@ -33,7 +33,8 @@ from typing import Any, NoReturn
 
 from core.runner import ToolError
 
-HELP_NAMES = ("help", "-h", "--help")
+HELP_FLAGS = ("-h", "--help")
+HELP_NAMES = ("help", *HELP_FLAGS)
 
 
 @dataclass(frozen=True)
@@ -89,6 +90,7 @@ def _parse(entry: str, command: Command, argv: Sequence[str]) -> argparse.Namesp
 
 def print_help(entry: str, commands: Sequence[Command]) -> None:
     print(f"Usage: {entry} <command>")
+    width = max(len(name) for name in ("help", *(command.name for command in commands)))
 
     groups: dict[str, list[Command]] = {}
     for command in commands:
@@ -97,25 +99,40 @@ def print_help(entry: str, commands: Sequence[Command]) -> None:
     for group, members in groups.items():
         print(f"\n  {group}:")
         for command in members:
-            print(f"    {command.synopsis:<20} {command.about}")
+            print(f"    {command.name:<{width}}  {command.about}")
 
-    print(f"\n    {'help':<20} Show this help")
+    print(f"\n    {'help':<{width}}  Show this help")
+    print(f"\nSee: {entry} help <command>")
+
+
+def print_command(entry: str, command: Command) -> None:
+    print(f"Usage: {entry} {command.synopsis}\n\n  {command.about}")
+
+
+def _named(entry: str, commands: Sequence[Command], name: str) -> Command:
+    for command in commands:
+        if command.name == name:
+            return command
+    raise ToolError(f"Unknown command: {name}\nSee: {entry} help")
 
 
 def dispatch(entry: str, package: str, argv: Sequence[str]) -> None:
     """Runs the command argv names, after its arguments."""
     commands = discover(package)
-    name = argv[0] if argv else HELP_NAMES[0]
+    name, *rest = argv or HELP_NAMES[:1]
     if name in HELP_NAMES:
-        print_help(entry, commands)
+        if len(rest) > 1:
+            raise ToolError(f"Usage: {entry} help [command]")
+        if not rest or rest[0] in HELP_NAMES:
+            print_help(entry, commands)
+        else:
+            print_command(entry, _named(entry, commands, rest[0]))
         return
 
-    for command in commands:
-        if command.name == name:
-            if command.passthrough:
-                command.run(argv[1:])
-            else:
-                command.run(**vars(_parse(entry, command, argv[1:])))
-            return
-
-    raise ToolError(f"Unknown command: {name}\nSee: {entry} help")
+    command = _named(entry, commands, name)
+    if command.passthrough:
+        command.run(rest)
+    elif set(rest) & set(HELP_FLAGS):
+        print_command(entry, command)
+    else:
+        command.run(**vars(_parse(entry, command, rest)))

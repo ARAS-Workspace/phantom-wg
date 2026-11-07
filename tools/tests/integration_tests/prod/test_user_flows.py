@@ -370,7 +370,7 @@ def test_restart_needs_a_running_stack():
     ("args", "usage"),
     [
         (("gen-keys", "--nope"), "gen-keys [-f]"),
-        (("status", "--help"), "status"),
+        (("status", "--nope"), "status"),
         (("down", "extra"), "down"),
         (("exec", "daemon"), "exec <service> <command>"),
         (("hard-reset", "--force"), "hard-reset"),
@@ -381,6 +381,19 @@ def test_bad_arguments_stop_with_the_usage(args, usage):
     done = prod(*args)
     assert done.returncode == 1
     assert done.stdout.strip() == f"Usage: ./tools/prod.sh {usage}"
+
+
+@pytest.mark.parametrize(
+    "args",
+    [("help", "gen-keys"), ("gen-keys", "--help"), ("gen-keys", "-h")],
+    ids=["help-command", "long-flag", "short-flag"],
+)
+def test_a_command_shows_its_usage_and_does_not_run(args):
+    before = digest(SECRETS / "wg_private_key")
+    done = prod(*args)
+    assert done.returncode == 0
+    assert done.stdout == "Usage: ./tools/prod.sh gen-keys [-f]\n\n  Generate WireGuard keypair\n"
+    assert digest(SECRETS / "wg_private_key") == before
 
 
 # ── Starting over ───────────────────────────────────────────────────
