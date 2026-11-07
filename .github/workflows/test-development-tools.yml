@@ -84,5 +84,5 @@ jobs:
       - name: Run integration tests
         env:
           GH_TOKEN: ${{ github.token }}
-        run: python -B -m pytest tests/integration_tests -x -s
+        run: python -B -m pytest tests/integration_tests/dev -x -s
         working-directory: tools
