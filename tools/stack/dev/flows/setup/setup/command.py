@@ -17,9 +17,9 @@ setup-auth and setup-tls.
 from __future__ import annotations
 
 from core.runner import ToolError
-from stack.dev.libs import auth, environment, keys, tls
+from stack.dev.libs import auth, environment, keys, tls, wallet
 
-ABOUT = "Create what is missing: keys, auth, TLS"
+ABOUT = "Create what is missing: keys, auth, TLS, wallet"
 
 
 def run() -> None:
@@ -37,4 +37,6 @@ def run() -> None:
         auth.first_bootstrap()
     if not tls.present():
         tls.generate()
+    if not wallet.present():
+        wallet.create()
     print("Setup complete.")

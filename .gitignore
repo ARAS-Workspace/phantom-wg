@@ -25,7 +25,6 @@ docker-compose.override.yml
 .env
 .env.daemon
 .env.auth-service
-.terazi-subnet
 
 # Container data
 container-data/secrets/production/*

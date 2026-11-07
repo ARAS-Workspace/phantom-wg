@@ -29,7 +29,7 @@ from phantom_daemon.base.logging import LOGGER_NAME, setup_logging
 from phantom_daemon.base.secrets import ServerKeys, load_secrets
 from phantom_daemon.base.services.firewall import FirewallService, open_firewall
 from phantom_daemon.base.services.wireguard import WireGuardService, open_wireguard
-from phantom_daemon.base.wallet import Wallet, open_wallet
+from phantom_daemon.base.wallet import Wallet, create_wallet, open_wallet
 
 __all__ = [
     "LOGGER_NAME",
@@ -47,6 +47,7 @@ __all__ = [
     "WalletFullError",
     "WireGuardError",
     "WireGuardService",
+    "create_wallet",
     "load_env",
     "load_secrets",
     "open_exit_store",

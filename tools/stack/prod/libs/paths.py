@@ -37,3 +37,7 @@ def secrets() -> Path:
 
 def auth_db() -> Path:
     return runner.ROOT / AUTH_DB_DIR
+
+
+def wallet() -> Path:
+    return runner.ROOT / DB_DIR / "wallet.db"

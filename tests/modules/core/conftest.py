@@ -36,7 +36,7 @@ from phantom_daemon.base.services.wireguard.service import (
     WireGuardService,
     open_wireguard,
 )
-from phantom_daemon.base.wallet import Wallet, open_wallet
+from phantom_daemon.base.wallet import Wallet, create_wallet
 from phantom_daemon.main import create_app
 
 # noinspection PyShadowingBuiltins
@@ -69,7 +69,7 @@ def test_env():
     db_name = f"api-{ts}.db"
     db_path = os.path.join(_DB_DIR, db_name)
     print(f"\n  API Test DB: {db_path}")
-    w = open_wallet(db_dir=_DB_DIR, db_name=db_name)
+    w = create_wallet(db_dir=_DB_DIR, db_name=db_name)
     w.close()
     conn = sqlite3.connect(db_path, check_same_thread=False)
     wallet = Wallet(conn, Path(db_path))

@@ -28,14 +28,8 @@ jobs:
       - name: Build dev images
         run: ./tools/dev.sh build
 
-      - name: Generate dev secrets
-        run: ./tools/dev.sh gen-keys
-
-      - name: Bootstrap auth service
-        run: ./tools/dev.sh setup-auth
-
-      - name: Generate TLS certificate
-        run: ./tools/dev.sh setup-tls
+      - name: Set up the dev host
+        run: ./tools/dev.sh setup
 
       - name: Prepare SPA dist (placeholder for nginx)
         run: mkdir -p services/react-spa/dist && echo '<!DOCTYPE html><html><body>CI</body></html>' > services/react-spa/dist/index.html

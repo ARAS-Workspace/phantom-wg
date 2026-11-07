@@ -16,7 +16,7 @@ import pytest
 from wireguard_go_bridge.keys import derive_public_key
 
 from phantom_daemon.base.errors import WalletFullError
-from phantom_daemon.base.wallet import open_wallet
+from phantom_daemon.base.wallet import create_wallet, open_wallet
 
 # Force line-by-line flush so output streams live under pytest -s
 # noinspection PyShadowingBuiltins
@@ -151,7 +151,7 @@ class TestIntegrity:
         print(f"  DB: {db_path}")
         print(f"{_SEP}")
 
-        with open_wallet(db_dir, db_name) as w:
+        with create_wallet(db_dir, db_name) as w:
             cumulative_assigns = 0
             t_total = time.perf_counter()
 

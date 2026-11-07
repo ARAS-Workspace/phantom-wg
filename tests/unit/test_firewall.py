@@ -20,7 +20,7 @@ from phantom_daemon.base.services.firewall.service import (
     resolve_multihop_v6_preset,
 )
 from phantom_daemon.base.services.wireguard import WG_INTERFACE_NAME
-from phantom_daemon.base.wallet import open_wallet
+from phantom_daemon.base.wallet import create_wallet
 
 # ── TestResolvePreset (pure — no FFI) ────────────────────────────
 
@@ -229,7 +229,7 @@ class TestBootstrap:
         a CIDR change only reaches the kernel if bootstrap runs again.
         """
         d = test_env.sub("boot-cidr")
-        with open_wallet(str(tmp_path)) as w, open_firewall(state_dir=d) as svc:
+        with create_wallet(str(tmp_path)) as w, open_firewall(state_dir=d) as svc:
             svc.bootstrap(env=test_env.env, wallet=w)
             masq = [r for r in svc.list_firewall_rules(CORE_PRESET_NAME)
                     if r.action == "masquerade"]
@@ -311,7 +311,7 @@ class TestResyncMultihop:
         rule that steers traffic into the mh table, the intra-subnet route
         that keeps local traffic local, and the masquerade source."""
         d = test_env.sub("mh-cidr")
-        with open_wallet(str(tmp_path)) as w, open_firewall(state_dir=d) as svc:
+        with create_wallet(str(tmp_path)) as w, open_firewall(state_dir=d) as svc:
             w.change_cidr(22)
             svc.resync_multihop(wallet=w, has_v4=True, has_v6=False)
 
@@ -332,7 +332,7 @@ class TestResyncMultihop:
 
     def test_tracks_wallet_subnet_v6(self, test_env, tmp_path):
         d = test_env.sub("mh-cidr-v6")
-        with open_wallet(str(tmp_path)) as w, open_firewall(state_dir=d) as svc:
+        with create_wallet(str(tmp_path)) as w, open_firewall(state_dir=d) as svc:
             w.change_cidr(22)
             svc.resync_multihop(wallet=w, has_v4=False, has_v6=True)
 

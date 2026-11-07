@@ -47,6 +47,11 @@ def run(terazi_ipv4_subnet: str) -> None:
     tls.require_whole()
     if images.source() == "archive":
         archive.load()
+    if terazi_ipv4_subnet and terazi.present():
+        raise ToolError(
+            f"{paths.DB_DIR}/wallet.db exists, its subnet is fixed.\n"
+            "Another subnet starts over: ./tools/prod.sh hard-reset"
+        )
     subnet = terazi.check(terazi_ipv4_subnet) if terazi_ipv4_subnet else ""
 
     print("Full production setup...")
@@ -57,9 +62,8 @@ def run(terazi_ipv4_subnet: str) -> None:
         auth.first_bootstrap()
     if not tls.present():
         tls.generate()
-    if subnet:
-        terazi.remember(subnet)
-        print(f"  Terazi subnet: {subnet}")
+    if not terazi.present():
+        terazi.create(subnet)
     versions.record()
 
     print("Production setup complete.\n")
@@ -68,6 +72,7 @@ def run(terazi_ipv4_subnet: str) -> None:
     print(f"  Auth keys:    {paths.SECRETS_DIR}/")
     print(f"  TLS cert:     {paths.SECRETS_DIR}/tls_cert")
     print(f"  Auth DB:      {paths.AUTH_DB_DIR}/auth.db")
+    print(f"  Wallet:       {paths.DB_DIR}/wallet.db")
     print(f"  Admin pass:   {paths.SECRETS_DIR}/.admin_password\n")
     print("Edit .env.daemon and set WIREGUARD_ENDPOINT_V4 before starting.")
     print("Start with: ./tools/prod.sh up")

@@ -8,7 +8,12 @@ import sqlite3
 import pytest
 
 from phantom_daemon.base.errors import WalletError
-from phantom_daemon.base.wallet import Wallet, _calculate_terazi, open_wallet
+from phantom_daemon.base.wallet import (
+    Wallet,
+    _calculate_terazi,
+    create_wallet,
+    open_wallet,
+)
 
 # ── Terazi ───────────────────────────────────────────────────────
 
@@ -34,12 +39,12 @@ class TestTerazi:
 
 class TestWalletCreate:
     def test_creates_tables(self, tmp_path):
-        with open_wallet(str(tmp_path)) as w:
+        with create_wallet(str(tmp_path)) as w:
             assert isinstance(w, Wallet)
             assert w.count_users() > 0
 
     def test_config_defaults(self, tmp_path):
-        with open_wallet(str(tmp_path)) as w:
+        with create_wallet(str(tmp_path)) as w:
             cfg = w.get_all_config()
             assert cfg["ipv4_subnet"] == "10.8.0.0/24"
             assert cfg["ipv6_subnet"] == "fd00:70:68::/120"
@@ -50,18 +55,18 @@ class TestWalletCreate:
             assert "interface_name" not in cfg
 
     def test_get_config_single(self, tmp_path):
-        with open_wallet(str(tmp_path)) as w:
+        with create_wallet(str(tmp_path)) as w:
             raw = w.get_config("dns_v4")
             assert raw == json.dumps({"primary": "9.9.9.9", "secondary": "149.112.112.112"})
             assert w.get_config("nonexistent") is None
 
     def test_ip_pool_count(self, tmp_path):
-        with open_wallet(str(tmp_path)) as w:
+        with create_wallet(str(tmp_path)) as w:
             # /24 → 253 usable IPs (index 2..254)
             assert w.count_users() == 253
 
     def test_ip_pool_first_last(self, tmp_path):
-        with open_wallet(str(tmp_path)) as w:
+        with create_wallet(str(tmp_path)) as w:
             # noinspection SqlNoDataSourceInspection
             rows = w._conn.execute(
                 "SELECT ipv4_address, ipv6_address FROM users "
@@ -73,7 +78,7 @@ class TestWalletCreate:
             assert rows[-1] == ("10.8.0.254", "fd00:70:68::fe")
 
     def test_no_assigned_on_fresh_db(self, tmp_path):
-        with open_wallet(str(tmp_path)) as w:
+        with create_wallet(str(tmp_path)) as w:
             assert w.count_assigned() == 0
 
 
@@ -83,7 +88,7 @@ class TestWalletCreate:
 class TestWalletOpen:
     def test_reopen_existing(self, tmp_path):
         # Create
-        w1 = open_wallet(str(tmp_path))
+        w1 = create_wallet(str(tmp_path))
         w1.close()
         # Reopen
         with open_wallet(str(tmp_path)) as w2:
@@ -95,13 +100,25 @@ class TestWalletOpen:
         with pytest.raises(WalletError, match="does not exist"):
             open_wallet("/nonexistent/path")
 
+    def test_a_missing_wallet_is_an_error(self, tmp_path):
+        with pytest.raises(WalletError, match="Run setup first"):
+            open_wallet(str(tmp_path))
+        assert not (tmp_path / "wallet.db").exists()
+
+    def test_create_keeps_an_existing_wallet(self, tmp_path):
+        create_wallet(str(tmp_path), ipv4_subnet="10.9.0.0/24").close()
+        with pytest.raises(WalletError, match="already exists"):
+            create_wallet(str(tmp_path), ipv4_subnet="10.10.0.0/24")
+        with open_wallet(str(tmp_path)) as w:
+            assert w.get_config("ipv4_subnet") == "10.9.0.0/24"
+
 
 # ── Context manager ──────────────────────────────────────────────
 
 
 class TestWalletContextManager:
     def test_context_manager_closes(self, tmp_path):
-        with open_wallet(str(tmp_path)) as w:
+        with create_wallet(str(tmp_path)) as w:
             w.count_users()
         # After exit, connection should be closed
         with pytest.raises(sqlite3.ProgrammingError, match="closed database"):
@@ -117,14 +134,14 @@ class TestListClientsPaginated:
     @pytest.fixture()
     def wallet_with_clients(self, tmp_path):
         """Wallet pre-loaded with 30 assigned clients: page-001 .. page-030."""
-        w = open_wallet(str(tmp_path))
+        w = create_wallet(str(tmp_path))
         for i in range(1, 31):
             w.assign_client(f"page-{i:03d}")
         yield w
         w.close()
 
     def test_empty_returns_zero(self, tmp_path):
-        with open_wallet(str(tmp_path)) as w:
+        with create_wallet(str(tmp_path)) as w:
             result = w.list_clients_paginated()
         assert result["total"] == 0
         assert result["clients"] == []

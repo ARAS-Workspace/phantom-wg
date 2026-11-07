@@ -31,6 +31,7 @@ services:
       - |
         mkdir -p /var/lib/phantom/db /var/lib/phantom/state/db
         rm -f /var/run/phantom/daemon.sock
+        [ -f /var/lib/phantom/db/wallet.db ] || python -m phantom_daemon.base.wallet.bootstrap /var/lib/phantom/db
         exec python -m phantom_daemon.main /var/run/phantom/daemon.sock
     cap_add: [NET_ADMIN, NET_RAW]
     sysctls:

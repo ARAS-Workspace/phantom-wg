@@ -68,6 +68,10 @@ class PlainText(http.server.BaseHTTPRequestHandler):
         pass
 
 
+def plain_text(request, address, server) -> PlainText:
+    return PlainText(request, address, server)
+
+
 def dev(
     *args: str, stdin: str = "", timeout: int = 120, cwd: Path = ROOT, entry: str = ENTRY, env: dict | None = None,
 ) -> subprocess.CompletedProcess:
@@ -513,7 +517,7 @@ def test_restart_needs_a_running_stack():
 
 
 def test_curl_reports_an_answer_without_json():
-    server = http.server.HTTPServer(("127.0.0.1", 9080), PlainText)
+    server = http.server.HTTPServer(("127.0.0.1", 9080), plain_text)
     threading.Thread(target=server.serve_forever, daemon=True).start()
     try:
         done = dev("curl")
@@ -579,7 +583,7 @@ def test_no_spa_packages_what_is_there():
 def test_the_package_holds_what_a_host_needs():
     for name in ("tools/compose/registry.yml", "tools/compose/MANIFEST.json", "phantom_daemon/__init__.py"):
         assert (PACKAGE / name).is_file(), name
-    assert ".terazi-subnet" in (PACKAGE / ".gitignore").read_text(encoding="utf-8")
+    assert "docker-compose.override.yml" in (PACKAGE / ".gitignore").read_text(encoding="utf-8")
 
 
 def test_the_tool_of_the_package_starts():

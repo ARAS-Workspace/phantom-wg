@@ -15,12 +15,13 @@ What setup leaves behind and the stack needs.
 
 from __future__ import annotations
 
-from stack.dev.libs import auth, keys, tls
+from stack.dev.libs import auth, keys, tls, wallet
 
 PARTS = (
     ("WireGuard keys", keys.present),
     ("auth service", auth.bootstrapped),
     ("TLS certificate", tls.present),
+    ("wallet", wallet.present),
 )
 
 

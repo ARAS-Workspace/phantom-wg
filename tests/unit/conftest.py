@@ -24,7 +24,7 @@ from wireguard_go_bridge.keys import derive_public_key, generate_private_key
 
 from phantom_daemon.base.env import DaemonEnv
 from phantom_daemon.base.secrets.secrets import ServerKeys
-from phantom_daemon.base.wallet import Wallet, open_wallet
+from phantom_daemon.base.wallet import Wallet, create_wallet
 
 # noinspection PyShadowingBuiltins
 print = functools.partial(print, flush=True)
@@ -60,7 +60,7 @@ def test_env():
     db_name = f"unit-{ts}.db"
     db_path = os.path.join(_DB_DIR, db_name)
     print(f"\n  Unit Test DB: {db_path}")
-    w = open_wallet(db_dir=_DB_DIR, db_name=db_name)
+    w = create_wallet(db_dir=_DB_DIR, db_name=db_name)
 
     # State dir
     state_dir = os.path.join(_STATE_DIR, f"unit-{ts}")

@@ -16,7 +16,7 @@ hard-reset: back to a host before setup.
 from __future__ import annotations
 
 from core.runner import ToolError
-from stack.prod.libs import compose, data, gates, host, images, terazi, versions
+from stack.prod.libs import compose, data, gates, host, images, versions
 
 ABOUT = "Wipe ALL data (secrets + auth DB + volumes)"
 
@@ -45,7 +45,6 @@ def run() -> None:
     print("Removing container-data...")
     if targets:
         data.wipe(targets, image)
-    terazi.forget()
     versions.forget()
 
     print("Hard reset complete. Run './tools/prod.sh setup' to start fresh.")

@@ -30,6 +30,8 @@ def missing() -> list[str]:
     found += [f"{paths.SECRETS_DIR}/{name}" for name in SECRET_FILES if not paths.filled(paths.secrets() / name)]
     if not auth.database().is_file():
         found.append(f"{paths.AUTH_DB_DIR}/auth.db")
+    if not paths.wallet().is_file():
+        found.append(f"{paths.DB_DIR}/wallet.db")
     return found
 
 

@@ -35,7 +35,7 @@ from prod_host import (
     SERVICES,
     STACK_IS_RUNNING,
     STACK_SECRETS,
-    SUBNET_FILE,
+    WALLET,
     api_answers,
     assert_the_operator_owns_the_host,
     call,
@@ -85,7 +85,7 @@ def test_setup_takes_no_force():
 def test_setup_refuses_a_subnet_the_daemon_refuses():
     done = prod("setup", "--terazi-ipv4-subnet=8.8.8.0/24", timeout=LONG)
     assert done.returncode != 0
-    assert not SUBNET_FILE.exists()
+    assert not WALLET.exists()
     assert not (ROOT / ".env").exists()
 
 
@@ -407,13 +407,11 @@ def test_hard_reset_needs_yes():
 
 
 def test_hard_reset_clears_the_host_and_keeps_its_local_files():
-    SUBNET_FILE.write_text("10.9.0.0/24\n", encoding="utf-8")
     done = prod("hard-reset", stdin="yes\n", timeout=LONG)
     assert done.returncode == 0, done.stdout
     for name in BOUND:
         assert not [path.name for path in (ROOT / name).iterdir() if path.name != ".gitkeep"], name
     assert not APPLIED.exists()
-    assert not SUBNET_FILE.exists()
     for name in LOCAL_FILES:
         assert (ROOT / name).is_file(), name
 
@@ -421,15 +419,29 @@ def test_hard_reset_clears_the_host_and_keeps_its_local_files():
 def test_a_chosen_subnet_reaches_the_daemon():
     done = prod("setup", "--terazi-ipv4-subnet=10.9.0.0/24", timeout=LONG)
     assert done.returncode == 0, done.stdout
-    assert SUBNET_FILE.read_text(encoding="utf-8").strip() == "10.9.0.0/24"
+    assert "Pool: 10.9.0.0/24" in done.stdout
+    assert WALLET.is_file()
 
     done = prod("up", timeout=LONG)
     assert done.returncode == 0, done.stdout
-    assert not SUBNET_FILE.exists()
     status, data = api_answers(logged_in(), "/api/core/network")
     assert status == 200
     assert data["data"]["ipv4_subnet"] == "10.9.0.0/24"
     assert prod("down").returncode == 0
+
+
+def test_a_wallet_keeps_its_subnet():
+    with lost(ROOT / ".env"):
+        done = prod("setup", "--terazi-ipv4-subnet=10.10.0.0/24", timeout=LONG)
+    assert done.returncode == 1
+    assert "wallet.db exists, its subnet is fixed." in done.stdout
+
+
+def test_up_needs_the_wallet():
+    with lost(WALLET):
+        done = prod("up", timeout=LONG)
+    assert done.returncode == 1
+    assert "Missing: container-data/db/wallet.db" in done.stdout
 
 
 # ── Owners of files and directories ─────────────────────────────────
@@ -457,7 +469,7 @@ def test_hard_reset_wipes_what_the_containers_left_as_root():
 
 def test_setup_makes_the_directories_a_package_lacks():
     assert prod("hard-reset", stdin="yes\n", timeout=LONG).returncode == 0
-    directories = (SECRETS, AUTH_DB.parent)
+    directories = (SECRETS, AUTH_DB.parent, WALLET.parent)
     for directory in directories:
         shutil.rmtree(directory)
     try:
@@ -472,14 +484,14 @@ def test_setup_makes_the_directories_a_package_lacks():
 
 @linux_only
 def test_hard_reset_wipes_the_directories_docker_made():
-    directories = (ROOT / "container-data/db", ROOT / "container-data/state/db")
+    directories = (ROOT / "container-data/state/db",)
     for directory in directories:
         shutil.rmtree(directory)
     try:
         assert prod("up", timeout=LONG).returncode == 0
         assert api_answers(logged_in())[0] == 200
         assert prod("down").returncode == 0
-        assert [directory.stat().st_uid for directory in directories] == [0, 0]
+        assert [directory.stat().st_uid for directory in directories] == [0]
         assert list(directories[0].iterdir())
 
         done = prod("hard-reset", stdin="yes\n", timeout=LONG)

@@ -19,7 +19,6 @@ import importlib.resources
 import ipaddress
 import json
 import math
-import os
 import sqlite3
 import uuid
 from datetime import UTC, datetime
@@ -130,7 +129,7 @@ def _connect(db_path: Path) -> sqlite3.Connection:
     return conn
 
 
-def _create_wallet(db_path: Path) -> sqlite3.Connection:
+def _create_wallet(db_path: Path, ipv4_subnet: str) -> sqlite3.Connection:
     """Create a new wallet database with schema, config defaults, and IP pool."""
     conn = sqlite3.connect(str(db_path))
     try:
@@ -140,7 +139,6 @@ def _create_wallet(db_path: Path) -> sqlite3.Connection:
         conn.execute("PRAGMA wal_autocheckpoint = 1")
 
         # Config defaults
-        ipv4_subnet = os.environ.get("DEFAULT_IPV4_SUBNET") or _DEFAULT_IPV4_SUBNET
         ipv4_str, ipv6_str, _capacity, _host_bits = _calculate_terazi(
             ipv4_subnet
         )
@@ -528,21 +526,31 @@ class Wallet:
 
 # ── Public entry point ───────────────────────────────────────────
 
-def open_wallet(db_dir: str, db_name: str = "wallet.db") -> Wallet:
-    """Open or create the wallet database.
-
-    If the database file exists → open.
-    If it does not exist → create with schema + defaults + IP pool.
-    """
+def _wallet_path(db_dir: str, db_name: str) -> Path:
     db_dir_path = Path(db_dir)
     if not db_dir_path.is_dir():
         raise WalletError(f"Database directory does not exist: {db_dir}")
+    return db_dir_path / db_name
 
-    db_path = db_dir_path / db_name
 
+def create_wallet(
+    db_dir: str,
+    db_name: str = "wallet.db",
+    ipv4_subnet: str = _DEFAULT_IPV4_SUBNET,
+) -> Wallet:
+    """Create the wallet database: schema, defaults and the IP pool of a subnet.
+
+    Setup calls this once. The pool of an existing wallet stays as it is.
+    """
+    db_path = _wallet_path(db_dir, db_name)
     if db_path.exists():
-        conn = _connect(db_path)
-    else:
-        conn = _create_wallet(db_path)
+        raise WalletError(f"Wallet already exists: {db_path}")
+    return Wallet(_create_wallet(db_path, ipv4_subnet), db_path)
 
-    return Wallet(conn, db_path)
+
+def open_wallet(db_dir: str, db_name: str = "wallet.db") -> Wallet:
+    """Open the wallet database. A missing wallet is an error: setup creates it."""
+    db_path = _wallet_path(db_dir, db_name)
+    if not db_path.exists():
+        raise WalletError(f"Wallet not found: {db_path}. Run setup first.")
+    return Wallet(_connect(db_path), db_path)

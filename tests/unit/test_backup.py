@@ -14,7 +14,7 @@ import pytest
 from phantom_daemon.base.backup import create_backup_tar, restore_backup_tar
 from phantom_daemon.base.errors import BackupError
 from phantom_daemon.base.exit_store import open_exit_store
-from phantom_daemon.base.wallet import open_wallet
+from phantom_daemon.base.wallet import create_wallet
 
 # ── Helpers ──────────────────────────────────────────────────────
 
@@ -35,7 +35,7 @@ def _add_exit(store, name: str = "test-exit") -> dict:
 
 class TestExport:
     def test_creates_valid_tar(self, tmp_path):
-        with open_wallet(str(tmp_path)) as w, \
+        with create_wallet(str(tmp_path)) as w, \
              open_exit_store(str(tmp_path)) as es:
             tar_path = create_backup_tar(w._conn, es._conn)
 
@@ -48,7 +48,7 @@ class TestExport:
             shutil.rmtree(tar_path.parent, ignore_errors=True)
 
     def test_manifest_counts(self, tmp_path):
-        with open_wallet(str(tmp_path)) as w, \
+        with create_wallet(str(tmp_path)) as w, \
              open_exit_store(str(tmp_path)) as es:
             w.assign_client("alice")
             w.assign_client("bob")
@@ -69,7 +69,7 @@ class TestExport:
             shutil.rmtree(tar_path.parent, ignore_errors=True)
 
     def test_exported_dbs_pass_integrity(self, tmp_path):
-        with open_wallet(str(tmp_path)) as w, \
+        with create_wallet(str(tmp_path)) as w, \
              open_exit_store(str(tmp_path)) as es:
             tar_path = create_backup_tar(w._conn, es._conn)
 
@@ -101,7 +101,7 @@ class TestImport:
         restore_dir.mkdir()
 
         # Create state: 2 clients + 1 exit
-        with open_wallet(str(backup_dir)) as w, \
+        with create_wallet(str(backup_dir)) as w, \
              open_exit_store(str(backup_dir)) as es:
             w.assign_client("alice")
             w.assign_client("bob")
@@ -109,7 +109,7 @@ class TestImport:
             tar_path = create_backup_tar(w._conn, es._conn)
 
         # Create different state: 3 clients, no exits
-        with open_wallet(str(restore_dir)) as w2, \
+        with create_wallet(str(restore_dir)) as w2, \
              open_exit_store(str(restore_dir)) as es2:
             w2.assign_client("charlie")
             w2.assign_client("dave")
@@ -134,7 +134,7 @@ class TestImport:
         bad_file.write_bytes(b"not a tar file")
 
         with (
-            open_wallet(str(tmp_path)) as w,
+            create_wallet(str(tmp_path)) as w,
             open_exit_store(str(tmp_path)) as es,
             pytest.raises(BackupError, match="Invalid backup file"),
         ):
@@ -150,7 +150,7 @@ class TestImport:
             tf.add(str(manifest_file), arcname="manifest.json")
 
         with (
-            open_wallet(str(tmp_path)) as w,
+            create_wallet(str(tmp_path)) as w,
             open_exit_store(str(tmp_path)) as es,
             pytest.raises(BackupError, match="Missing files"),
         ):
@@ -166,7 +166,7 @@ class TestImport:
 
         db_dir = tmp_path / "dbs"
         db_dir.mkdir()
-        with open_wallet(str(db_dir)), open_exit_store(str(db_dir)):
+        with create_wallet(str(db_dir)), open_exit_store(str(db_dir)):
             pass
 
         with tarfile.open(str(tar_file), "w") as tf:
@@ -176,7 +176,7 @@ class TestImport:
             tf.add(str(extra_file), arcname="evil.sh")
 
         with (
-            open_wallet(str(tmp_path)) as w,
+            create_wallet(str(tmp_path)) as w,
             open_exit_store(str(tmp_path)) as es,
             pytest.raises(BackupError, match="Unexpected files"),
         ):
@@ -186,7 +186,7 @@ class TestImport:
         """Tar with unsupported manifest version."""
         db_dir = tmp_path / "dbs"
         db_dir.mkdir()
-        with open_wallet(str(db_dir)), open_exit_store(str(db_dir)):
+        with create_wallet(str(db_dir)), open_exit_store(str(db_dir)):
             pass
 
         manifest_file = tmp_path / "manifest.json"
@@ -199,7 +199,7 @@ class TestImport:
             tf.add(str(manifest_file), arcname="manifest.json")
 
         with (
-            open_wallet(str(tmp_path)) as w,
+            create_wallet(str(tmp_path)) as w,
             open_exit_store(str(tmp_path)) as es,
             pytest.raises(BackupError, match="Unsupported backup version"),
         ):
@@ -209,7 +209,7 @@ class TestImport:
         """Tar with corrupt wallet.db → integrity check fails."""
         db_dir = tmp_path / "dbs"
         db_dir.mkdir()
-        with open_wallet(str(db_dir)), open_exit_store(str(db_dir)):
+        with create_wallet(str(db_dir)), open_exit_store(str(db_dir)):
             pass
 
         corrupt_path = tmp_path / "corrupt_wallet.db"
@@ -225,7 +225,7 @@ class TestImport:
             tf.add(str(manifest_file), arcname="manifest.json")
 
         with (
-            open_wallet(str(tmp_path)) as w,
+            create_wallet(str(tmp_path)) as w,
             open_exit_store(str(tmp_path)) as es,
             pytest.raises(BackupError, match="Integrity check failed"),
         ):
@@ -255,7 +255,7 @@ class TestImport:
             tf.add(str(manifest_file), arcname="manifest.json")
 
         with (
-            open_wallet(str(tmp_path)) as w,
+            create_wallet(str(tmp_path)) as w,
             open_exit_store(str(tmp_path)) as es,
             pytest.raises(BackupError, match="missing table"),
         ):
@@ -274,7 +274,7 @@ class TestRoundtrip:
         dst_dir.mkdir()
 
         # Source: populate with data
-        with open_wallet(str(src_dir)) as w, \
+        with create_wallet(str(src_dir)) as w, \
              open_exit_store(str(src_dir)) as es:
             alice = w.assign_client("alice")
             w.change_dns("v4", "8.8.8.8", "8.8.4.4")
@@ -284,7 +284,7 @@ class TestRoundtrip:
             tar_path = create_backup_tar(w._conn, es._conn)
 
         # Destination: fresh DBs → import
-        with open_wallet(str(dst_dir)) as w2, \
+        with create_wallet(str(dst_dir)) as w2, \
              open_exit_store(str(dst_dir)) as es2:
             manifest = restore_backup_tar(tar_path, w2._conn, es2._conn)
 

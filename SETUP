@@ -72,8 +72,8 @@ Custom Client Subnet:
 
     ./tools/prod.sh setup --terazi-ipv4-subnet=10.9.0.0/24
 
-  The value is used once: the first ./tools/prod.sh up creates wallet.db and
-  fills it with the pool, and from then on the subnet lives there. To move to
+  The value is used once: setup creates wallet.db and fills it with the pool,
+  and from then on the subnet lives there. To move to
   another subnet, start over with ./tools/prod.sh hard-reset. The prefix length
   alone can be changed from the dashboard (/16 to /30); every WireGuard client
   config must then be exported again.
