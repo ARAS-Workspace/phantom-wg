@@ -1,11 +1,18 @@
-"""The stages of the update chain: three releases reach a host through update.
+"""The stages of the update chain: releases reach a host through update.
 
 .github/workflows/update-chain.yml runs one stage per step, so its log reads as
 the story of a host. The release tree becomes a repository, each release enters
 it the way bump.sh commits one, and a host clones it and follows it. The images
 come from a local registry: each is a published image with a new digest.
 
-Usage: update_chain.py registry | publish <n> | client | prove <n>
+Usage: update_chain.py <stage> [arguments]
+  registry
+  publish <n> [--dockerfile | --failing-hook | --failing-code]
+  client
+  prove <n> [--built]
+  local-change | detached | diverged | invalid-override
+  missing <path>
+  failing-hook | failing-code
 """
 
 from __future__ import annotations
@@ -41,7 +48,6 @@ SERVICES = {
     "auth-service": ("phantom-auth-base", "phantom-auth"),
     "nginx": ("phantom-nginx-base", "phantom-nginx"),
 }
-BUILT_RELEASE = 3
 LABEL = "phantom.chain.release"
 CLIENT = "chain-client"
 SUBNET = "10.9.0.0/24"
@@ -50,6 +56,10 @@ VERSION_FILE = "phantom_daemon/__init__.py"
 UPDATE_COMMAND = "tools/stack/prod/flows/stack/update/command.py"
 HOOK = "tools/stack/prod/flows/stack/update/helper/update_hook.sh"
 HOOK_MARK = "container-data/.chain-hook"
+OVERRIDE = "docker-compose.override.yml"
+DAEMON_MAIN = "phantom_daemon/main.py"
+FAILING_HOOK = "exit 3\n"
+FAILING_CODE = "this line is not python\n"
 TIMEOUT = 300
 
 
@@ -145,7 +155,13 @@ def start_the_repository() -> None:
     PUBLISHED.write_text(json.dumps(read_pins(PUBLISHER)), encoding="utf-8")
 
 
-def change_the_tree(number: int) -> None:
+def heal() -> None:
+    """A release after a failing one takes the failure back."""
+    edit(PUBLISHER / HOOK, lambda text: text.replace(FAILING_HOOK, ""))
+    edit(PUBLISHER / DAEMON_MAIN, lambda text: text.replace(FAILING_CODE, ""))
+
+
+def change_the_tree(number: int, option: str) -> None:
     """Each release changes what a real one changes: compose, the tool, the hook, a Dockerfile."""
 
     def compose_label(text: str) -> str:
@@ -156,20 +172,25 @@ def change_the_tree(number: int) -> None:
     if number > 1:
         edit(PUBLISHER / UPDATE_COMMAND, lambda text: re.sub(r"Update complete[^\"]*", f"Update complete by release {number}.", text))
         edit(PUBLISHER / HOOK, lambda text: f"{text}printf '%s\\n' {number} > {HOOK_MARK}\n")
-    if number == BUILT_RELEASE:
+    if option == "--dockerfile":
         edit(PUBLISHER / "nginx.Dockerfile", lambda text: f"{text}LABEL {LABEL}={number}\n")
+    if option == "--failing-hook":
+        edit(PUBLISHER / HOOK, lambda text: f"{text}{FAILING_HOOK}")
+    if option == "--failing-code":
+        edit(PUBLISHER / DAEMON_MAIN, lambda text: f"{text}{FAILING_CODE}")
 
 
-def publish(number: int) -> None:
+def publish(number: int, option: str) -> None:
     if number == 1:
         start_the_repository()
         version, subject = code_version(PUBLISHER), f"Release v{code_version(PUBLISHER)}"
     else:
+        heal()
         version = bump()
         subject = f"Bump v{version}"
 
     write_pins(derive_images(number))
-    change_the_tree(number)
+    change_the_tree(number, option)
     git("add", "-A", "-f")
     git("commit", "-q", "-m", subject)
     git("push", "-q", "origin", "main")
@@ -228,13 +249,13 @@ def inspect(*args: str) -> str:
     return run("docker", "inspect", "--format", *args)
 
 
-def prove_images(number: int) -> None:
+def prove_images(number: int, built: bool) -> None:
     pins = read_pins(HOST)
     for service, (image, container) in SERVICES.items():
-        expected = f"{image}:local" if number == BUILT_RELEASE else pins[service]
+        expected = f"{image}:local" if built else pins[service]
         running = inspect("{{.Config.Image}}", container)
         proved(running == expected, f"{container} runs {running}")
-    if number == BUILT_RELEASE:
+    if built:
         label = inspect(f'{{{{index .Config.Labels "{LABEL}"}}}}', "phantom-nginx-base:local")
         proved(label == str(number), "the nginx image came from the Dockerfile of this release")
     else:
@@ -242,13 +263,13 @@ def prove_images(number: int) -> None:
         proved(label == str(number), "the nginx image is the one this release pinned")
 
 
-def prove(number: int) -> None:
+def prove(number: int, built: bool) -> None:
     version = code_version(HOST)
     token = logged_in()
     answered = authorized(token, "/api/core/hello")["version"]
     proved(answered == version == code_version(PUBLISHER), f"the daemon runs version {answered}")
 
-    prove_images(number)
+    prove_images(number, built)
     network = authorized(token, "/api/core/network")
     proved(network["ipv4_subnet"] == SUBNET, f"the pool stayed on {SUBNET}, IPv6 on {network['ipv6_subnet']}")
     label = inspect(f'{{{{index .Config.Labels "{LABEL}"}}}}', "phantom-nginx")
@@ -262,16 +283,113 @@ def prove(number: int) -> None:
         proved(after == before, f"client {CLIENT} is unchanged")
 
 
+# ── What stops an update ────────────────────────────────────────────
+
+
+def run_update() -> subprocess.CompletedProcess:
+    done = subprocess.run(
+        [str(HOST / "tools/prod.sh"), "update"], cwd=HOST, stdin=subprocess.DEVNULL,
+        stdout=subprocess.PIPE, stderr=subprocess.STDOUT, encoding="utf-8", timeout=TIMEOUT, check=False,
+    )
+    print(done.stdout, flush=True)
+    return done
+
+
+def containers() -> dict[str, str]:
+    return {container: inspect("{{.Id}}", container) for _, container in SERVICES.values()}
+
+
+def update_stops(code: int, message: str) -> None:
+    """The operator reads why, and the stack runs on as it did."""
+    before = containers()
+    done = run_update()
+    proved(done.returncode == code, f"update exited {code}")
+    proved(message in done.stdout, f"update said: {message}")
+    proved(containers() == before, "the containers are the ones from before")
+
+
+def head() -> str:
+    return git("rev-parse", "HEAD", cwd=HOST)
+
+
+def local_change() -> None:
+    before = head()
+    edit(HOST / "docker-compose.yml", lambda text: f"{text}# a local change\n")
+    update_stops(1, "have local changes")
+    proved(head() == before, "the clone did not move")
+    git("checkout", "--", "docker-compose.yml", cwd=HOST)
+
+
+def detached() -> None:
+    before = head()
+    git("checkout", "-q", "--detach", cwd=HOST)
+    update_stops(1, "update follows main")
+    proved(head() == before, "the clone did not move")
+    git("checkout", "-q", "main", cwd=HOST)
+
+
+def diverged() -> None:
+    git("commit", "-q", "--allow-empty", "-m", "A local commit", cwd=HOST)
+    before = head()
+    update_stops(1, "has left origin/main")
+    proved(head() == before, "the clone did not move")
+    git("fetch", "-q", "origin", "main", cwd=HOST)
+    git("reset", "-q", "--hard", "FETCH_HEAD", cwd=HOST)
+    proved(code_version(HOST) == code_version(PUBLISHER), "the two commands update printed bring the clone back")
+
+
+def missing(relative: str) -> None:
+    path = HOST / relative
+    aside = path.with_name(f"{path.name}.aside")
+    path.rename(aside)
+    update_stops(1, f"Missing: {relative}")
+    aside.rename(path)
+
+
+def invalid_override() -> None:
+    path = HOST / OVERRIDE
+    before = path.read_text(encoding="utf-8")
+    path.write_text("services:\n  not-a-service:\n    ports:\n      - 1:1\n", encoding="utf-8")
+    update_stops(1, "not-a-service")
+    path.write_text(before, encoding="utf-8")
+
+
+def failing_hook() -> None:
+    update_stops(3, "update_hook.sh exited 3")
+
+
+def failing_code() -> None:
+    """The new daemon does not start: only the wait after up can see it."""
+    done = run_update()
+    proved(done.returncode == 1, "update exited 1")
+    proved("The services did not settle" in done.stdout, "update said the services did not settle")
+    proved("Update complete" not in done.stdout, "update did not call it complete")
+
+
 def main() -> None:
-    stage = sys.argv[1]
+    stage, *args = sys.argv[1:]
     if stage == "registry":
         registry()
     elif stage == "publish":
-        publish(int(sys.argv[2]))
+        publish(int(args[0]), args[1] if len(args) > 1 else "")
     elif stage == "client":
         client()
     elif stage == "prove":
-        prove(int(sys.argv[2]))
+        prove(int(args[0]), "--built" in args)
+    elif stage == "local-change":
+        local_change()
+    elif stage == "detached":
+        detached()
+    elif stage == "diverged":
+        diverged()
+    elif stage == "missing":
+        missing(args[0])
+    elif stage == "invalid-override":
+        invalid_override()
+    elif stage == "failing-hook":
+        failing_hook()
+    elif stage == "failing-code":
+        failing_code()
     else:
         sys.exit(__doc__)
 
