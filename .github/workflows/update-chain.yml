@@ -1,0 +1,103 @@
+name: Update chain
+
+# Three releases reach one host through ./tools/prod.sh update.
+#
+# The release tree becomes a repository on this runner, and each release enters
+# it the way .github/scripts/distribution/bump.sh commits one. The host clones
+# that repository and follows it. The images come from a local registry: each
+# one is a published image under a new digest.
+#
+# Every step below is one thing a person would do or check. The "Host" steps are
+# the commands an operator types, the "Prove" steps say what each release left.
+
+on:
+  workflow_call:
+
+permissions:
+  contents: read
+
+env:
+  CHAIN: /tmp/phantom-chain
+  HOST: /tmp/phantom-chain/phantom-wg
+  PACKAGE: dist/phantom-wg-modern
+  STAGE: tools/tests/integration_tests/release/update_chain.py
+
+jobs:
+  chain:
+    name: Three releases on one host
+    runs-on: ubuntu-26.04
+    steps:
+      - name: Harden runner
+        uses: step-security/harden-runner@46b06cea07f9e64621fdf066ba77ac6915163d43 # v2.22.3
+        with:
+          egress-policy: audit
+
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+
+      - name: Set up Python
+        uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: '3.14'
+
+      - name: Prepare SPA dist (placeholder for nginx)
+        run: mkdir -p services/react-spa/dist && echo '<!DOCTYPE html><html><body>CI</body></html>' > services/react-spa/dist/index.html
+
+      - name: Build the release tree
+        run: ./tools/dev.sh generate-production-package --no-spa
+
+      - name: Start the local registry
+        run: python3 -B "$STAGE" registry
+
+      - name: Publish release 1
+        run: python3 -B "$STAGE" publish 1
+
+      - name: Host clones the local origin
+        run: git clone "file://$CHAIN/origin.git" "$HOST"
+
+      - name: Host runs setup with its own subnet
+        working-directory: ${{ env.HOST }}
+        run: ./tools/prod.sh setup --terazi-ipv4-subnet=10.9.0.0/24
+
+      - name: Host runs up
+        working-directory: ${{ env.HOST }}
+        run: ./tools/prod.sh up
+
+      - name: Prove release 1 runs
+        run: python3 -B "$STAGE" prove 1
+
+      - name: Host adds a client
+        run: python3 -B "$STAGE" client
+
+      - name: Publish release 2 with new pins, compose, tool and hook
+        run: python3 -B "$STAGE" publish 2
+
+      - name: Host runs update
+        working-directory: ${{ env.HOST }}
+        shell: bash
+        run: ./tools/prod.sh update | tee "$CHAIN/update.log"
+
+      - name: Prove release 2 runs and the client stayed
+        run: python3 -B "$STAGE" prove 2
+
+      - name: Publish release 3 with a new Dockerfile
+        run: python3 -B "$STAGE" publish 3
+
+      - name: Host selects the build source
+        working-directory: ${{ env.HOST }}
+        run: ./tools/prod.sh images use build
+
+      - name: Host runs update and builds the images
+        working-directory: ${{ env.HOST }}
+        shell: bash
+        run: ./tools/prod.sh update | tee "$CHAIN/update.log"
+
+      - name: Prove release 3 runs from the images built here
+        run: python3 -B "$STAGE" prove 3
+
+      - name: Stack logs on failure
+        if: failure()
+        working-directory: ${{ env.HOST }}
+        run: docker compose logs --tail 60
