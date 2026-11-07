@@ -24,17 +24,15 @@ USAGE = "setup-auth [-f] [--username <name>]"
 
 
 def run(force: bool, username: str) -> None:
-    archived = ""
-    if auth.database().is_file():
-        if force:
-            archived = auth.archive()
-        elif auth.bootstrapped():
+    exists = auth.database().is_file()
+    if exists and not force:
+        if auth.bootstrapped():
             print("Auth service already bootstrapped. Use -f to overwrite.")
             return
-        else:
-            auth.first_bootstrap()
+        auth.first_bootstrap()
 
-    auth.bootstrap(username)
+    image = auth.ready()
+    archived = auth.archive() if exists else ""
+    auth.bootstrap(image, username)
     if archived:
         print(f"  Previous: {archived}")
-        print("Restart auth-service if the stack is running.")

@@ -30,6 +30,8 @@ def _confirmed() -> bool:
 
 
 def run() -> None:
+    compose.require_down()
+
     print("This will destroy ALL data: secrets, auth DB, and Docker volumes.")
     if not _confirmed():
         raise ToolError("Aborted.")

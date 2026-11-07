@@ -18,6 +18,7 @@ from __future__ import annotations
 from typing import NoReturn
 
 from core import runner
+from core.runner import ToolError
 
 COMPOSE = ("docker", "compose", "-f", "docker-compose-dev.yml")
 DAEMON = "daemon"
@@ -31,6 +32,16 @@ def run(*args: str) -> None:
 def capture(*args: str) -> str:
     """Runs a Compose command for what it prints."""
     return runner.capture([*COMPOSE, *args])
+
+
+def running() -> bool:
+    """True while a container of the stack runs."""
+    return bool(capture("ps", "-q"))
+
+
+def require_down() -> None:
+    if running():
+        raise ToolError("The stack is running. Stop it first: ./tools/dev.sh down")
 
 
 def attach(*args: str) -> NoReturn:

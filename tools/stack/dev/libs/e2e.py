@@ -21,6 +21,7 @@ from pathlib import Path
 
 from core import runner
 from core.runner import ToolError
+from stack.dev.libs import compose
 
 BRIDGE_DIR = "lib/compose_bridge"
 
@@ -34,6 +35,7 @@ def _library() -> Path:
 
 
 def run(script: str, args: Sequence[str]) -> None:
+    compose.require_down()
     library = _library()
     search_path = f"{runner.ROOT / 'lib'}:{os.environ.get('PYTHONPATH', '')}"
     environment = {"COMPOSE_BRIDGE_LIB_PATH": str(library), "PYTHONPATH": search_path}

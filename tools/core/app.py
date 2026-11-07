@@ -35,3 +35,6 @@ def run(entry: str, flows: str, argv: Sequence[str]) -> None:
         sys.exit(EXIT_INTERRUPTED)
     except BrokenPipeError:
         sys.exit(EXIT_BROKEN_PIPE)
+    except OSError as error:
+        print(error, file=sys.stderr)
+        sys.exit(1)

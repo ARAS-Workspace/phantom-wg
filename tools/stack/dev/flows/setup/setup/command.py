@@ -17,13 +17,13 @@ setup-auth and setup-tls.
 from __future__ import annotations
 
 from core.runner import ToolError
-from stack.dev.libs import auth, keys, tls
+from stack.dev.libs import auth, environment, keys, tls
 
 ABOUT = "Create what is missing: keys, auth, TLS"
 
 
 def run() -> None:
-    if keys.present() and auth.bootstrapped() and tls.present():
+    if not environment.missing():
         raise ToolError(
             "Setup is already complete.\n"
             "  Start the stack: ./tools/dev.sh up\n"

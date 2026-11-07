@@ -26,6 +26,10 @@ STATE_DIR = "container-data/state/db"
 BOUND_DIRS = (DB_DIR, STATE_DIR, AUTH_DB_DIR, SECRETS_DIR)
 
 
+def filled(path: Path) -> bool:
+    return path.is_file() and path.stat().st_size > 0
+
+
 def secrets() -> Path:
     return runner.ROOT / SECRETS_DIR
 

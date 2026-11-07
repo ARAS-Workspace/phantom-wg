@@ -16,12 +16,13 @@ state-reset: the state databases.
 from __future__ import annotations
 
 from core import runner
-from stack.dev.libs import data, paths
+from stack.dev.libs import compose, data, paths
 
 ABOUT = "Wipe state/db/"
 
 
 def run() -> None:
+    compose.require_down()
     print("Wiping state/db/...")
     data.wipe(runner.ROOT / paths.STATE_DIR)
     print("state/db cleared.")

@@ -15,12 +15,16 @@ restart: Restart daemon container
 
 from __future__ import annotations
 
+from core.runner import ToolError
 from stack.dev.libs import compose
 
 ABOUT = "Restart daemon container"
 
 
 def run() -> None:
+    if not compose.running():
+        raise ToolError("The stack is not running. Start it: ./tools/dev.sh up")
+
     print(f"Restarting {compose.DAEMON}...")
     compose.run("restart", compose.DAEMON)
     print("Restarted.")

@@ -15,12 +15,17 @@ up: Build & start dev stack
 
 from __future__ import annotations
 
-from stack.dev.libs import compose
+from core.runner import ToolError
+from stack.dev.libs import compose, environment
 
 ABOUT = "Build & start dev stack"
 
 
 def run() -> None:
+    missing = environment.missing()
+    if missing:
+        raise ToolError(f"Setup is incomplete: {', '.join(missing)}\nRun: ./tools/dev.sh setup")
+
     print("Starting stack...")
     compose.run("up", "-d", "--build")
     print("Stack started.")

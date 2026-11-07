@@ -15,12 +15,13 @@ key-reset: the development secrets.
 
 from __future__ import annotations
 
-from stack.dev.libs import data, paths
+from stack.dev.libs import compose, data, paths
 
 ABOUT = "Wipe development secrets"
 
 
 def run() -> None:
+    compose.require_down()
     print("Wiping development secrets...")
     data.wipe(paths.secrets())
     print(f"{paths.SECRETS_DIR}/ cleared (gitkeep preserved).")

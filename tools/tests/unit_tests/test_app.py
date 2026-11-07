@@ -45,6 +45,14 @@ def test_interruptions_end_quietly(flows, capsys, error, code):
     assert capsys.readouterr().err == ""
 
 
+def test_an_operating_system_error_stops_without_a_traceback(flows, capsys):
+    flows.add("one", "go", raising('PermissionError(13, "Permission denied", "/secret")'))
+    with pytest.raises(SystemExit) as caught:
+        app.run("./t.sh", flows.package, ["go"])
+    assert caught.value.code == 1
+    assert capsys.readouterr().err == "[Errno 13] Permission denied: '/secret'\n"
+
+
 def test_a_defect_stays_a_traceback(flows):
     flows.add("one", "go", raising("ZeroDivisionError()"))
     with pytest.raises(ZeroDivisionError):

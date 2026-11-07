@@ -16,12 +16,13 @@ db-reset: the daemon databases and auth.db.
 from __future__ import annotations
 
 from core import runner
-from stack.dev.libs import auth, data, paths
+from stack.dev.libs import auth, compose, data, paths
 
 ABOUT = "Wipe db/ + auth-db/"
 
 
 def run() -> None:
+    compose.require_down()
     print("Wiping db/ + auth-db/...")
     data.wipe(runner.ROOT / paths.DB_DIR)
     source = auth.database()

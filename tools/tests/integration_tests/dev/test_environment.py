@@ -9,6 +9,7 @@ tree. It runs only when named, top to bottom, each test on what the last left:
 from __future__ import annotations
 
 import hashlib
+import http.server
 import json
 import os
 import pty
@@ -30,11 +31,13 @@ ROOT = Path(__file__).resolve().parents[4]
 ENTRY = "./tools/dev.sh"
 SECRETS = ROOT / "container-data/secrets/development"
 AUTH_DB = ROOT / "container-data/auth-db/auth.db"
+AUTH_SOURCE = ROOT / "services/auth-service"
 DB = ROOT / "container-data/db"
 STATE = ROOT / "container-data/state/db"
 PACKAGE = ROOT / "dist/phantom-wg-modern"
 SPA_DIST = ROOT / "services/react-spa/dist"
 BOUND = ("container-data/db", "container-data/state/db", "container-data/auth-db", "container-data/secrets/development")
+STACK_SECRETS = ("wg_private_key", "wg_public_key", "auth_signing_key", "auth_verify_key", "tls_cert", "tls_key")
 SECRET_FILES = (
     "wg_private_key", "wg_public_key", "auth_signing_key", "auth_verify_key",
     "tls_cert", "tls_key", ".admin_password",
@@ -50,6 +53,19 @@ DAEMON_CONTAINER = "phantom-daemon-dev"
 GATEWAY = "http://127.0.0.1:9080/api/core/hello"
 ONE_TEST_FILE = "tests/unit/test_subnet_check.py"
 LONG = 600
+STACK_IS_RUNNING = "The stack is running. Stop it first: ./tools/dev.sh down"
+
+
+class PlainText(http.server.BaseHTTPRequestHandler):
+    """A gateway that answers with something other than JSON."""
+
+    def do_GET(self):
+        self.send_response(200)
+        self.end_headers()
+        self.wfile.write(b"not json")
+
+    def log_message(self, *args):
+        pass
 
 
 def dev(
@@ -81,11 +97,15 @@ def digest(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
-def without_docker(directory: Path) -> dict:
-    """A PATH that holds what dev.sh needs to start, and no docker."""
-    for tool in ("bash", "dirname", "python3"):
-        os.symlink(shutil.which(tool), directory / tool)
-    return {"PATH": str(directory)}
+def recording_docker(directory: Path, before: str = "") -> tuple:
+    """A docker on the PATH that notes its calls and hands them to the real one."""
+    record = directory / "docker-calls"
+    record.touch()
+    script = directory / "docker"
+    real = shutil.which("docker")
+    script.write_text(f'#!/bin/sh\necho "$*" >> "{record}"\n{before}\nexec "{real}" "$@"\n', encoding="utf-8")
+    script.chmod(0o755)
+    return {**os.environ, "PATH": f"{directory}:{os.environ['PATH']}"}, record
 
 
 def only_gitkeep(name: str) -> bool:
@@ -249,10 +269,73 @@ def test_setup_auth_force_keeps_the_old_database():
     assert list(AUTH_DB.parent.glob("auth.db.*.bak"))
 
 
+def test_force_changes_nothing_without_the_auth_source():
+    before = sorted(AUTH_DB.parent.iterdir())
+    aside = AUTH_SOURCE.with_name("auth-service-aside")
+    AUTH_SOURCE.rename(aside)
+    try:
+        done = dev("setup-auth", "-f")
+    finally:
+        aside.rename(AUTH_SOURCE)
+    assert done.returncode == 1
+    assert "auth-service not found" in done.stdout
+    assert sorted(AUTH_DB.parent.iterdir()) == before
+
+
 def test_build_builds_the_images():
     done = dev("build", timeout=LONG)
     assert done.returncode == 0, done.stdout
     assert done.stdout.strip().endswith("Images built.")
+
+
+@pytest.mark.parametrize("name", STACK_SECRETS)
+def test_up_stops_without_a_secret(name):
+    path = SECRETS / name
+    aside = path.with_name(f"{name}-aside")
+    path.rename(aside)
+    try:
+        done = dev("up")
+    finally:
+        aside.rename(path)
+    assert done.returncode == 1
+    assert "Setup is incomplete" in done.stdout
+    assert hello() == 0
+
+
+@pytest.mark.parametrize("name", STACK_SECRETS)
+def test_up_stops_on_an_empty_secret(name):
+    path = SECRETS / name
+    content = path.read_bytes()
+    path.write_bytes(b"")
+    try:
+        done = dev("up")
+    finally:
+        path.write_bytes(content)
+    assert done.returncode == 1
+    assert "Setup is incomplete" in done.stdout
+
+
+def test_up_stops_without_the_auth_database():
+    aside = AUTH_DB.with_name("auth.db-aside")
+    AUTH_DB.rename(aside)
+    try:
+        done = dev("up")
+    finally:
+        aside.rename(AUTH_DB)
+    assert done.returncode == 1
+    assert "auth service" in done.stdout
+
+
+def test_setup_sees_what_up_refuses():
+    path = SECRETS / "auth_verify_key"
+    aside = path.with_name("auth_verify_key-aside")
+    path.rename(aside)
+    try:
+        done = dev("setup")
+    finally:
+        aside.rename(path)
+    assert done.returncode == 1
+    assert "Use -f to start over." in done.stdout
 
 
 def test_up_answers():
@@ -270,6 +353,38 @@ def test_login_works_with_the_generated_password():
             break
         time.sleep(1)
     assert status == 200
+
+
+@pytest.mark.parametrize(
+    "args",
+    [
+        ("hard-reset",), ("db-reset",), ("state-reset",), ("key-reset",),
+        ("gen-keys", "-f"), ("setup-tls", "-f"), ("setup-auth", "-f"),
+        ("test-multihop-e2e",), ("test-chaos-e2e",), ("test-scenario-e2e",), ("test-spa-e2e",),
+    ],
+    ids=" ".join,
+)
+def test_a_running_stack_refuses(args):
+    before = {name: digest(SECRETS / name) for name in STACK_SECRETS}
+    done = dev(*args, stdin="yes\n")
+    assert done.returncode == 1
+    assert done.stdout.strip().endswith(STACK_IS_RUNNING)
+    assert {name: digest(SECRETS / name) for name in STACK_SECRETS} == before
+    assert AUTH_DB.is_file()
+    assert wait_for_hello() == 200
+
+
+def test_setup_makes_nothing_under_a_running_stack():
+    path = SECRETS / "tls_key"
+    aside = path.with_name("tls_key-aside")
+    path.rename(aside)
+    try:
+        done = dev("setup")
+        assert not path.exists()
+    finally:
+        aside.rename(path)
+    assert done.returncode == 1
+    assert done.stdout.strip().endswith(STACK_IS_RUNNING)
 
 
 def test_status_lists_the_stack():
@@ -296,6 +411,18 @@ def test_curl_reads_the_gateway():
 def test_curl_takes_a_path():
     done = dev("curl", "/api/core/no-such-path")
     assert done.returncode == 0, done.stdout
+
+
+def test_curl_adds_the_leading_slash():
+    done = dev("curl", "api/core/hello")
+    assert done.returncode == 0, done.stdout
+    assert json.loads(done.stdout)["ok"] is True
+
+
+def test_curl_reports_a_bad_path():
+    done = dev("curl", "a b")
+    assert done.returncode == 1
+    assert done.stdout.strip() == "Not a gateway path: a b"
 
 
 def test_db_ls_sees_the_files_of_the_daemon():
@@ -377,6 +504,25 @@ def test_down_stops_the_stack():
     assert done.returncode == 0, done.stdout
     assert done.stdout.strip().endswith("Stopped.")
     assert hello() == 0
+
+
+def test_restart_needs_a_running_stack():
+    done = dev("restart")
+    assert done.returncode == 1
+    assert done.stdout.strip().endswith("The stack is not running. Start it: ./tools/dev.sh up")
+
+
+def test_curl_reports_an_answer_without_json():
+    server = http.server.HTTPServer(("127.0.0.1", 9080), PlainText)
+    threading.Thread(target=server.serve_forever, daemon=True).start()
+    try:
+        done = dev("curl")
+    finally:
+        server.shutdown()
+        server.server_close()
+    assert done.returncode == 1
+    assert "The gateway answered without JSON" in done.stdout
+    assert "Traceback" not in done.stdout
 
 
 def test_setup_is_still_complete_after_down():
@@ -488,25 +634,25 @@ def test_hard_reset_starts_over_after_a_real_run():
         assert only_gitkeep(name), name
 
 
-def test_nothing_to_wipe_needs_no_docker(tmp_path):
-    done = dev("state-reset", env=without_docker(tmp_path))
+def test_nothing_to_wipe_starts_no_container(tmp_path):
+    env, record = recording_docker(tmp_path)
+    done = dev("state-reset", env=env)
     assert done.returncode == 0, done.stdout
+    assert not [line for line in record.read_text(encoding="utf-8").splitlines() if line.startswith("run ")]
 
 
 def test_a_wipe_goes_through_a_container(tmp_path):
     left = STATE / "left-behind"
     left.touch()
-    done = dev("state-reset", env=without_docker(tmp_path))
+    env, _ = recording_docker(tmp_path, before='[ "$1" = run ] && exit 125')
+    done = dev("state-reset", env=env)
     assert done.returncode != 0
     assert left.exists()
 
 
 def test_the_wipe_container_is_closed(tmp_path):
-    record = tmp_path / "docker-calls"
-    shim = tmp_path / "docker"
-    shim.write_text(f'#!/bin/sh\necho "$*" >> "{record}"\nexec "{shutil.which("docker")}" "$@"\n', encoding="utf-8")
-    shim.chmod(0o755)
-    done = dev("state-reset", env={**os.environ, "PATH": f"{tmp_path}:{os.environ['PATH']}"})
+    env, record = recording_docker(tmp_path)
+    done = dev("state-reset", env=env)
     assert done.returncode == 0, done.stdout
     assert only_gitkeep("container-data/state/db")
     call = next(line for line in record.read_text(encoding="utf-8").splitlines() if line.startswith("run "))

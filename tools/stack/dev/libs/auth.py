@@ -20,13 +20,14 @@ from pathlib import Path
 
 from core import runner
 from core.runner import ToolError
-from stack.dev.libs import images, paths
+from stack.dev.libs import compose, images, paths
 
 AUTH_DIR = "services/auth-service"
 SERVICE = "auth-service"
 DEFAULT_USERNAME = "admin"
 DATABASE_SUFFIXES = ("", "-wal", "-shm")
-PRIVATE_FILES = ("auth_signing_key", "auth_verify_key", ".admin_password")
+KEY_FILES = ("auth_signing_key", "auth_verify_key")
+PRIVATE_FILES = (*KEY_FILES, ".admin_password")
 
 
 def database() -> Path:
@@ -34,7 +35,7 @@ def database() -> Path:
 
 
 def bootstrapped() -> bool:
-    return database().is_file() and (paths.secrets() / "auth_signing_key").is_file()
+    return database().is_file() and all(paths.filled(paths.secrets() / name) for name in KEY_FILES)
 
 
 def archive() -> str:
@@ -48,21 +49,24 @@ def archive() -> str:
     return f"{paths.AUTH_DB_DIR}/{target}"
 
 
-def bootstrap(username: str = DEFAULT_USERNAME) -> None:
-    source = runner.ROOT / AUTH_DIR
-    if not source.is_dir():
+def ready() -> str:
+    """What a bootstrap needs, before anything changes. Returns the image."""
+    compose.require_down()
+    if not (runner.ROOT / AUTH_DIR).is_dir():
         raise ToolError(f"auth-service not found at {AUTH_DIR}/")
+    return images.ensure(SERVICE)
 
+
+def bootstrap(image: str, username: str = DEFAULT_USERNAME) -> None:
     paths.secrets().mkdir(parents=True, exist_ok=True)
     paths.auth_db().mkdir(parents=True, exist_ok=True)
-    image = images.ensure(SERVICE)
 
     print("Bootstrapping auth service...")
     runner.stream([
         "docker", "run", "--rm", *images.as_operator(),
         "-v", f"{paths.secrets()}:/secrets",
         "-v", f"{paths.auth_db()}:/db",
-        "-v", f"{source}/tools/bootstrap.py:/tmp/bootstrap.py:ro",
+        "-v", f"{runner.ROOT / AUTH_DIR}/tools/bootstrap.py:/tmp/bootstrap.py:ro",
         image,
         "python", "/tmp/bootstrap.py",
         "--secrets-dir", "/secrets",
@@ -83,4 +87,4 @@ def first_bootstrap() -> None:
     """The bootstrap of setup: it leaves an auth.db it finds to setup-auth -f."""
     if database().is_file():
         raise ToolError(f"{paths.AUTH_DB_DIR}/auth.db exists without its keys. Use -f to start over.")
-    bootstrap()
+    bootstrap(ready())

@@ -37,7 +37,7 @@ def _paths() -> tuple[Path, Path]:
 
 
 def present() -> bool:
-    return all(path.is_file() and path.stat().st_size > 0 for path in _paths())
+    return all(paths.filled(path) for path in _paths())
 
 
 def parse(output: str) -> tuple[str, str]:
@@ -59,6 +59,7 @@ def _write_private(path: Path, text: str) -> None:
 
 
 def generate() -> None:
+    compose.require_down()
     image = images.ensure(compose.DAEMON)
 
     print("Generating WireGuard keypair...")

@@ -29,10 +29,11 @@ def _paths() -> tuple[Path, Path]:
 
 
 def present() -> bool:
-    return all(path.is_file() for path in _paths())
+    return all(paths.filled(path) for path in _paths())
 
 
 def generate() -> None:
+    compose.require_down()
     cert_path, key_path = _paths()
     cert_path.parent.mkdir(parents=True, exist_ok=True)
     image = images.ensure(compose.DAEMON)

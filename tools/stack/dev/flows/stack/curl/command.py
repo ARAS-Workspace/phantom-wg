@@ -15,6 +15,7 @@ curl: a request to the daemon through the gateway.
 
 from __future__ import annotations
 
+import http.client
 import json
 import urllib.error
 import urllib.request
@@ -30,10 +31,16 @@ GATEWAY = "http://127.0.0.1:9080"
 
 def run(path: str) -> None:
     try:
-        with urllib.request.urlopen(GATEWAY + path, timeout=10) as response:
+        with urllib.request.urlopen(f"{GATEWAY}/{path.lstrip('/')}", timeout=10) as response:
             body = response.read()
     except urllib.error.HTTPError as error:
         body = error.read()
+    except http.client.InvalidURL as error:
+        raise ToolError(f"Not a gateway path: {path}") from error
     except OSError as error:
         raise ToolError(f"The gateway does not answer: {error}") from error
-    print(json.dumps(json.loads(body), indent=4))
+
+    try:
+        print(json.dumps(json.loads(body), indent=4))
+    except ValueError as error:
+        raise ToolError(f"The gateway answered without JSON: {error}") from error
