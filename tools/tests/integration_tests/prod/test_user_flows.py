@@ -46,7 +46,6 @@ from prod_host import (
     lost,
     only_gitkeep,
     prod,
-    set_the_endpoint,
     sudo,
 )
 
@@ -243,7 +242,6 @@ def test_up_stops_without_the_auth_database():
 
 
 def test_up_gives_a_stack_that_logs_in():
-    set_the_endpoint()
     done = prod("up", timeout=LONG)
     assert done.returncode == 0, done.stdout
     assert done.stdout.strip().endswith("Stack started.")

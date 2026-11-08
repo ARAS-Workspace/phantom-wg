@@ -25,7 +25,6 @@ AUTH_DB = ROOT / "container-data/auth-db/auth.db"
 AUTH_SOURCE = ROOT / "services/auth-service"
 WALLET = ROOT / "container-data/db/wallet.db"
 SPA_INDEX = ROOT / "services/react-spa/dist/index.html"
-ENV_DAEMON = ROOT / ".env.daemon"
 BOUND = ("container-data/db", "container-data/state/db", "container-data/auth-db", "container-data/secrets/production")
 LOCAL_FILES = (".env", ".env.daemon", ".env.auth-service", "docker-compose.override.yml")
 STACK_SECRETS = ("wg_private_key", "wg_public_key", "auth_signing_key", "auth_verify_key", "tls_cert", "tls_key")
@@ -126,11 +125,6 @@ def assert_the_operator_owns_the_host() -> None:
         SECRETS, AUTH_DB.parent, AUTH_DB,
     ]
     assert not [str(path) for path in paths if path.stat().st_uid != os.getuid()]
-
-
-def set_the_endpoint() -> None:
-    text = ENV_DAEMON.read_text(encoding="utf-8")
-    ENV_DAEMON.write_text(text.replace("WIREGUARD_ENDPOINT_V4=\n", "WIREGUARD_ENDPOINT_V4=127.0.0.1\n"), encoding="utf-8")
 
 
 def call(path: str, token: str = "", body: dict | None = None) -> tuple:

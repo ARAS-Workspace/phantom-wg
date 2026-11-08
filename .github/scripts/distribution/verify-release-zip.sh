@@ -38,8 +38,6 @@ grep -q '^PHANTOM_IMAGE_SOURCE=archive$' .env.example || fail "the zip does not 
 
 ./tools/prod.sh setup
 grep -q '^PHANTOM_IMAGE_SOURCE=archive$' .env || fail "setup left another source in .env"
-sed 's/^WIREGUARD_ENDPOINT_V4=.*/WIREGUARD_ENDPOINT_V4=127.0.0.1/' .env.daemon > .env.daemon.tmp
-mv .env.daemon.tmp .env.daemon
 ./tools/prod.sh up
 wait_api
 [ "$(curl -sk -o /dev/null -m 5 -w '%{http_code}' https://127.0.0.1/)" = 200 ] || fail "the dashboard does not answer"

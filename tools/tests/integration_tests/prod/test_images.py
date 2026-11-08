@@ -13,7 +13,7 @@ import shutil
 import subprocess
 
 import pytest
-from prod_host import LONG, ROOT, api_answers, logged_in, lost, prod, set_the_endpoint
+from prod_host import LONG, ROOT, api_answers, logged_in, lost, prod
 
 ENV = ROOT / ".env"
 ENV_EXAMPLE = ROOT / ".env.example"
@@ -122,7 +122,6 @@ def test_bad_image_arguments_stop_with_the_usage(args):
 def test_setup_takes_the_registry_source():
     done = prod("setup", timeout=LONG)
     assert done.returncode == 0, done.stdout
-    set_the_endpoint()
 
 
 # ── How .env reads ──────────────────────────────────────────────────
