@@ -4,7 +4,6 @@ import { Button } from '@carbon/react';
 import { ArrowLeft, WarningAlt } from '@carbon/icons-react';
 import { useLocale } from '@shared/hooks';
 import { translate } from '@shared/translations';
-import DinoGame from '@shared/components/games/DinoGame';
 import './styles/common.scss';
 
 const NotFoundPage: React.FC = () => {
@@ -21,9 +20,6 @@ const NotFoundPage: React.FC = () => {
         <h1 className="error-code">{t.errorPages.notFound.code}</h1>
         <h2 className="error-title">{t.errorPages.notFound.title}</h2>
         <p className="error-description">{t.errorPages.notFound.description}</p>
-        <div className="error-game-area">
-          <DinoGame.Lazy theme="error" />
-        </div>
         <div className="error-actions">
           <Button renderIcon={ArrowLeft} onClick={() => navigate(-1 as never)} size="lg">
             {t.errorPages.notFound.goBack}

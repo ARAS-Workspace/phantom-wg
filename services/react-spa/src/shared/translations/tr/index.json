@@ -63,12 +63,6 @@
     "passwordChange": "Şifre Değiştir",
     "users": "Kullanıcı Yönetimi"
   },
-  "dinoGame": {
-    "startMessage": "Başlamak için tıklayın veya yukarı ok tuşuna basın",
-    "gameOver": "Oyun Bitti",
-    "restartMessage": "Tekrar denemek için tıklayın",
-    "score": "Skor"
-  },
   "errorPages": {
     "notFound": {
       "code": "404",

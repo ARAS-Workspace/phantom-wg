@@ -63,12 +63,6 @@
     "passwordChange": "Change Password",
     "users": "User Management"
   },
-  "dinoGame": {
-    "startMessage": "Click or press Up arrow to start",
-    "gameOver": "Game Over",
-    "restartMessage": "Click to try again",
-    "score": "Score"
-  },
   "errorPages": {
     "notFound": {
       "code": "404",
