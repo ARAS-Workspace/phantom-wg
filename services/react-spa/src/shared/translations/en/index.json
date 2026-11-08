@@ -399,6 +399,7 @@
     "neverConnected": "Never",
     "unknown": "(unknown)",
     "noPeers": "No peers found.",
+    "filterName": "Filter by name",
     "refresh": "Refresh",
     "refreshPeer": "Refresh Peer",
     "details": "Details",

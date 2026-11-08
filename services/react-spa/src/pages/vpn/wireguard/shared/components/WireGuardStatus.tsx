@@ -13,6 +13,7 @@ import {
   TableContainer,
   TableToolbar,
   TableToolbarContent,
+  TableToolbarSearch,
   Button,
   OverflowMenu,
   OverflowMenuItem,
@@ -30,7 +31,14 @@ import { apiClient } from '@shared/api/client';
 import { formatBytes, formatHandshake } from '@shared/utils/formatUtils';
 import TableLoader from '@shared/components/data/TableLoader';
 import PeerStatusTag from '@shared/components/data/PeerStatusTag';
-import { getPeerStatus, type PeerInfo, type WireGuardStatusData } from '@shared/types/wireguard';
+import {
+  getPeerStatus,
+  sortPeers,
+  type PeerInfo,
+  type PeerSortKey,
+  type SortDirection,
+  type WireGuardStatusData,
+} from '@shared/types/wireguard';
 import './styles/WireGuardStatus.scss';
 
 // ── Constants ─────────────────────────────────────────────────────
@@ -38,8 +46,11 @@ import './styles/WireGuardStatus.scss';
 const COLUMN_COUNT = 7; // 6 data cols + 1 actions col
 const DEFAULT_PAGE_SIZE = 25;
 const PAGE_SIZES = [10, 25, 50, 100];
+const SORT_KEYS: readonly string[] = ['name', 'last_handshake', 'rx', 'tx'];
 
 // ── Helpers ───────────────────────────────────────────────────────
+
+const isSortKey = (key: string): key is PeerSortKey => SORT_KEYS.includes(key);
 
 const truncateKey = (key: string): string =>
   key.length > 20 ? `${key.slice(0, 8)}…${key.slice(-8)}` : key;
@@ -58,6 +69,11 @@ const WireGuardStatus: React.FC = () => {
   const [refreshingPeer, setRefreshingPeer] = useState<string | null>(null);
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(DEFAULT_PAGE_SIZE);
+  const [search, setSearch] = useState('');
+  const [sort, setSort] = useState<{ key: PeerSortKey; direction: SortDirection }>({
+    key: 'name',
+    direction: 'ASC',
+  });
 
   // ── Fetch ─────────────────────────────────────────────────────
   const fetchStatus = useCallback(async () => {
@@ -95,6 +111,20 @@ const WireGuardStatus: React.FC = () => {
     setPageSize(ps);
   };
 
+  const handleSearch = (e: React.ChangeEvent<HTMLInputElement> | string) => {
+    setSearch(typeof e === 'string' ? e : e.target.value);
+    setPage(1);
+  };
+
+  const handleSort = (key: PeerSortKey) => {
+    setSort((prev) =>
+      prev.key === key
+        ? { key, direction: prev.direction === 'ASC' ? 'DESC' : 'ASC' }
+        : { key, direction: 'ASC' }
+    );
+    setPage(1);
+  };
+
   // ── Initial skeleton ──────────────────────────────────────────
   if (loading && !data) {
     return (
@@ -107,8 +137,13 @@ const WireGuardStatus: React.FC = () => {
   }
 
   // ── Table data ────────────────────────────────────────────────
-  const peers = data?.peers ?? [];
-  const peersMap = new Map(peers.map((p) => [p.public_key, p]));
+  const allPeers = data?.peers ?? [];
+  const peersMap = new Map(allPeers.map((p) => [p.public_key, p]));
+  const query = search.trim().toLowerCase();
+  const matching = query
+    ? allPeers.filter((p) => p.name !== null && p.name.toLowerCase().includes(query))
+    : allPeers;
+  const peers = sortPeers(matching, sort.key, sort.direction);
   const pageCount = Math.max(1, Math.ceil(peers.length / pageSize));
   const currentPage = Math.min(page, pageCount);
   const pagePeers = peers.slice((currentPage - 1) * pageSize, currentPage * pageSize);
@@ -179,16 +214,23 @@ const WireGuardStatus: React.FC = () => {
                 <TableContainer {...getTableContainerProps()}>
                   <TableToolbar>
                     <TableToolbarContent>
+                      <TableToolbarSearch
+                        persistent
+                        placeholder={t.wireguard.filterName}
+                        value={search}
+                        onChange={handleSearch}
+                        data-testid="vpn-wg-search"
+                      />
                       <Button
                         renderIcon={Renew}
                         size="sm"
-                        kind="ghost"
-                        iconDescription={t.wireguard.refresh}
-                        hasIconOnly
+                        kind="primary"
                         onClick={() => void fetchStatus()}
                         disabled={loading}
                         data-testid="vpn-wg-refresh"
-                      />
+                      >
+                        {t.wireguard.refresh}
+                      </Button>
                     </TableToolbarContent>
                   </TableToolbar>
 
@@ -205,8 +247,25 @@ const WireGuardStatus: React.FC = () => {
                         <TableRow>
                           {tableHeaders.map((header) => {
                             const { key: _key, ...hProps } = getHeaderProps({ header });
+                            const key = header.key;
+                            if (!isSortKey(key)) {
+                              return (
+                                <TableHeader key={key} {...hProps}>
+                                  {header.header}
+                                </TableHeader>
+                              );
+                            }
+                            const active = sort.key === key;
                             return (
-                              <TableHeader key={header.key} {...hProps}>
+                              <TableHeader
+                                key={key}
+                                {...hProps}
+                                isSortable
+                                isSortHeader={active}
+                                sortDirection={active ? sort.direction : 'NONE'}
+                                onClick={() => handleSort(key)}
+                                data-testid={`vpn-wg-sort-${key}`}
+                              >
                                 {header.header}
                               </TableHeader>
                             );
@@ -286,6 +345,7 @@ const WireGuardStatus: React.FC = () => {
 
                   {/* Localized pagination */}
                   <Pagination
+                    data-testid="vpn-wg-pagination"
                     totalItems={peers.length}
                     pageSize={pageSize}
                     page={currentPage}

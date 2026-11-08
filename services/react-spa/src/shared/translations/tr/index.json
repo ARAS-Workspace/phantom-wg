@@ -399,6 +399,7 @@
     "neverConnected": "Hiç bağlanmadı",
     "unknown": "(bilinmiyor)",
     "noPeers": "Eş bulunamadı.",
+    "filterName": "İsme göre filtrele",
     "refresh": "Yenile",
     "refreshPeer": "Eşi Yenile",
     "details": "Detaylar",
