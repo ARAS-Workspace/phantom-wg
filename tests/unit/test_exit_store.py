@@ -22,6 +22,17 @@ _SAMPLE_EXIT = {
     "keepalive": 5,
 }
 
+# Every field differs from _SAMPLE_EXIT.
+_UPDATED_EXIT = {
+    "endpoint": "[2001:db8::7]:51821",
+    "address": "10.0.0.9/32, fd00::9/128",
+    "private_key_hex": "dd" * 32,
+    "public_key_hex": "ee" * 32,
+    "preshared_key_hex": "",
+    "allowed_ips": "10.0.0.0/8",
+    "keepalive": 0,
+}
+
 
 class TestOpenExitStore:
     def test_missing_dir(self):
@@ -125,6 +136,48 @@ class TestListExits:
             store.add_exit("vpn1", **_SAMPLE_EXIT)
             exits = store.list_exits()
             assert "private_key_hex" in exits[0]
+
+
+class TestUpdateExit:
+    def test_update_replaces_every_field(self, test_env):
+        d = test_env.sub("exit-update")
+        with open_exit_store(db_dir=d) as store:
+            added = store.add_exit("vpn1", **_SAMPLE_EXIT)
+            expected = {"id": added["id"], "name": "vpn1", **_UPDATED_EXIT}
+            assert store.update_exit("vpn1", **_UPDATED_EXIT) == expected
+            assert store.get_exit("vpn1") == expected
+
+    def test_update_keeps_id_and_order(self, test_env):
+        d = test_env.sub("exit-update-order")
+        with open_exit_store(db_dir=d) as store:
+            for name in ("aaa", "bbb", "ccc"):
+                store.add_exit(name, **_SAMPLE_EXIT)
+            before = store.list_exits()
+            store.update_exit("bbb", **_UPDATED_EXIT)
+            after = store.list_exits()
+            assert [e["name"] for e in after] == ["aaa", "bbb", "ccc"]
+            assert after[0] == before[0]
+            assert after[1] == {"id": before[1]["id"], "name": "bbb", **_UPDATED_EXIT}
+            assert after[2] == before[2]
+
+    def test_update_not_found(self, test_env):
+        d = test_env.sub("exit-update-nf")
+        with (
+            open_exit_store(db_dir=d) as store,
+            pytest.raises(ExitNotFoundError, match="not found"),
+        ):
+            store.update_exit("nonexistent", **_UPDATED_EXIT)
+
+    def test_update_active_raises(self, test_env):
+        d = test_env.sub("exit-update-active")
+        with open_exit_store(db_dir=d) as store:
+            store.add_exit("vpn1", **_SAMPLE_EXIT)
+            store.activate("vpn1")
+            before = store.get_exit("vpn1")
+            with pytest.raises(ExitActiveError, match="deactivate first"):
+                store.update_exit("vpn1", **_UPDATED_EXIT)
+            assert store.get_exit("vpn1") == before
+            assert store.get_active() == "vpn1"
 
 
 class TestRemoveExit:
