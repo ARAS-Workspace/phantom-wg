@@ -13,6 +13,12 @@
   }
 }
 
+// Overflow menus float at Carbon's z('floating'), 6000, under the footer: an
+// item that opens over the footer could not be clicked. They go above it.
+.cds--overflow-menu-options {
+  z-index: 8002;
+}
+
 .footer-separator {
   width: 100%;
   height: 1px;
