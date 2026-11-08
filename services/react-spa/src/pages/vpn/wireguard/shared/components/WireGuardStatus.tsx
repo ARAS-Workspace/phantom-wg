@@ -16,7 +16,7 @@ import {
   Button,
   OverflowMenu,
   OverflowMenuItem,
-  Tag,
+  Pagination,
   Modal,
   StructuredListWrapper,
   StructuredListBody,
@@ -29,49 +29,20 @@ import { translate } from '@shared/translations';
 import { apiClient } from '@shared/api/client';
 import { formatBytes, formatHandshake } from '@shared/utils/formatUtils';
 import TableLoader from '@shared/components/data/TableLoader';
+import PeerStatusTag from '@shared/components/data/PeerStatusTag';
+import { getPeerStatus, type PeerInfo, type WireGuardStatusData } from '@shared/types/wireguard';
 import './styles/WireGuardStatus.scss';
-
-// ── Types ─────────────────────────────────────────────────────────
-
-interface InterfaceInfo {
-  public_key: string;
-  listen_port: number;
-  fwmark: number;
-}
-
-interface PeerInfo {
-  public_key: string;
-  name: string | null;
-  endpoint: string;
-  allowed_ips: string[];
-  latest_handshake: number;
-  rx_bytes: number;
-  tx_bytes: number;
-  keepalive: number;
-}
-
-interface WireGuardStatusData {
-  interface: InterfaceInfo;
-  peers: PeerInfo[];
-  total_peers: number;
-}
-
-type PeerStatus = 'online' | 'offline' | 'never';
 
 // ── Constants ─────────────────────────────────────────────────────
 
 const COLUMN_COUNT = 7; // 6 data cols + 1 actions col
-const ONLINE_THRESHOLD_SECS = 180;
+const DEFAULT_PAGE_SIZE = 25;
+const PAGE_SIZES = [10, 25, 50, 100];
 
 // ── Helpers ───────────────────────────────────────────────────────
 
 const truncateKey = (key: string): string =>
   key.length > 20 ? `${key.slice(0, 8)}…${key.slice(-8)}` : key;
-
-const getStatus = (ts: number): PeerStatus => {
-  if (ts === 0) return 'never';
-  return Date.now() / 1000 - ts < ONLINE_THRESHOLD_SECS ? 'online' : 'offline';
-};
 
 const peerKey = (peer: PeerInfo): string => peer.name ?? peer.public_key.slice(0, 8);
 
@@ -85,6 +56,8 @@ const WireGuardStatus: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [detail, setDetail] = useState<PeerInfo | null>(null);
   const [refreshingPeer, setRefreshingPeer] = useState<string | null>(null);
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(DEFAULT_PAGE_SIZE);
 
   // ── Fetch ─────────────────────────────────────────────────────
   const fetchStatus = useCallback(async () => {
@@ -111,6 +84,17 @@ const WireGuardStatus: React.FC = () => {
     setRefreshingPeer(null);
   };
 
+  const handlePaginationChange = ({
+    page: p,
+    pageSize: ps,
+  }: {
+    page: number;
+    pageSize: number;
+  }) => {
+    setPage(p);
+    setPageSize(ps);
+  };
+
   // ── Initial skeleton ──────────────────────────────────────────
   if (loading && !data) {
     return (
@@ -125,6 +109,9 @@ const WireGuardStatus: React.FC = () => {
   // ── Table data ────────────────────────────────────────────────
   const peers = data?.peers ?? [];
   const peersMap = new Map(peers.map((p) => [p.public_key, p]));
+  const pageCount = Math.max(1, Math.ceil(peers.length / pageSize));
+  const currentPage = Math.min(page, pageCount);
+  const pagePeers = peers.slice((currentPage - 1) * pageSize, currentPage * pageSize);
 
   const headers = [
     { key: 'status', header: t.wireguard.status },
@@ -135,25 +122,15 @@ const WireGuardStatus: React.FC = () => {
     { key: 'tx', header: t.wireguard.txBytes },
   ];
 
-  const rows = peers.map((p) => ({
+  const rows = pagePeers.map((p) => ({
     id: p.public_key,
-    status: getStatus(p.latest_handshake) as string,
+    status: getPeerStatus(p.latest_handshake) as string,
     name: p.name ?? t.wireguard.unknown,
     endpoint: p.endpoint || '—',
     last_handshake: formatHandshake(p.latest_handshake),
     rx: formatBytes(p.rx_bytes),
     tx: formatBytes(p.tx_bytes),
   }));
-
-  // ── Detail modal helpers ───────────────────────────────────────
-  const statusTagType = (s: PeerStatus) =>
-    s === 'online' ? 'green' : s === 'offline' ? 'red' : 'gray';
-  const statusTagText = (s: PeerStatus) =>
-    s === 'online'
-      ? t.wireguard.online
-      : s === 'offline'
-        ? t.wireguard.offline
-        : t.wireguard.neverConnected;
 
   return (
     <>
@@ -218,7 +195,7 @@ const WireGuardStatus: React.FC = () => {
                   {loading ? (
                     <TableLoader
                       columnCount={COLUMN_COUNT}
-                      rowCount={Math.min(peers.length || 5, 10)}
+                      rowCount={Math.min(pagePeers.length || 5, 10)}
                       showToolbar={false}
                       showHeader={false}
                     />
@@ -262,12 +239,9 @@ const WireGuardStatus: React.FC = () => {
                               <TableRow key={row.id} {...rProps} data-testid={`vpn-wg-row-${key}`}>
                                 {row.cells.map((cell) => {
                                   if (cell.info.header === 'status') {
-                                    const s = cell.value as PeerStatus;
                                     return (
                                       <TableCell key={cell.id}>
-                                        <Tag type={statusTagType(s) as never} size="sm">
-                                          {statusTagText(s)}
-                                        </Tag>
+                                        <PeerStatusTag latestHandshake={peer.latest_handshake} />
                                       </TableCell>
                                     );
                                   }
@@ -309,6 +283,24 @@ const WireGuardStatus: React.FC = () => {
                       </TableBody>
                     </Table>
                   )}
+
+                  {/* Localized pagination */}
+                  <Pagination
+                    totalItems={peers.length}
+                    pageSize={pageSize}
+                    page={currentPage}
+                    pageSizes={PAGE_SIZES}
+                    backwardText={t.pagination.backwardText}
+                    forwardText={t.pagination.forwardText}
+                    itemsPerPageText={t.pagination.itemsPerPageText}
+                    itemRangeText={(min, max, total) =>
+                      `${min}–${max} ${t.pagination.ofText} ${total} ${t.pagination.itemsText}`
+                    }
+                    pageRangeText={(current, total) =>
+                      `${current} ${t.pagination.ofText} ${total} ${t.pagination.pagesText}`
+                    }
+                    onChange={handlePaginationChange}
+                  />
                 </TableContainer>
               )}
             </DataTable>
@@ -327,76 +319,68 @@ const WireGuardStatus: React.FC = () => {
         className="wireguard__modal"
         data-testid="vpn-wg-detail-modal"
       >
-        {detail &&
-          (() => {
-            const s = getStatus(detail.latest_handshake);
-            return (
-              <Grid>
-                <Column lg={16} md={8} sm={4}>
-                  <StructuredListWrapper isCondensed>
-                    <StructuredListBody>
-                      <StructuredListRow>
-                        <StructuredListCell>{t.wireguard.status}</StructuredListCell>
-                        <StructuredListCell>
-                          <Tag type={statusTagType(s) as never} size="sm">
-                            {statusTagText(s)}
-                          </Tag>
-                        </StructuredListCell>
-                      </StructuredListRow>
-                      <StructuredListRow>
-                        <StructuredListCell>{t.wireguard.name}</StructuredListCell>
-                        <StructuredListCell>
-                          {detail.name ?? t.wireguard.unknown}
-                        </StructuredListCell>
-                      </StructuredListRow>
-                      <StructuredListRow>
-                        <StructuredListCell>{t.wireguard.publicKey}</StructuredListCell>
-                        <StructuredListCell>
-                          <span className="wireguard__detail-mono">{detail.public_key}</span>
-                        </StructuredListCell>
-                      </StructuredListRow>
-                      <StructuredListRow>
-                        <StructuredListCell>{t.wireguard.endpoint}</StructuredListCell>
-                        <StructuredListCell>
-                          <span className="wireguard__detail-mono">{detail.endpoint || '—'}</span>
-                        </StructuredListCell>
-                      </StructuredListRow>
-                      <StructuredListRow>
-                        <StructuredListCell>{t.wireguard.allowedIps}</StructuredListCell>
-                        <StructuredListCell>
-                          <div className="wireguard__allowed-ips">
-                            {detail.allowed_ips.length > 0
-                              ? detail.allowed_ips.map((ip) => <span key={ip}>{ip}</span>)
-                              : '—'}
-                          </div>
-                        </StructuredListCell>
-                      </StructuredListRow>
-                      <StructuredListRow>
-                        <StructuredListCell>{t.wireguard.lastHandshake}</StructuredListCell>
-                        <StructuredListCell>
-                          {formatHandshake(detail.latest_handshake)}
-                        </StructuredListCell>
-                      </StructuredListRow>
-                      <StructuredListRow>
-                        <StructuredListCell>{t.wireguard.rxBytes}</StructuredListCell>
-                        <StructuredListCell>{formatBytes(detail.rx_bytes)}</StructuredListCell>
-                      </StructuredListRow>
-                      <StructuredListRow>
-                        <StructuredListCell>{t.wireguard.txBytes}</StructuredListCell>
-                        <StructuredListCell>{formatBytes(detail.tx_bytes)}</StructuredListCell>
-                      </StructuredListRow>
-                      <StructuredListRow>
-                        <StructuredListCell>{t.wireguard.keepalive}</StructuredListCell>
-                        <StructuredListCell>
-                          {detail.keepalive > 0 ? `${detail.keepalive}s` : '—'}
-                        </StructuredListCell>
-                      </StructuredListRow>
-                    </StructuredListBody>
-                  </StructuredListWrapper>
-                </Column>
-              </Grid>
-            );
-          })()}
+        {detail && (
+          <Grid>
+            <Column lg={16} md={8} sm={4}>
+              <StructuredListWrapper isCondensed>
+                <StructuredListBody>
+                  <StructuredListRow>
+                    <StructuredListCell>{t.wireguard.status}</StructuredListCell>
+                    <StructuredListCell>
+                      <PeerStatusTag latestHandshake={detail.latest_handshake} />
+                    </StructuredListCell>
+                  </StructuredListRow>
+                  <StructuredListRow>
+                    <StructuredListCell>{t.wireguard.name}</StructuredListCell>
+                    <StructuredListCell>{detail.name ?? t.wireguard.unknown}</StructuredListCell>
+                  </StructuredListRow>
+                  <StructuredListRow>
+                    <StructuredListCell>{t.wireguard.publicKey}</StructuredListCell>
+                    <StructuredListCell>
+                      <span className="wireguard__detail-mono">{detail.public_key}</span>
+                    </StructuredListCell>
+                  </StructuredListRow>
+                  <StructuredListRow>
+                    <StructuredListCell>{t.wireguard.endpoint}</StructuredListCell>
+                    <StructuredListCell>
+                      <span className="wireguard__detail-mono">{detail.endpoint || '—'}</span>
+                    </StructuredListCell>
+                  </StructuredListRow>
+                  <StructuredListRow>
+                    <StructuredListCell>{t.wireguard.allowedIps}</StructuredListCell>
+                    <StructuredListCell>
+                      <div className="wireguard__allowed-ips">
+                        {detail.allowed_ips.length > 0
+                          ? detail.allowed_ips.map((ip) => <span key={ip}>{ip}</span>)
+                          : '—'}
+                      </div>
+                    </StructuredListCell>
+                  </StructuredListRow>
+                  <StructuredListRow>
+                    <StructuredListCell>{t.wireguard.lastHandshake}</StructuredListCell>
+                    <StructuredListCell>
+                      {formatHandshake(detail.latest_handshake)}
+                    </StructuredListCell>
+                  </StructuredListRow>
+                  <StructuredListRow>
+                    <StructuredListCell>{t.wireguard.rxBytes}</StructuredListCell>
+                    <StructuredListCell>{formatBytes(detail.rx_bytes)}</StructuredListCell>
+                  </StructuredListRow>
+                  <StructuredListRow>
+                    <StructuredListCell>{t.wireguard.txBytes}</StructuredListCell>
+                    <StructuredListCell>{formatBytes(detail.tx_bytes)}</StructuredListCell>
+                  </StructuredListRow>
+                  <StructuredListRow>
+                    <StructuredListCell>{t.wireguard.keepalive}</StructuredListCell>
+                    <StructuredListCell>
+                      {detail.keepalive > 0 ? `${detail.keepalive}s` : '—'}
+                    </StructuredListCell>
+                  </StructuredListRow>
+                </StructuredListBody>
+              </StructuredListWrapper>
+            </Column>
+          </Grid>
+        )}
       </Modal>
     </>
   );
