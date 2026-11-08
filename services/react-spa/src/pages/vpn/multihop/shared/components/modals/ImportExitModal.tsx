@@ -3,6 +3,8 @@ import { Modal, Grid, Column, TextInput, TextArea } from '@carbon/react';
 import FormError from '@shared/components/forms/FormError';
 import { apiClient } from '@shared/api/client';
 import { translate } from '@shared/translations';
+import { validateExitConfig } from '../../utils/exitConfig';
+import { formatExitConfigIssues } from '../../utils/exitConfigMessages';
 
 const NAME_PATTERN = /^[a-zA-Z0-9_-]{1,64}$/;
 
@@ -18,6 +20,7 @@ const ImportExitModal: React.FC<Props> = ({ open, t, onClose, onSuccess }) => {
   const [config, setConfig] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [details, setDetails] = useState<string[]>([]);
 
   const nameValid = NAME_PATTERN.test(name);
   const configValid = config.trim().length > 0;
@@ -29,17 +32,29 @@ const ImportExitModal: React.FC<Props> = ({ open, t, onClose, onSuccess }) => {
       setName('');
       setConfig('');
       setError(null);
+      setDetails([]);
     }
   }, [open]);
 
   const handleSubmit = async () => {
     if (!canSubmit) return;
+
+    // Validated as sent: the daemon parses the same trimmed text.
+    const payload = config.trim();
+    const issues = validateExitConfig(payload);
+    if (issues.length > 0) {
+      setError(t.multihop.validation.title);
+      setDetails(formatExitConfigIssues(issues, t));
+      return;
+    }
+
     setLoading(true);
     setError(null);
+    setDetails([]);
 
     const res = await apiClient.post<unknown>('/api/multihop/import', {
       name,
-      config: config.trim(),
+      config: payload,
     });
 
     setLoading(false);
@@ -69,7 +84,7 @@ const ImportExitModal: React.FC<Props> = ({ open, t, onClose, onSuccess }) => {
     >
       <Grid>
         <Column lg={16} md={8} sm={4}>
-          <FormError error={error} className="multihop__modal-error" />
+          <FormError error={error} details={details} className="multihop__modal-error" />
 
           <TextInput
             id="import-exit-name"

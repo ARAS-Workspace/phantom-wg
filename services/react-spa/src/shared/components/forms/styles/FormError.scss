@@ -1,0 +1,14 @@
+@use '@carbon/react/scss/spacing' as sp;
+
+// With detail lines, the list goes under the title instead of beside it.
+.form-error--details .cds--inline-notification__text-wrapper {
+  flex-direction: column;
+}
+
+.form-error__details {
+  margin-top: sp.$spacing-02;
+
+  li + li {
+    margin-top: sp.$spacing-02;
+  }
+}

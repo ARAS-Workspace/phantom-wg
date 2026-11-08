@@ -33,6 +33,7 @@ import { apiClient } from '@shared/api/client';
 import { formatBytes, formatHandshake } from '@shared/utils/formatUtils';
 import TableLoader from '@shared/components/data/TableLoader';
 import ImportExitModal from './modals/ImportExitModal';
+import EditExitModal from './modals/EditExitModal';
 import './styles/MultihopManager.scss';
 
 // ── Types ─────────────────────────────────────────────────────────
@@ -102,6 +103,7 @@ const MultihopManager: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [actionLoading, setActionLoading] = useState<string | null>(null);
   const [importOpen, setImportOpen] = useState(false);
+  const [editName, setEditName] = useState<string | null>(null);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -203,6 +205,13 @@ const MultihopManager: React.FC = () => {
 
   const handleImportSuccess = () => {
     setImportOpen(false);
+    void fetchAll();
+  };
+
+  const handleEditSuccess = () => {
+    setEditName(null);
+    setErrorMsg(null);
+    setSuccessMsg(t.multihop.updated);
     void fetchAll();
   };
 
@@ -465,6 +474,12 @@ const MultihopManager: React.FC = () => {
                                       data-testid={`vpn-mh-overflow-${exitName}`}
                                     >
                                       <OverflowMenuItem
+                                        itemText={t.multihop.edit}
+                                        disabled={isActive}
+                                        onClick={() => setEditName(exitName)}
+                                        data-testid={`vpn-mh-action-edit-${exitName}`}
+                                      />
+                                      <OverflowMenuItem
                                         itemText={t.multihop.remove}
                                         isDelete
                                         disabled={isActive}
@@ -497,6 +512,15 @@ const MultihopManager: React.FC = () => {
         t={t}
         onClose={() => setImportOpen(false)}
         onSuccess={handleImportSuccess}
+      />
+
+      {/* Edit modal */}
+      <EditExitModal
+        open={editName !== null}
+        exitName={editName ?? ''}
+        t={t}
+        onClose={() => setEditName(null)}
+        onSuccess={handleEditSuccess}
       />
     </>
   );
