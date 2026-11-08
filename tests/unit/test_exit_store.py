@@ -4,7 +4,12 @@ from __future__ import annotations
 
 import pytest
 
-from phantom_daemon.base.errors import ExitStoreError
+from phantom_daemon.base.errors import (
+    ExitActiveError,
+    ExitAlreadyExistsError,
+    ExitNotFoundError,
+    ExitStoreError,
+)
 from phantom_daemon.base.exit_store.store import ExitStore, open_exit_store
 
 _SAMPLE_EXIT = {
@@ -72,7 +77,7 @@ class TestAddExit:
         d = test_env.sub("exit-dup")
         with open_exit_store(db_dir=d) as store:
             store.add_exit("vpn1", **_SAMPLE_EXIT)
-            with pytest.raises(ExitStoreError, match="already exists"):
+            with pytest.raises(ExitAlreadyExistsError, match="already exists"):
                 store.add_exit("vpn1", **_SAMPLE_EXIT)
 
     def test_add_multiple(self, test_env):
@@ -134,7 +139,7 @@ class TestRemoveExit:
         d = test_env.sub("exit-rm-nf")
         with (
             open_exit_store(db_dir=d) as store,
-            pytest.raises(ExitStoreError, match="not found"),
+            pytest.raises(ExitNotFoundError, match="not found"),
         ):
             store.remove_exit("nonexistent")
 
@@ -143,7 +148,7 @@ class TestRemoveExit:
         with open_exit_store(db_dir=d) as store:
             store.add_exit("vpn1", **_SAMPLE_EXIT)
             store.activate("vpn1")
-            with pytest.raises(ExitStoreError, match="deactivate first"):
+            with pytest.raises(ExitActiveError, match="deactivate first"):
                 store.remove_exit("vpn1")
 
 
@@ -160,7 +165,7 @@ class TestActivateDeactivate:
         d = test_env.sub("exit-activate-nf")
         with (
             open_exit_store(db_dir=d) as store,
-            pytest.raises(ExitStoreError, match="not found"),
+            pytest.raises(ExitNotFoundError, match="not found"),
         ):
             store.activate("nonexistent")
 
