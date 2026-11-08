@@ -21,6 +21,7 @@ const IDLE_COUNT = 25;
 
 // Peers table: default page size and the order the SPA sorts names in
 const DEFAULT_PAGE_SIZE = 25;
+const DASHBOARD_PAGE_SIZE = 10;
 const NAME_ORDER = new Intl.Collator("en", { numeric: true });
 
 type Peer = { name: string; latest_handshake: number; rx_bytes: number; tx_bytes: number };
@@ -122,11 +123,15 @@ function expectedOrder(list: Peer[], key: SortKey, direction: Direction): string
   return sorted.map((p) => p.name);
 }
 
-async function visibleRowNames(page: import("@playwright/test").Page): Promise<string[]> {
+async function visibleRowNames(
+  page: import("@playwright/test").Page,
+  prefix = "vpn-wg-row-",
+): Promise<string[]> {
   return page
-    .locator('[data-testid^="vpn-wg-row-"]')
-    .evaluateAll((rows) =>
-      rows.map((r) => (r.getAttribute("data-testid") ?? "").slice("vpn-wg-row-".length)),
+    .locator(`[data-testid^="${prefix}"]`)
+    .evaluateAll(
+      (rows, p) => rows.map((r) => (r.getAttribute("data-testid") ?? "").slice(p.length)),
+      prefix,
     );
 }
 
@@ -291,7 +296,28 @@ test.describe.serial("WireGuard peers table", () => {
     }
   });
 
-  // ── 6. Cleanup ─────────────────────────────────────────────────
+  // ── 6. Dashboard ───────────────────────────────────────────────
+  test("Dashboard: latest handshake first, ten rows, total peers", async ({ page }) => {
+    // Login lands on the dashboard
+    await login(page, adminPassword);
+    const all = await peers(page);
+    const table = page.getByTestId("dashboard-wg-table");
+    await expect(table).toBeVisible({ timeout: 10_000 });
+
+    // Latest handshake first (the connected clients), equal values in name order
+    await expect
+      .poll(() => visibleRowNames(page, "dashboard-wg-row-"))
+      .toEqual(expectedOrder(all, "last_handshake", "DESC").slice(0, DASHBOARD_PAGE_SIZE));
+
+    // Six columns, no actions menu
+    await expect(table.locator("thead th")).toHaveCount(6);
+    await expect(table.locator(".cds--overflow-menu")).toHaveCount(0);
+
+    // The WireGuard tile counts every peer
+    await expect(page.getByTestId("dashboard-wg-total")).toHaveText(new RegExp(`^${all.length}\\s`));
+  });
+
+  // ── 7. Cleanup ─────────────────────────────────────────────────
   test("Cleanup: disconnect and revoke", async ({ page }) => {
     test.setTimeout(60_000);
 
