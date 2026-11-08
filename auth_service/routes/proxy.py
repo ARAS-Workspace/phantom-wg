@@ -105,12 +105,14 @@ ROUTES: dict[tuple[str, str], Route] = {
     ("POST", "/api/dns/change"):                 Route(Access.OPERATE),
     ("POST", "/api/dns/get"):                    Route(Access.VIEW),
     # Multihop
+    ("POST", "/api/multihop/config"):            Route(Access.OPERATE),
     ("POST", "/api/multihop/disable"):           Route(Access.OPERATE),
     ("POST", "/api/multihop/enable"):            Route(Access.OPERATE),
     ("POST", "/api/multihop/import"):            Route(Access.OPERATE),
     ("GET", "/api/multihop/list"):               Route(Access.VIEW),
     ("POST", "/api/multihop/remove"):            Route(Access.OPERATE),
     ("GET", "/api/multihop/status"):             Route(Access.VIEW),
+    ("POST", "/api/multihop/update"):            Route(Access.OPERATE),
 }
 
 

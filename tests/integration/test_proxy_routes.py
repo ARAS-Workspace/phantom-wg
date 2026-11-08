@@ -190,6 +190,12 @@ def test_routes_carrying_a_client_key_are_not_view(route):
     assert ROUTES[("POST", route)].access is Access.OPERATE
 
 
+# config returns the exit's private key, update replaces the exit's config.
+@pytest.mark.parametrize("route", ["/api/multihop/config", "/api/multihop/update"])
+def test_exit_edit_routes_are_operate(route):
+    assert ROUTES[("POST", route)].access is Access.OPERATE
+
+
 def test_custody_is_the_backup_routes():
     custody = sorted(path for (_, path), r in ROUTES.items() if r.access is Access.CUSTODY)
     assert custody == BACKUP_ROUTES
