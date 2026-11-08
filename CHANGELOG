@@ -5,6 +5,21 @@ passwords, TOTP MFA, RBAC, audit log, authenticated reverse proxy
 to the daemon UDS.
 
 
+v1.1.12 - 2026-11-08
+--------------------
+
+  Proxy route release. The proxy forwards two more multihop routes of
+  the daemon. Roles, the schema and the configuration are unchanged.
+
+  * Route table. ROUTES lists 28 daemon routes. POST
+    /api/multihop/update replaces the configuration of an exit that is
+    not active, and POST /api/multihop/config returns the stored
+    configuration of an exit as WireGuard .conf text, its private and
+    preshared keys included. Both rows are OPERATE: update changes VPN
+    state, and config reads a key, as the client routes that return a
+    key do.
+
+
 v1.1.11 - 2026-11-05
 --------------------
 
