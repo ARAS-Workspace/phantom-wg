@@ -177,7 +177,7 @@ class TestExitUpdateAndConfig:
         body = resp.json()
         assert body["ok"] is False
         assert body["code"] == "INVALID_EXIT_CONFIG"
-        assert body["error"] == "Missing [Interface] PrivateKey"
+        assert body["error"] == "Line 1 is not a section header or key = value"
 
         # DB state — unchanged
         assert test_env.exit_store.get_exit(imported) == before

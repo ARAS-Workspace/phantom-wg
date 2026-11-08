@@ -166,50 +166,103 @@ def _validate_keepalive(value: str) -> int:
     return seconds
 
 
+# Section name (lower case) → its keys the daemon uses (lower case → as written).
+# Every other key in a section is not used and is skipped.
+_SECTION_KEYS: dict[str, dict[str, str]] = {
+    "interface": {"privatekey": "PrivateKey", "address": "Address"},
+    "peer": {
+        "publickey": "PublicKey",
+        "presharedkey": "PresharedKey",
+        "endpoint": "Endpoint",
+        "allowedips": "AllowedIPs",
+        "persistentkeepalive": "PersistentKeepalive",
+    },
+}
+_SECTION_NAMES = {"interface": "Interface", "peer": "Peer"}
+
+# Keys WireGuard allows on more than one line; the lines are joined.
+_LIST_KEYS = frozenset({"address", "allowedips"})
+
+
+def _read_sections(raw_config: str) -> tuple[dict[str, str], dict[str, str]]:
+    """Read the [Interface] and [Peer] sections into key → value maps.
+
+    The layout is fixed: one [Interface], one [Peer], every other line a
+    comment, a blank line or a key = value inside one of them. Anything else
+    raises instead of being dropped, so a second peer, a mistyped section or
+    a line without "=" cannot disappear from the config unnoticed. Errors
+    name the line number and never the line itself, which may hold a key.
+    """
+    sections: dict[str, dict[str, str]] = {}
+    section = ""
+
+    for number, raw_line in enumerate(raw_config.splitlines(), start=1):
+        line = raw_line.strip()
+        if not line or line.startswith("#"):
+            continue
+
+        if line.startswith("["):
+            if not line.endswith("]"):
+                raise ValueError(f"Line {number} is not a section header or key = value")
+            name = line[1:-1].strip()
+            section = name.lower()
+            if section not in _SECTION_KEYS:
+                raise ValueError(
+                    f"Unknown section [{name}] — only [Interface] and [Peer] are supported"
+                )
+            if section in sections:
+                raise ValueError(
+                    f"Duplicate [{_SECTION_NAMES[section]}] section — only one is supported"
+                )
+            sections[section] = {}
+            continue
+
+        if "=" not in line:
+            raise ValueError(f"Line {number} is not a section header or key = value")
+        if not section:
+            raise ValueError(f"Line {number} is outside a section")
+
+        key, value = line.split("=", 1)
+        key = key.strip().lower()
+        value = value.strip()
+        # A key is one word. "PresharedKey <key>=" has an "=" from the key's
+        # padding; read as a key it would be skipped as unknown.
+        if len(key.split()) != 1:
+            raise ValueError(f"Line {number} is not a section header or key = value")
+
+        known = _SECTION_KEYS[section]
+        if key not in known:
+            continue
+        values = sections[section]
+        if key not in values:
+            values[key] = value
+        elif key in _LIST_KEYS:
+            values[key] = f"{values[key]}, {value}"
+        else:
+            raise ValueError(f"Duplicate [{_SECTION_NAMES[section]}] {known[key]}")
+
+    return sections.get("interface", {}), sections.get("peer", {})
+
+
 def parse_wireguard_config(raw_config: str) -> ParsedWireGuardConfig:
     """Parse a standard WireGuard .conf into structured data.
 
     Expected format:
         [Interface]
         PrivateKey = <base64>
-        Address = <cidr>
+        Address = <cidr>, ...       # may repeat, lines are joined
 
         [Peer]
         PublicKey = <base64>
         PresharedKey = <base64>     # optional
         Endpoint = <host:port>
-        AllowedIPs = <cidr>, ...
+        AllowedIPs = <cidr>, ...    # may repeat, lines are joined
         PersistentKeepalive = <int> # optional, default 5
 
-    Raises ValueError on missing required fields or invalid keys.
+    Other keys (DNS, MTU, ...) are skipped. Raises ValueError on a layout
+    _read_sections refuses, on missing required fields and on invalid values.
     """
-    section = ""
-    iface: dict[str, str] = {}
-    peer: dict[str, str] = {}
-
-    for raw_line in raw_config.splitlines():
-        line = raw_line.strip()
-        if not line or line.startswith("#"):
-            continue
-
-        if line.startswith("["):
-            section = line.strip("[]").lower()
-            continue
-
-        if "=" not in line:
-            continue
-
-        key, value = line.split("=", 1)
-        key = key.strip().lower()
-        value = value.strip()
-
-        if section == "interface":
-            iface[key] = value
-        elif section == "peer":
-            if key == "allowedips" and key in peer:
-                peer[key] = f"{peer[key]}, {value}"
-            else:
-                peer[key] = value
+    iface, peer = _read_sections(raw_config)
 
     # Validate required fields
     if "privatekey" not in iface:
