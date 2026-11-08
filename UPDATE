@@ -12,6 +12,36 @@ Standard Update:
   update follows a git clone. A package installed from the release zip has no
   git remote, and update stops there.
 
+Update Recipe:
+  The commands ./tools/prod.sh update runs, without the tool, from the clone.
+  Nothing is rolled back for you.
+
+    # Host and clone
+    docker info --format '{{.ServerVersion}}'
+    docker compose version --short
+    git --version
+    df -h .                                       # 1 GiB free or more
+    git remote get-url origin
+    git status --porcelain --untracked-files=no   # prints nothing
+    git symbolic-ref --short HEAD                 # prints main
+
+    # The release
+    git fetch origin main
+    git merge-base --is-ancestor HEAD FETCH_HEAD  # exits 0
+    git merge --ff-only FETCH_HEAD
+
+    # From here on, the code of the new release
+    # Images: PHANTOM_IMAGE_SOURCE in .env, one of
+    docker compose pull                           # registry
+    docker compose build                          # build
+    bash tools/stack/prod/flows/stack/update/helper/update_hook.sh
+    docker compose config -q
+    docker compose up -d --force-recreate
+    # All running, restart counts steady for 10 s:
+    docker compose ps -aq | xargs docker inspect \
+      --format '{{.Name}} {{.State.Status}} {{.RestartCount}}'
+    docker compose ps
+
 Local Changes:
   Server-specific changes (ports, resource limits, extra volumes) belong in
   docker-compose.override.yml. It is not tracked by git, so updates leave
@@ -62,12 +92,16 @@ Rollback:
   Environment files and runtime data are unaffected by rollback.
 
 Hard Reset:
+  ./tools/prod.sh down
   ./tools/prod.sh hard-reset
 
-  Destroys ALL data: secrets, auth database, client databases,
-  and Docker volumes. Requires typing 'yes' to confirm. Environment files
-  and docker-compose.override.yml stay. The daemon writes its data as root,
-  so run it as root or with sudo.
+  Destroys ALL data: secrets, auth database, the address pool, client
+  databases, Let's Encrypt state and Docker volumes. It stops while the stack
+  runs and requires typing 'yes' to confirm. Environment files and
+  docker-compose.override.yml stay. The daemon writes its data as root; the
+  tool removes those files from a throwaway container without network
+  (--cap-drop ALL --cap-add DAC_OVERRIDE), so a user of the docker group runs
+  it without sudo.
 
   After hard reset, run setup again:
     ./tools/prod.sh setup

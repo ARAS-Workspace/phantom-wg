@@ -2,10 +2,22 @@ Phantom-WG Modern — Setup Guide
 =================================
 
 Prerequisites:
-  - Docker Engine 20.10+
-  - Docker Compose v2
+  - Linux with kernel 5.15 or newer (the kernel docker info reports)
+  - Docker Engine 27.0.1 or newer, with the Docker Compose plugin 2.27.2 or
+    newer. Engine 27.0.1 is the first with ip6tables on by default, which the
+    dual-stack network of the stack needs; Compose 2.27.2 is the first with
+    "docker compose config --environment", which the tools read .env with.
+  - /dev/net/tun
+  - Python 3.9 or newer as python3. Without it, tools/prod.sh stops and, on
+    the Debian, Fedora/RHEL and Arch families, names the command that
+    installs it.
   - bash
-  - git (required for the update mechanism)
+  - git, to install from a clone and to update
+  - unzip, to install from a release zip
+  - A user of the docker group, or root, to run the tools
+
+  ./tools/prod.sh gates reports what this host has: Python, Docker, Compose,
+  kernel, TUN, git and free disk.
 
 Directory Structure:
   phantom-wg/
@@ -21,29 +33,32 @@ Directory Structure:
   ├── UPDATE                               Update and maintenance guide
   ├── LICENSE                              AGPL-3.0
   ├── THIRD_PARTY_LICENSES                 Dependency licenses
+  ├── images/                              Image archive (release zip only)
   ├── phantom_daemon/                      Daemon source
   ├── services/
   │   ├── auth-service/                    Authentication service
   │   ├── nginx/                           TLS reverse proxy config
   │   └── react-spa/dist/                  Web dashboard (pre-built)
   └── tools/
-      ├── prod.sh                          Production CLI
-      ├── prod.vars                        Environment variables
-      ├── compose/                         Image sources (registry, build, archive)
-      └── lib/                             Shell libraries
+      ├── prod.sh                          Production CLI, starts the toolchain
+      ├── __main__.py                      Toolchain entry (Python floor check)
+      ├── core/                            Command discovery and process runner
+      ├── stack/prod/                      Production commands and libraries
+      └── compose/                         Image sources (registry, build, archive)
 
 Quick Start:
   1. Setup (first time only):
      ./tools/prod.sh setup
 
-     This generates:
-       - .env from .env.example (if not exists)
-       - docker-compose.override.yml from its .example (if not exists)
-       - .env.daemon from .env.daemon.example (if not exists)
-       - .env.auth-service from .env.auth-service.example (if not exists)
+     This creates what is missing, in this order:
+       - .env, .env.daemon, .env.auth-service and
+         docker-compose.override.yml, each from its .example
        - WireGuard server keypair
-       - Auth service keypair + admin account + database
+       - Auth service keypair, admin account and database
        - Self-signed TLS certificate
+       - Address pool (container-data/db/wallet.db)
+
+     Setup Recipe below lists the commands it runs.
 
      Setup refuses a complete install and otherwise creates only what is
      missing. To start over, use ./tools/prod.sh hard-reset.
@@ -56,6 +71,9 @@ Quick Start:
      Edit .env.daemon and set your server's public IP:
        WIREGUARD_ENDPOINT_V4=203.0.113.1
        WIREGUARD_ENDPOINT_V6=2001:db8::1    (optional)
+     The stack starts without them: they go into the WireGuard client
+     configs the dashboard exports. The daemon reads them when it starts, so
+     set them before up.
 
   3. Start:
      ./tools/prod.sh up
@@ -63,6 +81,86 @@ Quick Start:
   4. Access:
      Dashboard:  https://<server-ip>
      WireGuard:  UDP port 51820
+
+Setup Recipe:
+  The commands ./tools/prod.sh setup and up run, without the tool, from the
+  install directory, as a user of the docker group.
+
+    # Host: Engine 27.0.1+ on kernel 5.15+, Compose 2.27.2+
+    docker info --format '{{.ServerVersion}} {{.KernelVersion}}'
+    docker compose version --short
+    test -e /dev/net/tun
+
+    # Local files
+    for f in .env .env.daemon .env.auth-service docker-compose.override.yml; do
+      [ -f "$f" ] || cp "$f.example" "$f"
+    done
+
+    # Images: PHANTOM_IMAGE_SOURCE in .env, one of
+    SOURCE=registry
+    docker compose pull                                # registry
+    docker compose build                               # build
+    (cd images && sha256sum -c SHA256SUMS)             # archive
+    while read -r _ t; do
+      docker load -q -i "images/$t"
+    done < images/SHA256SUMS
+    LEG="tools/compose/$SOURCE.yml"
+    DAEMON=$(docker compose -f "$LEG" config --images daemon)
+    AUTH=$(docker compose -f "$LEG" config --images auth-service)
+
+    SECRETS=container-data/secrets/production
+    mkdir -p "$SECRETS" container-data/auth-db container-data/db
+
+    # WireGuard keypair
+    GENERATE='from wireguard_go_bridge.keys import generate_private_key as new'
+    GENERATE="$GENERATE, derive_public_key as public"
+    GENERATE="$GENERATE; key = new(); print(key); print(public(key))"
+    docker run --rm "$DAEMON" python -c "$GENERATE" | {
+      read -r private; echo "$private" > "$SECRETS/wg_private_key"
+      read -r public; echo "$public" > "$SECRETS/wg_public_key"
+    }
+    chmod 600 "$SECRETS/wg_private_key" "$SECRETS/wg_public_key"
+
+    # Auth service: signing and verify keys, admin password, auth.db
+    docker run --rm --user "$(id -u):$(id -g)" \
+      -v "$PWD/$SECRETS:/secrets" -v "$PWD/container-data/auth-db:/db" \
+      -v "$PWD/services/auth-service/tools/bootstrap.py:/tmp/bootstrap.py:ro" \
+      "$AUTH" python /tmp/bootstrap.py \
+      --secrets-dir /secrets --db-dir /db --admin-username admin
+    chmod 600 "$SECRETS/auth_signing_key" "$SECRETS/auth_verify_key" \
+      "$SECRETS/.admin_password"
+
+    # Self-signed TLS certificate
+    SUBJECT='/C=TR/ST=Istanbul/L=Istanbul/O=Phantom-WG'
+    SUBJECT="$SUBJECT/OU=Phantom Certification Authority"
+    SUBJECT="$SUBJECT/CN=phantom-wg/emailAddress=ca@phantom.tc"
+    docker run --rm --user "$(id -u):$(id -g)" -v "$PWD/$SECRETS:/secrets" \
+      "$DAEMON" openssl req -x509 -newkey ec \
+      -pkeyopt ec_paramgen_curve:prime256v1 -days 365 -nodes \
+      -keyout /secrets/tls_key -out /secrets/tls_cert -subj "$SUBJECT" \
+      -addext 'subjectAltName=DNS:phantom-wg,DNS:localhost,IP:127.0.0.1' \
+      -addext 'basicConstraints=critical,CA:TRUE' \
+      -addext 'keyUsage=critical,digitalSignature,keyCertSign,keyEncipherment' \
+      -addext 'extendedKeyUsage=serverAuth'
+    chmod 600 "$SECRETS/tls_cert" "$SECRETS/tls_key"
+
+    # Address pool. SUBNET is the value of --terazi-ipv4-subnet, or empty.
+    SUBNET=
+    [ -z "$SUBNET" ] || SUBNET=$(docker run --rm \
+      -v "$PWD/phantom_daemon:/app/phantom_daemon:ro" \
+      "$DAEMON" python -m phantom_daemon.base.wallet.subnet_check "$SUBNET")
+    docker run --rm --network none \
+      -v "$PWD/phantom_daemon:/app/phantom_daemon:ro" \
+      --mount "type=bind,src=$PWD/container-data/db,dst=/db" \
+      "$DAEMON" python -m phantom_daemon.base.wallet.bootstrap \
+      /db ${SUBNET:+"$SUBNET"}
+
+    # ./tools/prod.sh up
+    docker compose up -d
+    # All running, restart counts steady for 10 s:
+    docker compose ps -aq | xargs docker inspect \
+      --format '{{.Name}} {{.State.Status}} {{.RestartCount}}'
+    docker compose ps
 
 Custom Client Subnet:
   VPN clients get their addresses from 10.8.0.0/24 by default. Terazi pairs
@@ -120,13 +218,14 @@ Compose Override:
 
 Commands:
   ./tools/prod.sh help             Show all commands
-  ./tools/prod.sh setup            First setup (env + keys + auth + TLS)
+  ./tools/prod.sh gates            Report what this host provides
+  ./tools/prod.sh setup            First setup (env, keys, auth, TLS, pool)
   ./tools/prod.sh gen-keys [-f]    Generate the WireGuard keypair
   ./tools/prod.sh setup-auth [-f]  Bootstrap the auth service
   ./tools/prod.sh setup-tls [-f]   Generate a self-signed TLS certificate
   ./tools/prod.sh up               Start stack (stops if setup is incomplete)
   ./tools/prod.sh down             Stop stack
-  ./tools/prod.sh restart          Restart all services
+  ./tools/prod.sh restart [svc]    Restart all services, or one
   ./tools/prod.sh images           Show the image source and its images
   ./tools/prod.sh images use <src> Select registry, build or archive
   ./tools/prod.sh images sync      Pull, build or load the selected images
@@ -155,9 +254,10 @@ Ports:
 Data Directories (created at runtime):
   container-data/
   ├── secrets/production/         Keys and certificates
-  ├── db/                         Client and peer databases
+  ├── db/                         Address pool, client and peer databases
   ├── state/db/                   Runtime state (bridges)
-  └── auth-db/                    Authentication database
+  ├── auth-db/                    Authentication database
+  └── certbot/                    Let's Encrypt state (certbot only)
 
 TLS Certificate:
   Default is self-signed. To use your own certificate,
