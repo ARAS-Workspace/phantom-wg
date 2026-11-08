@@ -12,6 +12,7 @@ import {
 import { apiClient } from '@shared/api/client';
 import { useLocale } from '@shared/hooks';
 import { translate } from '@shared/translations';
+import { type PeerInfo, type WireGuardStatusData } from '@shared/types/wireguard';
 import './styles/DashboardStatus.scss';
 
 interface HelloData {
@@ -38,17 +39,6 @@ interface NetworkData {
   pool: PoolStats;
 }
 
-interface WireGuardPeer {
-  latest_handshake: number;
-}
-
-interface WireGuardData {
-  interface: {
-    total_peers: number;
-  };
-  peers: WireGuardPeer[];
-}
-
 interface MultihopData {
   enabled: boolean;
   active: string;
@@ -57,7 +47,7 @@ interface MultihopData {
 interface DashboardState {
   hello: HelloData | null;
   network: NetworkData | null;
-  wireguard: WireGuardData | null;
+  wireguard: WireGuardStatusData | null;
   multihop: MultihopData | null;
   loading: boolean;
   error: boolean;
@@ -83,7 +73,7 @@ const DashboardStatus: React.FC = () => {
     const [helloRes, networkRes, wireguardRes, multihopRes] = await Promise.all([
       apiClient.get<HelloData>('/api/core/hello'),
       apiClient.get<NetworkData>('/api/core/network'),
-      apiClient.get<WireGuardData>('/api/core/wireguard'),
+      apiClient.get<WireGuardStatusData>('/api/core/wireguard'),
       apiClient.get<MultihopData>('/api/multihop/status'),
     ]);
 
@@ -101,7 +91,7 @@ const DashboardStatus: React.FC = () => {
     void fetchAll();
   }, [fetchAll]);
 
-  const countOnlinePeers = (peers: WireGuardPeer[]): number => {
+  const countOnlinePeers = (peers: PeerInfo[]): number => {
     const now = Math.floor(Date.now() / 1000);
     return peers.filter((p) => p.latest_handshake > 0 && now - p.latest_handshake < 180).length;
   };
@@ -176,8 +166,8 @@ const DashboardStatus: React.FC = () => {
               <SkeletonText width="70%" />
             ) : wireguard ? (
               <p className="dashboard-status__tile-value">
-                <span className="dashboard-status__stat">
-                  {wireguard.interface.total_peers} {t.dashboard.total}
+                <span className="dashboard-status__stat" data-testid="dashboard-wg-total">
+                  {wireguard.total_peers} {t.dashboard.total}
                 </span>
                 <span className="dashboard-status__stat-online">
                   {countOnlinePeers(wireguard.peers)} {t.dashboard.online}
