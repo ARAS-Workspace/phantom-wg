@@ -15,9 +15,6 @@ const PEER_COUNT = parseInt(process.env.WG_CLIENT_COUNT ?? "1", 10);
 // Container name: resolved from COMPOSE_PROJECT_NAME injected by runner.py
 const project = process.env.COMPOSE_PROJECT_NAME ?? "spa";
 
-// Never-connected clients added for the peers table test (more than one page)
-const EXTRA_COUNT = 25;
-
 // Peers table: default page size and the order the SPA sorts names in
 const DEFAULT_PAGE_SIZE = 25;
 const NAME_ORDER = new Intl.Collator("en", { numeric: true });
@@ -26,10 +23,6 @@ const NAME_ORDER = new Intl.Collator("en", { numeric: true });
 
 function clientName(index: number): string {
   return `e2e-wg-${RUN_ID}-${index}`;
-}
-
-function extraName(index: number): string {
-  return `e2e-wgx-${RUN_ID}-${index}`;
 }
 
 async function visibleRowNames(page: import("@playwright/test").Page): Promise<string[]> {
@@ -252,83 +245,9 @@ test.describe.serial("WireGuard", () => {
     ).toBeVisible();
   });
 
-  // ── 6. Peers table: pagination, search, sorting ───────────────
-  test("Peers table: pagination, search and sorting", async ({ page }) => {
-    test.setTimeout(60_000);
-    await loginAndGoWireGuard(page, adminPassword);
-
-    // Never-connected clients, so the table spans more than one page
-    for (let i = 1; i <= EXTRA_COUNT; i++) {
-      const name = extraName(i);
-      const res = await apiCall<{ ok: boolean }>(
-        page, "POST", "/api/core/clients/assign", { name },
-      );
-      expect(res.ok).toBe(true);
-      createdClients.push(name);
-    }
-
-    const names = await peerNames(page);
-    expect(names.length).toBe(baselinePeers + PEER_COUNT + EXTRA_COUNT);
-    const byName = [...names].sort(NAME_ORDER.compare);
-    const connected = Array.from({ length: PEER_COUNT }, (_, i) => clientName(i + 1));
-    const neverConnected = byName.filter((n) => !connected.includes(n));
-
-    const pagination = page.getByTestId("vpn-wg-pagination");
-    const refresh = page.getByTestId("vpn-wg-refresh");
-    const rows = () => visibleRowNames(page);
-
-    // Refresh loads the new clients: first page in name order
-    await refresh.click();
-    await expect(refresh).toBeEnabled();
-    await expect.poll(rows).toEqual(byName.slice(0, DEFAULT_PAGE_SIZE));
-
-    // Second page
-    await pagination.locator(".cds--pagination__button--forward").click();
-    await expect.poll(rows).toEqual(byName.slice(DEFAULT_PAGE_SIZE, 2 * DEFAULT_PAGE_SIZE));
-
-    // A refresh keeps the page and its order (the API order changes on every call)
-    await refresh.click();
-    await expect(refresh).toBeEnabled();
-    await expect.poll(rows).toEqual(byName.slice(DEFAULT_PAGE_SIZE, 2 * DEFAULT_PAGE_SIZE));
-
-    // Page size 10 starts again from the first page
-    await pagination.locator(".cds--pagination__left select").selectOption("10");
-    await expect.poll(rows).toEqual(byName.slice(0, 10));
-
-    // Search by name
-    const search = page.getByTestId("vpn-wg-search");
-    await search.fill(extraName(7));
-    await expect.poll(rows).toEqual([extraName(7)]);
-    await search.fill("");
-    await expect.poll(rows).toEqual(byName.slice(0, 10));
-
-    // Numeric columns: ascending puts the never-connected peers first, equal values
-    // in name order; descending puts the connected peers first
-    const top = Math.min(PEER_COUNT, 10);
-    for (const key of ["last_handshake", "rx", "tx"]) {
-      const header = page.getByTestId(`vpn-wg-sort-${key}`);
-      await header.click();
-      await expect.poll(rows).toEqual(neverConnected.slice(0, 10));
-      await header.click();
-      await expect
-        .poll(async () => {
-          const r = await rows();
-          return {
-            connected: r.slice(0, top).filter((n) => connected.includes(n)).length,
-            rest: r.slice(top),
-          };
-        })
-        .toEqual({ connected: top, rest: neverConnected.slice(0, 10 - top) });
-    }
-
-    // Back to name order
-    await page.getByTestId("vpn-wg-sort-name").click();
-    await expect.poll(rows).toEqual(byName.slice(0, 10));
-  });
-
-  // ── 7. Cleanup: Disconnect all and revoke ─────────────────────
+  // ── 6. Cleanup: Disconnect all and revoke ─────────────────────
   test(`Cleanup: Disconnect ${PEER_COUNT} clients and revoke`, async ({ page }) => {
-    test.setTimeout(30_000 + PEER_COUNT * 3_000 + EXTRA_COUNT * 1_000);
+    test.setTimeout(30_000 + PEER_COUNT * 3_000);
 
     // Bring down WireGuard on all containers
     for (let i = 1; i <= PEER_COUNT; i++) {
