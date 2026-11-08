@@ -88,7 +88,7 @@
   "dashboard": {
     "daemonStatus": "Daemon Durumu",
     "clientPool": "İstemci Havuzu",
-    "wireguardPeers": "WireGuard Peers",
+    "wireguardPeers": "WireGuard Eşleri",
     "network": "Ağ Yapılandırması",
     "dns": "DNS Sunucuları",
     "multihop": "Multihop",
