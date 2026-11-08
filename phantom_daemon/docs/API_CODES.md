@@ -54,12 +54,12 @@ All responses carry a `code` field for frontend translation. The `error` field i
 
 ### Multihop (`/api/multihop/`)
 
-| Code                  | HTTP | Trigger                                              |
-|-----------------------|------|------------------------------------------------------|
-| `INVALID_EXIT_CONFIG` | 400  | `ValueError` — WireGuard config parse failed         |
-| `EXIT_NOT_FOUND`      | 404  | Exit lookup on enable, `ExitNotFoundError` on remove |
-| `EXIT_ALREADY_EXISTS` | 400  | `ExitAlreadyExistsError` — duplicate name on import  |
-| `EXIT_IS_ACTIVE`      | 400  | `ExitActiveError` — remove attempted while active    |
+| Code                  | HTTP | Trigger                                                                    |
+|-----------------------|------|----------------------------------------------------------------------------|
+| `INVALID_EXIT_CONFIG` | 400  | `ValueError` — WireGuard config parse failed on import or update           |
+| `EXIT_NOT_FOUND`      | 404  | Exit lookup on enable and config, `ExitNotFoundError` on remove and update |
+| `EXIT_ALREADY_EXISTS` | 400  | `ExitAlreadyExistsError` — duplicate name on import                        |
+| `EXIT_IS_ACTIVE`      | 400  | `ExitActiveError` — remove or update attempted while active                |
 
 ### Generic (Global Handler — Business Exceptions)
 

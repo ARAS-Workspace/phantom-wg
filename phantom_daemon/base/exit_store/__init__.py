@@ -17,6 +17,7 @@ from phantom_daemon.base.exit_store.parser import (
     ParsedWireGuardConfig,
     parse_wireguard_config,
 )
+from phantom_daemon.base.exit_store.render import render_wireguard_config
 from phantom_daemon.base.exit_store.store import ExitStore, open_exit_store
 
 __all__ = [
@@ -24,4 +25,5 @@ __all__ = [
     "ParsedWireGuardConfig",
     "open_exit_store",
     "parse_wireguard_config",
+    "render_wireguard_config",
 ]

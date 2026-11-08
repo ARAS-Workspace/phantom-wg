@@ -150,6 +150,56 @@ class ExitStore:
             "keepalive": keepalive,
         }
 
+    def update_exit(
+        self,
+        name: str,
+        *,
+        endpoint: str,
+        address: str,
+        private_key_hex: str,
+        public_key_hex: str,
+        preshared_key_hex: str,
+        allowed_ips: str,
+        keepalive: int,
+    ) -> dict:
+        """Replace the configuration of an exit, keeping its id, name and position.
+
+        Raises ExitActiveError if active, ExitNotFoundError if not found.
+        """
+        active = self.get_active()
+        if active == name:
+            raise ExitActiveError(
+                f"Cannot update active exit: {name} — deactivate first"
+            )
+
+        row = self._conn.execute(
+            "SELECT id FROM exits WHERE name = ?", (name,)
+        ).fetchone()
+        if not row:
+            raise ExitNotFoundError(f"Exit not found: {name}")
+
+        self._conn.execute(
+            "UPDATE exits SET endpoint = ?, address = ?, private_key_hex = ?, "
+            "public_key_hex = ?, preshared_key_hex = ?, allowed_ips = ?, "
+            "keepalive = ? WHERE name = ?",
+            (endpoint, address, private_key_hex, public_key_hex,
+             preshared_key_hex, allowed_ips, keepalive, name),
+        )
+
+        self._conn.commit()
+
+        return {
+            "id": row[0],
+            "name": name,
+            "endpoint": endpoint,
+            "address": address,
+            "private_key_hex": private_key_hex,
+            "public_key_hex": public_key_hex,
+            "preshared_key_hex": preshared_key_hex,
+            "allowed_ips": allowed_ips,
+            "keepalive": keepalive,
+        }
+
     def remove_exit(self, name: str) -> None:
         """Remove an exit configuration.
 
