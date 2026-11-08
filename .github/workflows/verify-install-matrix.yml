@@ -1,0 +1,220 @@
+name: Verify install matrix
+
+# Installs the release tree with tools/prod.sh on the Linux distributions an
+# operator runs: each job boots a pinned cloud image under KVM, and the guest
+# runs .github/scripts/probes/install-matrix/install-matrix-guest.sh on the
+# repository it gets on a payload disk. The guest installs Docker and reboots;
+# then a user of the docker group runs setup, up, a check of the running stack
+# and hard-reset in one tree, first with the default address pool, then with
+# SUBNET.
+#
+# required hosts must pass. observe hosts report without failing the run.
+# .github/scripts/probes/install-matrix/verify-install-matrix.sh moves the tag
+# and starts the run.
+
+on:
+  push:
+    tags:
+      - 'verify-install-matrix'
+
+permissions:
+  contents: read
+
+env:
+  # Docker CE from download.docker.com, pinned to these versions on the deb
+  # hosts; each matrix entry gives the suffix its repository adds.
+  DOCKER_CE: '5:29.9.3-1'
+  CONTAINERD_IO: '2.4.2-3'
+  BUILDX: '0.38.1-1'
+  COMPOSE: '5.7.0-1'
+  # The pool setup gives without --terazi-ipv4-subnet, and the one of the
+  # second round.
+  DEFAULT_SUBNET: '10.8.0.0/24'
+  SUBNET: '10.9.0.0/24'
+
+jobs:
+  install:
+    name: Install on ${{ matrix.name }}
+    # The self-hosted bare-metal runners with KVM.
+    runs-on: [self-hosted, linux, x64, kvm]
+    timeout-minutes: 60
+    continue-on-error: ${{ matrix.role == 'observe' }}
+    strategy:
+      fail-fast: false
+      matrix:
+        # The current image of each release, as an operator gets it today.
+        include:
+          - name: Ubuntu 22.04
+            id: ubuntu-22.04
+            role: required
+            family: deb
+            image: https://cloud-images.ubuntu.com/releases/jammy/release-20261020/ubuntu-22.04-server-cloudimg-amd64.img
+            digest_tool: sha256sum
+            digest: 2099e63da0b822ef8e05e3d596c1b402eaaae658fc08ab919cb8495bfcdc488b
+            docker_os: ubuntu
+            docker_codename: jammy
+            docker_suffix: '~ubuntu.22.04~jammy'
+          - name: Ubuntu 24.04
+            id: ubuntu-24.04
+            role: required
+            family: deb
+            image: https://cloud-images.ubuntu.com/releases/noble/release-20261017/ubuntu-24.04-server-cloudimg-amd64.img
+            digest_tool: sha256sum
+            digest: 04e8f2461a16a44e78a370284471f29616cdd9baf1893df25807b71f985b6c94
+            docker_os: ubuntu
+            docker_codename: noble
+            docker_suffix: '~ubuntu.24.04~noble'
+          - name: Ubuntu 26.04
+            id: ubuntu-26.04
+            role: required
+            family: deb
+            image: https://cloud-images.ubuntu.com/releases/resolute/release-20261016/ubuntu-26.04-server-cloudimg-amd64.img
+            digest_tool: sha256sum
+            digest: 5645d0318ad21f643ebb1ac4567514620e9893380b07b0201fda163baa5b7eb5
+            docker_os: ubuntu
+            docker_codename: resolute
+            docker_suffix: '~ubuntu.26.04~resolute'
+          - name: Debian 12
+            id: debian-12
+            role: required
+            family: deb
+            image: https://cloud.debian.org/images/cloud/bookworm/20261026-2643/debian-12-generic-amd64-20261026-2643.qcow2
+            digest_tool: sha512sum
+            digest: ba6073af9f789c0f7d6b73ec1b23bb207f07f06f2d31bfd3ce5e550fe43eb9415ef983dc0e039014cd59797e0cbea5c32592e6900fa8f974f2e4466b88ff0d80
+            docker_os: debian
+            docker_codename: bookworm
+            docker_suffix: '~debian.12~bookworm'
+          - name: Debian 13
+            id: debian-13
+            role: required
+            family: deb
+            image: https://cloud.debian.org/images/cloud/trixie/20261103-2651/debian-13-generic-amd64-20261103-2651.qcow2
+            digest_tool: sha512sum
+            digest: 1207e6e3efaff8ee77ab7a32c156a3eea6a9e53f94cfc48efbd1f49ba554ca36ac62ab27395aa813a1775a8c0a393b1a1ce5377d9e5670f6113e3110c57fee4b
+            docker_os: debian
+            docker_codename: trixie
+            docker_suffix: '~debian.13~trixie'
+          - name: Fedora 45
+            id: fedora-45
+            role: observe
+            family: rpm
+            image: https://dl.fedoraproject.org/pub/fedora/linux/releases/45/Cloud/x86_64/images/Fedora-Cloud-Base-Generic-45-1.4.x86_64.qcow2
+            digest_tool: sha256sum
+            digest: 50bdc5e70f6a24f540932d15411c1c6ae9fcfa40fb990d876d83c5cc823b2ad0
+            docker_os: fedora
+            docker_codename: ''
+            docker_suffix: ''
+          - name: AlmaLinux 10.2
+            id: almalinux-10.2
+            role: observe
+            family: rpm
+            image: https://repo.almalinux.org/almalinux/10/cloud/x86_64/images/AlmaLinux-10-GenericCloud-10.2-20261012.0.x86_64.qcow2
+            digest_tool: sha256sum
+            digest: cbee4726fc0f5a60694bb4f289003cc221e715dfbacebcce76b54daf386d8eca
+            docker_os: centos
+            docker_codename: ''
+            docker_suffix: ''
+          - name: Arch Linux
+            id: arch
+            role: observe
+            family: arch
+            image: https://geo.mirror.pkgbuild.com/images/v20261101.620452/Arch-Linux-x86_64-cloudimg-20261101.620452.qcow2
+            digest_tool: sha256sum
+            digest: 794eb4889b39e1f0ed7d5ae998b2a1ed2137db8cf8c3476cf2962c7437ecb003
+            docker_os: ''
+            docker_codename: ''
+            docker_suffix: ''
+    steps:
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+
+      - name: Check the host
+        run: |
+          for c in qemu-system-x86_64 qemu-img cloud-localds git curl python3 mawk; do
+            command -v "$c" > /dev/null || { echo "::error::$c is not installed on this runner"; exit 1; }
+          done
+          python3 -c 'import os; os.close(os.open("/dev/kvm", os.O_RDWR))' \
+            || { echo "::error::/dev/kvm cannot be opened by $(id -un)"; exit 1; }
+          echo "user $(id -un), kernel $(uname -r), $(nproc) cpus, $(df -h --output=avail "$RUNNER_TEMP" | tail -1 | tr -d ' ') free"
+
+      - name: Fetch the image
+        env:
+          IMAGE_URL: ${{ matrix.image }}
+          DIGEST_TOOL: ${{ matrix.digest_tool }}
+          DIGEST: ${{ matrix.digest }}
+        run: |
+          mkdir -p "$RUNNER_TEMP/vm"
+          curl -fSL --retry 3 --retry-delay 2 -o "$RUNNER_TEMP/vm/base.img" "$IMAGE_URL"
+          echo "$DIGEST  $RUNNER_TEMP/vm/base.img" | "$DIGEST_TOOL" -c -
+          qemu-img create -f qcow2 -b base.img -F qcow2 "$RUNNER_TEMP/vm/disk.qcow2" 40G
+
+      - name: Make the payload, seed and results disks
+        env:
+          NAME: ${{ matrix.name }}
+          ROLE: ${{ matrix.role }}
+          FAMILY: ${{ matrix.family }}
+          DOCKER_OS: ${{ matrix.docker_os }}
+          DOCKER_CODENAME: ${{ matrix.docker_codename }}
+          DOCKER_SUFFIX: ${{ matrix.docker_suffix }}
+        run: |
+          vm="$RUNNER_TEMP/vm"
+          {
+            echo "NAME='$NAME'"
+            echo "ROLE='$ROLE'"
+            echo "FAMILY='$FAMILY'"
+            echo "DOCKER_OS='$DOCKER_OS'"
+            echo "DOCKER_CODENAME='$DOCKER_CODENAME'"
+            echo "DOCKER_SUFFIX='$DOCKER_SUFFIX'"
+            echo "DOCKER_CE='$DOCKER_CE'"
+            echo "CONTAINERD_IO='$CONTAINERD_IO'"
+            echo "BUILDX='$BUILDX'"
+            echo "COMPOSE='$COMPOSE'"
+            echo "DEFAULT_SUBNET='$DEFAULT_SUBNET'"
+            echo "SUBNET='$SUBNET'"
+          } > matrix.env
+          git archive --format=tar -o "$vm/payload.tar" HEAD
+          tar -rf "$vm/payload.tar" matrix.env
+          truncate -s 1G "$vm/results.img"
+          cat > "$vm/user-data" <<'EOF'
+          #cloud-config
+          runcmd:
+            - [sh, -c, 'mkdir -p /work && tar -xf /dev/disk/by-id/virtio-payload -C /work && exec bash /work/.github/scripts/probes/install-matrix/install-matrix-guest.sh || { echo "PROBE | payload unreadable" > /dev/ttyS0; poweroff; }']
+          EOF
+          echo "instance-id: install-matrix" > "$vm/meta-data"
+          cloud-localds "$vm/seed.img" "$vm/user-data" "$vm/meta-data"
+
+      - name: Run the guest
+        env:
+          NAME: ${{ matrix.name }}
+        run: bash .github/scripts/probes/install-matrix/install-matrix-probe.sh "$NAME" "$RUNNER_TEMP/vm"
+
+      - name: Check the steps
+        if: always()
+        shell: bash
+        run: |
+          steps="$RUNNER_TEMP/vm/results/steps"
+          [ -f "$steps" ] || { echo "::error::the guest wrote no steps"; exit 1; }
+          {
+            echo '| Step | Exit | Seconds |'
+            echo '| --- | --- | --- |'
+            while read -r name code seconds; do
+              echo "| $name | $code | $seconds |"
+            done < "$steps"
+          } >> "$GITHUB_STEP_SUMMARY"
+          for name in docker boot tree default-setup default-up default-verify default-reset subnet-setup subnet-up subnet-verify subnet-reset; do
+            grep -q "^$name 0 " "$steps" || { echo "::error::$name did not pass"; exit 1; }
+          done
+
+      - name: Keep the guest's logs
+        if: always()
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
+        with:
+          name: install-matrix-${{ matrix.id }}
+          path: |
+            ${{ runner.temp }}/vm/results
+            ${{ runner.temp }}/vm/guest.log
+            ${{ runner.temp }}/vm/serial.log
+          retention-days: 14
+          if-no-files-found: ignore
