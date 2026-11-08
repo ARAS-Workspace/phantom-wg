@@ -364,3 +364,99 @@ class TestKeepaliveValidation:
                                     "PersistentKeepalive = soon")
         with pytest.raises(ValueError, match="not a number"):
             parse_wireguard_config(conf)
+
+
+class TestLayout:
+    """One [Interface] and one [Peer]: a layout that would drop part of the
+    config raises instead of losing it."""
+
+    @staticmethod
+    def _error(conf: str) -> str:
+        with pytest.raises(ValueError) as exc:
+            parse_wireguard_config(conf)
+        return str(exc.value)
+
+    @staticmethod
+    def _peer(endpoint: str = "198.51.100.9:51820") -> str:
+        return (
+            "\n[Peer]\n"
+            f"PublicKey = {_make_key_b64()}\n"
+            f"Endpoint = {endpoint}\n"
+            "AllowedIPs = 0.0.0.0/0\n"
+        )
+
+    def test_second_peer_rejected(self):
+        error = self._error(_make_conf() + "\n" + self._peer())
+        assert error == "Duplicate [Peer] section — only one is supported"
+
+    def test_second_interface_rejected(self):
+        conf = _make_conf().replace(
+            "[Peer]", f"[Interface]\nPrivateKey = {_make_key_b64()}\nAddress = 10.9.9.9/32\n\n[Peer]"
+        )
+        assert self._error(conf) == "Duplicate [Interface] section — only one is supported"
+
+    def test_section_name_is_trimmed_and_case_free(self):
+        conf = _make_conf() + "\n" + self._peer().replace("[Peer]", "[ peer ]")
+        assert self._error(conf) == "Duplicate [Peer] section — only one is supported"
+
+    def test_unknown_section_rejected(self):
+        conf = _make_conf() + "\n" + self._peer().replace("[Peer]", "[Peers]")
+        assert self._error(conf) == (
+            "Unknown section [Peers] — only [Interface] and [Peer] are supported"
+        )
+
+    def test_unclosed_header_rejected(self):
+        conf = _make_conf().replace("[Interface]", "[Interface")
+        assert self._error(conf) == "Line 1 is not a section header or key = value"
+
+    def test_key_before_any_section_rejected(self):
+        assert self._error("DNS = 1.1.1.1\n" + _make_conf()) == "Line 1 is outside a section"
+
+    def test_line_without_equals_rejected(self):
+        secret = _make_key_b64().rstrip("=")
+        conf = _make_conf().replace("[Peer]\n", f"[Peer]\nPresharedKey {secret}\n")
+        error = self._error(conf)
+        assert error == "Line 6 is not a section header or key = value"
+        assert secret not in error
+
+    def test_key_padding_is_not_an_equals_sign(self):
+        """A padded base64 key ends in "=": the line has an "=" but no key name."""
+        secret = _make_key_b64()
+        assert secret.endswith("=")
+        conf = _make_conf().replace("[Peer]\n", f"[Peer]\nPresharedKey {secret}\n")
+        error = self._error(conf)
+        assert error == "Line 6 is not a section header or key = value"
+        assert secret[:-1] not in error
+
+    def test_empty_key_rejected(self):
+        conf = _make_conf().replace("[Peer]\n", "[Peer]\n= 25\n")
+        assert self._error(conf) == "Line 6 is not a section header or key = value"
+
+    def test_repeated_endpoint_rejected(self):
+        conf = _make_conf() + "\nEndpoint = 198.51.100.9:51820"
+        assert self._error(conf) == "Duplicate [Peer] Endpoint"
+
+    def test_repeated_private_key_rejected(self):
+        conf = _make_conf().replace("[Peer]", f"PrivateKey = {_make_key_b64()}\n\n[Peer]")
+        assert self._error(conf) == "Duplicate [Interface] PrivateKey"
+
+    def test_repeated_key_names_the_key_not_the_value(self):
+        secret = _make_key_b64()
+        conf = _make_conf() + f"\nPresharedKey = {_make_key_b64()}\npresharedkey = {secret}"
+        error = self._error(conf)
+        assert error == "Duplicate [Peer] PresharedKey"
+        assert secret not in error
+
+    def test_address_lines_joined(self):
+        conf = _make_conf().replace("[Peer]", "Address = fd00::2/128\n\n[Peer]")
+        assert parse_wireguard_config(conf).address == "10.0.0.2/32, fd00::2/128"
+
+    def test_allowed_ips_lines_joined(self):
+        conf = _make_conf(allowed_ips="10.0.0.0/8") + "\nAllowedIPs = fd00::/64"
+        assert parse_wireguard_config(conf).allowed_ips == "10.0.0.0/8, fd00::/64"
+
+    def test_unused_keys_skipped(self):
+        conf = _make_conf().replace(
+            "[Peer]", "DNS = 1.1.1.1\nDNS = 9.9.9.9\nMTU = 1380\nListenPort = 51820\n\n[Peer]"
+        )
+        assert parse_wireguard_config(conf).address == "10.0.0.2/32"
