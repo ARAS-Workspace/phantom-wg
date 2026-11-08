@@ -30,6 +30,9 @@ from wireguard_go_bridge.types import BridgeError as WireGuardBridgeError
 from phantom_daemon import __version__
 from phantom_daemon.base import (
     BackupError,
+    ExitActiveError,
+    ExitAlreadyExistsError,
+    ExitNotFoundError,
     ExitStoreError,
     FirewallError,
     StartupError,
@@ -195,6 +198,27 @@ def _register_error_handlers(app: FastAPI) -> None:
         return JSONResponse(
             status_code=400,
             content={"ok": False, "error": str(exc), "code": "BACKUP_ERROR"},
+        )
+
+    @app.exception_handler(ExitNotFoundError)
+    async def _exit_not_found(_request, exc):
+        return JSONResponse(
+            status_code=404,
+            content={"ok": False, "error": str(exc), "code": "EXIT_NOT_FOUND"},
+        )
+
+    @app.exception_handler(ExitAlreadyExistsError)
+    async def _exit_already_exists(_request, exc):
+        return JSONResponse(
+            status_code=400,
+            content={"ok": False, "error": str(exc), "code": "EXIT_ALREADY_EXISTS"},
+        )
+
+    @app.exception_handler(ExitActiveError)
+    async def _exit_active(_request, exc):
+        return JSONResponse(
+            status_code=400,
+            content={"ok": False, "error": str(exc), "code": "EXIT_IS_ACTIVE"},
         )
 
     @app.exception_handler(ExitStoreError)

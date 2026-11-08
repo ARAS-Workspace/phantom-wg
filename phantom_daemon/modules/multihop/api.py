@@ -155,10 +155,11 @@ async def import_exit(body: ImportRequest, request: Request):
 @router.post(
     "/remove",
     response_model=ApiOk[dict],
-    responses={400: {"model": ApiErr}},
+    responses={400: {"model": ApiErr}, 404: {"model": ApiErr}},
     summary="Remove Exit",
     description="Delete an exit server configuration by name. The exit must not "
-    "be currently active — disable multihop first if needed.",
+    "be currently active — disable multihop first if needed. Returns 400 if the "
+    "exit is active, 404 if it does not exist.",
 )
 async def remove_exit(body: ExitNameRequest, request: Request):
     """Remove an exit configuration. Must not be active."""

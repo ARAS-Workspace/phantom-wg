@@ -42,6 +42,18 @@ class ExitStoreError(StartupError):
     """Failed to open, create, or query exit store database."""
 
 
+class ExitNotFoundError(ExitStoreError):
+    """No exit with the given name is in the exit store."""
+
+
+class ExitAlreadyExistsError(ExitStoreError):
+    """An exit with the given name is already in the exit store."""
+
+
+class ExitActiveError(ExitStoreError):
+    """The exit is active and must be deactivated first."""
+
+
 class FirewallError(StartupError):
     """Failed to initialise or configure firewall bridge."""
 

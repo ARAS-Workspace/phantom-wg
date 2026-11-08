@@ -16,6 +16,9 @@ Base startup services: secrets, environment, wallet, wireguard, firewall.
 from phantom_daemon.base.env import DaemonEnv, load_env
 from phantom_daemon.base.errors import (
     BackupError,
+    ExitActiveError,
+    ExitAlreadyExistsError,
+    ExitNotFoundError,
     ExitStoreError,
     FirewallError,
     SecretsError,
@@ -35,6 +38,9 @@ __all__ = [
     "LOGGER_NAME",
     "BackupError",
     "DaemonEnv",
+    "ExitActiveError",
+    "ExitAlreadyExistsError",
+    "ExitNotFoundError",
     "ExitStore",
     "ExitStoreError",
     "FirewallError",

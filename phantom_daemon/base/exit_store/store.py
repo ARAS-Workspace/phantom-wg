@@ -21,7 +21,12 @@ import uuid
 from pathlib import Path
 from typing import Self
 
-from phantom_daemon.base.errors import ExitStoreError
+from phantom_daemon.base.errors import (
+    ExitActiveError,
+    ExitAlreadyExistsError,
+    ExitNotFoundError,
+    ExitStoreError,
+)
 
 # ── Schema ───────────────────────────────────────────────────────
 
@@ -115,12 +120,12 @@ class ExitStore:
         allowed_ips: str = "0.0.0.0/0, ::/0",
         keepalive: int = 5,
     ) -> dict:
-        """Add a new exit configuration. Raises ExitStoreError on duplicate."""
+        """Add a new exit configuration. Raises ExitAlreadyExistsError on duplicate."""
         existing = self._conn.execute(
             "SELECT 1 FROM exits WHERE name = ?", (name,)
         ).fetchone()
         if existing:
-            raise ExitStoreError(f"Exit name already exists: {name}")
+            raise ExitAlreadyExistsError(f"Exit name already exists: {name}")
 
         exit_id = uuid.uuid4().hex
         self._conn.execute(
@@ -146,10 +151,13 @@ class ExitStore:
         }
 
     def remove_exit(self, name: str) -> None:
-        """Remove an exit configuration. Raises if active or not found."""
+        """Remove an exit configuration.
+
+        Raises ExitActiveError if active, ExitNotFoundError if not found.
+        """
         active = self.get_active()
         if active == name:
-            raise ExitStoreError(
+            raise ExitActiveError(
                 f"Cannot remove active exit: {name} — deactivate first"
             )
 
@@ -157,7 +165,7 @@ class ExitStore:
             "SELECT 1 FROM exits WHERE name = ?", (name,)
         ).fetchone()
         if not row:
-            raise ExitStoreError(f"Exit not found: {name}")
+            raise ExitNotFoundError(f"Exit not found: {name}")
 
         self._conn.execute("DELETE FROM exits WHERE name = ?", (name,))
 
@@ -180,12 +188,12 @@ class ExitStore:
     # ── State ────────────────────────────────────────────────────
 
     def activate(self, name: str) -> None:
-        """Set multihop enabled and active exit name."""
+        """Set multihop enabled and active exit name. Raises ExitNotFoundError."""
         row = self._conn.execute(
             "SELECT 1 FROM exits WHERE name = ?", (name,)
         ).fetchone()
         if not row:
-            raise ExitStoreError(f"Exit not found: {name}")
+            raise ExitNotFoundError(f"Exit not found: {name}")
 
         self._conn.execute(
             "UPDATE config SET value = '1' WHERE key = 'multihop_enabled'"
