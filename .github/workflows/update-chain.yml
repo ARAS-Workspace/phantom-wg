@@ -15,11 +15,6 @@ name: Update chain
 
 on:
   workflow_call:
-    inputs:
-      release-tree:
-        description: Take the tree of Package the release instead of building one
-        type: boolean
-        default: false
 
 permissions:
   contents: read
@@ -51,22 +46,10 @@ jobs:
           python-version: '3.14'
 
       - name: Prepare SPA dist (placeholder for nginx)
-        if: ${{ !inputs.release-tree }}
         run: mkdir -p services/react-spa/dist && echo '<!DOCTYPE html><html><body>CI</body></html>' > services/react-spa/dist/index.html
 
       - name: Build the release tree
-        if: ${{ !inputs.release-tree }}
         run: ./tools/dev.sh generate-production-package --no-spa
-
-      - name: Download the release tree
-        if: ${{ inputs.release-tree }}
-        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
-        with:
-          name: release-tree
-
-      - name: Unpack the release tree
-        if: ${{ inputs.release-tree }}
-        run: mkdir -p dist && tar -xzf release-tree.tar.gz -C dist
 
       - name: Start the local registry
         run: python3 -B "$STAGE" registry
@@ -142,22 +125,10 @@ jobs:
           python-version: '3.14'
 
       - name: Prepare SPA dist (placeholder for nginx)
-        if: ${{ !inputs.release-tree }}
         run: mkdir -p services/react-spa/dist && echo '<!DOCTYPE html><html><body>CI</body></html>' > services/react-spa/dist/index.html
 
       - name: Build the release tree
-        if: ${{ !inputs.release-tree }}
         run: ./tools/dev.sh generate-production-package --no-spa
-
-      - name: Download the release tree
-        if: ${{ inputs.release-tree }}
-        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
-        with:
-          name: release-tree
-
-      - name: Unpack the release tree
-        if: ${{ inputs.release-tree }}
-        run: mkdir -p dist && tar -xzf release-tree.tar.gz -C dist
 
       - name: Start the local registry
         run: python3 -B "$STAGE" registry

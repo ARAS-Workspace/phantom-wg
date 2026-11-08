@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
-# Trigger the Verify release mechanics workflow.
-# The tag verify-release-dynamics moves to HEAD on every run; the workflow
+# Trigger the Verify release packaging workflow.
+# The tag verify-release-packaging moves to HEAD on every run; the workflow
 # leaves the release packages as artifacts, nothing reaches main.
 # Usage: .github/scripts/distribution/verify-release.sh
 set -euo pipefail
 
-TAG="verify-release-dynamics"
+TAG="verify-release-packaging"
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "${SCRIPT_DIR}/../../.." && pwd)"
@@ -25,4 +25,4 @@ git -C "${REPO_ROOT}" push origin "refs/tags/${TAG}"
 
 echo ""
 echo "Triggered: ${TAG}"
-echo "Watch: gh run list --workflow verify-release-mechanics.yml"
+echo "Watch: gh run list --workflow verify-release-packaging.yml"

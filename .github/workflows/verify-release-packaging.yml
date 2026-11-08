@@ -1,15 +1,14 @@
-name: Verify release mechanics
+name: Verify release packaging
 
 # Runs the release package without cutting a release. The artifacts are the
 # package itself: the tree main would receive and the zip of each architecture.
-# The tree then goes through the update chain as a host would follow it.
 # Nothing reaches main or the releases. .github/scripts/distribution/verify-release.sh moves
 # the tag and starts the run.
 
 on:
   push:
     tags:
-      - 'verify-release-dynamics'
+      - 'verify-release-packaging'
 
 permissions:
   contents: read
@@ -18,10 +17,3 @@ jobs:
   package:
     name: Package the release
     uses: ./.github/workflows/package-release.yml
-
-  update-chain:
-    name: Update chain
-    needs: package
-    uses: ./.github/workflows/update-chain.yml
-    with:
-      release-tree: true

@@ -1,9 +1,9 @@
 name: Package release
 
 # Builds the release package: the tree main receives, and one zip per
-# architecture that adds the pinned images to it. Each zip is installed and
-# updated on a runner of its own architecture before it is kept. Publishing
-# belongs to the caller.
+# architecture that adds the pinned images to it. Each zip is installed on a
+# runner of its own architecture before it is kept. Publishing belongs to the
+# caller.
 
 on:
   workflow_call:
