@@ -23,6 +23,23 @@ const EditExitModal: React.FC<Props> = ({ open, exitName, t, onClose, onSuccess 
   const [error, setError] = useState<string | null>(null);
   const [details, setDetails] = useState<string[]>([]);
 
+  // Each opening is a new session. Its state is cleared during the render
+  // that opens the modal, before anything is painted: the text of the last
+  // session never shows, and the stored config lands in an empty editor
+  // rather than over what was typed into the last one.
+  const session = open ? exitName : null;
+  const [currentSession, setCurrentSession] = useState<string | null>(null);
+  if (session !== currentSession) {
+    setCurrentSession(session);
+    if (session !== null) {
+      setPhase('loading');
+      setConfig('');
+      setSaving(false);
+      setError(null);
+      setDetails([]);
+    }
+  }
+
   const canSubmit = phase === 'ready' && config.trim().length > 0 && !saving;
 
   const apiError = (code: string | undefined) =>
@@ -33,11 +50,6 @@ const EditExitModal: React.FC<Props> = ({ open, exitName, t, onClose, onSuccess 
   useEffect(() => {
     if (!open || !exitName) return;
     let cancelled = false;
-    setPhase('loading');
-    setConfig('');
-    setSaving(false);
-    setError(null);
-    setDetails([]);
 
     void (async () => {
       const res = await apiClient.post<string>('/api/multihop/config', { name: exitName });
