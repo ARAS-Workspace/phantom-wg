@@ -16,6 +16,29 @@ from auth_service.routes.proxy import GRANTS, ROUTES, Access, Role
 
 BACKUP_ROUTES = ["/api/core/backup/export", "/api/core/backup/import"]
 
+# The routes an admin holds, written out by hand: the reads beside the
+# multihop exits, the multihop status, and the client tunnels with their keys.
+# Every other route is the superadmin's.
+ADMIN_ROUTES = {
+    ("GET", "/api/core/clients/list"),
+    ("POST", "/api/core/firewall/groups/get"),
+    ("GET", "/api/core/firewall/groups/list"),
+    ("POST", "/api/core/firewall/routing/list"),
+    ("POST", "/api/core/firewall/rules/list"),
+    ("GET", "/api/core/firewall/table"),
+    ("GET", "/api/core/hello"),
+    ("GET", "/api/core/network"),
+    ("GET", "/api/core/network/validate"),
+    ("GET", "/api/core/wireguard"),
+    ("POST", "/api/core/wireguard/peer"),
+    ("POST", "/api/dns/get"),
+    ("GET", "/api/multihop/status"),
+    ("POST", "/api/core/clients/assign"),
+    ("POST", "/api/core/clients/config"),
+    ("POST", "/api/core/clients/get"),
+    ("POST", "/api/core/clients/revoke"),
+}
+
 # Spellings of /api/core/backup/export. The first three decode to the route
 # itself, so the role decides; the others are not in the route table.
 DECODED_SPELLINGS = ["/api/core/%62ackup/export", "/api/core%2Fbackup%2Fexport"]
@@ -132,12 +155,16 @@ def test_other_spelling_is_not_a_route(client, daemon, superadmin, route):
     assert daemon.hits == []
 
 
+def test_admin_routes_are_in_the_table():
+    assert ADMIN_ROUTES <= ROUTES.keys()
+
+
 @pytest.mark.parametrize(("method", "route"), sorted(ROUTES))
 def test_every_route_answers_by_its_access(client, daemon, admin, superadmin, method, route):
-    backup = route in BACKUP_ROUTES
-    assert send(client, route, admin, method=method) == (403 if backup else 200)
+    held = (method, route) in ADMIN_ROUTES
+    assert send(client, route, admin, method=method) == (200 if held else 403)
     assert send(client, route, superadmin, method=method) == 200
-    assert daemon.hits == ([route] if backup else [route, route])
+    assert daemon.hits == ([route, route] if held else [route])
 
 
 @pytest.mark.parametrize("route", ["/api/core/nonexistent", "/api/core/backups", "/api/core/backup"])
@@ -175,25 +202,41 @@ def test_unknown_route_is_audited(auth_env, client, admin):
 
 
 def test_grants_decide_the_roles_of_a_whole_access(monkeypatch, client, daemon, admin):
-    monkeypatch.setitem(GRANTS, Access.OPERATE, frozenset({Role.SUPERADMIN}))
+    monkeypatch.setitem(GRANTS, Access.TUNNEL, frozenset({Role.SUPERADMIN}))
     assert send(client, "/api/core/clients/assign", admin) == 403
     assert send(client, "/api/core/clients/list", admin, method="GET") == 200
     assert daemon.hits == ["/api/core/clients/list"]
 
 
+# get, config and assign return a client's private key: TUNNEL, not VIEW.
 @pytest.mark.parametrize("route", [
     "/api/core/clients/assign",
     "/api/core/clients/config",
     "/api/core/clients/get",
+    "/api/core/clients/revoke",
 ])
-def test_routes_carrying_a_client_key_are_not_view(route):
-    assert ROUTES[("POST", route)].access is Access.OPERATE
+def test_client_tunnel_routes_are_tunnel(route):
+    assert ROUTES[("POST", route)].access is Access.TUNNEL
 
 
-# config returns the exit's private key, update replaces the exit's config.
-@pytest.mark.parametrize("route", ["/api/multihop/config", "/api/multihop/update"])
-def test_exit_edit_routes_are_operate(route):
-    assert ROUTES[("POST", route)].access is Access.OPERATE
+def test_operate_is_the_server_configuration():
+    operate = sorted(path for (_, path), r in ROUTES.items() if r.access is Access.OPERATE)
+    assert operate == ["/api/core/network/cidr", "/api/dns/change"]
+
+
+# config returns an exit's private key; the status stays a read.
+def test_multihop_is_the_exit_routes_beside_the_status():
+    multihop = sorted(path for (_, path), r in ROUTES.items() if r.access is Access.MULTIHOP)
+    assert multihop == [
+        "/api/multihop/config",
+        "/api/multihop/disable",
+        "/api/multihop/enable",
+        "/api/multihop/import",
+        "/api/multihop/list",
+        "/api/multihop/remove",
+        "/api/multihop/update",
+    ]
+    assert ROUTES[("GET", "/api/multihop/status")].access is Access.VIEW
 
 
 def test_custody_is_the_backup_routes():

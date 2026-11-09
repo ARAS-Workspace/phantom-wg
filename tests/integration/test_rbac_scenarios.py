@@ -37,10 +37,12 @@ Scenarios (executed in order):
      Superadmin tries to delete self → 400.
 
   8. Proxy access by role
-     Admin is refused on backup (403) and keeps the other routes. Superadmin
-     passes the role check on backup. A path outside the route table is 404
-     for both, however it is spelled. Body limits hold per route. The service
-     runs without a daemon here: a route that passes the checks answers 502.
+     Admin is refused on backup, on the server configuration and on multihop
+     beside its status (403), and keeps the reads and the client tunnels.
+     Superadmin passes the role check on those routes. A path outside the
+     route table is 404 for both, however it is spelled. Body limits hold per
+     route. The service runs without a daemon here: a route that passes the
+     checks answers 502.
 
   9. Superadmin deletes admin
      Superadmin deletes admin → admin token revoked → admin cannot login.
@@ -366,6 +368,22 @@ def admin_token(http):
 
 class TestProxyAccessByRole:
     BACKUP_ROUTES = ("/api/core/backup/export", "/api/core/backup/import")
+    # A read, the pool check, the multihop status and the client tunnels.
+    ADMIN_HOLDS = (
+        ("GET", "/api/core/clients/list"),
+        ("GET", "/api/core/network/validate"),
+        ("GET", "/api/multihop/status"),
+        ("POST", "/api/core/clients/assign"),
+        ("POST", "/api/core/clients/revoke"),
+    )
+    # The address pool, DNS, and multihop beside its status.
+    SUPERADMIN_HOLDS = (
+        ("POST", "/api/core/network/cidr"),
+        ("POST", "/api/dns/change"),
+        ("GET", "/api/multihop/list"),
+        ("POST", "/api/multihop/config"),
+        ("POST", "/api/multihop/enable"),
+    )
     # No daemon runs beside the service: 502 is a request that passed the checks.
     PASSED = (200, 502)
     OVER_THE_LIMIT = b"x" * 65537
@@ -381,9 +399,10 @@ class TestProxyAccessByRole:
             resp = http.post(route, headers=_bearer(superadmin_token))
             assert resp.status_code in self.PASSED
 
-    def test_03_admin_keeps_the_other_routes(self, http, admin_token):
-        resp = http.get("/api/core/clients/list", headers=_bearer(admin_token))
-        assert resp.status_code in self.PASSED
+    def test_03_admin_keeps_the_reads_and_the_tunnels(self, http, admin_token):
+        for method, route in self.ADMIN_HOLDS:
+            resp = http.request(method, route, headers=_bearer(admin_token))
+            assert resp.status_code in self.PASSED, route
 
     def test_04_route_outside_the_table_is_404(self, http, admin_token, superadmin_token):
         for token in (admin_token, superadmin_token):
@@ -437,6 +456,17 @@ class TestProxyAccessByRole:
             if item["detail"]["status"] == 403
         ]
         assert "/api/core/backup/export" in refused
+
+    def test_11_admin_is_refused_on_the_superadmin_routes(self, http, admin_token):
+        for method, route in self.SUPERADMIN_HOLDS:
+            resp = http.request(method, route, headers=_bearer(admin_token))
+            assert resp.status_code == 403, route
+            assert resp.json()["error_code"] == "SUPERADMIN_REQUIRED"
+
+    def test_12_superadmin_passes_on_the_superadmin_routes(self, http, superadmin_token):
+        for method, route in self.SUPERADMIN_HOLDS:
+            resp = http.request(method, route, headers=_bearer(superadmin_token))
+            assert resp.status_code in self.PASSED, route
 
 
 # ── Scenario 9: Superadmin deletes admin ───────────────────────
