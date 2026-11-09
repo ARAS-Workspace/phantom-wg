@@ -1,22 +1,95 @@
 from __future__ import annotations
 
+import json
+import logging
+
+import pytest
+
 from auth_service.middleware.rate_limit import RateLimiter
 
+REFUSED = {"login_failed", "login_rate_limited", "mfa_rate_limited", "backup_code_rate_limited"}
+WRONG = "Wrong-Pass-2026!"
 
-def test_audit_log_on_failed_login(auth_env):
+
+def actions(auth_env) -> list[str]:
+    return [row["action"] for row in auth_env.db.get_audit_logs()]
+
+
+def service_lines(caplog) -> list[str]:
+    return [record.getMessage() for record in caplog.records if record.name == "phantom-auth"]
+
+
+# ── A refused login: one service log line, no audit row ──────────
+
+
+def test_a_failed_login_goes_to_the_service_log(auth_env, caplog):
     auth_env.create_user("audituser", "auditpw12")
     client = auth_env.make_client()
-    client.post("/auth/login", json={"username": "audituser", "password": "wrong"})
-    logs = auth_env.db.get_audit_logs()
-    assert any(l["action"] == "login_failed" for l in logs)
+    with caplog.at_level(logging.WARNING, logger="phantom-auth"):
+        resp = client.post("/auth/login", json={"username": "audituser", "password": WRONG})
+    assert resp.status_code == 401
+    assert service_lines(caplog) == ['login_failed ip=testclient username="audituser"']
+    assert REFUSED.isdisjoint(actions(auth_env))
+    assert WRONG not in caplog.text
 
 
-def test_audit_log_on_successful_login(auth_env):
+@pytest.mark.parametrize(("path", "body", "line"), [
+    ("/auth/login", {"username": "x", "password": WRONG},
+     'login_rate_limited ip=testclient username="x"'),
+    ("/auth/mfa/verify", {"mfa_token": "t", "code": "123456"},
+     "mfa_rate_limited ip=testclient"),
+    ("/auth/totp/backup", {"mfa_token": "t", "code": "12345678"},
+     "backup_code_rate_limited ip=testclient"),
+])
+def test_a_rate_limited_attempt_goes_to_the_service_log(auth_env, caplog, path, body, line):
+    client = auth_env.make_client(rate_limiter=RateLimiter(window=60, max_attempts=0))
+    with caplog.at_level(logging.WARNING, logger="phantom-auth"):
+        resp = client.post(path, json=body)
+    assert resp.status_code == 429
+    assert service_lines(caplog) == [line]
+    assert REFUSED.isdisjoint(actions(auth_env))
+    assert WRONG not in caplog.text
+
+
+def test_the_sent_name_cannot_start_a_new_log_line(auth_env, caplog):
+    name = 'adm\nin" ip=203.0.113.9'
+    client = auth_env.make_client()
+    with caplog.at_level(logging.WARNING, logger="phantom-auth"):
+        client.post("/auth/login", json={"username": name, "password": WRONG})
+    lines = service_lines(caplog)
+    assert lines == [f"login_failed ip=testclient username={json.dumps(name)}"]
+    assert "\n" not in lines[0]
+
+
+def test_a_failed_second_step_stays_in_the_audit_log(auth_env, caplog):
+    # The password was right: the operator sees in the audit log that
+    # someone holds it and is forcing the second step.
+    auth_env.create_user("mfaaud", "mfaaudpw1")
+    token = auth_env.login("mfaaud", "mfaaudpw1")
+    auth_env.enable_totp("mfaaud", "mfaaudpw1", token)
+    client = auth_env.make_client()
+    challenge = client.post("/auth/login", json={"username": "mfaaud", "password": "mfaaudpw1"})
+    mfa_token = challenge.json()["data"]["mfa_token"]
+    with caplog.at_level(logging.WARNING, logger="phantom-auth"):
+        totp = client.post("/auth/mfa/verify", json={"mfa_token": mfa_token, "code": "abcdef"})
+        backup = client.post("/auth/totp/backup", json={"mfa_token": mfa_token, "code": "zzzzzzzz"})
+    assert (totp.status_code, backup.status_code) == (401, 401)
+    user_id = auth_env.db.get_user_by_username("mfaaud").id
+    failed = [row for row in auth_env.db.get_audit_logs()
+              if row["action"] in ("mfa_failed", "backup_code_failed")]
+    assert sorted(row["action"] for row in failed) == ["backup_code_failed", "mfa_failed"]
+    assert {row["user_id"] for row in failed} == {user_id}
+    assert service_lines(caplog) == []
+
+
+def test_audit_log_on_successful_login(auth_env, caplog):
     auth_env.create_user("auditok", "auditpw12")
     client = auth_env.make_client()
-    client.post("/auth/login", json={"username": "auditok", "password": "auditpw12"})
+    with caplog.at_level(logging.WARNING, logger="phantom-auth"):
+        client.post("/auth/login", json={"username": "auditok", "password": "auditpw12"})
     logs = auth_env.db.get_audit_logs()
     assert any(l["action"] == "login_success" for l in logs)
+    assert service_lines(caplog) == []
 
 
 def test_audit_log_on_user_create(auth_env):
@@ -48,14 +121,6 @@ def test_audit_log_on_totp_enable(auth_env):
     logs = auth_env.db.get_audit_logs()
     assert any(l["action"] == "totp_setup_started" for l in logs)
     assert any(l["action"] == "totp_enabled" for l in logs)
-
-
-def test_audit_log_on_rate_limit(auth_env):
-    client = auth_env.make_client(rate_limiter=RateLimiter(window=60, max_attempts=1))
-    client.post("/auth/login", json={"username": "x", "password": "y"})
-    client.post("/auth/login", json={"username": "x", "password": "y"})
-    logs = auth_env.db.get_audit_logs()
-    assert any(l["action"] == "login_rate_limited" for l in logs)
 
 
 # ── GET /auth/audit ───────────────────────────────────────────────

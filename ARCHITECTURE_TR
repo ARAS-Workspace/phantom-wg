@@ -65,10 +65,13 @@ Kalıcılık katmanı
     sessions             id, user_id, token_jti, token_hash,
                          issued_at, expires_at, last_activity_at,
                          revoked.
-    audit_log            her giriş denemesi, MFA doğrulaması, parola
-                         değişikliği, kullanıcı yönetimi işlemi ve
-                         proxy isteği. Kayıtlar append-only (yalnızca
-                         ekleme) mantığıyla çalışır.
+    audit_log            kimliği bilinen kullanıcının yaptıkları:
+                         girişler, MFA adımları, parola değişiklikleri,
+                         kullanıcı yönetimi ve proxy istekleri. Kayıtlar
+                         append-only (yalnızca ekleme) mantığıyla
+                         çalışır. Kullanıcı belli olmadan reddedilen
+                         giriş buraya değil servis log'una yazılır
+                         (Servis log'u bölümü).
 
   Veritabanı dosyasını ilk kurulumda tools/bootstrap.py bir kez
   oluşturur. Dosya yoksa servis başlamaz. Servisin açtığı her bağlantı
@@ -287,6 +290,32 @@ Rate limiting (İstek sınırlama)
   sıfırlamaz.
 
 
+Servis log'u (Service log)
+--------------------------
+
+  Servis kendi satırlarını phantom-auth logger'ı üzerinden stdout'a
+  yazar: zaman, seviye (level), logger adı ve mesaj
+  (__main__.py:log_config). uvicorn erişim log'u (access log) yazmaz;
+  her isteği nginx kaydeder.
+
+  Kullanıcı belli olmadan reddedilen bir giriş audit_log'a satır
+  yazmaz. Bunun yerine tek bir WARNING satırı yazar
+  (audit.py:log_refused_login):
+
+    login_failed                kullanıcı adı ya da parola yanlış
+    login_rate_limited          /auth/login istek sınırını aştı
+    mfa_rate_limited            /auth/mfa/verify istek sınırını aştı
+    backup_code_rate_limited    /auth/totp/backup istek sınırını aştı
+
+  Satır istemcinin IP adresini, ilk iki olayda da istemcinin gönderdiği
+  kullanıcı adını taşır. Ad JSON string olarak yazılır, bu yüzden yeni
+  bir satır başlatamaz. Parola hiçbir zaman yazılmaz. Bu denemeleri
+  herkes tekrarlayabildiği için auth.db'ye girmezler. Yanlış TOTP ya da
+  yedek kod (backup code) ise doğru paroladan sonra gelir ve audit_log'da
+  kalır (mfa_failed, backup_code_failed): operatöre birinin parolayı
+  bildiğini gösterir.
+
+
 Yapılandırma
 ------------
 
@@ -296,7 +325,7 @@ Yapılandırma
   Değişkenler ve varsayılan değerleri:
 
     AUTH_HOST / AUTH_PORT        0.0.0.0 / 8443
-    AUTH_LOG_LEVEL               info
+    AUTH_LOG_LEVEL               info      (uvicorn ve phantom-auth)
     AUTH_PROXY_URL               unix:///var/run/phantom/daemon.sock
                                  (ya da http://...); production'da UDS
     AUTH_PROXY_TIMEOUT           30.0      (saniye)
@@ -418,10 +447,10 @@ Kaynak kod düzeni
 
   auth_service/
     __init__.py           __version__, sürüm bilgisinin tek kaynağı (SSOT)
-    __main__.py           uvicorn giriş noktası (entrypoint)
+    __main__.py           uvicorn giriş noktası (entrypoint), servis logger'ı yapılandırması
     app.py                FastAPI app factory, lifespan ve middleware'ler
     config.py             ortam değişkenlerinden yüklenen AuthConfig
-    audit.py              audit_log yardımcı fonksiyonları
+    audit.py              audit_log yardımcı fonksiyonları, reddedilen giriş log satırı
     errors.py             exception hiyerarşisi
     models.py             Pydantic istek (request) ve yanıt (response) modelleri
     crypto/

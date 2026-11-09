@@ -61,9 +61,11 @@ Persistence layer
     sessions             id, user_id, token_jti, token_hash,
                          issued_at, expires_at, last_activity_at,
                          revoked.
-    audit_log            every login attempt, MFA verification,
-                         password change, user-management action,
-                         and proxy request. Append-only.
+    audit_log            what an identified user does: logins, MFA
+                         steps, password changes, user management
+                         and proxy requests. Append-only. A login
+                         refused before the user is known goes to
+                         the service log instead (Service log).
 
   The file is created once by tools/bootstrap.py during initial
   setup. If the file is missing, startup aborts. Every connection
@@ -264,6 +266,31 @@ Rate limiting
   enrolled, a correct password alone does not reset it.
 
 
+Service log
+-----------
+
+  The service writes its own lines to stdout through the logger
+  phantom-auth: time, level, logger name, message
+  (__main__.py:log_config). uvicorn writes no access log; nginx
+  logs every request.
+
+  A login refused before the user is known writes no audit row. It
+  writes one WARNING line instead (audit.py:log_refused_login):
+
+    login_failed                wrong name or password
+    login_rate_limited          /auth/login over the rate limit
+    mfa_rate_limited            /auth/mfa/verify over the rate limit
+    backup_code_rate_limited    /auth/totp/backup over the rate limit
+
+  The line carries the client IP and, for the first two, the name the
+  client sent, JSON-quoted so it cannot start a new line. The password
+  is never written. Anyone can repeat these attempts, so they stay
+  out of auth.db. A wrong TOTP or backup code comes after a correct
+  password and stays in the audit log (mfa_failed,
+  backup_code_failed): it tells the operator that someone holds the
+  password.
+
+
 Configuration
 -------------
 
@@ -272,7 +299,7 @@ Configuration
   variables and their defaults:
 
     AUTH_HOST / AUTH_PORT        0.0.0.0 / 8443
-    AUTH_LOG_LEVEL               info
+    AUTH_LOG_LEVEL               info      (uvicorn and phantom-auth)
     AUTH_PROXY_URL               unix:///var/run/phantom/daemon.sock
                                  (or http://...); UDS in production
     AUTH_PROXY_TIMEOUT           30.0      (seconds)
@@ -387,10 +414,10 @@ Source layout
 
   auth_service/
     __init__.py           __version__ — single source of truth
-    __main__.py           uvicorn entry
+    __main__.py           uvicorn entry, service logger config
     app.py                FastAPI factory + lifespan + middleware
     config.py             env-driven AuthConfig
-    audit.py              audit_log helper
+    audit.py              audit_log helper, refused-login log line
     errors.py             exception hierarchy
     models.py             pydantic request/response types
     crypto/
