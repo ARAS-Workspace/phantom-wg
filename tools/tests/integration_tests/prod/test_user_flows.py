@@ -47,6 +47,8 @@ from prod_host import (
     only_gitkeep,
     prod,
     sudo,
+    superadmins,
+    wipe_the_tree,
 )
 
 # ── First install ───────────────────────────────────────────────────
@@ -87,6 +89,13 @@ def test_setup_refuses_a_subnet_the_daemon_refuses():
     assert not (ROOT / ".env").exists()
 
 
+def test_setup_takes_the_admin_username():
+    done = prod("setup", "--admin-username", "e2e-root", timeout=LONG)
+    assert done.returncode == 0, done.stdout
+    assert superadmins() == ["e2e-root"]
+    wipe_the_tree()
+
+
 def test_setup_builds_the_host():
     done = prod("setup", timeout=LONG)
     assert done.returncode == 0, done.stdout
@@ -98,6 +107,7 @@ def test_setup_builds_the_host():
         assert path.stat().st_size > 0, name
         assert path.stat().st_mode & 0o777 == 0o600, name
     assert AUTH_DB.is_file()
+    assert superadmins() == ["admin"]
 
 
 def test_setup_refuses_a_complete_host():
@@ -146,6 +156,15 @@ def test_force_replaces_the_files(command, files):
 
 def test_setup_auth_force_keeps_the_old_database():
     assert list(AUTH_DB.parent.glob("auth.db.*.bak"))
+
+
+def test_setup_auth_force_takes_the_admin_username():
+    done = prod("setup-auth", "-f", "--admin-username", "e2e-root", timeout=LONG)
+    assert done.returncode == 0, done.stdout
+    assert superadmins() == ["e2e-root"]
+    done = prod("setup-auth", "-f", timeout=LONG)
+    assert done.returncode == 0, done.stdout
+    assert superadmins() == ["admin"]
 
 
 def test_force_changes_nothing_without_the_auth_source():

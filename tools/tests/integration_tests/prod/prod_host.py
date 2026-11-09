@@ -7,6 +7,7 @@ import hashlib
 import json
 import os
 import re
+import sqlite3
 import ssl
 import subprocess
 import sys
@@ -91,6 +92,13 @@ def digest(path: Path) -> str:
 
 def only_gitkeep(name: str) -> bool:
     return [path.name for path in (ROOT / name).iterdir()] == [".gitkeep"]
+
+
+def superadmins() -> list[str]:
+    """The superadmin accounts of auth.db, read from the host."""
+    with contextlib.closing(sqlite3.connect(AUTH_DB)) as db:
+        rows = db.execute("SELECT username FROM users WHERE role = 'superadmin' ORDER BY username")
+        return [row[0] for row in rows]
 
 
 def code_version() -> str:

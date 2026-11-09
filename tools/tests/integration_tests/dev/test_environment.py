@@ -16,6 +16,7 @@ import pty
 import re
 import select
 import shutil
+import sqlite3
 import ssl
 import subprocess
 import sys
@@ -23,6 +24,7 @@ import threading
 import time
 import urllib.error
 import urllib.request
+from contextlib import closing
 from pathlib import Path
 
 import pytest
@@ -114,6 +116,13 @@ def recording_docker(directory: Path, before: str = "") -> tuple:
 
 def only_gitkeep(name: str) -> bool:
     return [path.name for path in (ROOT / name).iterdir()] == [".gitkeep"]
+
+
+def superadmins() -> list[str]:
+    """The superadmin accounts of auth.db, read from the host."""
+    with closing(sqlite3.connect(AUTH_DB)) as db:
+        rows = db.execute("SELECT username FROM users WHERE role = 'superadmin' ORDER BY username")
+        return [row[0] for row in rows]
 
 
 def hello() -> int:
@@ -211,10 +220,19 @@ def test_hard_reset_clears_what_the_stack_bound():
         assert only_gitkeep(name), name
 
 
+def test_setup_takes_the_admin_username():
+    done = dev("setup", "--admin-username", "e2e-root", timeout=LONG)
+    assert done.returncode == 0, done.stdout
+    assert superadmins() == ["e2e-root"]
+    done = dev("hard-reset", stdin="yes\n", timeout=LONG)
+    assert done.returncode == 0, done.stdout
+
+
 def test_setup_builds_the_environment():
     done = dev("setup", timeout=LONG)
     assert done.returncode == 0, done.stdout
     assert AUTH_DB.is_file()
+    assert superadmins() == ["admin"]
     for name in SECRET_FILES:
         path = SECRETS / name
         assert path.stat().st_size > 0, name
@@ -232,7 +250,7 @@ def test_setup_refuses_an_existing_environment():
 def test_setup_takes_no_force():
     done = dev("setup", "-f")
     assert done.returncode == 1
-    assert done.stdout.strip().endswith("Usage: ./tools/dev.sh setup")
+    assert done.stdout.strip().endswith("Usage: ./tools/dev.sh setup [--admin-username <name>]")
 
 
 @pytest.mark.parametrize(
@@ -271,6 +289,15 @@ def test_force_replaces_the_files(command, files):
 
 def test_setup_auth_force_keeps_the_old_database():
     assert list(AUTH_DB.parent.glob("auth.db.*.bak"))
+
+
+def test_setup_auth_force_takes_the_admin_username():
+    done = dev("setup-auth", "-f", "--admin-username", "e2e-root", timeout=LONG)
+    assert done.returncode == 0, done.stdout
+    assert superadmins() == ["e2e-root"]
+    done = dev("setup-auth", "-f", timeout=LONG)
+    assert done.returncode == 0, done.stdout
+    assert superadmins() == ["admin"]
 
 
 def test_force_changes_nothing_without_the_auth_source():
