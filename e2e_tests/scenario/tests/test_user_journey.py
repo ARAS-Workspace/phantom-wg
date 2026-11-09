@@ -38,7 +38,9 @@ from __future__ import annotations
 import base64
 import functools
 import json
+import re
 import time
+from collections import Counter
 
 import pyotp
 import pytest
@@ -149,6 +151,7 @@ class TestUserJourney:
 
     _NEW_PASSWORD: str = "Sc3n@r10-E2E-N3wP@ss!"
     _totp_secret: str = ""
+    _CLIENT_COUNT: int = 100  # clients of PHASE 12
 
     # ================================================================
     #  PHASE 1 — LOGIN (BOOTSTRAP PASSWORD)
@@ -588,7 +591,7 @@ class TestUserJourney:
         print(f"{_SEP}")
 
         # noinspection PyPep8Naming
-        CLIENT_COUNT = 100
+        CLIENT_COUNT = self._CLIENT_COUNT
         names = [f"e2e-pg-{i:03d}" for i in range(1, CLIENT_COUNT + 1)]
 
         # ── Create 100 clients ───────────────────────────────────
@@ -656,63 +659,93 @@ class TestUserJourney:
     #  PHASE 13 — PROXY AUDIT LOG
     # ================================================================
 
+    # Reads of the journey: the proxy writes none of them.
+    _READ_PATHS = ("/api/core/hello", "/api/core/clients/list", "/api/multihop/status")
+
+    def _proxy_rows_of_the_journey(self) -> Counter:
+        """(method, path, status) of every call that changes the daemon or
+        hands out a key, with the number of its calls in this journey."""
+        clients = self._CLIENT_COUNT + 1  # PHASE 8 and PHASE 12
+        return Counter({
+            ("POST", "/api/core/clients/assign", 201): clients,
+            ("POST", "/api/core/clients/config", 200): 1,   # PHASE 10
+            ("POST", "/api/core/clients/revoke", 200): clients,
+            ("POST", "/api/multihop/import", 201): 1,       # PHASE 9a
+            ("GET", "/api/multihop/list", 200): 2,          # PHASE 9a, 11b
+            ("POST", "/api/multihop/enable", 200): 1,       # PHASE 9b
+            ("POST", "/api/multihop/disable", 200): 1,      # PHASE 11a
+            ("POST", "/api/multihop/remove", 200): 1,       # PHASE 11b
+        })
+
     def test_proxy_audit(self, api):
-        """Verify proxy_request entries exist in audit log."""
+        """The proxy rows hold every change and key handout of the journey,
+        with its outcome and its actor, and none of its reads."""
         t0 = time.perf_counter()
 
         print(f"\n{_SEP}")
         print("  PHASE 13 — PROXY AUDIT LOG")
         print(f"{_SEP}")
 
-        # ── Fetch audit log filtered by proxy_request ─────────
-        resp = api.get("/auth/audit?action=proxy_request&limit=100")
-        assert resp.status_code == 200
-        data = resp.json()["data"]
-        items = data["items"]
+        # ── Every proxy_request row, pages held by the first as_of ──
+        rows: list[dict] = []
+        as_of = None
+        page = 1
+        while True:
+            query = f"/auth/audit?action=proxy_request&limit=100&order=asc&page={page}"
+            if as_of is not None:
+                query += f"&as_of={as_of}"
+            resp = api.get(query)
+            assert resp.status_code == 200, f"audit page {page}: {resp.status_code} {resp.text}"
+            data = resp.json()["data"]
+            if as_of is None:
+                as_of = data["as_of"]
+                assert as_of is not None, "No proxy_request audit entries found"
+            assert data["as_of"] == as_of, f"page {page} answered as_of {data['as_of']}, sent {as_of}"
+            rows.extend(data["items"])
+            if page >= data["pages"]:
+                break
+            page += 1
+
         total = data["total"]
+        ids = [row["id"] for row in rows]
+        assert len(ids) == total, f"{len(ids)} rows read in {page} pages, total {total}"
+        assert len(set(ids)) == total, "a row came on two pages"
+        print(f"\n  Rows        : {total} in {page} pages, as_of {as_of}")
 
-        assert total > 0, "No proxy_request audit entries found"
-        print(f"\n  Total proxy_request entries: {total}")
-
-        # ── Verify entry schema ───────────────────────────────
-        sample = items[0]
-        assert "id" in sample
-        assert "user_id" in sample
-        assert sample["user_id"] is not None, "user_id should be resolved"
-        assert "username" in sample
-        assert sample["action"] == "proxy_request"
-        assert "detail" in sample
-        assert isinstance(sample["detail"], dict)
-        assert "method" in sample["detail"]
-        assert "path" in sample["detail"]
-        assert "status" in sample["detail"]
-        assert "ip_address" in sample
-        assert "timestamp" in sample
+        # ── Row schema ────────────────────────────────────────
+        for key in ("id", "user_id", "username", "action", "detail", "ip_address", "timestamp"):
+            assert key in rows[0], f"row without {key}: {rows[0]}"
+        for key in ("method", "path", "status"):
+            assert key in rows[0]["detail"], f"detail without {key}: {rows[0]['detail']}"
         print("  Schema      : valid")
 
-        # ── Check known paths exist in audit ──────────────────
-        # Fetch all proxy entries (total may exceed single page due to pagination test)
-        all_items = items
-        if total > 100:
-            resp2 = api.get("/auth/audit?action=proxy_request&limit=100&order=asc")
-            assert resp2.status_code == 200
-            all_items = all_items + resp2.json()["data"]["items"]
-        paths = {item["detail"]["path"] for item in all_items}
-        expected_paths = ["/api/core/hello", "/api/core/clients/list"]
-        for ep in expected_paths:
-            assert ep in paths, f"Expected {ep} in audit paths — found: {paths}"
-        print(f"  Known paths : {', '.join(expected_paths)} ✓")
+        # ── The actor of every row: the journey's account ─────
+        actors = {(row["user_id"], row["username"]) for row in rows}
+        assert len(actors) == 1, f"rows of more than one actor: {actors}"
+        user_id, username = actors.pop()
+        assert username == "admin", f"actor {username!r}, expected 'admin'"
+        assert re.fullmatch(r"[0-9a-f]{32}", user_id or ""), f"actor id {user_id!r}"
+        print(f"  Actor       : {username} ({user_id})")
 
-        # ── Verify methods are recorded ───────────────────────
-        methods = {item["detail"]["method"] for item in items}
-        assert "GET" in methods, "GET method should be in audit"
-        assert "POST" in methods, "POST method should be in audit"
-        print(f"  Methods     : {', '.join(sorted(methods))}")
+        # ── No read is written ────────────────────────────────
+        written_paths = {row["detail"]["path"] for row in rows}
+        for path in self._READ_PATHS:
+            assert path not in written_paths, f"the read {path} is in the audit log"
+        print(f"  Reads       : none of {', '.join(self._READ_PATHS)}")
 
-        # ── Verify status codes are recorded ──────────────────
-        statuses = {item["detail"]["status"] for item in items}
-        assert 200 in statuses or 201 in statuses, "Success status should be in audit"
-        print(f"  Statuses    : {sorted(statuses)}")
+        # ── Every change and key handout, with its outcome ────
+        found = Counter(
+            (row["detail"]["method"], row["detail"]["path"], row["detail"]["status"])
+            for row in rows
+        )
+        expected = self._proxy_rows_of_the_journey()
+        assert found == expected, (
+            f"proxy rows differ from the journey\n"
+            f"  missing: {dict(expected - found)}\n"
+            f"  extra  : {dict(found - expected)}"
+        )
+        for (method, path, status), count in sorted(expected.items(), key=lambda kv: kv[0][1]):
+            print(f"  {count:4d}  {method:4s} {path} {status}")
 
         print(f"\n  Phase time    : {time.perf_counter() - t0:.2f}s")
 
