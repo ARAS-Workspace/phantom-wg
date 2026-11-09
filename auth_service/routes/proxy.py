@@ -61,16 +61,29 @@ GRANTS: dict[Access, frozenset[Role]] = {
 }
 
 
+class Record(StrEnum):
+    """What the audit log keeps of a daemon route."""
+
+    CHANGE = "change"  # changes daemon state: every outcome is written
+    SECRET = "secret"  # hands out a private key or the data set: every outcome is written
+    READ = "read"      # reads state, no key: only a refusal is written
+
+
 @dataclass(frozen=True, slots=True)
 class Route:
-    """The access a daemon route needs, and the body limit it takes."""
+    """The access a daemon route needs, what the audit log keeps of it, its body limit."""
 
     access: Access
+    record: Record
     large_body: bool = False
 
     def permits(self, payload: TokenPayload) -> bool:
         """Whether this token's role holds the route's access."""
         return payload.role in GRANTS[self.access]
+
+    def records_every_outcome(self) -> bool:
+        """Whether the daemon's answer and an unreachable daemon get an audit row."""
+        return self.record is not Record.READ
 
     def max_body(self, config: AuthConfig) -> int:
         """Request body limit for the route, in bytes."""
@@ -79,44 +92,45 @@ class Route:
 
 # Every daemon route the proxy forwards, matched exactly on method and path.
 # A request outside this table does not reach the daemon, and the URL sent to
-# the daemon is the table's path.
+# the daemon is the table's path. The record is not the method: some reads
+# are POST.
 ROUTES: dict[tuple[str, str], Route] = {
     # Backup
-    ("POST", "/api/core/backup/export"):         Route(Access.CUSTODY, large_body=True),
-    ("POST", "/api/core/backup/import"):         Route(Access.CUSTODY, large_body=True),
+    ("POST", "/api/core/backup/export"):         Route(Access.CUSTODY, Record.SECRET, large_body=True),
+    ("POST", "/api/core/backup/import"):         Route(Access.CUSTODY, Record.CHANGE, large_body=True),
     # Clients
-    ("POST", "/api/core/clients/assign"):        Route(Access.TUNNEL),
-    ("POST", "/api/core/clients/config"):        Route(Access.TUNNEL),
-    ("POST", "/api/core/clients/get"):           Route(Access.TUNNEL),
-    ("GET", "/api/core/clients/list"):           Route(Access.VIEW),
-    ("POST", "/api/core/clients/revoke"):        Route(Access.TUNNEL),
+    ("POST", "/api/core/clients/assign"):        Route(Access.TUNNEL, Record.CHANGE),
+    ("POST", "/api/core/clients/config"):        Route(Access.TUNNEL, Record.SECRET),
+    ("POST", "/api/core/clients/get"):           Route(Access.TUNNEL, Record.SECRET),
+    ("GET", "/api/core/clients/list"):           Route(Access.VIEW, Record.READ),
+    ("POST", "/api/core/clients/revoke"):        Route(Access.TUNNEL, Record.CHANGE),
     # Firewall
-    ("POST", "/api/core/firewall/groups/get"):   Route(Access.VIEW),
-    ("GET", "/api/core/firewall/groups/list"):   Route(Access.VIEW),
-    ("POST", "/api/core/firewall/routing/list"): Route(Access.VIEW),
-    ("POST", "/api/core/firewall/rules/list"):   Route(Access.VIEW),
-    ("GET", "/api/core/firewall/table"):         Route(Access.VIEW),
+    ("POST", "/api/core/firewall/groups/get"):   Route(Access.VIEW, Record.READ),
+    ("GET", "/api/core/firewall/groups/list"):   Route(Access.VIEW, Record.READ),
+    ("POST", "/api/core/firewall/routing/list"): Route(Access.VIEW, Record.READ),
+    ("POST", "/api/core/firewall/rules/list"):   Route(Access.VIEW, Record.READ),
+    ("GET", "/api/core/firewall/table"):         Route(Access.VIEW, Record.READ),
     # Hello
-    ("GET", "/api/core/hello"):                  Route(Access.VIEW),
+    ("GET", "/api/core/hello"):                  Route(Access.VIEW, Record.READ),
     # Network
-    ("GET", "/api/core/network"):                Route(Access.VIEW),
-    ("POST", "/api/core/network/cidr"):          Route(Access.OPERATE),
-    ("GET", "/api/core/network/validate"):       Route(Access.VIEW),
+    ("GET", "/api/core/network"):                Route(Access.VIEW, Record.READ),
+    ("POST", "/api/core/network/cidr"):          Route(Access.OPERATE, Record.CHANGE),
+    ("GET", "/api/core/network/validate"):       Route(Access.VIEW, Record.READ),
     # WireGuard
-    ("GET", "/api/core/wireguard"):              Route(Access.VIEW),
-    ("POST", "/api/core/wireguard/peer"):        Route(Access.VIEW),
+    ("GET", "/api/core/wireguard"):              Route(Access.VIEW, Record.READ),
+    ("POST", "/api/core/wireguard/peer"):        Route(Access.VIEW, Record.READ),
     # DNS
-    ("POST", "/api/dns/change"):                 Route(Access.OPERATE),
-    ("POST", "/api/dns/get"):                    Route(Access.VIEW),
+    ("POST", "/api/dns/change"):                 Route(Access.OPERATE, Record.CHANGE),
+    ("POST", "/api/dns/get"):                    Route(Access.VIEW, Record.READ),
     # Multihop
-    ("POST", "/api/multihop/config"):            Route(Access.MULTIHOP),
-    ("POST", "/api/multihop/disable"):           Route(Access.MULTIHOP),
-    ("POST", "/api/multihop/enable"):            Route(Access.MULTIHOP),
-    ("POST", "/api/multihop/import"):            Route(Access.MULTIHOP),
-    ("GET", "/api/multihop/list"):               Route(Access.MULTIHOP),
-    ("POST", "/api/multihop/remove"):            Route(Access.MULTIHOP),
-    ("GET", "/api/multihop/status"):             Route(Access.VIEW),
-    ("POST", "/api/multihop/update"):            Route(Access.MULTIHOP),
+    ("POST", "/api/multihop/config"):            Route(Access.MULTIHOP, Record.SECRET),
+    ("POST", "/api/multihop/disable"):           Route(Access.MULTIHOP, Record.CHANGE),
+    ("POST", "/api/multihop/enable"):            Route(Access.MULTIHOP, Record.CHANGE),
+    ("POST", "/api/multihop/import"):            Route(Access.MULTIHOP, Record.CHANGE),
+    ("GET", "/api/multihop/list"):               Route(Access.MULTIHOP, Record.SECRET),
+    ("POST", "/api/multihop/remove"):            Route(Access.MULTIHOP, Record.CHANGE),
+    ("GET", "/api/multihop/status"):             Route(Access.VIEW, Record.READ),
+    ("POST", "/api/multihop/update"):            Route(Access.MULTIHOP, Record.CHANGE),
 }
 
 
@@ -187,17 +201,21 @@ async def proxy(
         )
     except Exception:
         log.exception("Daemon proxy error")
-        audit_log(db, request, "proxy_request",
-                  detail=_audit_detail(request.method, path, query, 502),
-                  actor=actor)
+        # A change or a key handed out is written whatever its outcome;
+        # a read is written only when it is refused (above).
+        if route_access.records_every_outcome():
+            audit_log(db, request, "proxy_request",
+                      detail=_audit_detail(request.method, path, query, 502),
+                      actor=actor)
         return JSONResponse(
             status_code=502,
             content={"ok": False, "error_code": "SERVICE_UNAVAILABLE"},
         )
 
-    audit_log(db, request, "proxy_request",
-              detail=_audit_detail(request.method, path, query, response.status_code),
-              actor=actor)
+    if route_access.records_every_outcome():
+        audit_log(db, request, "proxy_request",
+                  detail=_audit_detail(request.method, path, query, response.status_code),
+                  actor=actor)
 
     passthrough_headers = {
         k: v

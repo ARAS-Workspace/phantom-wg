@@ -96,11 +96,11 @@ def test_proxy_revoked_token(auth_env, mock_daemon):
 
 
 def test_proxy_audit_get(auth_env, mock_daemon):
-    """Successful GET creates proxy_request audit entry with method/path/status."""
-    auth_env.create_user("auditget", "auditpass1")
+    """A GET that hands out keys is audited with method, path, query and status."""
+    auth_env.create_user("auditget", "auditpass1", role="superadmin")
     token = auth_env.issue_token("auditget")
     client = _proxy_client(auth_env, mock_daemon)
-    client.get("/api/core/clients/list?page=1&limit=25", headers=auth_env.bearer(token))
+    client.get("/api/multihop/list?page=1&limit=25", headers=auth_env.bearer(token))
 
     logs = auth_env.db.get_audit_logs()
     proxy_logs = [l for l in logs if l["action"] == "proxy_request"]
@@ -108,9 +108,21 @@ def test_proxy_audit_get(auth_env, mock_daemon):
 
     detail = json.loads(proxy_logs[0]["detail"])
     assert detail["method"] == "GET"
-    assert detail["path"] == "/api/core/clients/list"
+    assert detail["path"] == "/api/multihop/list"
     assert detail["query"] == "page=1&limit=25"
     assert detail["status"] == 200
+
+
+def test_proxy_audit_skips_an_answered_read(auth_env, mock_daemon):
+    """A read the daemon answers adds no audit entry."""
+    auth_env.create_user("auditread", "auditpass1")
+    token = auth_env.issue_token("auditread")
+    client = _proxy_client(auth_env, mock_daemon)
+    resp = client.get("/api/core/clients/list?page=1&limit=25", headers=auth_env.bearer(token))
+    assert resp.status_code == 200
+
+    logs = auth_env.db.get_audit_logs()
+    assert [l for l in logs if l["action"] == "proxy_request"] == []
 
 
 def test_proxy_audit_post(auth_env, mock_daemon):
@@ -136,7 +148,7 @@ def test_proxy_audit_user_id(auth_env, mock_daemon):
     user = auth_env.create_user("audituid", "auditpass1")
     token = auth_env.issue_token("audituid")
     client = _proxy_client(auth_env, mock_daemon)
-    client.get("/api/core/hello", headers=auth_env.bearer(token))
+    client.post("/api/core/clients/assign", json={"name": "x"}, headers=auth_env.bearer(token))
 
     logs = auth_env.db.get_audit_logs()
     proxy_logs = [l for l in logs if l["action"] == "proxy_request"]
@@ -144,11 +156,11 @@ def test_proxy_audit_user_id(auth_env, mock_daemon):
 
 
 def test_proxy_audit_daemon_error(auth_env, mock_daemon_error):
-    """502 daemon error is audited."""
+    """A change the daemon cannot take is audited with 502."""
     auth_env.create_user("auditerr", "auditpass1")
     token = auth_env.issue_token("auditerr")
     client = _proxy_client(auth_env, mock_daemon_error)
-    resp = client.get("/api/core/hello", headers=auth_env.bearer(token))
+    resp = client.post("/api/core/clients/assign", json={"name": "x"}, headers=auth_env.bearer(token))
     assert resp.status_code == 502
 
     logs = auth_env.db.get_audit_logs()
@@ -159,12 +171,24 @@ def test_proxy_audit_daemon_error(auth_env, mock_daemon_error):
     assert detail["status"] == 502
 
 
+def test_proxy_audit_skips_a_read_the_daemon_cannot_take(auth_env, mock_daemon_error):
+    """A read that ends in 502 adds no audit entry."""
+    auth_env.create_user("auditerr2", "auditpass1")
+    token = auth_env.issue_token("auditerr2")
+    client = _proxy_client(auth_env, mock_daemon_error)
+    resp = client.get("/api/core/hello", headers=auth_env.bearer(token))
+    assert resp.status_code == 502
+
+    logs = auth_env.db.get_audit_logs()
+    assert [l for l in logs if l["action"] == "proxy_request"] == []
+
+
 def test_proxy_audit_upstream_error(auth_env, mock_daemon_404):
     """Non-200 daemon response status is recorded in audit detail."""
     auth_env.create_user("audit404", "auditpass1")
     token = auth_env.issue_token("audit404")
     client = _proxy_client(auth_env, mock_daemon_404)
-    resp = client.get("/api/core/hello", headers=auth_env.bearer(token))
+    resp = client.post("/api/core/clients/revoke", json={"name": "x"}, headers=auth_env.bearer(token))
     assert resp.status_code == 404
 
     logs = auth_env.db.get_audit_logs()
@@ -189,9 +213,9 @@ def test_proxy_audit_filterable(auth_env, mock_daemon):
     token = auth_env.login("filtadmin", "FiltAdmPw1!")
     client = _proxy_client(auth_env, mock_daemon)
 
-    # Make 3 proxy requests
+    # Make 3 proxy requests that change state
     for _ in range(3):
-        client.get("/api/core/hello", headers=auth_env.bearer(token))
+        client.post("/api/core/clients/assign", json={"name": "x"}, headers=auth_env.bearer(token))
 
     # Query audit endpoint
     resp = client.get("/auth/audit?action=proxy_request", headers=auth_env.bearer(token))

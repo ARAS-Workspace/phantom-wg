@@ -1,4 +1,4 @@
-"""The route table: exact matches, the role per route, the body limit per route."""
+"""The route table: exact matches, the role, the audit record and the body limit per route."""
 
 from __future__ import annotations
 
@@ -12,9 +12,33 @@ from fastapi import FastAPI, Request
 
 from auth_service.config import load_auth_config
 from auth_service.middleware.rate_limit import RateLimiter
-from auth_service.routes.proxy import GRANTS, ROUTES, Access, Role
+from auth_service.routes.proxy import GRANTS, ROUTES, Access, Record, Role
 
 BACKUP_ROUTES = ["/api/core/backup/export", "/api/core/backup/import"]
+
+# The routes whose every outcome the audit log keeps, written out by hand:
+# the ones that change daemon state, and the ones that hand out a private
+# key or the whole data set. Every other route is a read.
+CHANGE_ROUTES = {
+    ("POST", "/api/core/backup/import"),
+    ("POST", "/api/core/clients/assign"),
+    ("POST", "/api/core/clients/revoke"),
+    ("POST", "/api/core/network/cidr"),
+    ("POST", "/api/dns/change"),
+    ("POST", "/api/multihop/disable"),
+    ("POST", "/api/multihop/enable"),
+    ("POST", "/api/multihop/import"),
+    ("POST", "/api/multihop/remove"),
+    ("POST", "/api/multihop/update"),
+}
+SECRET_ROUTES = {
+    ("POST", "/api/core/backup/export"),
+    ("POST", "/api/core/clients/config"),
+    ("POST", "/api/core/clients/get"),
+    ("POST", "/api/multihop/config"),
+    ("GET", "/api/multihop/list"),
+}
+READ_ROUTES = sorted(key for key, route in ROUTES.items() if route.record is Record.READ)
 
 # The routes an admin holds, written out by hand: the reads beside the
 # multihop exits, the multihop status, and the client tunnels with their keys.
@@ -256,6 +280,45 @@ def test_refusal_is_audited(auth_env, client, admin):
     detail = json.loads(logs[0]["detail"])
     assert detail["path"] == "/api/core/backup/export"
     assert detail["status"] == 403
+
+
+# ── Audit record ─────────────────────────────────────────────────
+
+
+def proxy_rows(auth_env) -> list[tuple[str, int]]:
+    rows = [row for row in auth_env.db.get_audit_logs() if row["action"] == "proxy_request"]
+    return [(json.loads(row["detail"])["path"], json.loads(row["detail"])["status"]) for row in rows]
+
+
+def test_the_record_of_each_route():
+    assert {key for key, r in ROUTES.items() if r.record is Record.CHANGE} == CHANGE_ROUTES
+    assert {key for key, r in ROUTES.items() if r.record is Record.SECRET} == SECRET_ROUTES
+    assert set(READ_ROUTES) == set(ROUTES) - CHANGE_ROUTES - SECRET_ROUTES
+
+
+def test_the_reads_are_the_view_routes():
+    assert set(READ_ROUTES) == {key for key, r in ROUTES.items() if r.access is Access.VIEW}
+
+
+@pytest.mark.parametrize(("method", "route"), sorted(CHANGE_ROUTES | SECRET_ROUTES))
+def test_a_change_or_a_secret_is_written(auth_env, client, daemon, superadmin, method, route):
+    assert send(client, route, superadmin, method=method) == 200
+    assert daemon.hits == [route]
+    assert proxy_rows(auth_env) == [(route, 200)]
+
+
+@pytest.mark.parametrize(("method", "route"), READ_ROUTES)
+def test_an_answered_read_is_not_written(auth_env, client, daemon, superadmin, method, route):
+    assert send(client, route, superadmin, method=method) == 200
+    assert daemon.hits == [route]
+    assert proxy_rows(auth_env) == []
+
+
+def test_a_read_over_the_body_limit_is_written(auth_env, client, daemon, admin):
+    body = b"x" * (auth_env.config.proxy_max_body + 1)
+    assert send(client, "/api/dns/get", admin, body=body) == 413
+    assert daemon.hits == []
+    assert proxy_rows(auth_env) == [("/api/dns/get", 413)]
 
 
 # ── Body limits ──────────────────────────────────────────────────

@@ -50,8 +50,9 @@ Scenarios (executed in order):
      filter by action, username. Events from prior scenarios appear.
 
   9. Proxy audit logging
-     Proxy request (success or 502) creates proxy_request audit entry.
-     Entry has correct schema (method, path, status). Filterable via audit API.
+     A change through the proxy (success or 502) creates a proxy_request
+     audit entry; a read does not. Entry has correct schema (method, path,
+     status). Filterable via audit API.
 
   10. Rate limiting (last — poisons IP for the window duration)
       Rapid failed logins from same IP → sliding window fills → 429.
@@ -667,9 +668,13 @@ class TestProxyAudit:
     """Proxy requests create proxy_request audit entries."""
 
     def test_01_proxy_request_creates_audit(self, http, admin_token):
-        """Any proxy request (success or 502) should produce an audit entry."""
+        """A change through the proxy (success or 502) should produce an audit entry."""
         # Make a proxy request — daemon may or may not be running
-        resp = http.get("/api/core/hello", headers=_bearer(admin_token))
+        resp = http.post(
+            "/api/core/clients/assign",
+            json={"name": "audit-scenario"},
+            headers=_bearer(admin_token),
+        )
         # Accept 200 (daemon up) or 502 (daemon down) — both should audit
         assert resp.status_code in (200, 502)
 
@@ -739,6 +744,17 @@ class TestProxyAudit:
         )
         count_after = resp.json()["data"]["total"]
         assert count_after == count_before, "Unauthenticated proxy should not create audit entry"
+
+    def test_06_read_no_audit(self, http, admin_token):
+        """A read through the proxy (success or 502) should NOT create an audit entry."""
+        resp = http.get("/auth/audit?action=proxy_request", headers=_bearer(admin_token))
+        count_before = resp.json()["data"]["total"]
+
+        resp = http.get("/api/core/hello", headers=_bearer(admin_token))
+        assert resp.status_code in (200, 502)
+
+        resp = http.get("/auth/audit?action=proxy_request", headers=_bearer(admin_token))
+        assert resp.json()["data"]["total"] == count_before, "A read should not create audit entry"
 
 
 # ── Scenario 10: Rate limiting (last — poisons IP for the window) ─

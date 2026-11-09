@@ -67,7 +67,9 @@ Kalıcılık katmanı
                          revoked.
     audit_log            kimliği bilinen kullanıcının yaptıkları:
                          girişler, MFA adımları, parola değişiklikleri,
-                         kullanıcı yönetimi ve proxy istekleri. Kayıtlar
+                         kullanıcı yönetimi ve durumu değiştiren,
+                         anahtar veren ya da reddedilen proxy istekleri
+                         (Reverse proxy bölümü). Kayıtlar
                          append-only (yalnızca ekleme) mantığıyla
                          çalışır. user_id işlemi yapanı tutar (Audit
                          log bölümü). Kullanıcı belli olmadan
@@ -211,36 +213,36 @@ Reverse proxy
   GRANTS ise her yetkiyi ona sahip rollerle eşleştirir. Path'ler /api/
   altındadır:
 
-    Metot  Rota                        Yetki     admin  superadmin
-    ─────  ──────────────────────────  ────────  ─────  ──────────
-    GET    core/hello                  VIEW      evet   evet
-    GET    core/wireguard              VIEW      evet   evet
-    POST   core/wireguard/peer         VIEW      evet   evet
-    GET    core/firewall/groups/list   VIEW      evet   evet
-    POST   core/firewall/groups/get    VIEW      evet   evet
-    POST   core/firewall/routing/list  VIEW      evet   evet
-    POST   core/firewall/rules/list    VIEW      evet   evet
-    GET    core/firewall/table         VIEW      evet   evet
-    GET    core/network                VIEW      evet   evet
-    GET    core/network/validate       VIEW      evet   evet
-    POST   dns/get                     VIEW      evet   evet
-    GET    core/clients/list           VIEW      evet   evet
-    GET    multihop/status             VIEW      evet   evet
-    POST   core/clients/assign         TUNNEL    evet   evet
-    POST   core/clients/get            TUNNEL    evet   evet
-    POST   core/clients/config         TUNNEL    evet   evet
-    POST   core/clients/revoke         TUNNEL    evet   evet
-    POST   core/network/cidr           OPERATE   hayır  evet
-    POST   dns/change                  OPERATE   hayır  evet
-    GET    multihop/list               MULTIHOP  hayır  evet
-    POST   multihop/config             MULTIHOP  hayır  evet
-    POST   multihop/import             MULTIHOP  hayır  evet
-    POST   multihop/update             MULTIHOP  hayır  evet
-    POST   multihop/enable             MULTIHOP  hayır  evet
-    POST   multihop/disable            MULTIHOP  hayır  evet
-    POST   multihop/remove             MULTIHOP  hayır  evet
-    POST   core/backup/export          CUSTODY   hayır  evet
-    POST   core/backup/import          CUSTODY   hayır  evet
+    Metot  Rota                        Yetki     Kayıt   admin  superadmin
+    ─────  ──────────────────────────  ────────  ──────  ─────  ──────────
+    GET    core/hello                  VIEW      read    evet   evet
+    GET    core/wireguard              VIEW      read    evet   evet
+    POST   core/wireguard/peer         VIEW      read    evet   evet
+    GET    core/firewall/groups/list   VIEW      read    evet   evet
+    POST   core/firewall/groups/get    VIEW      read    evet   evet
+    POST   core/firewall/routing/list  VIEW      read    evet   evet
+    POST   core/firewall/rules/list    VIEW      read    evet   evet
+    GET    core/firewall/table         VIEW      read    evet   evet
+    GET    core/network                VIEW      read    evet   evet
+    GET    core/network/validate       VIEW      read    evet   evet
+    POST   dns/get                     VIEW      read    evet   evet
+    GET    core/clients/list           VIEW      read    evet   evet
+    GET    multihop/status             VIEW      read    evet   evet
+    POST   core/clients/assign         TUNNEL    change  evet   evet
+    POST   core/clients/get            TUNNEL    secret  evet   evet
+    POST   core/clients/config         TUNNEL    secret  evet   evet
+    POST   core/clients/revoke         TUNNEL    change  evet   evet
+    POST   core/network/cidr           OPERATE   change  hayır  evet
+    POST   dns/change                  OPERATE   change  hayır  evet
+    GET    multihop/list               MULTIHOP  secret  hayır  evet
+    POST   multihop/config             MULTIHOP  secret  hayır  evet
+    POST   multihop/import             MULTIHOP  change  hayır  evet
+    POST   multihop/update             MULTIHOP  change  hayır  evet
+    POST   multihop/enable             MULTIHOP  change  hayır  evet
+    POST   multihop/disable            MULTIHOP  change  hayır  evet
+    POST   multihop/remove             MULTIHOP  change  hayır  evet
+    POST   core/backup/export          CUSTODY   secret  hayır  evet
+    POST   core/backup/import          CUSTODY   change  hayır  evet
 
   Yetkilerin kapsamı:
 
@@ -249,6 +251,15 @@ Reverse proxy
     OPERATE    sunucu yapılandırmasını değiştirir
     MULTIHOP   multihop exit düğümlerini anahtarlarıyla birlikte listeler, okur ya da değiştirir
     CUSTODY    tüm veri setini bütün istemci anahtarlarıyla birlikte dışa/içe aktarır
+
+  Audit log'un bir rotadan ne tuttuğu (Kayıt sütunu, ROUTES'taki Record;
+  kayıt türü HTTP metoduna bağlı değildir, bazı okumalar POST'tur):
+
+    change     daemon durumunu değiştirir: her sonuç yazılır
+    secret     private key ya da veri setini dışarı verir: her sonuç yazılır
+    read       anahtar taşımayan durumu okur: yalnızca reddedilirse yazılır (403, 413)
+
+  Tabloda olmayan bir path her metotta 404 olarak yazılır.
 
   İstek başına (per-request) akış:
     1. require_auth çalışır; kimliği doğrulanmamış istek daemon'a
@@ -261,13 +272,14 @@ Reverse proxy
        döner ve audit log'a yazılır.
     5. Request body okunur; rotanın boyut sınırını aşarsa 413 ile
        reddedilir (AUTH_PROXY_MAX_BODY, backup rotalarında ise
-       AUTH_PROXY_BACKUP_MAX_BODY).
+       AUTH_PROXY_BACKUP_MAX_BODY) ve audit log'a yazılır.
     6. İletilecek header'lar arasından Host, Authorization,
        Content-Length ve Transfer-Encoding temizlenir.
     7. İstek httpx AsyncClient ile daemon'a iletilir (production'da
        UDS üzerinden).
-    8. İstek audit log'a kaydedilir: metot, path, query ve HTTP yanıt
-       kodu.
+    8. change ve secret rotalarında istek audit log'a kaydedilir:
+       metot, path, query ve HTTP yanıt kodu; daemon'a ulaşılamazsa
+       502. read rotası bu adımda satır yazmaz.
     9. Yanıt istemciye döner; content-type korunur, ancak
        Content-Length, Transfer-Encoding ve Content-Encoding header'ları
        çıkarılır (uvicorn bunları yeniden hesaplar).

@@ -63,7 +63,9 @@ Persistence layer
                          revoked.
     audit_log            what an identified user does: logins, MFA
                          steps, password changes, user management
-                         and proxy requests. Append-only. user_id
+                         and the proxy requests that change state,
+                         hand out a key or are refused (Reverse
+                         proxy). Append-only. user_id
                          holds who acted (Audit log). A login
                          refused before the user is known goes to
                          the service log instead (Service log).
@@ -191,36 +193,36 @@ Reverse proxy
   Each row names the access the route needs, and GRANTS maps an
   access to the roles that hold it. Paths are under /api/:
 
-    Method  Route                       Access    admin  superadmin
-    ──────  ──────────────────────────  ────────  ─────  ──────────
-    GET     core/hello                  VIEW      yes    yes
-    GET     core/wireguard              VIEW      yes    yes
-    POST    core/wireguard/peer         VIEW      yes    yes
-    GET     core/firewall/groups/list   VIEW      yes    yes
-    POST    core/firewall/groups/get    VIEW      yes    yes
-    POST    core/firewall/routing/list  VIEW      yes    yes
-    POST    core/firewall/rules/list    VIEW      yes    yes
-    GET     core/firewall/table         VIEW      yes    yes
-    GET     core/network                VIEW      yes    yes
-    GET     core/network/validate       VIEW      yes    yes
-    POST    dns/get                     VIEW      yes    yes
-    GET     core/clients/list           VIEW      yes    yes
-    GET     multihop/status             VIEW      yes    yes
-    POST    core/clients/assign         TUNNEL    yes    yes
-    POST    core/clients/get            TUNNEL    yes    yes
-    POST    core/clients/config         TUNNEL    yes    yes
-    POST    core/clients/revoke         TUNNEL    yes    yes
-    POST    core/network/cidr           OPERATE   no     yes
-    POST    dns/change                  OPERATE   no     yes
-    GET     multihop/list               MULTIHOP  no     yes
-    POST    multihop/config             MULTIHOP  no     yes
-    POST    multihop/import             MULTIHOP  no     yes
-    POST    multihop/update             MULTIHOP  no     yes
-    POST    multihop/enable             MULTIHOP  no     yes
-    POST    multihop/disable            MULTIHOP  no     yes
-    POST    multihop/remove             MULTIHOP  no     yes
-    POST    core/backup/export          CUSTODY   no     yes
-    POST    core/backup/import          CUSTODY   no     yes
+    Method  Route                       Access    Audit   admin  superadmin
+    ──────  ──────────────────────────  ────────  ──────  ─────  ──────────
+    GET     core/hello                  VIEW      read    yes    yes
+    GET     core/wireguard              VIEW      read    yes    yes
+    POST    core/wireguard/peer         VIEW      read    yes    yes
+    GET     core/firewall/groups/list   VIEW      read    yes    yes
+    POST    core/firewall/groups/get    VIEW      read    yes    yes
+    POST    core/firewall/routing/list  VIEW      read    yes    yes
+    POST    core/firewall/rules/list    VIEW      read    yes    yes
+    GET     core/firewall/table         VIEW      read    yes    yes
+    GET     core/network                VIEW      read    yes    yes
+    GET     core/network/validate       VIEW      read    yes    yes
+    POST    dns/get                     VIEW      read    yes    yes
+    GET     core/clients/list           VIEW      read    yes    yes
+    GET     multihop/status             VIEW      read    yes    yes
+    POST    core/clients/assign         TUNNEL    change  yes    yes
+    POST    core/clients/get            TUNNEL    secret  yes    yes
+    POST    core/clients/config         TUNNEL    secret  yes    yes
+    POST    core/clients/revoke         TUNNEL    change  yes    yes
+    POST    core/network/cidr           OPERATE   change  no     yes
+    POST    dns/change                  OPERATE   change  no     yes
+    GET     multihop/list               MULTIHOP  secret  no     yes
+    POST    multihop/config             MULTIHOP  secret  no     yes
+    POST    multihop/import             MULTIHOP  change  no     yes
+    POST    multihop/update             MULTIHOP  change  no     yes
+    POST    multihop/enable             MULTIHOP  change  no     yes
+    POST    multihop/disable            MULTIHOP  change  no     yes
+    POST    multihop/remove             MULTIHOP  change  no     yes
+    POST    core/backup/export          CUSTODY   secret  no     yes
+    POST    core/backup/import          CUSTODY   change  no     yes
 
   What each access covers:
 
@@ -229,6 +231,15 @@ Reverse proxy
     OPERATE    changes the server configuration
     MULTIHOP   lists, reads or changes the multihop exits together with their keys
     CUSTODY    exports or imports the whole data set together with every client key
+
+  What the audit log keeps of a route (Record in ROUTES; the record
+  is not the method, some reads are POST):
+
+    change     changes daemon state: every outcome is written
+    secret     hands out a private key or the data set: every outcome is written
+    read       reads state with no key: written only when refused (403, 413)
+
+  A path outside the table is written as 404 on every method.
 
   Per-request flow:
     1. Apply require_auth (unauthenticated requests never reach the
@@ -241,11 +252,13 @@ Reverse proxy
        body is read.
     5. Read the request body; reject with 413 if larger than the
        route's limit (AUTH_PROXY_MAX_BODY, or
-       AUTH_PROXY_BACKUP_MAX_BODY on backup).
+       AUTH_PROXY_BACKUP_MAX_BODY on backup), audited.
     6. Strip Host / Authorization / Content-Length /
        Transfer-Encoding from forwarded headers.
     7. Forward via httpx AsyncClient (UDS transport in production).
-    8. Audit-log the request: method, path, query, response status.
+    8. On a change or a secret route, audit-log the request: method,
+       path, query, response status, 502 when the daemon cannot be
+       reached. A read writes no row here.
     9. Pass the response back, preserving content-type and
        stripping Content-Length, Transfer-Encoding and
        Content-Encoding (uvicorn re-computes them).
