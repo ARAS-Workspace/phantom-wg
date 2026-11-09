@@ -588,8 +588,11 @@ class TestAuditLog:
         assert len(page["items"]) <= 3
 
     def test_07_pagination_second_page(self, http, admin_token):
+        # Each read writes audit_viewed; the second page sends the first page's as_of.
         resp1 = http.get("/auth/audit?page=1&limit=5", headers={"Authorization": f"Bearer {admin_token}"})
-        resp2 = http.get("/auth/audit?page=2&limit=5", headers={"Authorization": f"Bearer {admin_token}"})
+        as_of = resp1.json()["data"]["as_of"]
+        resp2 = http.get(f"/auth/audit?page=2&limit=5&as_of={as_of}",
+                         headers={"Authorization": f"Bearer {admin_token}"})
         assert resp1.status_code == 200
         assert resp2.status_code == 200
         ids1 = {i["id"] for i in resp1.json()["data"]["items"]}

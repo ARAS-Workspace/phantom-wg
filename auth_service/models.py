@@ -174,3 +174,4 @@ class AuditLogPage(BaseModel):
     pages: int
     order: str
     sort_by: str
+    as_of: int | None

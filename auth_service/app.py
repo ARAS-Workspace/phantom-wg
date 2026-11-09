@@ -27,6 +27,7 @@ from fastapi.responses import JSONResponse
 from starlette.middleware.base import BaseHTTPMiddleware
 
 from auth_service import __version__
+from auth_service.audit import audit_log
 from auth_service.config import load_auth_config
 from auth_service.crypto.keys import build_signing_key, build_verify_key, load_auth_keys
 from auth_service.db.repository import open_auth_db, resolve_db_path
@@ -132,21 +133,53 @@ _STATUS_CODES: dict[int, str] = {
 }
 
 
+# A wrong password or code from a token holder: someone with the session
+# is trying the account's credentials.
+_REAUTH_CODES = frozenset({"INVALID_PASSWORD", "INVALID_TOTP_CODE"})
+
+
+def _audit_refusal(request: Request, status: int, code: str) -> None:
+    """Write the refused /auth request of an authenticated account.
+
+    A change route (POST, DELETE) writes every refusal; a read route
+    (GET) writes a 403 only. A request with no access token has no actor
+    and writes nothing; the proxy writes its own rows.
+    """
+    actor = getattr(request.state, "actor", None)
+    if actor is None or not request.url.path.startswith("/auth/"):
+        return
+    if request.method == "GET" and status != 403:
+        return
+    audit_log(
+        request.state.db, request,
+        "reauth_failed" if code in _REAUTH_CODES else "request_refused",
+        actor=actor,
+        detail={"method": request.method, "path": request.url.path,
+                "status": status, "code": code},
+    )
+
+
 def _register_error_handlers(app: FastAPI) -> None:
-    """Register handlers: HTTPException and RequestValidationError return the ApiErr envelope."""
+    """Register handlers: HTTPException and RequestValidationError return the ApiErr envelope.
+
+    Both write the refusal of an authenticated account to the audit log
+    (_audit_refusal).
+    """
 
     @app.exception_handler(HTTPException)
-    async def _http_error(_request, exc):
+    async def _http_error(request, exc):
         error_code = getattr(exc, "error_code", None) or _STATUS_CODES.get(
             exc.status_code, "UNKNOWN_ERROR"
         )
+        _audit_refusal(request, exc.status_code, error_code)
         return JSONResponse(
             status_code=exc.status_code,
             content={"ok": False, "error_code": error_code},
         )
 
     @app.exception_handler(RequestValidationError)
-    async def _validation(_request, _exc):
+    async def _validation(request, _exc):
+        _audit_refusal(request, 422, "VALIDATION_ERROR")
         return JSONResponse(
             status_code=422,
             content={"ok": False, "error_code": "VALIDATION_ERROR"},

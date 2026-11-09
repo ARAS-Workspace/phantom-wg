@@ -67,7 +67,8 @@ Kalıcılık katmanı
                          revoked.
     audit_log            kimliği bilinen kullanıcının yaptıkları:
                          girişler, MFA adımları, parola değişiklikleri,
-                         kullanıcı yönetimi ve durumu değiştiren,
+                         kullanıcı yönetimi, reddedilen istekler, audit
+                         log'un kendisinin okunması ve durumu değiştiren,
                          anahtar veren ya da reddedilen proxy istekleri
                          (Reverse proxy bölümü). Kayıtlar
                          append-only (yalnızca ekleme) mantığıyla
@@ -320,6 +321,25 @@ Audit log
   kapatma) o hesabı aynı biçimde detail.target alanında tutar; detail
   başka bir adı tekrarlamaz.
 
+  Kayıt eylemleri tutar, ziyaretleri değil. Kimliği doğrulanmış bir
+  hesabın /auth altında reddedilen isteğini hata handler'ları yazar
+  (app.py:_audit_refusal); detail alanında metot, path, durum kodu ve
+  hata kodu yer alır:
+
+    reauth_failed      token sahibinin yanlış parolası ya da kodu
+                       (INVALID_PASSWORD, INVALID_TOTP_CODE)
+    request_refused    diğer bütün retler
+
+  Değişiklik rotası (POST, DELETE) her reddi yazar; bozuk isteğin 422
+  yanıtı da buna dahildir. Okuma rotası (GET) yalnızca 403'ü yazar.
+  Access token taşımayan istek burada satır yazmaz; proxy kendi
+  satırını yazar (Reverse proxy bölümü). GET /auth/audit, yanıtı
+  verdikten sonra sorgusuyla birlikte audit_viewed yazar. Her sayfa
+  as_of değerini, yani taşıdığı en büyük satır id'sini döner; sorgunun
+  sonraki sayfaları bu değeri geri gönderir ve onunla sınırlanır.
+  Böylece arada yazılan bir satır, okuyanın kendi audit_viewed satırı
+  da dahil, hiçbir sayfayı kaydırmaz.
+
   GET /auth/audit, user_id değerini user_id ve username alanlarına
   ayırır; username filtresi bu adla eşleşir. 1.3.0'dan önce yazılmış
   satırlar yalnızca hesap id'sini taşır: ad users tablosundan gelir,
@@ -408,8 +428,10 @@ Hata zarfı (Error envelope)
     app.py:_register_error_handlers
                                   HTTPException'ı (ApiException dahil)
                                   ve FastAPI'nin RequestValidationError
-                                  hatasını standart zarf formatına çevirir.
-                                  Yakalanmayan (unhandled) exception'lar
+                                  hatasını standart zarf formatına çevirir;
+                                  kimliği doğrulanmış hesabın reddedilen
+                                  isteğini audit log'a yazar (Audit log
+                                  bölümü). Yakalanmayan (unhandled) exception'lar
                                   plain-text 500 döner.
 
 

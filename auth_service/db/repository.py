@@ -350,6 +350,7 @@ class AuthDB:
         ip: str | None = None,
         order: str = "desc",
         sort_by: str = "timestamp",
+        as_of: int | None = None,
     ) -> dict:
         """Get audit log entries with server-side pagination, filtering and ordering.
 
@@ -359,7 +360,11 @@ class AuthDB:
         A row written before 1.3.0 holds a bare account id; its name comes
         from the users table and is empty once the account is deleted.
         sort_by accepts 'timestamp' only, ordered by al.id.
-        Returns: { items, total, page, limit, pages, order, sort_by }
+        as_of bounds the pages to rows up to that id. Without it the result
+        names the highest id it holds; the next pages send that back, and a
+        row written in between, the reader's own audit_viewed among them,
+        shifts no page.
+        Returns: { items, total, page, limit, pages, order, sort_by, as_of }
         """
         # Normalise and guard order / sort_by to prevent SQL injection
         safe_order = "DESC" if order.lower() != "asc" else "ASC"
@@ -390,6 +395,9 @@ class AuthDB:
         if ip is not None:
             conditions.append("al.ip_address = ?")
             params.append(ip)
+        if as_of is not None:
+            conditions.append("al.id <= ?")
+            params.append(as_of)
 
         where = ("WHERE " + " AND ".join(conditions)) if conditions else ""
 
@@ -405,15 +413,19 @@ class AuthDB:
         rows = self._conn.execute(
             f"SELECT al.id, {actor_id} AS user_id, {actor_name} AS username, "
             f"al.action, al.detail, "
-            f"al.ip_address, al.timestamp, COUNT(*) OVER() AS _total "
+            f"al.ip_address, al.timestamp, COUNT(*) OVER() AS _total, "
+            f"MAX(al.id) OVER() AS _as_of "
             f"{base_query} "
             f"ORDER BY {safe_sort_key} {safe_order} LIMIT ? OFFSET ?",
             [*params, limit, offset],
         ).fetchall()
 
-        total = rows[0]["_total"] if rows else self._conn.execute(
-            f"SELECT COUNT(*) {base_query}", params
-        ).fetchone()[0]
+        if rows:
+            total, newest = rows[0]["_total"], rows[0]["_as_of"]
+        else:
+            total, newest = self._conn.execute(
+                f"SELECT COUNT(*), MAX(al.id) {base_query}", params
+            ).fetchone()
 
         import math
         pages = math.ceil(total / limit) if total > 0 else 1
@@ -422,6 +434,7 @@ class AuthDB:
         for r in rows:
             row_dict = dict(r)
             row_dict.pop("_total", None)
+            row_dict.pop("_as_of", None)
             try:
                 row_dict["detail"] = json.loads(row_dict["detail"] or "{}")
             except (json.JSONDecodeError, TypeError):
@@ -436,6 +449,7 @@ class AuthDB:
             "pages": pages,
             "order": safe_order.lower(),
             "sort_by": sort_by,
+            "as_of": as_of if as_of is not None else newest,
         }
 
 

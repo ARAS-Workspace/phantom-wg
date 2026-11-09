@@ -62,7 +62,8 @@ Persistence layer
                          issued_at, expires_at, last_activity_at,
                          revoked.
     audit_log            what an identified user does: logins, MFA
-                         steps, password changes, user management
+                         steps, password changes, user management,
+                         refused requests, reads of the log itself,
                          and the proxy requests that change state,
                          hand out a key or are refused (Reverse
                          proxy). Append-only. user_id
@@ -296,6 +297,24 @@ Audit log
   a password reset, turning off its TOTP) holds that account in
   detail.target, in the same form; detail repeats no other name.
 
+  The log keeps actions, not visits. What an authenticated account
+  is refused on /auth is written by the error handlers
+  (app.py:_audit_refusal), with method, path, status and code in
+  detail:
+
+    reauth_failed      a wrong password or code from the token holder
+                       (INVALID_PASSWORD, INVALID_TOTP_CODE)
+    request_refused    any other refusal
+
+  A change route (POST, DELETE) writes every refusal, the 422 of a
+  malformed request among them; a read route (GET) writes a 403
+  only. A request with no access token writes no row here, and the
+  proxy writes its own (Reverse proxy). GET /auth/audit writes
+  audit_viewed with its query after it answers. A page answers
+  as_of, the highest row id it holds; the next pages of the query
+  send it back and are bounded to it, so a row written in between,
+  the reader's own audit_viewed among them, shifts no page.
+
   GET /auth/audit splits user_id into user_id and username, and the
   username filter matches that name. A row written before 1.3.0
   holds a bare account id: its name comes from the users table, and
@@ -383,8 +402,10 @@ Error envelope
                                   Maps HTTPException, ApiException
                                   among them, and FastAPI's
                                   RequestValidationError into the
-                                  envelope. An uncaught exception
-                                  answers a plain-text 500.
+                                  envelope, and writes the refusal of
+                                  an authenticated account to the
+                                  audit log (Audit log). An uncaught
+                                  exception answers a plain-text 500.
 
 
 Bootstrap

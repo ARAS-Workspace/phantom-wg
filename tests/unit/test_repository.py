@@ -311,6 +311,30 @@ def test_audit_paginated_username_filter_matches_the_actor_name(auth_env):
     assert actions("system:host") == ["system_actor"]
 
 
+def test_audit_paginated_names_the_highest_id_it_holds(auth_env):
+    db = auth_env.db
+    for _ in range(3):
+        db.add_audit_log("one", {}, ip_address="1.0.0.1")
+    db.add_audit_log("other", {}, ip_address="1.0.0.1")
+    rows = db.get_audit_logs()
+    assert db.get_audit_logs_paginated(limit=1)["as_of"] == max(r["id"] for r in rows)
+    assert db.get_audit_logs_paginated(action="one", limit=1)["as_of"] == max(
+        r["id"] for r in rows if r["action"] == "one")
+    assert db.get_audit_logs_paginated(action="none")["as_of"] is None
+
+
+def test_audit_paginated_as_of_keeps_the_pages_of_one_query(auth_env):
+    db = auth_env.db
+    for n in range(4):
+        db.add_audit_log(f"row{n}", {}, ip_address="1.0.0.1")
+    first = db.get_audit_logs_paginated(page=1, limit=2)
+    db.add_audit_log("written_between", {}, ip_address="1.0.0.1")
+    second = db.get_audit_logs_paginated(page=2, limit=2, as_of=first["as_of"])
+    assert [i["action"] for i in first["items"]] == ["row3", "row2"]
+    assert [i["action"] for i in second["items"]] == ["row1", "row0"]
+    assert (second["total"], second["as_of"]) == (4, first["as_of"])
+
+
 def test_audit_paginated_no_user_id(auth_env):
     db = auth_env.db
     db.add_audit_log("login_rate_limited", {}, ip_address="4.4.4.4")
