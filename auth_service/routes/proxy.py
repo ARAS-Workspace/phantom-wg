@@ -120,12 +120,6 @@ ROUTES: dict[tuple[str, str], Route] = {
 }
 
 
-def _resolve_user_id(request: Request, username: str) -> str | None:
-    """Resolve user_id from username for audit logging."""
-    user = request.state.db.get_user_by_username(username)
-    return user.id if user else None
-
-
 def _audit_detail(method: str, path: str, query: str, status: int) -> dict:
     """Build audit detail dict for a proxy request."""
     detail: dict = {"method": method, "path": f"/api/{path}", "status": status}
@@ -149,19 +143,19 @@ async def proxy(
     db = request.state.db
     route = f"/api/{path}"
     query = str(request.url.query) if request.url.query else ""
-    user_id = _resolve_user_id(request, payload.sub)
+    actor = request.state.actor
 
     route_access = ROUTES.get((request.method, route))
     if route_access is None:
         audit_log(db, request, "proxy_request",
                   detail=_audit_detail(request.method, path, query, 404),
-                  user_id=user_id)
+                  actor=actor)
         raise ApiException(404, "NOT_FOUND")
 
     if not route_access.permits(payload):
         audit_log(db, request, "proxy_request",
                   detail=_audit_detail(request.method, path, query, 403),
-                  user_id=user_id)
+                  actor=actor)
         raise ApiException(403, "SUPERADMIN_REQUIRED")
 
     target_url = f"{config.proxy_base_url}{route}"
@@ -172,7 +166,7 @@ async def proxy(
     if len(body) > route_access.max_body(config):
         audit_log(db, request, "proxy_request",
                   detail=_audit_detail(request.method, path, query, 413),
-                  user_id=user_id)
+                  actor=actor)
         return JSONResponse(
             status_code=413,
             content={"ok": False, "error_code": "BODY_TOO_LARGE"},
@@ -195,7 +189,7 @@ async def proxy(
         log.exception("Daemon proxy error")
         audit_log(db, request, "proxy_request",
                   detail=_audit_detail(request.method, path, query, 502),
-                  user_id=user_id)
+                  actor=actor)
         return JSONResponse(
             status_code=502,
             content={"ok": False, "error_code": "SERVICE_UNAVAILABLE"},
@@ -203,7 +197,7 @@ async def proxy(
 
     audit_log(db, request, "proxy_request",
               detail=_audit_detail(request.method, path, query, response.status_code),
-              user_id=user_id)
+              actor=actor)
 
     passthrough_headers = {
         k: v

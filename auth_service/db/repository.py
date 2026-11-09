@@ -353,7 +353,11 @@ class AuthDB:
     ) -> dict:
         """Get audit log entries with server-side pagination, filtering and ordering.
 
-        Joins with users table to resolve username from user_id.
+        user_id holds the actor (audit.account): "<id>-<name>", fixed when
+        the row is written, or "system:<source>". The entry splits it into
+        user_id and username, and the username filter matches that name.
+        A row written before 1.3.0 holds a bare account id; its name comes
+        from the users table and is empty once the account is deleted.
         sort_by accepts 'timestamp' only, ordered by al.id.
         Returns: { items, total, page, limit, pages, order, sort_by }
         """
@@ -361,6 +365,17 @@ class AuthDB:
         safe_order = "DESC" if order.lower() != "asc" else "ASC"
         # timestamp is the only sort key; al.id follows insertion order
         safe_sort_key = "al.id"
+
+        actor_id = (
+            "CASE WHEN al.user_id LIKE 'system:%' THEN NULL "
+            "ELSE substr(al.user_id, 1, 32) END"
+        )
+        actor_name = (
+            "CASE WHEN al.user_id LIKE 'system:%' THEN al.user_id "
+            "WHEN length(al.user_id) > 33 AND substr(al.user_id, 33, 1) = '-' "
+            "THEN substr(al.user_id, 34) "
+            "ELSE u.username END"
+        )
 
         # Build WHERE clause dynamically
         conditions: list[str] = []
@@ -370,7 +385,7 @@ class AuthDB:
             conditions.append("al.action = ?")
             params.append(action)
         if username is not None:
-            conditions.append("u.username = ?")
+            conditions.append(f"{actor_name} = ?")
             params.append(username)
         if ip is not None:
             conditions.append("al.ip_address = ?")
@@ -388,7 +403,8 @@ class AuthDB:
         # avoiding a race between separate COUNT and SELECT statements.
         offset = (page - 1) * limit
         rows = self._conn.execute(
-            f"SELECT al.id, al.user_id, u.username, al.action, al.detail, "
+            f"SELECT al.id, {actor_id} AS user_id, {actor_name} AS username, "
+            f"al.action, al.detail, "
             f"al.ip_address, al.timestamp, COUNT(*) OVER() AS _total "
             f"{base_query} "
             f"ORDER BY {safe_sort_key} {safe_order} LIMIT ? OFFSET ?",

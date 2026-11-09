@@ -67,18 +67,38 @@ def get_client_ip(request: Request) -> str:
     return candidate
 
 
+def account(user_id: str, username: str) -> str:
+    """The audit form of an account, "<id>-<name>", fixed when the row is written.
+
+    The id is uuid4().hex: 32 characters and no dash, so the first dash
+    ends it and the name keeps its own dashes. The row keeps the name
+    after the account is deleted. AuthDB.get_audit_logs_paginated reads
+    the form back.
+    """
+    return f"{user_id}-{username}"
+
+
 def audit_log(
     db: AuthDB,
     request: Request,
     action: str,
+    *,
+    actor: str,
+    target: str | None = None,
     detail: dict | None = None,
-    user_id: str | None = None,
 ) -> None:
-    """Write an audit log entry."""
+    """Write an audit row: who acted in user_id, the account acted on in detail.target.
+
+    actor and target take the form of account(). An authenticated
+    request carries its actor in request.state.actor (middleware/auth.py).
+    """
+    row = dict(detail or {})
+    if target is not None:
+        row["target"] = target
     db.add_audit_log(
         action=action,
-        detail=detail,
-        user_id=user_id,
+        detail=row,
+        user_id=actor,
         ip_address=get_client_ip(request),
     )
 

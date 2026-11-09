@@ -5,6 +5,7 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
+from auth_service.audit import account
 from auth_service.middleware.rate_limit import RateLimiter
 
 
@@ -131,7 +132,7 @@ def test_proxy_audit_post(auth_env, mock_daemon):
 
 
 def test_proxy_audit_user_id(auth_env, mock_daemon):
-    """Audit entry links to correct user_id."""
+    """Audit entry names its actor: account id and name."""
     user = auth_env.create_user("audituid", "auditpass1")
     token = auth_env.issue_token("audituid")
     client = _proxy_client(auth_env, mock_daemon)
@@ -139,7 +140,7 @@ def test_proxy_audit_user_id(auth_env, mock_daemon):
 
     logs = auth_env.db.get_audit_logs()
     proxy_logs = [l for l in logs if l["action"] == "proxy_request"]
-    assert proxy_logs[0]["user_id"] == user.id
+    assert proxy_logs[0]["user_id"] == account(user.id, "audituid")
 
 
 def test_proxy_audit_daemon_error(auth_env, mock_daemon_error):

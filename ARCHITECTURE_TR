@@ -69,9 +69,10 @@ Kalıcılık katmanı
                          girişler, MFA adımları, parola değişiklikleri,
                          kullanıcı yönetimi ve proxy istekleri. Kayıtlar
                          append-only (yalnızca ekleme) mantığıyla
-                         çalışır. Kullanıcı belli olmadan reddedilen
-                         giriş buraya değil servis log'una yazılır
-                         (Servis log'u bölümü).
+                         çalışır. user_id işlemi yapanı tutar (Audit
+                         log bölümü). Kullanıcı belli olmadan
+                         reddedilen giriş buraya değil servis log'una
+                         yazılır (Servis log'u bölümü).
 
   Veritabanı dosyasını ilk kurulumda tools/bootstrap.py bir kez
   oluşturur. Dosya yoksa servis başlamaz. Servisin açtığı her bağlantı
@@ -252,7 +253,7 @@ Reverse proxy
   İstek başına (per-request) akış:
     1. require_auth çalışır; kimliği doğrulanmamış istek daemon'a
        hiçbir zaman ulaşmaz.
-    2. Audit log için username üzerinden user_id bulunur.
+    2. Audit aktörü require_auth'tan alınır (request.state.actor).
     3. Metot ve path ROUTES tablosunda aranır; tabloda yoksa 404
        NOT_FOUND döner ve audit log'a yazılır.
     4. Token'daki rol GRANTS ile karşılaştırılır; rol gerekli yetkiye
@@ -288,6 +289,30 @@ Rate limiting (İstek sınırlama)
   Sayaç yalnızca başarılı bir şekilde access token üretildiğinde
   sıfırlanır. TOTP etkinse, parolanın doğru girilmesi tek başına sayacı
   sıfırlamaz.
+
+
+Audit log
+---------
+
+  user_id, işlemi yapanı (actor) satırla birlikte bir kez yazılan
+  biçimde tutar (audit.py:account):
+
+    <id>-<ad>          bir hesap: 32 karakterlik id'si, bir tire ve
+                       adı. Hesap silindikten sonra da ad satırda
+                       kalır.
+    system:<kaynak>    hesabı olmayan bir yazıcı
+
+  require_auth, kimliği doğrulanmış isteğin aktörünü
+  request.state.actor alanına koyar. Başka bir hesabı ilgilendiren
+  satır (kullanıcı yönetimi, parola sıfırlama, o hesabın TOTP'sini
+  kapatma) o hesabı aynı biçimde detail.target alanında tutar; detail
+  başka bir adı tekrarlamaz.
+
+  GET /auth/audit, user_id değerini user_id ve username alanlarına
+  ayırır; username filtresi bu adla eşleşir. 1.3.0'dan önce yazılmış
+  satırlar yalnızca hesap id'sini taşır: ad users tablosundan gelir,
+  ve user_created, user_deleted, totp_disabled ile parola sıfırlama
+  satırlarında bu id hedef hesabındır.
 
 
 Servis log'u (Service log)
@@ -454,7 +479,7 @@ Kaynak kod düzeni
     __main__.py           uvicorn giriş noktası (entrypoint), servis logger'ı yapılandırması
     app.py                FastAPI app factory, lifespan ve middleware'ler
     config.py             ortam değişkenlerinden yüklenen AuthConfig
-    audit.py              audit_log yardımcı fonksiyonları, reddedilen giriş log satırı
+    audit.py              audit_log, hesap biçimi (account), reddedilen giriş log satırı
     errors.py             exception hiyerarşisi
     models.py             Pydantic istek (request) ve yanıt (response) modelleri
     crypto/

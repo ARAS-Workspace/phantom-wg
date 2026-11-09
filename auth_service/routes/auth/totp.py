@@ -19,7 +19,7 @@ import uuid
 
 from fastapi import APIRouter, Request
 
-from auth_service.audit import audit_log
+from auth_service.audit import account, audit_log
 from auth_service.crypto.jwt import decode_token_claims, encode_token
 from auth_service.crypto.password import verify_password
 from auth_service.crypto.totp import (
@@ -82,7 +82,7 @@ def totp_setup(
         extra={"totp_secret": secret, "backup_codes": backup_codes},
     )
 
-    audit_log(db, request, "totp_setup_started", {"username": user.username}, user_id=user.id)
+    audit_log(db, request, "totp_setup_started", actor=request.state.actor)
     return ApiOk(data=TOTPSetupResponse(
         setup_token=setup_token,
         secret=secret,
@@ -133,7 +133,7 @@ def totp_confirm(
     db.set_totp_secret(user.id, totp_secret)
     db.store_backup_codes(user.id, backup_hashes)
 
-    audit_log(db, request, "totp_enabled", {"username": user.username}, user_id=user.id)
+    audit_log(db, request, "totp_enabled", actor=request.state.actor)
     return ApiOk(data=ActionResult(success_code="TOTP_ENABLED"))
 
 
@@ -170,7 +170,7 @@ def totp_disable(
 
     audit_log(
         db, request, "totp_disabled",
-        {"username": target.username, "by": payload.sub},
-        user_id=target.id,
+        actor=request.state.actor,
+        target=account(target.id, target.username),
     )
     return ApiOk(data=ActionResult(success_code="TOTP_DISABLED"))

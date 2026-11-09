@@ -17,7 +17,7 @@ from __future__ import annotations
 
 from fastapi import APIRouter, Request
 
-from auth_service.audit import audit_log
+from auth_service.audit import account, audit_log
 from auth_service.crypto.password import hash_password
 from auth_service.errors import ApiException, AuthDatabaseError
 from auth_service.middleware.auth import AuthPayload, SuperadminPayload
@@ -36,7 +36,7 @@ router = APIRouter()
 def create_user(
     body: CreateUserRequest,
     request: Request,
-    payload: SuperadminPayload,
+    _payload: SuperadminPayload,
 ):
     """Create a new admin user. Superadmin only."""
     db = request.state.db
@@ -50,8 +50,8 @@ def create_user(
         raise ApiException(409, "USER_ALREADY_EXISTS")
     audit_log(
         db, request, "user_created",
-        {"username": body.username, "by": payload.sub},
-        user_id=user.id,
+        actor=request.state.actor,
+        target=account(user.id, user.username),
     )
     return ApiOk(data=user_info(user))
 
@@ -83,8 +83,8 @@ def delete_user(
     db.delete_user(username)
     audit_log(
         db, request, "user_deleted",
-        {"username": username, "by": payload.sub},
-        user_id=user.id,
+        actor=request.state.actor,
+        target=account(user.id, user.username),
     )
     return ApiOk(data=ActionResult(success_code="USER_DELETED"))
 
@@ -109,7 +109,7 @@ def change_password(
     db.revoke_user_sessions(user.id)
     audit_log(
         db, request, "password_changed",
-        {"username": username, "by": payload.sub},
-        user_id=user.id,
+        actor=request.state.actor,
+        target=account(user.id, user.username),
     )
     return ApiOk(data=ActionResult(success_code="PASSWORD_CHANGED"))

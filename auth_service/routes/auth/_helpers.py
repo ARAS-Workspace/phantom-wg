@@ -20,7 +20,7 @@ from datetime import UTC, datetime, timedelta
 
 from fastapi import Request
 
-from auth_service.audit import audit_log, get_client_ip
+from auth_service.audit import account, audit_log, get_client_ip
 from auth_service.crypto.jwt import encode_token, token_hash
 from auth_service.models import ApiOk, LoginResponse, UserInfo
 
@@ -56,7 +56,7 @@ def issue_access_token(request: Request, username: str, user_id: str, role: str 
         expires_at=expires.isoformat(),
     )
 
-    audit_log(db, request, "login_success", {"username": username}, user_id=user_id)
+    audit_log(db, request, "login_success", actor=account(user_id, username))
     return ApiOk(data=LoginResponse(token=token, expires_in=config.token_lifetime))
 
 

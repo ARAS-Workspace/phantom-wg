@@ -20,7 +20,7 @@ import uuid
 from fastapi import APIRouter, Request
 from nacl.signing import VerifyKey
 
-from auth_service.audit import audit_log, get_client_ip, log_refused_login
+from auth_service.audit import account, audit_log, get_client_ip, log_refused_login
 from auth_service.crypto.jwt import TokenPayload, decode_token, encode_token
 from auth_service.crypto.password import verify_password
 from auth_service.crypto.totp import hash_backup_code, verify_totp
@@ -75,7 +75,7 @@ def login(body: LoginRequest, request: Request):
             lifetime=config.mfa_token_lifetime,
             typ="mfa_pending",
         )
-        audit_log(db, request, "mfa_challenge", {"username": user.username}, user_id=user.id)
+        audit_log(db, request, "mfa_challenge", actor=account(user.id, user.username))
         return ApiOk(data=MFARequiredResponse(
             mfa_token=mfa_token,
             expires_in=config.mfa_token_lifetime,
@@ -110,10 +110,10 @@ def mfa_verify(body: MFAVerifyRequest, request: Request):
         raise ApiException(401, "INVALID_MFA_STATE")
 
     if not verify_totp(user.totp_secret, body.code):
-        audit_log(db, request, "mfa_failed", {"username": user.username}, user_id=user.id)
+        audit_log(db, request, "mfa_failed", actor=account(user.id, user.username))
         raise ApiException(401, "INVALID_TOTP_CODE")
 
-    audit_log(db, request, "mfa_success", {"username": user.username}, user_id=user.id)
+    audit_log(db, request, "mfa_success", actor=account(user.id, user.username))
     return issue_access_token(request, user.username, user.id, user.role)
 
 
@@ -144,14 +144,14 @@ def mfa_backup(body: MFAVerifyRequest, request: Request):
 
     code_hash = hash_backup_code(body.code)
     if not db.verify_backup_code(user.id, code_hash):
-        audit_log(db, request, "backup_code_failed", {"username": user.username}, user_id=user.id)
+        audit_log(db, request, "backup_code_failed", actor=account(user.id, user.username))
         raise ApiException(401, "INVALID_BACKUP_CODE")
 
     remaining = db.count_remaining_backup_codes(user.id)
     audit_log(
         db, request, "backup_code_used",
-        {"username": user.username, "remaining": remaining},
-        user_id=user.id,
+        actor=account(user.id, user.username),
+        detail={"remaining": remaining},
     )
     return issue_access_token(request, user.username, user.id, user.role)
 

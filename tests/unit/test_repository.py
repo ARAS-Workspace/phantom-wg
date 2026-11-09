@@ -275,6 +275,42 @@ def test_audit_paginated_username_resolved(auth_env):
     assert entry["user_id"] == user.id
 
 
+def _rows_of_each_actor_form(db) -> tuple[str, str]:
+    """A row of each user_id form; returns the live account id and a deleted one."""
+    user = db.create_user("ops-a-b", hash_password("pass1234!A"))
+    gone = "f" * 32
+    db.add_audit_log("new_form", {}, user_id=f"{user.id}-ops-a-b", ip_address="1.0.0.1")
+    db.add_audit_log("deleted_actor", {}, user_id=f"{gone}-gone-ops", ip_address="1.0.0.1")
+    db.add_audit_log("system_actor", {}, user_id="system:host", ip_address="1.0.0.1")
+    db.add_audit_log("old_form", {}, user_id=user.id, ip_address="1.0.0.1")
+    db.add_audit_log("no_actor", {}, ip_address="1.0.0.1")
+    return user.id, gone
+
+
+def test_audit_paginated_reads_each_actor_form(auth_env):
+    user_id, gone = _rows_of_each_actor_form(auth_env.db)
+    items = auth_env.db.get_audit_logs_paginated()["items"]
+    assert {i["action"]: (i["user_id"], i["username"]) for i in items} == {
+        "new_form": (user_id, "ops-a-b"),
+        "deleted_actor": (gone, "gone-ops"),
+        "system_actor": (None, "system:host"),
+        "old_form": (user_id, "ops-a-b"),
+        "no_actor": (None, None),
+    }
+
+
+def test_audit_paginated_username_filter_matches_the_actor_name(auth_env):
+    _rows_of_each_actor_form(auth_env.db)
+
+    def actions(name: str) -> list[str]:
+        items = auth_env.db.get_audit_logs_paginated(username=name)["items"]
+        return sorted(i["action"] for i in items)
+
+    assert actions("ops-a-b") == ["new_form", "old_form"]
+    assert actions("gone-ops") == ["deleted_actor"]
+    assert actions("system:host") == ["system_actor"]
+
+
 def test_audit_paginated_no_user_id(auth_env):
     db = auth_env.db
     db.add_audit_log("login_rate_limited", {}, ip_address="4.4.4.4")

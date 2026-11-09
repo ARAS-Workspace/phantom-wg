@@ -5,6 +5,7 @@ import logging
 
 import pytest
 
+from auth_service.audit import account
 from auth_service.middleware.rate_limit import RateLimiter
 
 REFUSED = {"login_failed", "login_rate_limited", "mfa_rate_limited", "backup_code_rate_limited"}
@@ -78,7 +79,7 @@ def test_a_failed_second_step_stays_in_the_audit_log(auth_env, caplog):
     failed = [row for row in auth_env.db.get_audit_logs()
               if row["action"] in ("mfa_failed", "backup_code_failed")]
     assert sorted(row["action"] for row in failed) == ["backup_code_failed", "mfa_failed"]
-    assert {row["user_id"] for row in failed} == {user_id}
+    assert {row["user_id"] for row in failed} == {account(user_id, "mfaaud")}
     assert service_lines(caplog) == []
 
 

@@ -63,7 +63,8 @@ Persistence layer
                          revoked.
     audit_log            what an identified user does: logins, MFA
                          steps, password changes, user management
-                         and proxy requests. Append-only. A login
+                         and proxy requests. Append-only. user_id
+                         holds who acted (Audit log). A login
                          refused before the user is known goes to
                          the service log instead (Service log).
 
@@ -232,7 +233,7 @@ Reverse proxy
   Per-request flow:
     1. Apply require_auth (unauthenticated requests never reach the
        daemon).
-    2. Resolve user_id from username for audit context.
+    2. Take the audit actor from require_auth (request.state.actor).
     3. Look up method and path in ROUTES; 404 NOT_FOUND outside the
        table, audited.
     4. Check the token's role against GRANTS; 403
@@ -264,6 +265,29 @@ Rate limiting
 
   The counter resets only when an access token is issued. With TOTP
   enrolled, a correct password alone does not reset it.
+
+
+Audit log
+---------
+
+  user_id names who acted, written once with the row
+  (audit.py:account):
+
+    <id>-<name>        an account: its 32-character id, a dash and
+                       its name. The name stays with the row after
+                       the account is deleted.
+    system:<source>    a writer with no account
+
+  require_auth puts the actor of an authenticated request in
+  request.state.actor. A row about another account (user management,
+  a password reset, turning off its TOTP) holds that account in
+  detail.target, in the same form; detail repeats no other name.
+
+  GET /auth/audit splits user_id into user_id and username, and the
+  username filter matches that name. A row written before 1.3.0
+  holds a bare account id: its name comes from the users table, and
+  in user_created, user_deleted, totp_disabled and a password reset
+  that id is the target account.
 
 
 Service log
@@ -421,7 +445,7 @@ Source layout
     __main__.py           uvicorn entry, service logger config
     app.py                FastAPI factory + lifespan + middleware
     config.py             env-driven AuthConfig
-    audit.py              audit_log helper, refused-login log line
+    audit.py              audit_log, account form, refused-login log line
     errors.py             exception hierarchy
     models.py             pydantic request/response types
     crypto/
