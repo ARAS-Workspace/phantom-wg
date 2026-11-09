@@ -20,6 +20,7 @@ COMPOSE="docker compose -f docker-compose-dev.yml"
 AUTH="auth"
 DEV_DB_DIR="container-data/auth-db/development"
 DEV_SECRETS_DIR="container-data/secrets/development"
+CONTAINER_DB_DIR="/var/lib/phantom/auth"
 
 red()   { printf "\033[31m%s\033[0m\n" "$*"; }
 green() { printf "\033[32m%s\033[0m\n" "$*"; }
@@ -97,6 +98,37 @@ cmd_setup() {
     exec tools/setup.sh "$@"
 }
 
+cmd_add_superadmin() {
+    if [[ $# -ne 1 || -z "$1" ]]; then
+        red "Usage: ./tools/dev.sh add-superadmin <username>"
+        exit 1
+    fi
+    if [[ ! -t 0 ]]; then
+        red "add-superadmin reads the password from a terminal."
+        exit 1
+    fi
+    if [[ -z "$($COMPOSE ps --status running -q "$AUTH")" ]]; then
+        red "The auth service is not running. Start it first: ./tools/dev.sh up"
+        exit 1
+    fi
+
+    local password repeat status=0
+    read -rsp "Password: " password; echo
+    read -rsp "Repeat:   " repeat; echo
+    if [[ -z "$password" || "$password" != "$repeat" ]]; then
+        red "The passwords are empty or differ."
+        exit 1
+    fi
+    unset repeat
+
+    # printf is a builtin: the password goes into the pipe and into no
+    # argument list. exec -T keeps stdin a pipe; the script refuses a terminal.
+    printf '%s\n' "$password" | $COMPOSE exec -T "$AUTH" \
+        python -m tools.add_superadmin --db-dir "$CONTAINER_DB_DIR" --username "$1" || status=$?
+    unset password
+    return "$status"
+}
+
 cmd_db_reset() {
     bold "Resetting development database..."
     cmd_down 2>/dev/null || true
@@ -137,6 +169,9 @@ Usage: ./tools/dev.sh <command>
   shell          Open shell in auth container
   status         Show container status
   setup          Bootstrap auth service (keys + DB + admin)
+  add-superadmin <username>
+                 Add a superadmin to the running service; the
+                 password is asked twice and goes in on stdin
   db-reset       Clear development database
   secrets-reset  Clear development secrets
   hard-reset     Clear both database and secrets
@@ -159,6 +194,7 @@ case "$CMD" in
     shell)      cmd_shell ;;
     status)     cmd_status ;;
     setup)          cmd_setup "$@" ;;
+    add-superadmin) cmd_add_superadmin "$@" ;;
     db-reset)       cmd_db_reset ;;
     secrets-reset)  cmd_secrets_reset ;;
     hard-reset)     cmd_hard_reset ;;

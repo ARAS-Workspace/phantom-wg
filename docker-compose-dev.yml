@@ -7,6 +7,7 @@ services:
     volumes:
       - ./auth_service:/app/auth_service:ro
       - ./tests:/app/tests:ro
+      - ./tools:/app/tools:ro
       - ./pytest.ini:/app/pytest.ini:ro
       - ./container-data/auth-db/development:/var/lib/phantom/auth
       - ./container-data/secrets/development:/run/secrets:ro

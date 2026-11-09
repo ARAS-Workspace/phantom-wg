@@ -98,8 +98,10 @@ Stage 4 — Package workflow
                                   Produces dist/phantom-auth/ — a
                                   flat tree containing auth_service/,
                                   tools/setup.sh, tools/bootstrap.py,
-                                  Dockerfile, docker-compose.yml,
-                                  requirements.in, requirements.txt.
+                                  tools/add_superadmin.py, Dockerfile,
+                                  docker-compose.yml, requirements.in,
+                                  requirements.txt, LICENSE,
+                                  THIRD_PARTY_LICENSES.
                                   Tests, dev-only files, and caches
                                   are excluded.
 

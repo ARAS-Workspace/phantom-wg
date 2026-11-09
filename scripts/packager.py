@@ -3,7 +3,7 @@ Auth service packager — build production-ready distribution.
 
 Creates dist/phantom-auth/ with only the files needed for deployment:
   auth_service/    source code + schema
-  tools/           setup.sh + bootstrap.py
+  tools/           setup.sh + bootstrap.py + add_superadmin.py
   Dockerfile       production image (no COPY, no test deps)
   compose.yml      includable compose fragment (secrets parametric)
   requirements.*   locked dependencies
@@ -27,6 +27,7 @@ INCLUDE = [
     "auth_service/",
     "tools/setup.sh",
     "tools/bootstrap.py",
+    "tools/add_superadmin.py",
     "Dockerfile",
     "docker-compose.yml",
     "requirements.in",
