@@ -45,15 +45,19 @@ class Role(StrEnum):
 class Access(StrEnum):
     """What a daemon route asks of the caller."""
 
-    VIEW = "view"          # reads state, carries no client key
-    OPERATE = "operate"    # changes VPN state, or reads a client key
+    VIEW = "view"          # reads state, carries no private key
+    TUNNEL = "tunnel"      # creates, removes or reads a client tunnel, its keys with it
+    OPERATE = "operate"    # changes the server configuration
+    MULTIHOP = "multihop"  # lists, reads or changes the exits, their keys with it
     CUSTODY = "custody"    # moves the whole data set, every client key with it
 
 
 GRANTS: dict[Access, frozenset[Role]] = {
-    Access.VIEW:    frozenset({Role.ADMIN, Role.SUPERADMIN}),
-    Access.OPERATE: frozenset({Role.ADMIN, Role.SUPERADMIN}),
-    Access.CUSTODY: frozenset({Role.SUPERADMIN}),
+    Access.VIEW:     frozenset({Role.ADMIN, Role.SUPERADMIN}),
+    Access.TUNNEL:   frozenset({Role.ADMIN, Role.SUPERADMIN}),
+    Access.OPERATE:  frozenset({Role.SUPERADMIN}),
+    Access.MULTIHOP: frozenset({Role.SUPERADMIN}),
+    Access.CUSTODY:  frozenset({Role.SUPERADMIN}),
 }
 
 
@@ -81,11 +85,11 @@ ROUTES: dict[tuple[str, str], Route] = {
     ("POST", "/api/core/backup/export"):         Route(Access.CUSTODY, large_body=True),
     ("POST", "/api/core/backup/import"):         Route(Access.CUSTODY, large_body=True),
     # Clients
-    ("POST", "/api/core/clients/assign"):        Route(Access.OPERATE),
-    ("POST", "/api/core/clients/config"):        Route(Access.OPERATE),
-    ("POST", "/api/core/clients/get"):           Route(Access.OPERATE),
+    ("POST", "/api/core/clients/assign"):        Route(Access.TUNNEL),
+    ("POST", "/api/core/clients/config"):        Route(Access.TUNNEL),
+    ("POST", "/api/core/clients/get"):           Route(Access.TUNNEL),
     ("GET", "/api/core/clients/list"):           Route(Access.VIEW),
-    ("POST", "/api/core/clients/revoke"):        Route(Access.OPERATE),
+    ("POST", "/api/core/clients/revoke"):        Route(Access.TUNNEL),
     # Firewall
     ("POST", "/api/core/firewall/groups/get"):   Route(Access.VIEW),
     ("GET", "/api/core/firewall/groups/list"):   Route(Access.VIEW),
@@ -105,14 +109,14 @@ ROUTES: dict[tuple[str, str], Route] = {
     ("POST", "/api/dns/change"):                 Route(Access.OPERATE),
     ("POST", "/api/dns/get"):                    Route(Access.VIEW),
     # Multihop
-    ("POST", "/api/multihop/config"):            Route(Access.OPERATE),
-    ("POST", "/api/multihop/disable"):           Route(Access.OPERATE),
-    ("POST", "/api/multihop/enable"):            Route(Access.OPERATE),
-    ("POST", "/api/multihop/import"):            Route(Access.OPERATE),
-    ("GET", "/api/multihop/list"):               Route(Access.VIEW),
-    ("POST", "/api/multihop/remove"):            Route(Access.OPERATE),
+    ("POST", "/api/multihop/config"):            Route(Access.MULTIHOP),
+    ("POST", "/api/multihop/disable"):           Route(Access.MULTIHOP),
+    ("POST", "/api/multihop/enable"):            Route(Access.MULTIHOP),
+    ("POST", "/api/multihop/import"):            Route(Access.MULTIHOP),
+    ("GET", "/api/multihop/list"):               Route(Access.MULTIHOP),
+    ("POST", "/api/multihop/remove"):            Route(Access.MULTIHOP),
     ("GET", "/api/multihop/status"):             Route(Access.VIEW),
-    ("POST", "/api/multihop/update"):            Route(Access.OPERATE),
+    ("POST", "/api/multihop/update"):            Route(Access.MULTIHOP),
 }
 
 
