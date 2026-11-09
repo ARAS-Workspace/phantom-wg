@@ -221,7 +221,6 @@ const UserManagement: React.FC = () => {
                           const username = cell.value as string;
                           const isSelf = user?.username === username;
                           const target = users.find((u) => u.username === username);
-                          const isSA = target?.role === 'superadmin';
                           const hasTotp = target?.totp_enabled;
                           return (
                             <TableCell key={cell.id}>
@@ -240,7 +239,7 @@ const UserManagement: React.FC = () => {
                                 <OverflowMenuItem
                                   itemText={t.settings.users.deleteUser}
                                   isDelete
-                                  disabled={isSelf || isSA}
+                                  disabled={isSelf}
                                   onClick={() => setAction({ type: 'delete', username })}
                                   data-testid={`um-action-delete-${username}`}
                                 />
