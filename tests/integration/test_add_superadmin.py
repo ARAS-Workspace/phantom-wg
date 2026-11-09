@@ -8,6 +8,7 @@ from pathlib import Path
 
 import pytest
 
+from auth_service.audit import account
 from auth_service.crypto.password import verify_password
 from tools.add_superadmin import EXIT_CODES, main
 
@@ -51,10 +52,13 @@ def test_creates_a_superadmin(auth_env, capsys):
 
 def test_the_audit_log_names_the_host(auth_env, capsys):
     run(auth_env.db_dir, capsys)
+    target = account(auth_env.db.get_user_by_username(NAME).id, NAME)
     created = [row for row in auth_env.db.get_audit_logs() if row["action"] == "user_created"]
-    assert [json.loads(row["detail"]) for row in created] == [
-        {"username": NAME, "role": "superadmin", "by": "host"},
+    assert [(row["user_id"], json.loads(row["detail"])) for row in created] == [
+        ("system:host", {"target": target, "role": "superadmin"}),
     ]
+    entry = auth_env.db.get_audit_logs_paginated(action="user_created")["items"][0]
+    assert (entry["user_id"], entry["username"]) == (None, "system:host")
 
 
 def test_the_superadmin_logs_in_and_holds_its_routes(auth_env, capsys):

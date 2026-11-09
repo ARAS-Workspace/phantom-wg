@@ -17,8 +17,8 @@ Runs inside the auth image as `python -m tools.add_superadmin` from the
 directory that holds auth_service/, started by the daemon's add-superadmin
 tool with stdin piped. The account takes the service's own rules:
 CreateUserRequest for the name and the password policy, hash_password,
-AuthDB.create_user, and a user_created row in the audit log. One result line
-is printed; the password is never printed.
+AuthDB.create_user, and a user_created row in the audit log whose actor is
+system:host. One result line is printed; the password is never printed.
 
 Result lines and exit codes:
   SUPERADMIN_CREATED=<name>  0
@@ -38,6 +38,7 @@ from typing import NoReturn, TextIO
 
 from pydantic import ValidationError
 
+from auth_service.audit import account, system
 from auth_service.crypto.password import hash_password
 from auth_service.db.repository import open_auth_db, resolve_db_path
 from auth_service.errors import AuthDatabaseError
@@ -104,8 +105,8 @@ def main(argv: list[str] | None = None, stdin: TextIO | None = None) -> int:
             return _result("USER_ALREADY_EXISTS")
         db.add_audit_log(
             action="user_created",
-            detail={"username": user.username, "role": ROLE, "by": "host"},
-            user_id=user.id,
+            detail={"target": account(user.id, user.username), "role": ROLE},
+            user_id=system("host"),
         )
     finally:
         db.close()

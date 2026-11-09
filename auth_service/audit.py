@@ -78,6 +78,16 @@ def account(user_id: str, username: str) -> str:
     return f"{user_id}-{username}"
 
 
+def system(source: str) -> str:
+    """The audit form of a writer with no account, "system:<source>".
+
+    A name holds no colon (CreateUserRequest), so this form is no
+    account's. tools/bootstrap.py runs without this package and writes
+    "system:bootstrap" itself.
+    """
+    return f"system:{source}"
+
+
 def audit_log(
     db: AuthDB,
     request: Request,

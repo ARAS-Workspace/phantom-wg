@@ -313,7 +313,11 @@ Audit log
     <id>-<ad>          bir hesap: 32 karakterlik id'si, bir tire ve
                        adı. Hesap silindikten sonra da ad satırda
                        kalır.
-    system:<kaynak>    hesabı olmayan bir yazıcı
+    system:<kaynak>    hesabı olmayan bir yazıcı (audit.py:system):
+                       ilk hesap için system:bootstrap,
+                       tools/add_superadmin.py için system:host.
+                       Kullanıcı adında iki nokta (:) bulunamadığı için
+                       hiçbir hesap bu biçimi alamaz.
 
   require_auth, kimliği doğrulanmış isteğin aktörünü
   request.state.actor alanına koyar. Başka bir hesabı ilgilendiren
@@ -451,7 +455,9 @@ Hata zarfı (Error envelope)
        auth_service/db/schema.sql ile birebir aynı tutulur).
     4. İlk yönetici hesabı için 32 karakterlik rastgele bir parola üretir.
     5. Parolayı Argon2id ile hash'ler ve kullanıcıyı 'superadmin'
-       rolüyle veritabanına ekler.
+       rolüyle veritabanına ekler; aynı commit'te hesabın user_created
+       satırını da yazar (aktör system:bootstrap, hesap detail.target
+       alanında).
     6. Parolayı $AUTH_SECRETS_DIR/.admin_password dosyasına yazar;
        setup.sh bu dosyanın ve iki anahtar dosyasının izinlerini (chmod)
        600'e çeker. Konsol çıktısında parola dosyasının yolu gösterilirken,
@@ -465,8 +471,9 @@ Hata zarfı (Error envelope)
   (POST /auth/users yalnızca admin hesabı oluşturur).
   tools/add_superadmin.py, daemon'ın kurulum araçları tarafından auth
   imajı içinde çalıştırılır: parolayı yalnızca stdin'den okur,
-  CreateUserRequest kurallarını uygular ve audit log'a bir user_created
-  satırı yazar. Tek bir sonuç satırı basar, parolayı hiçbir zaman basmaz.
+  CreateUserRequest kurallarını uygular ve audit log'a aktörü
+  system:host olan bir user_created satırı yazar. Tek bir sonuç satırı
+  basar, parolayı hiçbir zaman basmaz.
 
 
 Container yapısı

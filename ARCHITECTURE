@@ -290,7 +290,11 @@ Audit log
     <id>-<name>        an account: its 32-character id, a dash and
                        its name. The name stays with the row after
                        the account is deleted.
-    system:<source>    a writer with no account
+    system:<source>    a writer with no account (audit.py:system):
+                       system:bootstrap for the first account,
+                       system:host for tools/add_superadmin.py. A
+                       name holds no colon, so no account takes
+                       this form.
 
   require_auth puts the actor of an authenticated request in
   request.state.actor. A row about another account (user management,
@@ -424,7 +428,8 @@ Bootstrap
     4. Generates a 32-character random password for the initial
        admin user.
     5. Hashes it with Argon2id and inserts the user with role
-       'superadmin'.
+       'superadmin', and in the same commit its user_created row
+       (actor system:bootstrap, the account in detail.target).
     6. Writes the password to $AUTH_SECRETS_DIR/.admin_password;
        setup.sh sets it to mode 600 with the two key files. The
        output names the file and prints both keys as [REDACTED].
@@ -437,8 +442,8 @@ Bootstrap
   tools/add_superadmin.py runs in the auth image, started by the
   daemon's setup tools: it reads the password on stdin and from
   nowhere else, applies the rules of CreateUserRequest, and writes a
-  user_created row to the audit log. It prints one result line and
-  never the password.
+  user_created row to the audit log with the actor system:host. It
+  prints one result line and never the password.
 
 
 Container shape
