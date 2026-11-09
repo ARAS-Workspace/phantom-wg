@@ -10,6 +10,7 @@ the last left:
 
 from __future__ import annotations
 
+import json
 import os
 import pty
 import select
@@ -35,6 +36,7 @@ from prod_host import (
     STACK_IS_RUNNING,
     STACK_SECRETS,
     WALLET,
+    accounts,
     api_answers,
     assert_the_operator_owns_the_host,
     call,
@@ -44,6 +46,7 @@ from prod_host import (
     linux_only,
     logged_in,
     lost,
+    on_terminal,
     only_gitkeep,
     prod,
     sudo,
@@ -299,6 +302,64 @@ def test_exec_keeps_the_exit_code():
     assert prod("exec", "daemon", "sh", "-c", "exit 7").returncode == 7
 
 
+# ── A superadmin from the host ──────────────────────────────────────
+
+OPS = "e2e-ops"
+OPS_PASSWORD = "Ops Superadmin-2026! "  # spaces inside and at the end: taken as typed
+
+
+def test_add_superadmin_creates_an_account_that_logs_in():
+    before = {name: digest(SECRETS / name) for name in SECRET_FILES}
+    done = on_terminal("add-superadmin", OPS, answers=(OPS_PASSWORD, OPS_PASSWORD))
+    assert done.returncode == 0, done.stdout
+    assert f"SUPERADMIN_CREATED={OPS}" in done.stdout
+    assert OPS_PASSWORD.strip() not in done.stdout
+    assert accounts()[OPS] == "superadmin"
+    status, body = call("/auth/login", body={"username": OPS, "password": OPS_PASSWORD})
+    assert status == 200, body
+    assert {name: digest(SECRETS / name) for name in SECRET_FILES} == before
+
+
+def test_add_superadmin_writes_the_host_to_the_audit_log():
+    status, body = call("/auth/audit?action=user_created&username=system:host", token=logged_in())
+    assert status == 200, body
+    targets = [row["detail"]["target"] for row in json.loads(body)["data"]["items"]]
+    assert any(target.endswith(f"-{OPS}") for target in targets), targets
+
+
+@pytest.mark.parametrize(
+    ("name", "answers", "code", "line"),
+    [
+        (OPS, (OPS_PASSWORD, OPS_PASSWORD), 7, "USER_ALREADY_EXISTS"),
+        ("e2e-weak", ("weakpass", "weakpass"), 5, "WEAK_PASSWORD"),
+        ("e2e/slash", (OPS_PASSWORD, OPS_PASSWORD), 4, "INVALID_USERNAME"),
+        ("e2e-differ", (OPS_PASSWORD, "Other-2026!x"), 1, "The passwords are empty or differ."),
+    ],
+    ids=["existing", "weak", "name", "differ"],
+)
+def test_add_superadmin_refuses(name, answers, code, line):
+    done = on_terminal("add-superadmin", name, answers=answers)
+    assert done.returncode == code, done.stdout
+    assert line in done.stdout
+    for answer in answers:
+        assert answer.strip() not in done.stdout
+    if name != OPS:
+        assert name not in accounts()
+
+
+def test_add_superadmin_takes_a_name_that_starts_with_a_dash():
+    done = on_terminal("add-superadmin", "--", "-e2e-dash", answers=(OPS_PASSWORD, OPS_PASSWORD))
+    assert done.returncode == 0, done.stdout
+    assert accounts()["-e2e-dash"] == "superadmin"
+
+
+def test_add_superadmin_needs_a_terminal():
+    done = prod("add-superadmin", "e2e-pipe", stdin=f"{OPS_PASSWORD}\n{OPS_PASSWORD}\n")
+    assert done.returncode == 1
+    assert done.stdout.strip().endswith("add-superadmin reads the password from a terminal.")
+    assert "e2e-pipe" not in accounts()
+
+
 def test_logs_follow_a_service():
     process = subprocess.Popen(
         [ENTRY, "logs", "daemon"], cwd=ROOT, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, encoding="utf-8", errors="replace",
@@ -378,6 +439,13 @@ def test_restart_needs_a_running_stack():
     assert done.stdout.strip().endswith("The stack is not running. Start it: ./tools/prod.sh up")
 
 
+def test_add_superadmin_needs_the_running_auth_service():
+    done = on_terminal("add-superadmin", "e2e-late", answers=(OPS_PASSWORD, OPS_PASSWORD))
+    assert done.returncode == 1
+    assert "The auth service is not running. Start it: ./tools/prod.sh up" in done.stdout
+    assert "Password:" not in done.stdout
+
+
 # ── Arguments ───────────────────────────────────────────────────────
 
 
@@ -389,8 +457,9 @@ def test_restart_needs_a_running_stack():
         (("down", "extra"), "down"),
         (("exec", "daemon"), "exec <service> <command>"),
         (("hard-reset", "--force"), "hard-reset"),
+        (("add-superadmin",), "add-superadmin <username>"),
     ],
-    ids=["gen-keys", "status", "down", "exec", "hard-reset"],
+    ids=["gen-keys", "status", "down", "exec", "hard-reset", "add-superadmin"],
 )
 def test_bad_arguments_stop_with_the_usage(args, usage):
     done = prod(*args)

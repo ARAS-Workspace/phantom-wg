@@ -6,7 +6,9 @@ import contextlib
 import hashlib
 import json
 import os
+import pty
 import re
+import select
 import sqlite3
 import ssl
 import subprocess
@@ -31,8 +33,8 @@ LOCAL_FILES = (".env", ".env.daemon", ".env.auth-service", "docker-compose.overr
 STACK_SECRETS = ("wg_private_key", "wg_public_key", "auth_signing_key", "auth_verify_key", "tls_cert", "tls_key")
 SECRET_FILES = (*STACK_SECRETS, ".admin_password")
 COMMANDS = (
-    "setup", "gen-keys", "setup-auth", "setup-tls", "certbot", "up", "down", "restart", "logs", "status",
-    "show-versions", "shell", "exec", "hard-reset", "gates", "images", "pull", "build", "rebuild", "update",
+    "setup", "gen-keys", "setup-auth", "setup-tls", "certbot", "add-superadmin", "up", "down", "restart", "logs",
+    "status", "show-versions", "shell", "exec", "hard-reset", "gates", "images", "pull", "build", "rebuild", "update",
 )
 SERVICES = ("phantom-daemon", "phantom-auth", "phantom-nginx")
 API = "https://127.0.0.1"
@@ -64,6 +66,54 @@ def prod(*args: str, stdin: str = "", timeout: int = 120, cwd: Path = ROOT, entr
     finally:
         timer.cancel()
     return subprocess.CompletedProcess(args, process.returncode, "".join(lines))
+
+
+PROMPT = re.compile(rb"(?:Password|Repeat): *")
+
+
+def on_terminal(*args: str, answers: tuple = (), timeout: int = 120) -> subprocess.CompletedProcess:
+    """Runs prod.sh on a terminal of its own, with an answer after each password prompt.
+
+    A new session holds no other terminal: getpass reads and writes this one.
+    The output keeps what the terminal showed, so an echoed answer shows in it.
+    """
+    print(f"\n--- prod.sh {' '.join(args)} (terminal)", flush=True)
+    master, slave = pty.openpty()
+    process = subprocess.Popen([ENTRY, *args], cwd=ROOT, stdin=slave, stdout=slave, stderr=slave, start_new_session=True)
+    os.close(slave)
+    pending, output = list(answers), b""
+    deadline = time.time() + timeout
+    try:
+        while time.time() < deadline:
+            if not select.select([master], [], [], 0.5)[0]:
+                if process.poll() is not None:
+                    break
+                continue
+            try:
+                chunk = os.read(master, 4096)
+            except OSError:
+                break
+            if not chunk:
+                break
+            output += chunk
+            sys.stdout.write(chunk.decode("utf-8", "replace"))
+            sys.stdout.flush()
+            answered = len(answers) - len(pending)
+            if pending and len(PROMPT.findall(output)) > answered:
+                os.write(master, pending.pop(0).encode("utf-8") + b"\n")
+    finally:
+        if process.poll() is None:
+            process.kill()
+        process.wait(timeout=10)
+        os.close(master)
+    return subprocess.CompletedProcess(args, process.returncode, output.decode("utf-8", "replace"))
+
+
+def accounts() -> dict:
+    """Each account of the running stack with its role, through the API."""
+    status, body = call("/auth/users", token=logged_in())
+    assert status == 200, body
+    return {user["username"]: user["role"] for user in json.loads(body)["data"]}
 
 
 def sudo(*args: str) -> subprocess.CompletedProcess:

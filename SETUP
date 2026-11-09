@@ -226,6 +226,8 @@ Commands:
   ./tools/prod.sh gen-keys [-f]    Generate the WireGuard keypair
   ./tools/prod.sh setup-auth [-f]  Bootstrap the auth service
   ./tools/prod.sh setup-tls [-f]   Generate a self-signed TLS certificate
+  ./tools/prod.sh add-superadmin <name>
+                                   Add a superadmin account (running stack)
   ./tools/prod.sh up               Start stack (stops if setup is incomplete)
   ./tools/prod.sh down             Stop stack
   ./tools/prod.sh restart [svc]    Restart all services, or one
@@ -248,6 +250,19 @@ Commands:
   gen-keys -f invalidates every WireGuard client config. setup-auth -f moves
   auth.db aside as auth.db.<time>.bak and creates a new admin account.
   setup and setup-auth take --admin-username <name> (default admin).
+
+  add-superadmin adds a superadmin account through the running auth
+  service. It asks the password twice on the terminal, without echo, and
+  takes it as typed. The auth service checks the name (letters, digits, _
+  and -, up to 64) and the password (8 to 256 characters with an upper
+  case letter, a lower case letter, a digit and a special character), and
+  writes the account with its user_created audit row (actor system:host).
+  One line and the exit code tell the result:
+    SUPERADMIN_CREATED=<name>   0
+    INVALID_USERNAME            4
+    WEAK_PASSWORD               5
+    USER_ALREADY_EXISTS         7
+  A name that starts with "-" comes after "--": add-superadmin -- -name.
 
 Ports:
   443/tcp     HTTPS (nginx → auth-service → daemon)
