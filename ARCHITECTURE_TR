@@ -1,335 +1,443 @@
 ARCHITECTURE_TR
 
-phantom-auth, phantom-daemon'ın önünde kullanıcı kimlik doğrulamasını
-sonlandıran bir FastAPI servisidir. Dashboard SPA'sından gelen her
-istek önce auth-service'e ulaşır; yalnızca kimliği doğrulanmış ve
-rolü onaylanmış istekler daemon'a Unix domain socket üzerinden geçer.
+phantom-auth, phantom-daemon'ın önünde konumlanan ve kullanıcı kimlik
+doğrulamasını (authentication) üstlenen bir FastAPI servisidir. Yönetim
+panelinden (SPA) gelen her istek önce auth-service'e ulaşır; yalnızca
+kimliği doğrulanmış ve rol yetkisi denetlenmiş istekler Unix domain
+socket (UDS) üzerinden daemon'a iletilir.
 
-Stack İçerisindeki Yeri
---------------
 
-  Tarayıcı (dashboard SPA)
+Stack içindeki yeri
+-------------------
+
+  Tarayıcı (gösterge paneli, SPA)
        │
        │  HTTPS
        ▼
-  nginx (TLS termination)
+  nginx (TLS sonlandırma)
        │
        │  HTTP
        ▼
-  auth-service ── /auth/*  login, MFA, oturumlar, kullanıcılar, audit
-               ── /api/*   daemon'a kimlik doğrulamalı reverse proxy
+  auth-service ── /auth/*  giriş, MFA, oturumlar, kullanıcılar, denetim kaydı
+               ── /api/*   daemon'a kimlik doğrulamalı ters proxy
        │
        │  UDS (unix:///var/run/phantom/daemon.sock)
        ▼
   phantom-daemon
 
-  Geçerli bir auth-service token'ı olmadan hiçbir daemon endpoint'i
-  erişilebilir değildir. Daemon kendi kimlik doğrulama mantığını
-  içermez.
+  Geçerli bir auth-service token'ı olmadan daemon'ın hiçbir uç
+  noktasına erişilemez. Daemon kimlik doğrulamayı kendisi yapmaz.
 
 
 Süreç modeli
 ------------
 
-  Tek bir Python process, uvicorn altında FastAPI.
+  Tek bir Python süreci: uvicorn altında çalışan FastAPI.
 
-  Uzun ömürlü tüm state app.state üzerinde tutulur, lifespan context
-  manager'ı (auth_service/app.py:lifespan) tarafından beş fazda
-  doldurulur:
+  Uzun ömürlü bütün durum app.state üzerinde tutulur. Bu durumu
+  lifespan bağlam yöneticisi (auth_service/app.py:lifespan) beş adımda
+  kurar:
 
-    1. Yapılandırmayı ortam değişkenlerinden yükle  (config.py)
-    2. Diskten Ed25519 imzalama anahtar çiftini yükle (crypto/keys.py)
-    3. auth.db'nin var olduğunu doğrula             (db/repository.py)
-    4. Daemon'a httpx istemcisi kur (UDS veya HTTP)
-    5. Bellekte rate limiter kur                    (middleware/rate_limit.py)
+    1. Yapılandırmayı ortam değişkenlerinden yükler  (config.py)
+    2. Ed25519 imza anahtar çiftini diskten yükler   (crypto/keys.py)
+    3. auth.db'nin var olduğunu doğrular             (db/repository.py)
+    4. Daemon için httpx istemcisini kurar (UDS ya da HTTP)
+    5. Bellekte istek sınırlayıcıyı kurar            (middleware/rate_limit.py)
 
-  Başlangıç hatası kritik ve ölümcüldür: sys.exit(1). Servis, eksik
-  başlatılmış bir state ile çalışmayı reddeder.
+  Başlangıçtaki (startup) her hata kritiktir (fatal): process
+  sys.exit(1) ile sonlanır. Servis eksik başlatılmış bir state ile
+  çalışmaz.
 
 
 Kalıcılık katmanı
 -----------------
 
-  $AUTH_DB_DIR/auth.db konumunda tek bir SQLite dosyası;
-  PRAGMA journal_mode = WAL ve PRAGMA foreign_keys = ON ile açılır.
+  Veriler $AUTH_DB_DIR/auth.db konumundaki tek bir SQLite dosyasında
+  tutulur. Dosya PRAGMA journal_mode = WAL, wal_autocheckpoint = 1 ve
+  foreign_keys = ON parametreleriyle açılır.
 
   Şema (auth_service/db/schema.sql):
 
     users                id, username, password_hash, role,
-                         totp_secret, zaman damgaları.
-    totp_backup_codes    Kullanıcı başına tek kullanımlık yedek
-                         kodlar (hash'lenmiş).
+                         totp_secret, timestamp'ler.
+    totp_backup_codes    kullanıcı başına tek kullanımlık yedek
+                         kodlar, hash'lenmiş olarak.
     sessions             id, user_id, token_jti, token_hash,
                          issued_at, expires_at, last_activity_at,
                          revoked.
-    audit_log            Her giriş denemesi, MFA doğrulaması, parola
-                         değişikliği, kullanıcı yönetimi aksiyonu ve
-                         proxy isteği. Append-only.
+    audit_log            her giriş denemesi, MFA doğrulaması, parola
+                         değişikliği, kullanıcı yönetimi işlemi ve
+                         proxy isteği. Kayıtlar append-only (yalnızca
+                         ekleme) mantığıyla çalışır.
 
-  Dosya, ilk kurulumda tools/bootstrap.py tarafından bir kez oluşturulur;
-  runtime şemayı asla oluşturmaz veya migrate etmez. Dosya yoksa
-  başlangıç abort eder.
+  Veritabanı dosyasını ilk kurulumda tools/bootstrap.py bir kez
+  oluşturur. Dosya yoksa servis başlamaz. Servisin açtığı her bağlantı
+  (db/connection.py) schema.sql'i çalıştırır; şemadaki bütün ifadeler
+  CREATE ... IF NOT EXISTS biçimindedir. Ardından tek bir forward
+  migration uygulanır: users tablosuna role sütunu eklenir. Servis
+  çalışırken silinen dosya bir sonraki istekte boş olarak yeniden
+  oluşur ve hiçbir kullanıcı giriş yapamaz.
 
-  Bağlantılar request başınadır, pool'lanmaz. _DBMiddleware
-  (auth_service/app.py) gelen her istekte taze bir sqlite3 bağlantısı
-  açar, request.state.db üzerinde saklar ve yanıttan sonra kapatır.
-  Bu pattern, tek bir sqlite3 bağlantısının asyncio worker'ları
-  arasında paylaşılmasından doğan threading tehlikelerini ortadan
-  kaldırır — v1.1.0'da düzeltilen gerçek bir bug'dı.
+  Connection pooling (bağlantı havuzu) kullanılmaz; her istek kendi
+  bağlantısını açar. _DBMiddleware (auth_service/app.py) gelen her
+  istekte yeni bir sqlite3 bağlantısı açar, request.state.db'ye atar ve
+  yanıt döndükten sonra kapatır. Böylece tek bir sqlite3 bağlantısının
+  asyncio worker'ları arasında paylaşılmasından doğan concurrency /
+  thread-safety sorunları ortadan kalkar (bu durum v1.1.0'da giderilen
+  gerçek bir bug'dı).
 
 
 Kimlik doğrulama akışı
 ----------------------
 
-  1. POST /auth/login            username + password → ya:
-                                   - "needs_mfa": TOTP enroll edilmişse
-                                     kısa ömürlü MFA token (varsayılan
-                                     120s), ya da
-                                   - access token + session kaydı.
-                                 Her iki dalda da audit_log yazılır.
+  1. POST /auth/login            Kullanıcı adı ve parola. Yanıt:
+                                   - TOTP etkinse mfa_required ve
+                                     kısa ömürlü bir MFA token'ı
+                                     (varsayılan 120 saniye), ya da
+                                   - access token ve oturum kaydı.
+                                 Her iki durum da audit_log'a yazılır.
 
-  2. POST /auth/mfa/verify       MFA token + TOTP kodu → access
-                                 token + session.
+  2. POST /auth/mfa/verify       MFA token'ı ve TOTP kodu → access
+                                 token ve oturum.
 
-  3. POST /auth/totp/backup      MFA token + yedek kod → access
-                                 token. Yedek kod tüketilir.
+  3. POST /auth/totp/backup      MFA token'ı ve yedek kod → access
+                                 token. Yedek kod tüketilir (harcanır).
 
-  4. POST /auth/logout           Aktif session'ı JTI ile iptal eder.
+  4. POST /auth/logout           Aktif oturumu JTI üzerinden iptal
+                                 eder (revoke).
 
-  5. GET  /auth/me               Mevcut kullanıcı + rolü döner.
+  5. GET  /auth/me               Mevcut kullanıcıyı ve rolünü döner.
 
-  Access token'lar varsayılan 24 saat. Session'lar ayrıca 30 dakikalık
-  inaktivite zaman aşımı uygular — kimliği doğrulanmış her çağrı
-  last_activity_at'ı günceller; idle session'lar bir sonraki erişim
-  denemesinde otomatik iptal edilir.
+  Access token'lar varsayılan olarak 24 saat geçerlidir. Oturumlara
+  ayrıca 30 dakikalık hareketsizlik zaman aşımı (inactivity timeout)
+  uygulanır: kimliği doğrulanmış her çağrı last_activity_at değerini
+  günceller; boşta kalan oturum bir sonraki erişim denemesinde
+  otomatik olarak iptal edilir.
 
 
-Yetkilendirme
--------------
+Yetkilendirme (Authorization)
+-----------------------------
 
-  middleware/auth.py:require_auth
-  Adımlar:
+  middleware/auth.py:require_auth sırasıyla şu adımları izler:
 
-    1. Authorization header'ından Bearer token'ı çıkar.
-    2. Ed25519 imzasını doğrula, payload'ı decode et.
-    3. token_type == "access" kontrolü.
-    4. Session'ı jti ile bul; yoksa veya iptal edilmişse reddet.
-    5. Saklanan token_hash'in raw token'ın sha256'sıyla eşleştiğini
-       kontrol et — JTI sızsa bile token sızmadıysa yeniden
-       kullanılmasını engeller.
-    6. Inaktivite zaman aşımını kontrol et; aşıldıysa iptal et.
-    7. last_activity_at'ı güncelle.
+    1. Authorization header'ından Bearer token'ı alır.
+    2. Ed25519 imzasını doğrular ve token payload'unu çözer.
+    3. typ alanının "access" olduğunu kontrol eder.
+    4. Oturumu jti ile sorgular; yoksa ya da iptal edilmişse (revoked)
+       isteği reddeder.
+    5. Kayıtlı token_hash değerinin ham token'ın sha256 özetiyle
+       eşleştiğini doğrular: JTI sızsa bile ham token sızmadıkça
+       yeniden kullanılamaz.
+    6. Hareketsizlik süresini (inactivity timeout) kontrol eder;
+       aşıldıysa oturumu iptal eder.
+    7. last_activity_at alanını günceller.
 
-  İki rol:
+  Sistemde iki rol vardır. Token gerektiren /auth/* endpoint'lerinde
+  yetki matrisi:
 
-    admin        /auth/me, /logout, /auth/password/* (kendi parolası),
-                 /auth/totp/* (kendi TOTP'si) ve backup rotaları dışında
-                 /api/* proxy.
-    superadmin   admin'in yapabildiği her şey + /auth/users/*
-                 (oluştur, listele, sil, parola zorla değiştir),
-                 /auth/audit (audit log oku) ve backup rotaları.
+    Metot   Rota                         Hedef            admin  superadmin
+    ──────  ───────────────────────────  ───────────────  ─────  ──────────
+    GET     /auth/me                     kendisi          evet   evet
+    POST    /auth/logout                 kendisi          evet   evet
+    POST    /auth/password/verify        kendisi          evet   evet
+    POST    /auth/password/change        kendisi          evet   evet
+    POST    /auth/totp/setup             kendisi          evet   evet
+    POST    /auth/totp/confirm           kendisi          evet   evet
+    POST    /auth/totp/disable           kendisi          evet   evet
+    POST    /auth/totp/disable           başka kullanıcı  hayır  evet
+    POST    /auth/users/{name}/password  kendisi          evet   evet
+    POST    /auth/users/{name}/password  başka kullanıcı  hayır  evet
+    GET     /auth/users                  -                hayır  evet
+    POST    /auth/users                  -                hayır  evet
+    DELETE  /auth/users/{name}           başka kullanıcı  hayır  evet
+    GET     /auth/audit                  -                hayır  evet
 
-  Rol uygulaması require_superadmin ile yapılır — require_auth'un
-  payload.role == "superadmin" assertion'ı içeren thin-wrapper
+  /auth/login, /auth/mfa/verify ve /auth/totp/backup endpoint'leri
+  token gerektirmez (bkz. Kimlik doğrulama akışı). /api/* proxy'sinde
+  admin yalnızca VIEW ve TUNNEL rotalarını, superadmin ise tüm rotaları
+  kullanabilir; ilgili tablo Reverse proxy bölümündedir.
+
+  require_superadmin, require_auth'un üzerine payload.role ==
+  "superadmin" kontrolünü ekleyen ince bir katmandır; kullanıcı
+  listeleme, oluşturma, silme rotalarını ve /auth/audit endpoint'ini
+  korur. İşlem hedefi başka bir kullanıcı olduğunda, users.py ve
+  totp.py rol kontrolünü kendi içinde yapar. Proxy ise rol kontrolünü
+  GRANTS tablosu üzerinden gerçekleştirir.
 
 
 Kriptografi
 -----------
 
-  JWT — Ed25519, manuel implementasyon (crypto/jwt.py)
-    Ek bağımlılık yok. Header.Payload.Signature, base64url
-    parçaları ile. Algoritma "EdDSA"ya sabitlenmiş; header'daki başka
-    herhangi bir alg doğrulamayı düşürür.
+  JWT: Ed25519, özel implementasyon (crypto/jwt.py)
+    Ek paket bağımlılığı yoktur. Format Header.Payload.Signature
+    şeklindedir ve parçalar base64url ile kodlanır. Algoritma "EdDSA"
+    olarak sabitlenmiştir (hardcoded); header'da farklı bir alg değeri
+    görülürse doğrulama başarısız olur.
 
-    İmzalama anahtar çifti diskte iki adet 64 karakterlik hex dosya
-    olarak yaşar, $AUTH_SECRETS_DIR içinde (production'da Docker
-    secrets ile mount'lanır): biri özel (signing) anahtar için, biri
-    açık (verify) anahtar için. İkisi de yükleme anında uzunluk ve
-    format olarak doğrulanır.
+    İmza anahtar çifti $AUTH_SECRETS_DIR içinde 64 karakterlik iki hex
+    dosyası olarak tutulur (production ortamında Docker secrets ile
+    mount edilir): biri private key (imzalama), diğeri public key
+    (doğrulama). Her ikisinin de uzunluğu ve formatı yükleme
+    sırasında denetlenir.
 
-  Parolalar — Argon2id (crypto/password.py via PyNaCl)
-    Varsayılan OPSLIMIT/MEMLIMIT libsodium'dan. Sadece hash + verify;
-    parametre tuning'i dışarı açılmamış.
+  Parolalar: Argon2id (crypto/password.py, PyNaCl üzerinden)
+    PyNaCl'ın varsayılan sınırları kullanılır: OPSLIMIT_INTERACTIVE ve
+    MEMLIMIT_INTERACTIVE (2 iterasyon, 64 MiB). Yalnızca hash'leme ve
+    doğrulama işlevi sunar; parametreler dışarıdan yapılandırılamaz.
 
-  TOTP — RFC 6238, standart kütüphane (crypto/totp.py)
-    HMAC-SHA1, 6 hane, 30 saniyelik periyot, 160-bit secret.
-    Authenticator-app enrollment için otpauth:// URI'leri yayınlar.
-    Yedek kodlar 8 adet 8 karakterlik koddur, hash'lenmiş saklanır
-    (tek kullanımlık).
+  TOTP: RFC 6238, standart kütüphane (crypto/totp.py)
+    HMAC-SHA1, 6 hane, 30 saniyelik periyot, iki yönde birer periyotluk
+    sapma toleransı (clock skew) ve 160 bitlik secret key. Authenticator
+    uygulamalarına kayıt için otpauth:// URI'leri üretir. Yedek kodlar
+    8 karakterlik 8 adet koddur; SHA-256 hash'i olarak saklanır ve her
+    biri tek kullanımlıktır.
 
 
 Reverse proxy
 -------------
 
-  routes/proxy.py /api/{path:path}'in sahibidir ve ROUTES tablosundaki
-  daemon rotalarını forward eder; eşleşme metot ve path üzerinde
-  birebirdir. Tablo dışındaki istek daemon'a ulaşmaz, daemon'a giden
-  URL tablodaki path'tir: başka biçimde yazılmış path'in satırı yoktur.
+  routes/proxy.py, /api/{path:path} rotasını karşılar ve yalnızca ROUTES
+  tablosunda tanımlı olan daemon rotalarını iletir; eşleşme HTTP metodu
+  ve path üzerinden birebir (exact match) yapılır. Tabloda yer almayan
+  hiçbir istek daemon'a ulaşmaz ve daemon'a giden URL doğrudan tablodaki
+  path değeridir (farklı biçimde yazılmış bir path tabloda eşleşme
+  bulamaz).
 
-  Her satır rotanın istediği yetkiyi adlandırır:
+  Her satır ilgili rotanın gerektirdiği yetkiyi (permission) belirtir;
+  GRANTS ise her yetkiyi ona sahip rollerle eşleştirir. Path'ler /api/
+  altındadır:
 
-    VIEW       durumu okur, istemci anahtarı taşımaz
-    OPERATE    VPN durumunu değiştirir ya da istemci anahtarı okur
-    CUSTODY    tüm veri setini taşır, bütün istemci anahtarlarıyla
+    Metot  Rota                        Yetki     admin  superadmin
+    ─────  ──────────────────────────  ────────  ─────  ──────────
+    GET    core/hello                  VIEW      evet   evet
+    GET    core/wireguard              VIEW      evet   evet
+    POST   core/wireguard/peer         VIEW      evet   evet
+    GET    core/firewall/groups/list   VIEW      evet   evet
+    POST   core/firewall/groups/get    VIEW      evet   evet
+    POST   core/firewall/routing/list  VIEW      evet   evet
+    POST   core/firewall/rules/list    VIEW      evet   evet
+    GET    core/firewall/table         VIEW      evet   evet
+    GET    core/network                VIEW      evet   evet
+    GET    core/network/validate       VIEW      evet   evet
+    POST   dns/get                     VIEW      evet   evet
+    GET    core/clients/list           VIEW      evet   evet
+    GET    multihop/status             VIEW      evet   evet
+    POST   core/clients/assign         TUNNEL    evet   evet
+    POST   core/clients/get            TUNNEL    evet   evet
+    POST   core/clients/config         TUNNEL    evet   evet
+    POST   core/clients/revoke         TUNNEL    evet   evet
+    POST   core/network/cidr           OPERATE   hayır  evet
+    POST   dns/change                  OPERATE   hayır  evet
+    GET    multihop/list               MULTIHOP  hayır  evet
+    POST   multihop/config             MULTIHOP  hayır  evet
+    POST   multihop/import             MULTIHOP  hayır  evet
+    POST   multihop/update             MULTIHOP  hayır  evet
+    POST   multihop/enable             MULTIHOP  hayır  evet
+    POST   multihop/disable            MULTIHOP  hayır  evet
+    POST   multihop/remove             MULTIHOP  hayır  evet
+    POST   core/backup/export          CUSTODY   hayır  evet
+    POST   core/backup/import          CUSTODY   hayır  evet
 
-  GRANTS bir yetkiyi ona sahip rollerle eşler: VIEW ve OPERATE admin
-  ve superadmin'e, CUSTODY superadmin'e. CUSTODY iki backup rotasıdır;
-  büyük body limiti de onlardadır.
+  Yetkilerin kapsamı:
 
-  Request başına akış:
-    1. require_auth'u uygula (kimliği doğrulanmamış istekler asla
-       daemon'a ulaşmaz).
-    2. Audit context için username'den user_id'yi resolve et.
-    3. Metot ve path'i ROUTES'ta ara; tablo dışındaysa 404 NOT_FOUND,
-       audit'lenir.
-    4. Token rolünü GRANTS ile denetle; yoksa 403 SUPERADMIN_REQUIRED,
-       audit'lenir, body okunmadan.
-    5. Request body'yi oku; rotanın limitinden büyükse 413 ile reddet
-       (AUTH_PROXY_MAX_BODY, backup'ta AUTH_PROXY_BACKUP_MAX_BODY).
-    6. Forward edilecek header'lardan Host / Authorization /
-       Content-Length / Transfer-Encoding'i çıkar.
-    7. httpx AsyncClient ile forward et (production'da UDS transport).
-    8. İsteği audit-log'la: method, path, query, response status.
-    9. Response'u geri ver, content-type'ı koru ama length/encoding
-       header'larını çıkar (uvicorn onları yeniden hesaplar).
-   10. JSON yanıtlar JSONResponse olarak yeniden encode edilir;
-       binary yanıtlar raw geçer — backup export gibi tarball
-       dönen daemon endpoint'lerinin uçtan uca çalışması için yakın
-       zamanda düzeltildi.
+    VIEW       durumu (state) okur, private key taşımaz
+    TUNNEL     istemci tünelini anahtarlarıyla birlikte oluşturur, okur ya da siler
+    OPERATE    sunucu yapılandırmasını değiştirir
+    MULTIHOP   multihop exit düğümlerini anahtarlarıyla birlikte listeler, okur ya da değiştirir
+    CUSTODY    tüm veri setini bütün istemci anahtarlarıyla birlikte dışa/içe aktarır
+
+  İstek başına (per-request) akış:
+    1. require_auth çalışır; kimliği doğrulanmamış istek daemon'a
+       hiçbir zaman ulaşmaz.
+    2. Audit log için username üzerinden user_id bulunur.
+    3. Metot ve path ROUTES tablosunda aranır; tabloda yoksa 404
+       NOT_FOUND döner ve audit log'a yazılır.
+    4. Token'daki rol GRANTS ile karşılaştırılır; rol gerekli yetkiye
+       sahip değilse request body hiç okunmadan 403 SUPERADMIN_REQUIRED
+       döner ve audit log'a yazılır.
+    5. Request body okunur; rotanın boyut sınırını aşarsa 413 ile
+       reddedilir (AUTH_PROXY_MAX_BODY, backup rotalarında ise
+       AUTH_PROXY_BACKUP_MAX_BODY).
+    6. İletilecek header'lar arasından Host, Authorization,
+       Content-Length ve Transfer-Encoding temizlenir.
+    7. İstek httpx AsyncClient ile daemon'a iletilir (production'da
+       UDS üzerinden).
+    8. İstek audit log'a kaydedilir: metot, path, query ve HTTP yanıt
+       kodu.
+    9. Yanıt istemciye döner; content-type korunur, ancak
+       Content-Length, Transfer-Encoding ve Content-Encoding header'ları
+       çıkarılır (uvicorn bunları yeniden hesaplar).
+   10. JSON yanıtlar JSONResponse olarak yeniden serialize edilir;
+       backup export tarball'ı dahil diğer tüm yanıtlar ham (raw)
+       olarak olduğu gibi aktarılır.
 
 
-Rate limiting
--------------
+Rate limiting (İstek sınırlama)
+-------------------------------
 
-  middleware/rate_limit.py:RateLimiter — kaynak IP başına bellekte
-  sliding window, tek bir Lock ile thread-safe. Varsayılan: 60 saniye
-  içinde 5 deneme. Sadece /auth/login üzerinde kullanılır; geri
-  kalan API session/token modeline güvenir.
+  middleware/rate_limit.py:RateLimiter, kaynak IP başına bellekte
+  (in-memory) tutulan kayan pencereli (sliding window) bir sınırlayıcıdır
+  ve tek bir Lock ile thread-safe hale getirilmiştir. Varsayılan sınır:
+  60 saniyede 5 denemedir. IP başına tanımlanan tek bir kota /auth/login,
+  /auth/mfa/verify ve /auth/totp/backup rotalarını ortaklaşa kapsar;
+  API'nin geri kalanı oturum ve token doğrulama modeline dayanır.
 
-  Başarılı login, o IP için sayacı sıfırlar.
+  Sayaç yalnızca başarılı bir şekilde access token üretildiğinde
+  sıfırlanır. TOTP etkinse, parolanın doğru girilmesi tek başına sayacı
+  sıfırlamaz.
 
 
 Yapılandırma
 ------------
 
-  Tüm ayarlar ortam değişkenlerinden gelir, başlangıçta bir kez
-  yüklenir ve immutable AuthConfig'e dönüştürülür (config.py —
-  frozen=True, slots=True):
+  Tüm ayarlar ortam değişkenlerinden (environment variables) okunur;
+  başlangıçta bir kez yüklenir ve immutable (değiştirilemez) bir
+  AuthConfig nesnesine dönüştürülür (config.py, frozen=True, slots=True).
+  Değişkenler ve varsayılan değerleri:
 
-    AUTH_HOST / AUTH_PORT        Varsayılan 0.0.0.0:8443
+    AUTH_HOST / AUTH_PORT        0.0.0.0 / 8443
+    AUTH_LOG_LEVEL               info
     AUTH_PROXY_URL               unix:///var/run/phantom/daemon.sock
-                                 (veya http://...). Production'da UDS.
+                                 (ya da http://...); production'da UDS
+    AUTH_PROXY_TIMEOUT           30.0      (saniye)
     AUTH_DB_DIR                  /var/lib/phantom/auth
-    AUTH_SECRETS_DIR             /run/secrets  (Docker secrets path)
-    AUTH_TOKEN_LIFETIME          86400  (24 saatlik access token)
-    AUTH_INACTIVITY_TIMEOUT      1800   (30 dakikalık sliding session)
-    AUTH_MFA_TOKEN_LIFETIME      120    (2 dakikalık MFA token)
-    AUTH_TOTP_SETUP_LIFETIME     300    (5 dakikalık enrollment QR)
-    AUTH_PROXY_MAX_BODY          65536    (64 KB)
-    AUTH_PROXY_BACKUP_MAX_BODY   67108864 (64 MB — backup rotaları)
-    PHANTOM_SUBNET_V4 / _V6      phantom-net subnet'leri, X-Forwarded-For
-                                 için güvenilir
-    AUTH_TRUSTED_PROXIES         ek güvenilir ağlar, varsayılanı boş
+    AUTH_SECRETS_DIR             /run/secrets  (Docker secrets dizini)
+    AUTH_TOKEN_LIFETIME          86400     (24 saatlik access token)
+    AUTH_INACTIVITY_TIMEOUT      1800      (30 dakikalık hareketsizlik süresi)
+    AUTH_MFA_TOKEN_LIFETIME      120       (2 dakikalık MFA token'ı)
+    AUTH_TOTP_SETUP_LIFETIME     300       (5 dakikalık TOTP kurulum süresi)
+    AUTH_PROXY_MAX_BODY          65536     (64 KB)
+    AUTH_PROXY_BACKUP_MAX_BODY   67108864  (64 MB, backup rotaları)
+    PHANTOM_SUBNET_V4 / _V6      172.28.0.0/24 / fd00:d0ce::/64
+                                 (phantom-net alt ağları, X-Forwarded-For
+                                 için güvenilir kabul edilir)
+    AUTH_TRUSTED_PROXIES         boş (X-Forwarded-For için ek güvenilir ağlar)
     AUTH_RATE_LIMIT_WINDOW/MAX   60 / 5
 
 
-Hata zarfı
-----------
+Hata zarfı (Error envelope)
+---------------------------
 
-  Her response — başarı ya da hata — sabit bir şekil kullanır:
+  Başarılı ya da hatalı olsun, her JSON yanıtı standart bir zarf
+  (envelope) formatı kullanır:
 
     Başarı:  { "ok": true,  "data": ... }
     Hata:    { "ok": false, "error_code": "..." }
 
-  Hata kodları stabil string'lerdir (UNAUTHORIZED, TOKEN_EXPIRED,
-  SESSION_INACTIVE, MFA_REQUIRED, BODY_TOO_LARGE, …). HTTP status
-  kodları hâlâ anlamlıdır, ama SPA branching için error_code'u okur.
+  Hata kodları sabit string değerlerdir (TOKEN_EXPIRED, SESSION_INACTIVE,
+  SUPERADMIN_REQUIRED, BODY_TOO_LARGE, …; tam liste docs/API_CODES.md
+  içindedir). HTTP durum kodları da semantik olarak anlamlıdır, ancak
+  SPA tarafındaki akış kontrolü (branching) error_code üzerinden yapılır.
 
-  Üç katman:
-    auth_service/errors.py        Python tarafı hiyerarşi (AuthError →
-                                  AuthSecretsError, AuthTokenError,
-                                  AuthCredentialsError, …).
-    ApiException                  status + error_code taşıyan
-                                  HTTP-aware exception.
+  Üç katmanlı hata yapısı:
+    auth_service/errors.py        Python tarafındaki exception hiyerarşisi
+                                  (AuthError → AuthSecretsError,
+                                  AuthTokenError, AuthCredentialsError, …).
+    ApiException                  HTTP durum kodunu ve error_code değerini
+                                  taşıyan exception sınıfı.
     app.py:_register_error_handlers
-                                  Her şeyi (FastAPI'nin
-                                  RequestValidationError'ı dahil)
-                                  zarfa çevirir.
+                                  HTTPException'ı (ApiException dahil)
+                                  ve FastAPI'nin RequestValidationError
+                                  hatasını standart zarf formatına çevirir.
+                                  Yakalanmayan (unhandled) exception'lar
+                                  plain-text 500 döner.
 
 
-Bootstrap
----------
+İlk kurulum (Bootstrapping)
+---------------------------
 
-  tools/setup.sh + tools/bootstrap.py tek seferlik kurulum. Host
-  başına bir kez çalışır, image + ad-hoc container kurar:
+  İlk kurulum tools/setup.sh ve tools/bootstrap.py aracılığıyla yapılır
+  ve her host üzerinde yalnızca bir kez çalıştırılır. setup.sh,
+  phantom-auth:latest imajı mevcut değilse Dockerfile'dan build eder ve
+  bootstrap.py betiğini --rm parametresiyle geçici bir container içinde
+  bir kez çalıştırır. bootstrap.py sırasıyla:
 
-    1. PyNaCl SigningKey ile Ed25519 anahtar çifti üretir.
-    2. Signing/verify anahtarlarını $AUTH_SECRETS_DIR içine 64
-       karakterlik hex dosyalar olarak yazar.
-    3. auth.db'yi tam şemayla oluşturur (auth_service/db/schema.sql
-       ile senkron tutulur).
-    4. İlk admin kullanıcı için 32 karakterlik rastgele bir parola
-       üretir.
-    5. Argon2id ile hash'leyip kullanıcıyı 'superadmin' rolüyle
-       insert eder.
-    6. İlk credential'ları bir kez yazdırır. Plain text olarak hiçbir
-       yerde saklanmaz.
+    1. PyNaCl SigningKey kullanarak Ed25519 anahtar çiftini üretir.
+    2. İmzalama (private) ve doğrulama (public) anahtarlarını
+       $AUTH_SECRETS_DIR içine 64 karakterlik hex dosyaları olarak yazar.
+    3. auth.db veritabanını tam şemayla oluşturur (şema
+       auth_service/db/schema.sql ile birebir aynı tutulur).
+    4. İlk yönetici hesabı için 32 karakterlik rastgele bir parola üretir.
+    5. Parolayı Argon2id ile hash'ler ve kullanıcıyı 'superadmin'
+       rolüyle veritabanına ekler.
+    6. Parolayı $AUTH_SECRETS_DIR/.admin_password dosyasına yazar;
+       setup.sh bu dosyanın ve iki anahtar dosyasının izinlerini (chmod)
+       600'e çeker. Konsol çıktısında parola dosyasının yolu gösterilirken,
+       iki anahtar [REDACTED] olarak maskelenir.
 
-  Bootstrap sonrası runtime container yalnızca önceden var olan
-  DB'yi ve önceden var olan anahtarları açar; asla oluşturmaz.
-
-
-Container şekli
----------------
-
-  Dockerfile         debian:trixie-slim + Debian'ın python3'ü ve
-                     /opt/venv'deki venv + requirements.txt.
-                     CMD `python -m auth_service`'i
-                     çalıştırır. Burada source COPY yok — kaynağı
-                     scripts/packager.py'nin ürettiği production
-                     paketi daemon checkout'una yatırır (bkz.
-                     DISTRIBUTION).
-  docker-compose.yml Ed25519 anahtar çiftini Docker secrets olarak
-                     mount'lar; restart: unless-stopped. Her ortam
-                     defaultu açıkça yazılmış, deployment'lar tek
-                     bakışta audit edebilsin.
-
-  Runtime container'ın auth.db dosyasına yazma erişimi yok. O yol
-  host tarafı bootstrap araçlarına aittir.
+  İlk kurulum tamamlandıktan sonra servis mevcut veritabanını ve
+  anahtarları kullanarak açılır; bunlardan herhangi biri eksikse servis
+  başlamaz.
 
 
-Kaynak yerleşimi
+Container yapısı
 ----------------
 
+  Dockerfile         Digest ile sabitlenmiş (pinned) debian:trixie-slim
+                     üzerine inşa edilir: imaj build edilirken paketler
+                     güncellenir, Debian'ın python3'ü ile /opt/venv
+                     altında bir virtualenv oluşturulur, apt önbelleği ve
+                     sanal ortam kurulum araçları temizlenir (pruned),
+                     ardından requirements.txt kurulur. CMD komutu
+                     `python -m auth_service` modülünü çalıştırır.
+                     İmajın içinde kaynak kod yer almaz:
+                     scripts/packager.py tarafından üretilen paket, kodu
+                     daemon reposundaki services/auth-service dizinine
+                     yerleştirir; daemon stack'i de buradaki auth_service
+                     dizinini container içine read-only (salt okunur)
+                     olarak mount eder (bkz. DISTRIBUTION).
+  docker-compose.yml Ed25519 anahtar çiftini Docker secrets olarak
+                     mount eder; restart politikası unless-stopped olarak
+                     ayarlıdır. Sunucu, proxy, token ve rate limit ortam
+                     değişkenlerini açıkça tanımlar. AUTH_DB_DIR,
+                     AUTH_PROXY_BACKUP_MAX_BODY, AUTH_TRUSTED_PROXIES ve
+                     PHANTOM_SUBNET_V4/_V6 bu dosyada yer almaz;
+                     container bu ayarlar için config.py içindeki
+                     varsayılanları kullanır. Dosyadaki AUTH_SECRETS_DIR
+                     yalnızca anahtar dosyalarının host üzerindeki
+                     konumunu işaret eder; container içinde ise varsayılan
+                     /run/secrets yolu geçerlidir ve Docker secrets
+                     oraya mount edilir.
+
+  Çalışan container auth.db dosyasına yazma yapar: oturumlar, audit log,
+  kullanıcılar ve TOTP durumu burada güncellenir. Daemon stack'i
+  container-data/auth-db dizinini read-write (okuma-yazma) olarak mount
+  eder.
+
+
+Kaynak kod düzeni
+-----------------
+
   auth_service/
-    __init__.py           __version__ — single source of truth
-    __main__.py           uvicorn entry
-    app.py                FastAPI factory + lifespan + middleware
-    config.py             env-driven AuthConfig
-    audit.py              audit_log helper
+    __init__.py           __version__, sürüm bilgisinin tek kaynağı (SSOT)
+    __main__.py           uvicorn giriş noktası (entrypoint)
+    app.py                FastAPI app factory, lifespan ve middleware'ler
+    config.py             ortam değişkenlerinden yüklenen AuthConfig
+    audit.py              audit_log yardımcı fonksiyonları
     errors.py             exception hiyerarşisi
-    models.py             pydantic request/response tipleri
+    models.py             Pydantic istek (request) ve yanıt (response) modelleri
     crypto/
-      jwt.py              Ed25519 JWT encode + decode
-      keys.py             Ed25519 anahtar yükleme + doğrulama
-      password.py         Argon2id hash + verify
-      totp.py             RFC 6238 + yedek kodlar
+      jwt.py              Ed25519 JWT encode ve decode işlemleri
+      keys.py             Ed25519 anahtar yükleme ve doğrulama
+      password.py         Argon2id hash'leme ve doğrulama
+      totp.py             RFC 6238 TOTP ve yedek kodlar
     db/
-      schema.sql          auth.db DDL
-      connection.py       open_auth_db helper
-      repository.py       AuthDB — tüm sorgular
+      schema.sql          auth.db veritabanı şeması (DDL)
+      connection.py       open_connection: PRAGMA'lar, şema ve migration
+      repository.py       AuthDB (tüm sorgular), resolve_db_path,
+                          open_auth_db
     middleware/
-      auth.py             require_auth + require_superadmin
-      rate_limit.py       sliding window limiter
+      auth.py             require_auth ve require_superadmin
+      rate_limit.py       sliding-window (kayan pencereli) rate limiter
     routes/
-      __init__.py         router kayıt
+      __init__.py         router kayıtları
       proxy.py            /api/* reverse proxy
       auth/
-        __init__.py       /auth router prefix
+        __init__.py       /auth router prefix'i
         login.py          /login, /mfa/verify, /totp/backup
         session.py        /logout, /me
         password.py       /password/verify, /password/change
         totp.py           /totp/setup, /totp/confirm, /totp/disable
-        users.py          /users (superadmin)
-        audit.py          /audit (superadmin)
-        _helpers.py       paylaşılan route helper'ları
+        users.py          /users, /users/{name}, /users/{name}/password
+        audit.py          /audit (yalnızca superadmin)
+        _helpers.py       rotaların ortak yardımcı fonksiyonları

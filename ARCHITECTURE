@@ -50,7 +50,8 @@ Persistence layer
 -----------------
 
   A single SQLite file at $AUTH_DB_DIR/auth.db, opened with
-  PRAGMA journal_mode = WAL and PRAGMA foreign_keys = ON.
+  PRAGMA journal_mode = WAL, wal_autocheckpoint = 1 and
+  foreign_keys = ON.
 
   Schema (auth_service/db/schema.sql):
 
@@ -65,8 +66,11 @@ Persistence layer
                          and proxy request. Append-only.
 
   The file is created once by tools/bootstrap.py during initial
-  setup; the runtime never creates or migrates schema. If the file
-  is missing, startup aborts.
+  setup. If the file is missing, startup aborts. Every connection
+  the runtime opens (db/connection.py) runs schema.sql, which is
+  CREATE ... IF NOT EXISTS throughout, and one forward migration:
+  the role column on users. A file removed while the service runs
+  comes back empty on the next request, and no user can log in.
 
   Connections are per-request, not pooled. _DBMiddleware
   (auth_service/app.py) opens a fresh sqlite3 connection on every
@@ -80,9 +84,9 @@ Authentication flow
 -------------------
 
   1. POST /auth/login            username + password → either:
-                                   - "needs_mfa": short-lived MFA
-                                     token (120s default) when TOTP
-                                     is enrolled, or
+                                   - mfa_required with a short-lived
+                                     MFA token (120s default) when
+                                     TOTP is enrolled, or
                                    - access token + session record.
                                  Both branches write to audit_log.
 
@@ -110,24 +114,41 @@ Authorization
 
     1. Extract Bearer token from the Authorization header.
     2. Verify Ed25519 signature, decode payload.
-    3. Check token_type == "access".
+    3. Check that the typ claim is "access".
     4. Look up the session by jti; reject if missing or revoked.
     5. Check that stored token_hash matches sha256 of the raw token
        — prevents reuse if a JTI leaks but the token does not.
     6. Check inactivity timeout; revoke if exceeded.
     7. Update last_activity_at.
 
-  Two roles:
+  Two roles. On the /auth/* routes that take a token:
 
-    admin        /auth/me, /logout, /auth/password/* (own password),
-                 /auth/totp/* (own TOTP), and the /api/* proxy
-                 except the backup routes.
-    superadmin   Everything admin can do, plus /auth/users/* (create,
-                 list, delete, force-change password), /auth/audit
-                 (read audit log) and the backup routes.
+    Method  Route                        Target      admin  superadmin
+    ──────  ───────────────────────────  ──────────  ─────  ──────────
+    GET     /auth/me                     self        yes    yes
+    POST    /auth/logout                 self        yes    yes
+    POST    /auth/password/verify        self        yes    yes
+    POST    /auth/password/change        self        yes    yes
+    POST    /auth/totp/setup             self        yes    yes
+    POST    /auth/totp/confirm           self        yes    yes
+    POST    /auth/totp/disable           self        yes    yes
+    POST    /auth/totp/disable           other user  no     yes
+    POST    /auth/users/{name}/password  self        yes    yes
+    POST    /auth/users/{name}/password  other user  no     yes
+    GET     /auth/users                  -           no     yes
+    POST    /auth/users                  -           no     yes
+    DELETE  /auth/users/{name}           other user  no     yes
+    GET     /auth/audit                  -           no     yes
 
-  Role enforcement uses require_superadmin — a thin-wrapper around
-  require_auth that asserts payload.role == "superadmin"
+  /auth/login, /auth/mfa/verify and /auth/totp/backup take no token
+  (Authentication flow). On the /api/* proxy, admin holds the VIEW
+  and TUNNEL routes and superadmin every route: the table is under
+  Reverse proxy.
+
+  require_superadmin, a thin wrapper around require_auth that asserts
+  payload.role == "superadmin", guards listing, creating and deleting
+  users and /auth/audit. users.py and totp.py check the role inline
+  when the target is another user. The proxy checks GRANTS.
 
 
 Cryptography
@@ -144,13 +165,15 @@ Cryptography
     key. Both are length- and format-validated at load time.
 
   Passwords — Argon2id (crypto/password.py via PyNaCl)
-    Default OPSLIMIT/MEMLIMIT from libsodium. Hash + verify only;
-    no parameter tuning is exposed.
+    PyNaCl's default limits, OPSLIMIT_INTERACTIVE and
+    MEMLIMIT_INTERACTIVE (2 passes, 64 MiB). Hash + verify only; no
+    parameter tuning is exposed.
 
   TOTP — RFC 6238, standard library (crypto/totp.py)
-    HMAC-SHA1, 6 digits, 30-second period, 160-bit secret. Emits
-    otpauth:// URIs for authenticator-app enrollment. Backup codes
-    are 8 codes of 8 characters each, stored hashed (one-time use).
+    HMAC-SHA1, 6 digits, 30-second period, one period of drift on
+    either side, 160-bit secret. Emits otpauth:// URIs for
+    authenticator-app enrollment. Backup codes are 8 codes of 8
+    characters each, stored as SHA-256 hashes (one-time use).
 
 
 Reverse proxy
@@ -162,15 +185,47 @@ Reverse proxy
   sent to the daemon is the table's path: a path spelled another way
   has no row.
 
-  Each row names the access the route needs:
+  Each row names the access the route needs, and GRANTS maps an
+  access to the roles that hold it. Paths are under /api/:
 
-    VIEW       reads state, carries no client key
-    OPERATE    changes VPN state, or reads a client key
-    CUSTODY    moves the whole data set, every client key with it
+    Method  Route                       Access    admin  superadmin
+    ──────  ──────────────────────────  ────────  ─────  ──────────
+    GET     core/hello                  VIEW      yes    yes
+    GET     core/wireguard              VIEW      yes    yes
+    POST    core/wireguard/peer         VIEW      yes    yes
+    GET     core/firewall/groups/list   VIEW      yes    yes
+    POST    core/firewall/groups/get    VIEW      yes    yes
+    POST    core/firewall/routing/list  VIEW      yes    yes
+    POST    core/firewall/rules/list    VIEW      yes    yes
+    GET     core/firewall/table         VIEW      yes    yes
+    GET     core/network                VIEW      yes    yes
+    GET     core/network/validate       VIEW      yes    yes
+    POST    dns/get                     VIEW      yes    yes
+    GET     core/clients/list           VIEW      yes    yes
+    GET     multihop/status             VIEW      yes    yes
+    POST    core/clients/assign         TUNNEL    yes    yes
+    POST    core/clients/get            TUNNEL    yes    yes
+    POST    core/clients/config         TUNNEL    yes    yes
+    POST    core/clients/revoke         TUNNEL    yes    yes
+    POST    core/network/cidr           OPERATE   no     yes
+    POST    dns/change                  OPERATE   no     yes
+    GET     multihop/list               MULTIHOP  no     yes
+    POST    multihop/config             MULTIHOP  no     yes
+    POST    multihop/import             MULTIHOP  no     yes
+    POST    multihop/update             MULTIHOP  no     yes
+    POST    multihop/enable             MULTIHOP  no     yes
+    POST    multihop/disable            MULTIHOP  no     yes
+    POST    multihop/remove             MULTIHOP  no     yes
+    POST    core/backup/export          CUSTODY   no     yes
+    POST    core/backup/import          CUSTODY   no     yes
 
-  GRANTS maps an access to the roles that hold it: VIEW and OPERATE
-  to admin and superadmin, CUSTODY to superadmin. CUSTODY is the two
-  backup routes, which also take the large body limit.
+  What each access covers:
+
+    VIEW       reads state and carries no private key
+    TUNNEL     creates, reads or removes a client tunnel together with its keys
+    OPERATE    changes the server configuration
+    MULTIHOP   lists, reads or changes the multihop exits together with their keys
+    CUSTODY    exports or imports the whole data set together with every client key
 
   Per-request flow:
     1. Apply require_auth (unauthenticated requests never reach the
@@ -188,12 +243,12 @@ Reverse proxy
        Transfer-Encoding from forwarded headers.
     7. Forward via httpx AsyncClient (UDS transport in production).
     8. Audit-log the request: method, path, query, response status.
-    9. Pass the response back, preserving content-type while
-       stripping length/encoding headers (uvicorn re-computes them).
-   10. JSON responses are re-encoded as JSONResponse; binary
-       responses pass through raw — fixed in a recent revision so
-       endpoints that return tarballs (backup export) work
-       end-to-end.
+    9. Pass the response back, preserving content-type and
+       stripping Content-Length, Transfer-Encoding and
+       Content-Encoding (uvicorn re-computes them).
+   10. JSON responses are re-encoded as JSONResponse; other
+       responses, the backup export tarball among them, pass
+       through raw.
 
 
 Rate limiting
@@ -201,47 +256,54 @@ Rate limiting
 
   middleware/rate_limit.py:RateLimiter — in-memory sliding window
   per source IP, threadsafe via a single Lock. Default: 5 attempts
-  per 60 seconds. Used only on /auth/login; everything else relies
+  per 60 seconds. One budget per IP covers /auth/login,
+  /auth/mfa/verify and /auth/totp/backup; the rest of the API relies
   on the session/token model.
 
-  Successful login resets the counter for the IP.
+  The counter resets only when an access token is issued. With TOTP
+  enrolled, a correct password alone does not reset it.
 
 
 Configuration
 -------------
 
   All settings are environment-driven, loaded once at startup into
-  an immutable AuthConfig (config.py — frozen=True, slots=True):
+  an immutable AuthConfig (config.py, frozen=True, slots=True). The
+  variables and their defaults:
 
-    AUTH_HOST / AUTH_PORT        0.0.0.0:8443 default
+    AUTH_HOST / AUTH_PORT        0.0.0.0 / 8443
+    AUTH_LOG_LEVEL               info
     AUTH_PROXY_URL               unix:///var/run/phantom/daemon.sock
-                                 (or http://...). UDS in production.
+                                 (or http://...); UDS in production
+    AUTH_PROXY_TIMEOUT           30.0      (seconds)
     AUTH_DB_DIR                  /var/lib/phantom/auth
     AUTH_SECRETS_DIR             /run/secrets  (Docker secrets path)
-    AUTH_TOKEN_LIFETIME          86400  (24h access token)
-    AUTH_INACTIVITY_TIMEOUT      1800   (30m sliding session)
-    AUTH_MFA_TOKEN_LIFETIME      120    (2m MFA token)
-    AUTH_TOTP_SETUP_LIFETIME     300    (5m enrollment QR window)
-    AUTH_PROXY_MAX_BODY          65536    (64 KB)
-    AUTH_PROXY_BACKUP_MAX_BODY   67108864 (64 MB — backup routes)
-    PHANTOM_SUBNET_V4 / _V6      phantom-net subnets, trusted for
-                                 X-Forwarded-For
-    AUTH_TRUSTED_PROXIES         further trusted networks, empty by
-                                 default
+    AUTH_TOKEN_LIFETIME          86400     (24h access token)
+    AUTH_INACTIVITY_TIMEOUT      1800      (30m inactivity timeout)
+    AUTH_MFA_TOKEN_LIFETIME      120       (2m MFA token)
+    AUTH_TOTP_SETUP_LIFETIME     300       (5m TOTP setup window)
+    AUTH_PROXY_MAX_BODY          65536     (64 KB)
+    AUTH_PROXY_BACKUP_MAX_BODY   67108864  (64 MB, backup routes)
+    PHANTOM_SUBNET_V4 / _V6      172.28.0.0/24 / fd00:d0ce::/64
+                                 (phantom-net subnets, trusted for
+                                 X-Forwarded-For)
+    AUTH_TRUSTED_PROXIES         empty (further networks trusted for
+                                 X-Forwarded-For)
     AUTH_RATE_LIMIT_WINDOW/MAX   60 / 5
 
 
 Error envelope
 --------------
 
-  Every response — success or failure — uses a stable shape:
+  Every JSON response, success or failure, uses the same shape:
 
     Success:  { "ok": true,  "data": ... }
     Error:    { "ok": false, "error_code": "..." }
 
-  Error codes are stable strings (UNAUTHORIZED, TOKEN_EXPIRED,
-  SESSION_INACTIVE, MFA_REQUIRED, BODY_TOO_LARGE, …). HTTP status
-  codes remain meaningful, but the SPA branches on error_code.
+  Error codes are stable strings (TOKEN_EXPIRED, SESSION_INACTIVE,
+  SUPERADMIN_REQUIRED, BODY_TOO_LARGE, …; the full list is
+  docs/API_CODES.md). HTTP status codes remain meaningful, but the
+  SPA branches on error_code.
 
   Three layers:
     auth_service/errors.py        Python-side hierarchy (AuthError →
@@ -250,16 +312,20 @@ Error envelope
     ApiException                  HTTP-aware exception carrying
                                   status + error_code.
     app.py:_register_error_handlers
-                                  Maps everything (including
-                                  FastAPI's RequestValidationError)
-                                  into the envelope.
+                                  Maps HTTPException, ApiException
+                                  among them, and FastAPI's
+                                  RequestValidationError into the
+                                  envelope. An uncaught exception
+                                  answers a plain-text 500.
 
 
 Bootstrap
 ---------
 
-  tools/setup.sh + tools/bootstrap.py is the one-time setup. Run
-  once per host, builds an image + ad-hoc container that:
+  The first setup runs tools/setup.sh and tools/bootstrap.py, once
+  per host. setup.sh builds phantom-auth:latest from the Dockerfile
+  when it is missing and runs bootstrap.py once in a --rm container.
+  bootstrap.py:
 
     1. Generates an Ed25519 keypair via PyNaCl SigningKey.
     2. Writes signing/verify keys as 64-char hex files into
@@ -270,29 +336,41 @@ Bootstrap
        admin user.
     5. Hashes it with Argon2id and inserts the user with role
        'superadmin'.
-    6. Prints the initial credentials once. They are never
-       persisted in plaintext.
+    6. Writes the password to $AUTH_SECRETS_DIR/.admin_password;
+       setup.sh sets it to mode 600 with the two key files. The
+       output names the file and prints both keys as [REDACTED].
 
-  After bootstrap, the runtime container only opens the
-  pre-existing DB and pre-existing keys. It never creates them.
+  After bootstrap, the runtime container opens the existing DB and
+  keys; startup aborts when either is missing.
 
 
 Container shape
 ---------------
 
-  Dockerfile         debian:trixie-slim + Debian's python3 with a
-                     venv at /opt/venv + requirements.txt. CMD runs
-                     `python -m auth_service`. No source COPY here
-                     — the production package built by
-                     scripts/packager.py lays the source into the
-                     daemon checkout (see DISTRIBUTION).
+  Dockerfile         debian:trixie-slim pinned by digest, packages
+                     upgraded at build time, Debian's python3 with a
+                     venv at /opt/venv, apt and the venv tooling
+                     purged in a pruned stage, then requirements.txt.
+                     CMD runs `python -m auth_service`. The image
+                     carries no source: the package scripts/packager.py
+                     builds puts the code in services/auth-service of
+                     the daemon repository, and the daemon stack
+                     mounts its auth_service directory read-only (see
+                     DISTRIBUTION).
   docker-compose.yml Mounts the Ed25519 keypair as Docker secrets,
-                     restart: unless-stopped. Every environment
-                     default is set explicitly so deployments can
-                     audit them at a glance.
+                     restart: unless-stopped. Sets the server, proxy,
+                     token and rate-limit variables explicitly.
+                     AUTH_DB_DIR, AUTH_PROXY_BACKUP_MAX_BODY,
+                     AUTH_TRUSTED_PROXIES and PHANTOM_SUBNET_V4/_V6
+                     are not in the file; the container takes their
+                     config.py defaults. AUTH_SECRETS_DIR in the file
+                     only names where the key files live on the host;
+                     inside the container the default /run/secrets
+                     applies, and Docker secrets are mounted there.
 
-  The runtime container does not have write access to auth.db. That
-  path is owned by host-side bootstrap tooling.
+  The runtime container writes auth.db: sessions, the audit log,
+  users and TOTP state. The daemon stack mounts container-data/auth-db
+  read-write.
 
 
 Source layout
@@ -313,8 +391,9 @@ Source layout
       totp.py             RFC 6238 + backup codes
     db/
       schema.sql          auth.db DDL
-      connection.py       open_auth_db helper
-      repository.py       AuthDB — every query
+      connection.py       open_connection: pragmas, schema, migration
+      repository.py       AuthDB (every query), resolve_db_path,
+                          open_auth_db
     middleware/
       auth.py             require_auth + require_superadmin
       rate_limit.py       sliding window limiter
@@ -327,6 +406,6 @@ Source layout
         session.py        /logout, /me
         password.py       /password/verify, /password/change
         totp.py           /totp/setup, /totp/confirm, /totp/disable
-        users.py          /users (superadmin)
+        users.py          /users, /users/{name}, /users/{name}/password
         audit.py          /audit (superadmin)
         _helpers.py       shared route helpers
