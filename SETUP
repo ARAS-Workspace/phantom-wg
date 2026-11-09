@@ -237,8 +237,8 @@ Commands:
   ./tools/prod.sh rebuild          Rebuild from scratch (build source)
   ./tools/prod.sh update           Pull latest (git clone), recreate stack
   ./tools/prod.sh show-versions    Show daemon + bridge versions
-  ./tools/prod.sh logs             Follow logs
-  ./tools/prod.sh status           Container status
+  ./tools/prod.sh logs [service]   Follow logs (all, or one service)
+  ./tools/prod.sh status          Container status
   ./tools/prod.sh shell [service]  Open shell (default: daemon)
   ./tools/prod.sh exec <svc> <cmd> Execute command in service
   ./tools/prod.sh certbot <domain> Obtain Let's Encrypt TLS certificate
@@ -254,6 +254,10 @@ Ports:
   51820/udp   WireGuard
 
   The published ports are set in docker-compose.override.yml.
+
+Logs:
+  docker-compose.yml rotates the log of each container: json-file driver,
+  three files of 10 MB at most. ./tools/prod.sh logs [service] follows them.
 
 Data Directories (created at runtime):
   container-data/

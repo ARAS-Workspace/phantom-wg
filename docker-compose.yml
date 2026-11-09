@@ -16,6 +16,13 @@
 # or tools/compose/build.yml.
 # ──────────────────────────────────────────────────────────────────
 
+# Every container log is rotated: three files of 10 MB.
+x-logging: &logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "3"
+
 services:
   daemon:
     extends:
@@ -23,6 +30,7 @@ services:
       service: daemon
     container_name: phantom-daemon
     restart: unless-stopped
+    logging: *logging
     command: ["python", "-m", "phantom_daemon.main", "/var/run/phantom/daemon.sock"]
     networks:
       - phantom-net
@@ -50,6 +58,7 @@ services:
       service: auth-service
     container_name: phantom-auth
     restart: unless-stopped
+    logging: *logging
     depends_on:
       - daemon
     networks:
@@ -71,6 +80,7 @@ services:
       service: nginx
     container_name: phantom-nginx
     restart: unless-stopped
+    logging: *logging
     depends_on:
       - auth-service
     networks:
