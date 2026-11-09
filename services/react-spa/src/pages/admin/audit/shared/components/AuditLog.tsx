@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import {
   Grid,
   Column,
@@ -106,6 +106,7 @@ interface AuditPage {
   pages: number;
   order: string;
   sort_by: string;
+  as_of: number | null;
 }
 
 // ── Helpers ───────────────────────────────────────────────────────
@@ -128,10 +129,14 @@ const AuditLog: React.FC = () => {
   const [page, setPage] = useState(1);
   const [limit, setLimit] = useState(DEFAULT_LIMIT);
   const [sortDir, setSortDir] = useState<SortDir>('DESC');
+  // as_of of the last page 1: the snapshot the other pages read in
+  const asOfRef = useRef<number | null>(null);
 
   // ── Filter state ──────────────────────────────────────────────
   const [actionFilter, setActionFilter] = useState('');
   const [usernameFilter, setUsernameFilter] = useState('');
+  // usernameFilter after the debounce: the value sent
+  const [usernameQuery, setUsernameQuery] = useState('');
   const [actionPopoverOpen, setActionPopoverOpen] = useState(false);
 
   // ── Modal state ─────────────────────────────────────────────
@@ -152,28 +157,34 @@ const AuditLog: React.FC = () => {
   }, [actionPopoverOpen]);
 
   // ── Fetch ─────────────────────────────────────────────────────
-  const fetchLogs = useCallback(
-    async (p: number, l: number, action: string, username: string, order: SortDir) => {
-      setLoading(true);
-      const params = new URLSearchParams();
-      params.set('page', String(p));
-      params.set('limit', String(l));
-      params.set('order', order.toLowerCase());
-      params.set('sort_by', 'timestamp');
-      if (action) params.set('action', action);
-      if (username) params.set('username', username);
-
-      const res = await apiClient.get<AuditPage>(`/auth/audit?${params.toString()}`);
-      if (res.ok) setData(res.data);
-      setLoading(false);
-    },
-    []
-  );
-
+  // The one place that reads the log, and each read writes an audit_viewed
+  // row. Page 1 opens a snapshot (its as_of) and the other pages read in it,
+  // so the rows written meanwhile shift none of them. A filter, the order and
+  // the page size go back to page 1: a new snapshot.
   useEffect(() => {
-    void fetchLogs(page, limit, actionFilter, usernameFilter, sortDir);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [page, limit, actionFilter, sortDir, fetchLogs]);
+    let current = true;
+    setLoading(true);
+    const params = new URLSearchParams();
+    params.set('page', String(page));
+    params.set('limit', String(limit));
+    params.set('order', sortDir.toLowerCase());
+    params.set('sort_by', 'timestamp');
+    if (actionFilter) params.set('action', actionFilter);
+    if (usernameQuery) params.set('username', usernameQuery);
+    if (page > 1 && asOfRef.current !== null) params.set('as_of', String(asOfRef.current));
+
+    void apiClient.get<AuditPage>(`/auth/audit?${params.toString()}`).then((res) => {
+      if (!current) return; // a later read took its place
+      if (res.ok) {
+        if (page === 1 || asOfRef.current === null) asOfRef.current = res.data.as_of;
+        setData(res.data);
+      }
+      setLoading(false);
+    });
+    return () => {
+      current = false;
+    };
+  }, [page, limit, actionFilter, usernameQuery, sortDir]);
 
   // ── Handlers ──────────────────────────────────────────────────
 
@@ -182,17 +193,15 @@ const AuditLog: React.FC = () => {
     setUsernameFilter(value);
     if (debounceRef.current) clearTimeout(debounceRef.current);
     debounceRef.current = setTimeout(() => {
+      setUsernameQuery(value);
       setPage(1);
-      void fetchLogs(1, limit, actionFilter, value, sortDir);
     }, SEARCH_DEBOUNCE_MS);
   };
 
   const handleActionSelect = (e: React.ChangeEvent<HTMLSelectElement>) => {
-    const val = e.target.value;
-    setActionFilter(val);
+    setActionFilter(e.target.value);
     setActionPopoverOpen(false);
     setPage(1);
-    void fetchLogs(1, limit, val, usernameFilter, sortDir);
   };
 
   const handlePaginationChange = ({
