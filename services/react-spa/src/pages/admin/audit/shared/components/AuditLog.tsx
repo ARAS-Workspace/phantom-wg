@@ -27,6 +27,7 @@ import { useLocale } from '@shared/hooks';
 import { translate } from '@shared/translations';
 import { apiClient } from '@shared/api/client';
 import { formatDateTime } from '@shared/utils/dateUtils';
+import { sortHeaderText } from '@shared/utils/tableSort';
 import TableLoader from '@shared/components/data/TableLoader';
 import AuditDetailModal from './modals/AuditDetailModal';
 import './styles/AuditLog.scss';
@@ -122,6 +123,7 @@ const formatDetail = (detail: Record<string, unknown>): string => {
 const AuditLog: React.FC = () => {
   const { locale } = useLocale();
   const t = translate(locale);
+  const sortText = sortHeaderText(t);
 
   // ── Server state ──────────────────────────────────────────────
   const [data, setData] = useState<AuditPage | null>(null);
@@ -364,8 +366,11 @@ const AuditLog: React.FC = () => {
                               key={header.key}
                               {...hProps}
                               isSortable={isTs}
+                              isSortHeader={isTs}
                               sortDirection={isTs ? sortDir : 'NONE'}
+                              translateWithId={sortText}
                               onClick={isTs ? toggleSort : undefined}
+                              data-testid={isTs ? 'audit-sort-timestamp' : undefined}
                             >
                               {header.header}
                             </TableHeader>

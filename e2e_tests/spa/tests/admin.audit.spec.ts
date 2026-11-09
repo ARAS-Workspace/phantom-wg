@@ -5,10 +5,12 @@ import { expect, test } from "@playwright/test";
 // the other pages read in it: page 2 holds the ten rows right below page 1,
 // whatever was written in between. Going back to page 1 opens a new snapshot.
 // The filter lists the actions of 1.3.0; one user action sends one read, so
-// it writes one row.
+// it writes one row. The time header shows its order and tells a screen
+// reader what its next click does.
 
 const SUPERADMIN = "admin"; // the bootstrap account, role superadmin
 const PAGE_SIZE = 10;
+const TIME = "Time"; // audit.timestamp in English, the locale of the test browser
 
 type Page = import("@playwright/test").Page;
 type APIRequestContext = import("@playwright/test").APIRequestContext;
@@ -174,5 +176,24 @@ test.describe.serial("Admin audit log", () => {
     // the count read above, then the one read of the selection
     const after = (await readLog(request, token, "action=audit_viewed&limit=1")).total;
     expect(after - before, "audit_viewed rows of one selection and one count").toBe(2);
+  });
+
+  // ── 4. Sort ────────────────────────────────────────────────────
+
+  test("Sort: the time header holds its order and its next step", async ({ page }) => {
+    await login(page, password);
+    await pageRead(page, () => page.goto("/admin/audit"));
+    const button = page.getByTestId("audit-sort-timestamp");
+    const header = page.locator("th", { has: button });
+
+    // newest first; the next click sorts ascending
+    await expect(header).toHaveAttribute("aria-sort", "descending");
+    await expect(button).toHaveClass(/cds--table-sort--active/);
+    await expect(button).toHaveAccessibleDescription(`${TIME}: click to sort in ascending order`);
+
+    const query = await pageRead(page, () => button.click());
+    expect(query.get("order")).toBe("asc");
+    await expect(header).toHaveAttribute("aria-sort", "ascending");
+    await expect(button).toHaveAccessibleDescription(`${TIME}: click to sort in descending order`);
   });
 });

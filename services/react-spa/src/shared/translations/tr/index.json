@@ -443,6 +443,10 @@
     "itemsText": "kayıt",
     "pagesText": "sayfa"
   },
+  "tableSort": {
+    "ascending": "artan sıralamak için tıklayın",
+    "descending": "azalan sıralamak için tıklayın"
+  },
   "auth_service_api_codes": {
     "RATE_LIMITED": "Çok fazla giriş denemesi. Lütfen bekleyin.",
     "INVALID_CREDENTIALS": "Geçersiz kullanıcı adı veya parola.",

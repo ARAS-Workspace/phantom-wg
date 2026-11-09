@@ -443,6 +443,10 @@
     "itemsText": "items",
     "pagesText": "pages"
   },
+  "tableSort": {
+    "ascending": "click to sort in ascending order",
+    "descending": "click to sort in descending order"
+  },
   "auth_service_api_codes": {
     "RATE_LIMITED": "Too many login attempts. Please wait.",
     "INVALID_CREDENTIALS": "Invalid username or password.",
