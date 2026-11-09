@@ -20,7 +20,7 @@ from datetime import UTC, datetime, timedelta
 
 from fastapi import Request
 
-from auth_service.audit import audit_log, get_client_ip
+from auth_service.audit import account, audit_log, get_client_ip
 from auth_service.crypto.jwt import encode_token, token_hash
 from auth_service.models import ApiOk, LoginResponse, UserInfo
 
@@ -33,8 +33,8 @@ def issue_access_token(request: Request, username: str, user_id: str, role: str 
 
     # The single success gate for all three auth paths (password login,
     # TOTP verify, backup code). The limiter resets only here — after
-    # full authentication — so a correct password alone no longer
-    # clears the bucket while MFA is still pending.
+    # full authentication — so a correct password alone does not
+    # clear the bucket while MFA is still pending.
     request.app.state.rate_limiter.reset(get_client_ip(request))
 
     jti = uuid.uuid4().hex
@@ -48,15 +48,15 @@ def issue_access_token(request: Request, username: str, user_id: str, role: str 
 
     now = datetime.now(UTC)
     expires = now + timedelta(seconds=config.token_lifetime)
-    db.create_session(
-        user_id=user_id,
-        token_jti=jti,
-        token_hash=token_hash(token),
-        issued_at=now.isoformat(),
-        expires_at=expires.isoformat(),
-    )
-
-    audit_log(db, request, "login_success", {"username": username}, user_id=user_id)
+    with db.atomic():
+        db.create_session(
+            user_id=user_id,
+            token_jti=jti,
+            token_hash=token_hash(token),
+            issued_at=now.isoformat(),
+            expires_at=expires.isoformat(),
+        )
+        audit_log(db, request, "login_success", actor=account(user_id, username))
     return ApiOk(data=LoginResponse(token=token, expires_in=config.token_lifetime))
 
 

@@ -42,26 +42,6 @@ class AuthTokenInvalidError(AuthTokenError):
     """Token is malformed, has an invalid signature, or contains unexpected claims."""
 
 
-class AuthCredentialsError(AuthError):
-    """Login credential failures."""
-
-
-class AuthRateLimitError(AuthError):
-    """Rate limit exceeded."""
-
-
-class AuthMFARequiredError(AuthError):
-    """TOTP verification required to complete login."""
-
-
-class AuthMFAError(AuthError):
-    """TOTP setup / verification failures."""
-
-
-class AuthInactivityError(AuthError):
-    """Session expired due to inactivity."""
-
-
 # ── API error code mechanism ─────────────────────────────────────
 
 

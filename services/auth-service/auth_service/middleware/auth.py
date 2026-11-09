@@ -20,6 +20,7 @@ from typing import Annotated
 
 from fastapi import Depends, Request
 
+from auth_service.audit import account
 from auth_service.crypto.jwt import TokenPayload, decode_token, token_hash
 from auth_service.errors import (
     ApiException,
@@ -68,6 +69,9 @@ def require_auth(request: Request) -> TokenPayload:
     # Update last activity
     db.update_last_activity(payload.jti)
 
+    # The audit actor of this request: the session's account and the
+    # name the token was issued to.
+    request.state.actor = account(session.user_id, payload.sub)
     return payload
 
 
