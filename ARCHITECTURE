@@ -306,9 +306,10 @@ Error envelope
   SPA branches on error_code.
 
   Three layers:
-    auth_service/errors.py        Python-side hierarchy (AuthError →
-                                  AuthSecretsError, AuthTokenError,
-                                  AuthCredentialsError, …).
+    auth_service/errors.py        Python-side hierarchy: AuthError →
+                                  AuthSecretsError, AuthDatabaseError,
+                                  AuthTokenError → AuthTokenExpiredError,
+                                  AuthTokenInvalidError.
     ApiException                  HTTP-aware exception carrying
                                   status + error_code.
     app.py:_register_error_handlers

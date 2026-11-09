@@ -330,9 +330,10 @@ Hata zarfı (Error envelope)
   SPA tarafındaki akış kontrolü (branching) error_code üzerinden yapılır.
 
   Üç katmanlı hata yapısı:
-    auth_service/errors.py        Python tarafındaki exception hiyerarşisi
-                                  (AuthError → AuthSecretsError,
-                                  AuthTokenError, AuthCredentialsError, …).
+    auth_service/errors.py        Python tarafındaki exception hiyerarşisi:
+                                  AuthError → AuthSecretsError,
+                                  AuthDatabaseError, AuthTokenError →
+                                  AuthTokenExpiredError, AuthTokenInvalidError.
     ApiException                  HTTP durum kodunu ve error_code değerini
                                   taşıyan exception sınıfı.
     app.py:_register_error_handlers
