@@ -54,6 +54,9 @@ const AUDIT_ACTIONS = [
   'user_created',
   'user_deleted',
   'proxy_request',
+  'reauth_failed',
+  'request_refused',
+  'audit_viewed',
 ] as const;
 
 const ACTION_TAG: Record<string, TagType> = {
@@ -67,12 +70,15 @@ const ACTION_TAG: Record<string, TagType> = {
   backup_code_failed: 'red',
   login_rate_limited: 'red',
   user_deleted: 'red',
+  reauth_failed: 'red',
+  request_refused: 'red',
   totp_disabled: 'warm-gray',
   password_changed: 'warm-gray',
   password_change_started: 'blue',
   mfa_challenge: 'blue',
   totp_setup_started: 'blue',
   logout: 'cool-gray',
+  audit_viewed: 'cool-gray',
   proxy_request: 'teal',
 };
 
