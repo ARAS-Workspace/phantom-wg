@@ -325,6 +325,14 @@ Audit log
   kapatma) o hesabı aynı biçimde detail.target alanında tutar; detail
   başka bir adı tekrarlamaz.
 
+  auth.db'deki bir değişiklik ve onun audit satırı birlikte commit'lenir
+  (AuthDB.atomic): satır yazılamazsa değişiklik geri alınır (rollback) ve
+  istek hatayla sonlanır. Girişler (parola, TOTP, yedek kod), çıkış,
+  parola değişiklikleri, TOTP, kullanıcı yönetimi ve
+  tools/add_superadmin.py bu şekilde yazar; tools/bootstrap.py ilk
+  hesabı satırıyla birlikte tek commit'te yazar. Proxy satırı daemon'da
+  yapılmış bir değişikliğin ardından gelir ve onu geri alamaz.
+
   Kayıt eylemleri tutar, ziyaretleri değil. Kimliği doğrulanmış bir
   hesabın /auth altında reddedilen isteğini hata handler'ları yazar
   (app.py:_audit_refusal); detail alanında metot, path, durum kodu ve

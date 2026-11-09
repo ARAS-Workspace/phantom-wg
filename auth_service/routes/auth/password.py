@@ -98,8 +98,8 @@ def password_change(
     if verify_password(body.password, user.password_hash):
         raise ApiException(400, "PASSWORD_MUST_DIFFER")
 
-    db.update_password(payload.sub, hash_password(body.password))
-    db.revoke_user_sessions(user.id)
-
-    audit_log(db, request, "password_changed", actor=request.state.actor)
+    with db.atomic():
+        db.update_password(payload.sub, hash_password(body.password))
+        db.revoke_user_sessions(user.id)
+        audit_log(db, request, "password_changed", actor=request.state.actor)
     return ApiOk(data=ActionResult(success_code="PASSWORD_CHANGED"))

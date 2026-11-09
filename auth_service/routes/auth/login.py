@@ -113,8 +113,9 @@ def mfa_verify(body: MFAVerifyRequest, request: Request):
         audit_log(db, request, "mfa_failed", actor=account(user.id, user.username))
         raise ApiException(401, "INVALID_TOTP_CODE")
 
-    audit_log(db, request, "mfa_success", actor=account(user.id, user.username))
-    return issue_access_token(request, user.username, user.id, user.role)
+    with db.atomic():
+        audit_log(db, request, "mfa_success", actor=account(user.id, user.username))
+        return issue_access_token(request, user.username, user.id, user.role)
 
 
 # ── MFA Backup Code ─────────────────────────────────────────────
@@ -142,18 +143,21 @@ def mfa_backup(body: MFAVerifyRequest, request: Request):
     if user is None or user.totp_secret is None:
         raise ApiException(401, "INVALID_MFA_STATE")
 
+    # The spent code, its audit row and the session commit together; a
+    # wrong code writes nothing in the block and is written after it.
     code_hash = hash_backup_code(body.code)
-    if not db.verify_backup_code(user.id, code_hash):
-        audit_log(db, request, "backup_code_failed", actor=account(user.id, user.username))
-        raise ApiException(401, "INVALID_BACKUP_CODE")
+    with db.atomic():
+        if db.verify_backup_code(user.id, code_hash):
+            remaining = db.count_remaining_backup_codes(user.id)
+            audit_log(
+                db, request, "backup_code_used",
+                actor=account(user.id, user.username),
+                detail={"remaining": remaining},
+            )
+            return issue_access_token(request, user.username, user.id, user.role)
 
-    remaining = db.count_remaining_backup_codes(user.id)
-    audit_log(
-        db, request, "backup_code_used",
-        actor=account(user.id, user.username),
-        detail={"remaining": remaining},
-    )
-    return issue_access_token(request, user.username, user.id, user.role)
+    audit_log(db, request, "backup_code_failed", actor=account(user.id, user.username))
+    raise ApiException(401, "INVALID_BACKUP_CODE")
 
 
 # ── Helper ───────────────────────────────────────────────────────

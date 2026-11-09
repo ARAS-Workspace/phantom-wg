@@ -40,19 +40,21 @@ def create_user(
 ):
     """Create a new admin user. Superadmin only."""
     db = request.state.db
-    try:
-        user = db.create_user(
-            username=body.username,
-            password_hash=hash_password(body.password),
-            role="admin",
+    password_hash = hash_password(body.password)
+    with db.atomic():
+        try:
+            user = db.create_user(
+                username=body.username,
+                password_hash=password_hash,
+                role="admin",
+            )
+        except AuthDatabaseError:
+            raise ApiException(409, "USER_ALREADY_EXISTS")
+        audit_log(
+            db, request, "user_created",
+            actor=request.state.actor,
+            target=account(user.id, user.username),
         )
-    except AuthDatabaseError:
-        raise ApiException(409, "USER_ALREADY_EXISTS")
-    audit_log(
-        db, request, "user_created",
-        actor=request.state.actor,
-        target=account(user.id, user.username),
-    )
     return ApiOk(data=user_info(user))
 
 
@@ -79,13 +81,14 @@ def delete_user(
     user = db.get_user_by_username(username)
     if user is None:
         raise ApiException(404, "USER_NOT_FOUND")
-    db.revoke_user_sessions(user.id)
-    db.delete_user(username)
-    audit_log(
-        db, request, "user_deleted",
-        actor=request.state.actor,
-        target=account(user.id, user.username),
-    )
+    with db.atomic():
+        db.revoke_user_sessions(user.id)
+        db.delete_user(username)
+        audit_log(
+            db, request, "user_deleted",
+            actor=request.state.actor,
+            target=account(user.id, user.username),
+        )
     return ApiOk(data=ActionResult(success_code="USER_DELETED"))
 
 
@@ -103,13 +106,15 @@ def change_password(
     user = db.get_user_by_username(username)
     if user is None:
         raise ApiException(404, "USER_NOT_FOUND")
-    db.update_password(username, hash_password(body.password))
-    # Same discipline as self-service change and delete_user: a reset
-    # password invalidates every existing session for the target.
-    db.revoke_user_sessions(user.id)
-    audit_log(
-        db, request, "password_changed",
-        actor=request.state.actor,
-        target=account(user.id, user.username),
-    )
+    password_hash = hash_password(body.password)
+    with db.atomic():
+        db.update_password(username, password_hash)
+        # Same discipline as self-service change and delete_user: a reset
+        # password invalidates every existing session for the target.
+        db.revoke_user_sessions(user.id)
+        audit_log(
+            db, request, "password_changed",
+            actor=request.state.actor,
+            target=account(user.id, user.username),
+        )
     return ApiOk(data=ActionResult(success_code="PASSWORD_CHANGED"))

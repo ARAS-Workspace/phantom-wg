@@ -48,15 +48,15 @@ def issue_access_token(request: Request, username: str, user_id: str, role: str 
 
     now = datetime.now(UTC)
     expires = now + timedelta(seconds=config.token_lifetime)
-    db.create_session(
-        user_id=user_id,
-        token_jti=jti,
-        token_hash=token_hash(token),
-        issued_at=now.isoformat(),
-        expires_at=expires.isoformat(),
-    )
-
-    audit_log(db, request, "login_success", actor=account(user_id, username))
+    with db.atomic():
+        db.create_session(
+            user_id=user_id,
+            token_jti=jti,
+            token_hash=token_hash(token),
+            issued_at=now.isoformat(),
+            expires_at=expires.isoformat(),
+        )
+        audit_log(db, request, "login_success", actor=account(user_id, username))
     return ApiOk(data=LoginResponse(token=token, expires_in=config.token_lifetime))
 
 

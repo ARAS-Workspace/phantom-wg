@@ -18,6 +18,8 @@ from __future__ import annotations
 import json
 import sqlite3
 import uuid
+from collections.abc import Iterator
+from contextlib import contextmanager
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
@@ -60,13 +62,38 @@ class SessionRow:
 class AuthDB:
     """Auth database — synchronous SQLite operations."""
 
-    __slots__ = ("_conn",)
+    __slots__ = ("_conn", "_depth")
 
     def __init__(self, conn: sqlite3.Connection) -> None:
         self._conn = conn
+        self._depth = 0
 
     def close(self) -> None:
         self._conn.close()
+
+    @contextmanager
+    def atomic(self) -> Iterator[None]:
+        """Commit every write inside the block together, or roll all of them back.
+
+        A change and its audit row go in one block: the change does not
+        stay without its row. A block inside another joins the outer one.
+        """
+        self._depth += 1
+        try:
+            yield
+        except BaseException:
+            self._depth -= 1
+            if self._depth == 0:
+                self._conn.rollback()
+            raise
+        self._depth -= 1
+        if self._depth == 0:
+            self._conn.commit()
+
+    def _commit(self) -> None:
+        """Commit a write, unless an atomic block commits it at its end."""
+        if self._depth == 0:
+            self._conn.commit()
 
     # ── Users ────────────────────────────────────────────────────
 
@@ -80,7 +107,7 @@ class AuthDB:
                 "VALUES (?, ?, ?, ?, ?, ?)",
                 (user_id, username, password_hash, role, now, now),
             )
-            self._conn.commit()
+            self._commit()
         except sqlite3.IntegrityError as exc:
             raise AuthDatabaseError(f"User already exists: {username}") from exc
         return UserRow(
@@ -155,7 +182,7 @@ class AuthDB:
         cursor = self._conn.execute(
             "DELETE FROM users WHERE username = ?", (username,)
         )
-        self._conn.commit()
+        self._commit()
         return cursor.rowcount > 0
 
     def update_password(self, username: str, password_hash: str) -> bool:
@@ -165,7 +192,7 @@ class AuthDB:
             "UPDATE users SET password_hash = ?, updated_at = ? WHERE username = ?",
             (password_hash, now, username),
         )
-        self._conn.commit()
+        self._commit()
         return cursor.rowcount > 0
 
     # ── TOTP ─────────────────────────────────────────────────────
@@ -177,7 +204,7 @@ class AuthDB:
             "UPDATE users SET totp_secret = ?, updated_at = ? WHERE id = ?",
             (secret, now, user_id),
         )
-        self._conn.commit()
+        self._commit()
         return cursor.rowcount > 0
 
     def store_backup_codes(self, user_id: str, code_hashes: list[str]) -> None:
@@ -190,7 +217,7 @@ class AuthDB:
                 "INSERT INTO totp_backup_codes (user_id, code_hash) VALUES (?, ?)",
                 (user_id, code_hash),
             )
-        self._conn.commit()
+        self._commit()
 
     def verify_backup_code(self, user_id: str, code_hash: str) -> bool:
         """Check backup code and mark as used. Returns True if valid."""
@@ -204,7 +231,7 @@ class AuthDB:
         self._conn.execute(
             "UPDATE totp_backup_codes SET used = 1 WHERE id = ?", (row["id"],)
         )
-        self._conn.commit()
+        self._commit()
         return True
 
     def clear_backup_codes(self, user_id: str) -> None:
@@ -212,7 +239,7 @@ class AuthDB:
         self._conn.execute(
             "DELETE FROM totp_backup_codes WHERE user_id = ?", (user_id,)
         )
-        self._conn.commit()
+        self._commit()
 
     def count_remaining_backup_codes(self, user_id: str) -> int:
         """Count unused backup codes."""
@@ -241,7 +268,7 @@ class AuthDB:
             "VALUES (?, ?, ?, ?, ?, ?, ?)",
             (session_id, user_id, token_jti, token_hash, issued_at, expires_at, issued_at),
         )
-        self._conn.commit()
+        self._commit()
         return SessionRow(
             id=session_id,
             user_id=user_id,
@@ -289,7 +316,7 @@ class AuthDB:
             "UPDATE sessions SET last_activity_at = ? WHERE token_jti = ?",
             (now, jti),
         )
-        self._conn.commit()
+        self._commit()
 
     def revoke_session(self, jti: str) -> bool:
         """Revoke a session by JTI. Returns True if revoked."""
@@ -297,7 +324,7 @@ class AuthDB:
             "UPDATE sessions SET revoked = 1 WHERE token_jti = ? AND revoked = 0",
             (jti,),
         )
-        self._conn.commit()
+        self._commit()
         return cursor.rowcount > 0
 
     def revoke_user_sessions(self, user_id: str) -> int:
@@ -306,7 +333,7 @@ class AuthDB:
             "UPDATE sessions SET revoked = 1 WHERE user_id = ? AND revoked = 0",
             (user_id,),
         )
-        self._conn.commit()
+        self._commit()
         return cursor.rowcount
 
     # ── Audit ────────────────────────────────────────────────────
@@ -330,7 +357,7 @@ class AuthDB:
                 _now_iso(),
             ),
         )
-        self._conn.commit()
+        self._commit()
 
     def get_audit_logs(self, limit: int = 100) -> list[dict]:
         """Get recent audit log entries."""

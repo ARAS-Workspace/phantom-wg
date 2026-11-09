@@ -30,8 +30,9 @@ router = APIRouter()
 def logout(request: Request, payload: AuthPayload):
     """Revoke current session."""
     db = request.state.db
-    db.revoke_session(payload.jti)
-    audit_log(db, request, "logout", actor=request.state.actor)
+    with db.atomic():
+        db.revoke_session(payload.jti)
+        audit_log(db, request, "logout", actor=request.state.actor)
     return ApiOk(data=ActionResult(success_code="LOGGED_OUT"))
 
 

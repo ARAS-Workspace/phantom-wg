@@ -130,10 +130,10 @@ def totp_confirm(
         raise ApiException(401, "INVALID_TOTP_CODE")
 
     backup_hashes = [hash_backup_code(c) for c in backup_codes]
-    db.set_totp_secret(user.id, totp_secret)
-    db.store_backup_codes(user.id, backup_hashes)
-
-    audit_log(db, request, "totp_enabled", actor=request.state.actor)
+    with db.atomic():
+        db.set_totp_secret(user.id, totp_secret)
+        db.store_backup_codes(user.id, backup_hashes)
+        audit_log(db, request, "totp_enabled", actor=request.state.actor)
     return ApiOk(data=ActionResult(success_code="TOTP_ENABLED"))
 
 
@@ -165,12 +165,12 @@ def totp_disable(
     if target.totp_secret is None:
         raise ApiException(400, "TOTP_NOT_ENABLED")
 
-    db.set_totp_secret(target.id, None)
-    db.clear_backup_codes(target.id)
-
-    audit_log(
-        db, request, "totp_disabled",
-        actor=request.state.actor,
-        target=account(target.id, target.username),
-    )
+    with db.atomic():
+        db.set_totp_secret(target.id, None)
+        db.clear_backup_codes(target.id)
+        audit_log(
+            db, request, "totp_disabled",
+            actor=request.state.actor,
+            target=account(target.id, target.username),
+        )
     return ApiOk(data=ActionResult(success_code="TOTP_DISABLED"))

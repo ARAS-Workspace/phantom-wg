@@ -97,17 +97,20 @@ def main(argv: list[str] | None = None, stdin: TextIO | None = None) -> int:
     except AuthDatabaseError:
         return _result("DATABASE_NOT_FOUND")
 
+    password_hash = hash_password(request.password)
     db = open_auth_db(db_path)
     try:
-        try:
-            user = db.create_user(request.username, hash_password(request.password), role=ROLE)
-        except AuthDatabaseError:
-            return _result("USER_ALREADY_EXISTS")
-        db.add_audit_log(
-            action="user_created",
-            detail={"target": account(user.id, user.username), "role": ROLE},
-            user_id=system("host"),
-        )
+        # The account and its audit row commit together, or neither stays.
+        with db.atomic():
+            try:
+                user = db.create_user(request.username, password_hash, role=ROLE)
+            except AuthDatabaseError:
+                return _result("USER_ALREADY_EXISTS")
+            db.add_audit_log(
+                action="user_created",
+                detail={"target": account(user.id, user.username), "role": ROLE},
+                user_id=system("host"),
+            )
     finally:
         db.close()
 

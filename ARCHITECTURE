@@ -301,6 +301,14 @@ Audit log
   a password reset, turning off its TOTP) holds that account in
   detail.target, in the same form; detail repeats no other name.
 
+  A change in auth.db and its audit row commit together
+  (AuthDB.atomic): when the row cannot be written, the change is
+  rolled back and the request ends in an error. Logins (password,
+  TOTP, backup code), logout, password changes, TOTP, user
+  management and tools/add_superadmin.py write this way;
+  tools/bootstrap.py commits the first account with its row. A proxy
+  row follows a change made in the daemon and cannot undo it.
+
   The log keeps actions, not visits. What an authenticated account
   is refused on /auth is written by the error handlers
   (app.py:_audit_refusal), with method, path, status and code in
