@@ -48,7 +48,7 @@ COMMANDS = (
     "build", "up", "down", "restart", "rebuild", "logs", "status", "show-versions", "shell", "curl",
     "test", "test-full", "test-uds", "test-multihop-e2e", "test-chaos-e2e", "test-scenario-e2e", "test-spa-e2e",
     "db-ls", "db-ls-r", "db-reset", "state-reset", "key-reset", "hard-reset",
-    "setup", "gen-keys", "setup-auth", "setup-tls",
+    "setup", "gen-keys", "setup-auth", "setup-tls", "add-superadmin",
     "build-spa", "stubs", "openapi", "fetch-compose-bridge", "generate-production-package",
 )
 DAEMON_CONTAINER = "phantom-daemon-dev"
@@ -156,6 +156,66 @@ def started_at() -> str:
 def code_version() -> str:
     text = (ROOT / "phantom_daemon/__init__.py").read_text(encoding="utf-8")
     return re.search(r'__version__ = "(.+?)"', text)[1]
+
+
+PROMPT = re.compile(rb"(?:Password|Repeat): *")
+
+
+def on_terminal(*args: str, answers: tuple = (), timeout: int = 120) -> subprocess.CompletedProcess:
+    """Runs dev.sh on a terminal of its own, with an answer after each password prompt.
+
+    A new session holds no other terminal: getpass reads and writes this one.
+    The output keeps what the terminal showed, so an echoed answer shows in it.
+    """
+    print(f"\n--- dev.sh {' '.join(args)} (terminal)", flush=True)
+    master, slave = pty.openpty()
+    process = subprocess.Popen([ENTRY, *args], cwd=ROOT, stdin=slave, stdout=slave, stderr=slave, start_new_session=True)
+    os.close(slave)
+    pending, output = list(answers), b""
+    deadline = time.time() + timeout
+    try:
+        while time.time() < deadline:
+            if not select.select([master], [], [], 0.5)[0]:
+                if process.poll() is not None:
+                    break
+                continue
+            try:
+                chunk = os.read(master, 4096)
+            except OSError:
+                break
+            if not chunk:
+                break
+            output += chunk
+            sys.stdout.write(chunk.decode("utf-8", "replace"))
+            sys.stdout.flush()
+            answered = len(answers) - len(pending)
+            if pending and len(PROMPT.findall(output)) > answered:
+                os.write(master, pending.pop(0).encode("utf-8") + b"\n")
+    finally:
+        if process.poll() is None:
+            process.kill()
+        process.wait(timeout=10)
+        os.close(master)
+    return subprocess.CompletedProcess(args, process.returncode, output.decode("utf-8", "replace"))
+
+
+def call(path: str, token: str = "", body: dict | None = None) -> tuple:
+    """An answer of the stack through nginx: status and body."""
+    context = ssl.create_default_context()
+    context.check_hostname = False
+    context.verify_mode = ssl.CERT_NONE
+    headers = {"Content-Type": "application/json"}
+    if token:
+        headers["Authorization"] = f"Bearer {token}"
+    data = None if body is None else json.dumps(body).encode()
+    request = urllib.request.Request(f"https://127.0.0.1{path}", data=data, headers=headers)
+    try:
+        with urllib.request.urlopen(request, context=context, timeout=5) as response:
+            return response.status, response.read()
+    except urllib.error.HTTPError as error:
+        return error.code, error.read()
+    except OSError:
+        return 0, b""
 
 
 def login() -> int:
@@ -530,6 +590,34 @@ def test_shell_opens_bash_on_a_terminal():
     assert b"inside-42" in output
 
 
+# ── A superadmin from the host ──────────────────────────────────────
+
+OPS = "e2e-ops"
+OPS_PASSWORD = "Ops Superadmin-2026! "  # spaces inside and at the end: taken as typed
+
+
+def test_add_superadmin_creates_an_account_with_the_superadmin_routes():
+    done = on_terminal("add-superadmin", OPS, answers=(OPS_PASSWORD, OPS_PASSWORD))
+    assert done.returncode == 0, done.stdout
+    assert f"SUPERADMIN_CREATED={OPS}" in done.stdout
+    assert OPS_PASSWORD.strip() not in done.stdout
+    status, body = call("/auth/login", body={"username": OPS, "password": OPS_PASSWORD})
+    assert status == 200, body
+    assert call("/auth/users", token=json.loads(body)["data"]["token"])[0] == 200
+
+
+def test_add_superadmin_keeps_the_answer_of_the_service():
+    done = on_terminal("add-superadmin", OPS, answers=(OPS_PASSWORD, OPS_PASSWORD))
+    assert done.returncode == 7, done.stdout
+    assert "USER_ALREADY_EXISTS" in done.stdout
+
+
+def test_add_superadmin_needs_a_terminal():
+    done = dev("add-superadmin", "e2e-pipe", stdin=f"{OPS_PASSWORD}\n{OPS_PASSWORD}\n")
+    assert done.returncode == 1
+    assert done.stdout.strip().endswith("add-superadmin reads the password from a terminal.")
+
+
 def test_down_stops_the_stack():
     done = dev("down")
     assert done.returncode == 0, done.stdout
@@ -541,6 +629,13 @@ def test_restart_needs_a_running_stack():
     done = dev("restart")
     assert done.returncode == 1
     assert done.stdout.strip().endswith("The stack is not running. Start it: ./tools/dev.sh up")
+
+
+def test_add_superadmin_needs_the_running_auth_service():
+    done = on_terminal("add-superadmin", "e2e-late", answers=(OPS_PASSWORD, OPS_PASSWORD))
+    assert done.returncode == 1
+    assert "The auth service is not running. Start it: ./tools/dev.sh up" in done.stdout
+    assert "Password:" not in done.stdout
 
 
 def test_curl_reports_an_answer_without_json():

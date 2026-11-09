@@ -83,6 +83,7 @@ services:
     volumes:
       - phantom-sock:/var/run/phantom
       - ./services/auth-service/auth_service:/app/auth_service:ro
+      - ./services/auth-service/tools/add_superadmin.py:/app/tools/add_superadmin.py:ro
       - ./container-data/auth-db:/var/lib/phantom/auth
     secrets:
       - auth_signing_key

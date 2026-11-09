@@ -10,11 +10,13 @@ Copyright (c) 2025 Rıza Emre ARAS <r.emrearas@proton.me>
 Licensed under AGPL-3.0 - see LICENSE file for details
 WireGuard® is a registered trademark of Jason A. Donenfeld.
 
-The bootstrap of the auth service: its keys, its database, its admin account.
+The auth service: its keys, its database, its admin account and the superadmins added later.
 """
 
 from __future__ import annotations
 
+import getpass
+import sys
 import time
 from pathlib import Path
 
@@ -28,6 +30,7 @@ DEFAULT_USERNAME = "admin"
 DATABASE_SUFFIXES = ("", "-wal", "-shm")
 KEY_FILES = ("auth_signing_key", "auth_verify_key")
 PRIVATE_FILES = (*KEY_FILES, ".admin_password")
+SERVICE_DB_DIR = "/var/lib/phantom/auth"
 
 
 def database() -> Path:
@@ -88,3 +91,34 @@ def first_bootstrap(username: str = DEFAULT_USERNAME) -> None:
     if database().is_file():
         raise ToolError(f"{paths.AUTH_DB_DIR}/auth.db exists without its keys. Use -f to start over.")
     bootstrap(ready(), username)
+
+
+def serving() -> bool:
+    """True while the auth service of the stack runs."""
+    return bool(compose.capture("ps", "--status", "running", "-q", SERVICE))
+
+
+def read_password() -> str:
+    """A password typed twice on the terminal, without echo, taken as typed."""
+    if not sys.stdin.isatty():
+        raise ToolError("add-superadmin reads the password from a terminal.")
+    password = getpass.getpass("Password: ")
+    if not password or password != getpass.getpass("Repeat:   "):
+        raise ToolError("The passwords are empty or differ.")
+    return password
+
+
+def add_superadmin(username: str, password: str) -> None:
+    """The running auth service creates the account with its own rules and audit row.
+
+    The password reaches the script through stdin only. --username=<name>
+    keeps a name that starts with "-" a value for Compose.
+    """
+    runner.feed(
+        [
+            *compose.COMPOSE, "exec", "-T", SERVICE,
+            "python", "-m", "tools.add_superadmin",
+            "--db-dir", SERVICE_DB_DIR, f"--username={username}",
+        ],
+        f"{password}\n",
+    )
