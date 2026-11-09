@@ -6,7 +6,7 @@ export interface ApiOk<T> {
 export interface ApiErr {
   ok: false;
   error_code?: string; // auth-service errors + client-side synthetic codes
-  code?: string; // daemon errors
+  code?: string; // daemon errors, and FORBIDDEN on a 403
   error?: string; // daemon: full English message for debugging
 }
 
@@ -66,8 +66,10 @@ class ApiClient {
       return { ok: false, error_code: 'SESSION_EXPIRED' };
     }
 
+    // Auth pages read error_code and daemon pages read code; FORBIDDEN is
+    // in both code tables, so a refused route shows the permission message.
     if (response.status === 403) {
-      return { ok: false, error_code: 'FORBIDDEN' };
+      return { ok: false, error_code: 'FORBIDDEN', code: 'FORBIDDEN' };
     }
 
     return response.json();
