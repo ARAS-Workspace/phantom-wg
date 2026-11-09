@@ -315,6 +315,9 @@ Servis log'u (Service log)
   kalır (mfa_failed, backup_code_failed): operatöre birinin parolayı
   bildiğini gösterir.
 
+  docker-compose.yml container log'unu döndürür (log rotation):
+  json-file sürücüsü, en fazla 10 MB'lık üç dosya.
+
 
 Yapılandırma
 ------------
@@ -425,7 +428,8 @@ Container yapısı
                      olarak mount eder (bkz. DISTRIBUTION).
   docker-compose.yml Ed25519 anahtar çiftini Docker secrets olarak
                      mount eder; restart politikası unless-stopped olarak
-                     ayarlıdır. Sunucu, proxy, token ve rate limit ortam
+                     ayarlıdır; container log'u döndürülür (json-file,
+                     3 x 10 MB). Sunucu, proxy, token ve rate limit ortam
                      değişkenlerini açıkça tanımlar. AUTH_DB_DIR,
                      AUTH_PROXY_BACKUP_MAX_BODY, AUTH_TRUSTED_PROXIES ve
                      PHANTOM_SUBNET_V4/_V6 bu dosyada yer almaz;

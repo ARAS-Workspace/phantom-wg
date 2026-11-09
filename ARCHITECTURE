@@ -290,6 +290,9 @@ Service log
   backup_code_failed): it tells the operator that someone holds the
   password.
 
+  docker-compose.yml rotates the container log: json-file driver,
+  three files of 10 MB at most.
+
 
 Configuration
 -------------
@@ -394,7 +397,8 @@ Container shape
                      mounts its auth_service directory read-only (see
                      DISTRIBUTION).
   docker-compose.yml Mounts the Ed25519 keypair as Docker secrets,
-                     restart: unless-stopped. Sets the server, proxy,
+                     restart: unless-stopped, container log rotated
+                     (json-file, 3 x 10 MB). Sets the server, proxy,
                      token and rate-limit variables explicitly.
                      AUTH_DB_DIR, AUTH_PROXY_BACKUP_MAX_BODY,
                      AUTH_TRUSTED_PROXIES and PHANTOM_SUBNET_V4/_V6
