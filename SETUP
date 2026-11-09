@@ -259,6 +259,13 @@ Logs:
   docker-compose.yml rotates the log of each container: json-file driver,
   three files of 10 MB at most. ./tools/prod.sh logs [service] follows them.
 
+  A login refused before the user is known is written to the auth-service
+  log, not to the audit log: a wrong name or password, or too many
+  attempts. Each is one line with the client IP and the name sent, if
+  any; the password is never written. A wrong TOTP or backup code comes
+  after a correct password and stays in the audit log.
+    ./tools/prod.sh logs auth-service
+
 Data Directories (created at runtime):
   container-data/
   ├── secrets/production/         Keys and certificates
