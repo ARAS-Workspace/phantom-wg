@@ -344,6 +344,14 @@ Bootstrap
   After bootstrap, the runtime container opens the existing DB and
   keys; startup aborts when either is missing.
 
+  Further superadmin accounts come from the host, never from the API
+  (POST /auth/users creates admin accounts only).
+  tools/add_superadmin.py runs in the auth image, started by the
+  daemon's setup tools: it reads the password on stdin and from
+  nowhere else, applies the rules of CreateUserRequest, and writes a
+  user_created row to the audit log. It prints one result line and
+  never the password.
+
 
 Container shape
 ---------------

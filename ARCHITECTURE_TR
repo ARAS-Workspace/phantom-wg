@@ -370,6 +370,13 @@ Hata zarfı (Error envelope)
   anahtarları kullanarak açılır; bunlardan herhangi biri eksikse servis
   başlamaz.
 
+  Sonraki superadmin hesapları API'den değil host'tan oluşturulur
+  (POST /auth/users yalnızca admin hesabı oluşturur).
+  tools/add_superadmin.py, daemon'ın kurulum araçları tarafından auth
+  imajı içinde çalıştırılır: parolayı yalnızca stdin'den okur,
+  CreateUserRequest kurallarını uygular ve audit log'a bir user_created
+  satırı yazar. Tek bir sonuç satırı basar, parolayı hiçbir zaman basmaz.
+
 
 Container yapısı
 ----------------
