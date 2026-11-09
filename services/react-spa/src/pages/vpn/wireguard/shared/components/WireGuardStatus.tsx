@@ -29,6 +29,7 @@ import { useLocale } from '@shared/hooks';
 import { translate } from '@shared/translations';
 import { apiClient } from '@shared/api/client';
 import { formatBytes, formatHandshake } from '@shared/utils/formatUtils';
+import { sortHeaderText } from '@shared/utils/tableSort';
 import TableLoader from '@shared/components/data/TableLoader';
 import PeerStatusTag from '@shared/components/data/PeerStatusTag';
 import {
@@ -62,6 +63,7 @@ const peerKey = (peer: PeerInfo): string => peer.name ?? peer.public_key.slice(0
 const WireGuardStatus: React.FC = () => {
   const { locale } = useLocale();
   const t = translate(locale);
+  const sortText = sortHeaderText(t);
 
   const [data, setData] = useState<WireGuardStatusData | null>(null);
   const [loading, setLoading] = useState(true);
@@ -263,6 +265,7 @@ const WireGuardStatus: React.FC = () => {
                                 isSortable
                                 isSortHeader={active}
                                 sortDirection={active ? sort.direction : 'NONE'}
+                                translateWithId={sortText}
                                 onClick={() => handleSort(key)}
                                 data-testid={`vpn-wg-sort-${key}`}
                               >

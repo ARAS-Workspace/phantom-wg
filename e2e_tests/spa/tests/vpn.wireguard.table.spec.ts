@@ -296,6 +296,27 @@ test.describe.serial("WireGuard peers table", () => {
     }
   });
 
+  test("Sorting: the headers hold their order and their next step", async ({ page }) => {
+    await goTable(page, adminPassword);
+    // Header names in English, the locale of the test browser
+    const name = page.getByTestId("vpn-wg-sort-name");
+    const received = page.getByTestId("vpn-wg-sort-rx");
+
+    // Name ascending by default: its next click sorts descending
+    await expect(page.locator("th", { has: name })).toHaveAttribute("aria-sort", "ascending");
+    await expect(name).toHaveAccessibleDescription("Name: click to sort in descending order");
+    // Another column starts ascending
+    await expect(page.locator("th", { has: received })).toHaveAttribute("aria-sort", "none");
+    await expect(received).toHaveAccessibleDescription(
+      "Received: click to sort in ascending order",
+    );
+
+    // Name descending: its next click sorts ascending again, the table has no unsorted step
+    await name.click();
+    await expect(page.locator("th", { has: name })).toHaveAttribute("aria-sort", "descending");
+    await expect(name).toHaveAccessibleDescription("Name: click to sort in ascending order");
+  });
+
   // ── 6. Dashboard ───────────────────────────────────────────────
   test("Dashboard: latest handshake first, ten rows, total peers", async ({ page }) => {
     // Login lands on the dashboard
