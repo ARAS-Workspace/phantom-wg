@@ -5,6 +5,43 @@ passwords, TOTP MFA, RBAC, audit log, authenticated reverse proxy
 to the daemon UDS.
 
 
+v1.2.0 - 2026-11-09
+-------------------
+
+  Proxy roles release. The proxy separates admin from superadmin: an
+  admin reads the VPN state and creates, reads and removes client
+  tunnels, and a superadmin holds every route. The schema, the
+  configuration and the 28 routes of ROUTES are unchanged.
+
+  * Access classes. Access gains TUNNEL and MULTIHOP next to VIEW,
+    OPERATE and CUSTODY. VIEW reads state and carries no private key.
+    TUNNEL creates, reads or removes a client tunnel with its keys:
+    clients/assign, clients/get, clients/config and clients/revoke.
+    OPERATE changes the server configuration: network/cidr and
+    dns/change. MULTIHOP lists, reads or changes the multihop exits
+    with their keys: every multihop route but status, which is VIEW.
+    CUSTODY is the two backup routes, as before.
+
+  * Grants. GRANTS gives VIEW and TUNNEL to admin and superadmin, and
+    OPERATE, MULTIHOP and CUSTODY to superadmin. An admin holds 17 of
+    the 28 routes: the reads, the multihop status and the client
+    tunnels. The nine it loses are network/cidr, dns/change and seven
+    multihop routes. A refusal is 403 SUPERADMIN_REQUIRED, audited,
+    before the body is read, as for backup.
+
+  * Documentation. ARCHITECTURE and ARCHITECTURE_TR carry a table of
+    the /auth/* routes by target and role and a table of the proxy
+    routes with their access and roles. Their other sections follow
+    the code again: the schema run on every connection, the
+    mfa_required field, the typ claim, the rate limit on the three
+    login routes, the configuration defaults, the bootstrap password
+    file and the container mounts. ARCHITECTURE_TR is rewritten.
+
+  No schema or migration impact. An admin account loses the address
+  pool, DNS and multihop changes and the multihop exit list until the
+  panel hides those controls; the bootstrap account is superadmin.
+
+
 v1.1.12 - 2026-11-08
 --------------------
 
