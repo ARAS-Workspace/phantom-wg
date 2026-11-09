@@ -10,12 +10,12 @@ import textwrap
 import pytest
 from support import TIMEOUT, python_lines, run
 
-from core.runner import Answer, ToolError, capture, probe, stream
+from core.runner import Answer, ToolError, capture, feed, probe, stream
 
 FRAME = """
 from pathlib import Path
 from core import runner
-from core.runner import ToolError, capture, replace, stream
+from core.runner import ToolError, capture, feed, replace, stream
 
 runner.ROOT = Path(sys.argv[1])
 """
@@ -78,6 +78,72 @@ def test_ctrl_c_leaves_the_command_its_cleanup(tmp_path):
     script = "trap 'kill $!; sleep 0.2; echo cleaned; exit 3' INT; sleep 5 & echo ready; wait"
     try:
         stream(["sh", "-c", script])
+    except ToolError as error:
+        print("code", error.code)
+    """
+    process = subprocess.Popen(
+        framed(code, tmp_path),
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+        encoding="utf-8",
+        start_new_session=True,
+    )
+    assert process.stdout.readline().strip() == "ready"
+    os.killpg(process.pid, signal.SIGINT)
+    output = process.communicate(timeout=TIMEOUT)[0]
+    assert "cleaned" in output
+    assert "code 3" in output
+
+
+SECRET = "  p\u00e4ssw\u00f6rd with spaces \n"
+
+
+def test_feed_hands_the_secret_to_stdin_and_closes_it(tmp_path):
+    # In its own process: a stdin left open would hang cat, the timeout ends it.
+    code = f"""
+    feed(["sh", "-c", "cat > got"], {SECRET!a})
+    print("fed")
+    """
+    done = in_process(code, tmp_path)
+    assert done.stdout.strip() == "fed", done.stderr
+    assert (tmp_path / "got").read_bytes() == SECRET.encode("utf-8")
+
+
+def test_feed_output_reaches_the_terminal(root, capfd):
+    feed(["sh", "-c", "read -r line; echo got $line"], "secret\n")
+    assert capfd.readouterr().out == "got secret\n"
+
+
+def test_feed_failure_keeps_the_exit_code_and_names_no_secret(root):
+    with pytest.raises(ToolError) as caught:
+        feed(["sh", "-c", "read -r line; exit 5"], "s3cret-value\n")
+    assert caught.value.code == 5
+    assert str(caught.value) == "sh -c exited 5"
+
+
+def test_feed_missing_command_exits_127(root):
+    with pytest.raises(ToolError) as caught:
+        feed(["no-such-command"], "secret\n")
+    assert caught.value.code == 127
+
+
+@pytest.mark.parametrize("code", [0, 3])
+def test_feed_a_command_that_reads_nothing_answers_with_its_exit_code(root, code):
+    # More than a pipe holds: the write meets the closed pipe.
+    secret = "x" * (1 << 20)
+    if code == 0:
+        feed(["sh", "-c", "exit 0"], secret)
+        return
+    with pytest.raises(ToolError) as caught:
+        feed(["sh", "-c", f"exit {code}"], secret)
+    assert caught.value.code == code
+
+
+def test_feed_ctrl_c_leaves_the_command_its_cleanup(tmp_path):
+    code = """
+    script = "trap 'kill $!; sleep 0.2; echo cleaned; exit 3' INT; sleep 5 & echo ready; wait"
+    try:
+        feed(["sh", "-c", script], "secret\\n")
     except ToolError as error:
         print("code", error.code)
     """

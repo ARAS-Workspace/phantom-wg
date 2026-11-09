@@ -13,12 +13,13 @@ WireGuard® is a registered trademark of Jason A. Donenfeld.
 Runs the commands of the host. No other module imports subprocess.
 
     stream    the output goes straight to the terminal
+    feed      as stream, with a secret on stdin
     capture   stdout comes back as text, stderr stays on the terminal
     probe     the answer comes back, a failure is an answer too
     replace   this process becomes the command
 
-Every command starts in the root of the install. A failure of stream or
-capture stops the tool with the exit code of the command.
+Every command starts in the root of the install. A failure of stream, feed
+or capture stops the tool with the exit code of the command.
 """
 
 from __future__ import annotations
@@ -79,6 +80,31 @@ def stream(args: Sequence[str], cwd: str = ".", env: Mapping[str, str] | None = 
         raise _not_started(args, error) from error
 
     with process:
+        returncode = _wait(process)
+
+    if returncode != 0:
+        raise _failed(args, returncode)
+
+
+def feed(args: Sequence[str], secret: str) -> None:
+    """Runs a command in front of the operator with secret on its stdin.
+
+    The secret goes through the pipe and nowhere else: no argument, no
+    environment, no message. stdin closes after it. A command that ends
+    before it reads the secret answers with its exit code.
+    """
+    # Unbuffered: a closed pipe fails the write once, close has nothing to flush.
+    try:
+        process = subprocess.Popen(args, cwd=ROOT, stdin=subprocess.PIPE, bufsize=0)
+    except OSError as error:
+        raise _not_started(args, error) from error
+
+    with process:
+        try:
+            process.stdin.write(secret.encode("utf-8"))
+        except BrokenPipeError:
+            pass
+        process.stdin.close()
         returncode = _wait(process)
 
     if returncode != 0:
