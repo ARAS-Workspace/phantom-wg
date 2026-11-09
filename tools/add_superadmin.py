@@ -18,7 +18,12 @@ directory that holds auth_service/, started by the daemon's add-superadmin
 tool with stdin piped. The account takes the service's own rules:
 CreateUserRequest for the name and the password policy, hash_password,
 AuthDB.create_user, and a user_created row in the audit log whose actor is
-system:host. One result line is printed; the password is never printed.
+system:host; the account and its row commit together. The password is never
+printed.
+
+The caller reads the password without echo and pipes it. The terminal check
+here sees the container's stdin only: under `docker compose exec -T` or
+`docker run -i` it is a pipe even when a person types at the host.
 
 Result lines and exit codes:
   SUPERADMIN_CREATED=<name>  0
@@ -28,6 +33,11 @@ Result lines and exit codes:
   WEAK_PASSWORD              5
   DATABASE_NOT_FOUND         6
   USER_ALREADY_EXISTS        7
+  (no result line)           1  auth.db fails the write: unreadable,
+                                read-only or damaged, or the audit row
+                                refused. stderr holds the traceback,
+                                which names the cause and holds no
+                                password; no account is left behind.
 """
 
 from __future__ import annotations

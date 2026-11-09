@@ -451,7 +451,11 @@ Bootstrap
   daemon's setup tools: it reads the password on stdin and from
   nowhere else, applies the rules of CreateUserRequest, and writes a
   user_created row to the audit log with the actor system:host. It
-  prints one result line and never the password.
+  prints one result line and an exit code; when auth.db fails the
+  write it exits 1 with the cause on stderr and no account left
+  behind. It never prints the password. The caller reads the password
+  without echo: the script sees a pipe even when a person types at
+  the host.
 
 
 Container shape

@@ -481,7 +481,11 @@ Hata zarfı (Error envelope)
   imajı içinde çalıştırılır: parolayı yalnızca stdin'den okur,
   CreateUserRequest kurallarını uygular ve audit log'a aktörü
   system:host olan bir user_created satırı yazar. Tek bir sonuç satırı
-  basar, parolayı hiçbir zaman basmaz.
+  ve çıkış kodu verir; auth.db yazmayı başaramazsa sebebi stderr'e
+  yazarak 1 koduyla çıkar ve geride hesap bırakmaz. Parolayı hiçbir
+  zaman basmaz. Parolayı ekrana yansıtmadan (echo olmadan) okumak
+  çağıranın işidir: host'ta biri yazarken bile betik stdin'de bir pipe
+  görür.
 
 
 Container yapısı

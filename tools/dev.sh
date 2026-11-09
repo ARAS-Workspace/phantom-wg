@@ -113,8 +113,9 @@ cmd_add_superadmin() {
     fi
 
     local password repeat status=0
-    read -rsp "Password: " password; echo
-    read -rsp "Repeat:   " repeat; echo
+    # IFS= keeps the spaces at both ends: the password is taken as typed.
+    IFS= read -rsp "Password: " password; echo
+    IFS= read -rsp "Repeat:   " repeat; echo
     if [[ -z "$password" || "$password" != "$repeat" ]]; then
         red "The passwords are empty or differ."
         exit 1
@@ -123,8 +124,9 @@ cmd_add_superadmin() {
 
     # printf is a builtin: the password goes into the pipe and into no
     # argument list. exec -T keeps stdin a pipe; the script refuses a terminal.
+    # --username=<name>: a name may start with "-".
     printf '%s\n' "$password" | $COMPOSE exec -T "$AUTH" \
-        python -m tools.add_superadmin --db-dir "$CONTAINER_DB_DIR" --username "$1" || status=$?
+        python -m tools.add_superadmin --db-dir "$CONTAINER_DB_DIR" --username="$1" || status=$?
     unset password
     return "$status"
 }
