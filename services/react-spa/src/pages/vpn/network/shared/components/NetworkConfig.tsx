@@ -13,6 +13,7 @@ import { Renew, Edit } from '@carbon/icons-react';
 import { useLocale } from '@shared/hooks';
 import { translate } from '@shared/translations';
 import { apiClient } from '@shared/api/client';
+import { useUser } from '@shared/contexts/UserContext';
 import ChangeCidrModal from './modals/ChangeCidrModal';
 import './styles/NetworkConfig.scss';
 
@@ -47,6 +48,8 @@ interface ValidateResult {
 const NetworkConfig: React.FC = () => {
   const { locale } = useLocale();
   const t = translate(locale);
+  const { can } = useUser();
+  const canOperate = can('operate');
 
   const [data, setData] = useState<NetworkStatus | null>(null);
   const [loading, setLoading] = useState(true);
@@ -193,15 +196,17 @@ const NetworkConfig: React.FC = () => {
                   disabled={loading}
                   data-testid="vpn-net-refresh"
                 />
-                <Button
-                  renderIcon={Edit}
-                  size="sm"
-                  kind="ghost"
-                  iconDescription={t.network.changeCidr}
-                  hasIconOnly
-                  onClick={() => setEditOpen(true)}
-                  data-testid="vpn-net-edit-cidr"
-                />
+                {canOperate && (
+                  <Button
+                    renderIcon={Edit}
+                    size="sm"
+                    kind="ghost"
+                    iconDescription={t.network.changeCidr}
+                    hasIconOnly
+                    onClick={() => setEditOpen(true)}
+                    data-testid="vpn-net-edit-cidr"
+                  />
+                )}
               </div>
             </div>
             <div className="network__kv-grid">
@@ -304,13 +309,15 @@ const NetworkConfig: React.FC = () => {
         </Column>
       </Grid>
 
-      <ChangeCidrModal
-        open={editOpen}
-        currentPrefix={parseInt(data.ipv4_subnet.split('/')[1], 10)}
-        assignedCount={pool.assigned}
-        onClose={() => setEditOpen(false)}
-        onSaved={handleCidrSaved}
-      />
+      {canOperate && (
+        <ChangeCidrModal
+          open={editOpen}
+          currentPrefix={parseInt(data.ipv4_subnet.split('/')[1], 10)}
+          assignedCount={pool.assigned}
+          onClose={() => setEditOpen(false)}
+          onSaved={handleCidrSaved}
+        />
+      )}
     </>
   );
 };

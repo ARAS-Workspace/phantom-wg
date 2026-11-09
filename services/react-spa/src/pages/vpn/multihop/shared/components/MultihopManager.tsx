@@ -30,6 +30,7 @@ import { Add, Renew } from '@carbon/icons-react';
 import { useLocale } from '@shared/hooks';
 import { translate } from '@shared/translations';
 import { apiClient } from '@shared/api/client';
+import { useUser } from '@shared/contexts/UserContext';
 import { formatBytes, formatHandshake } from '@shared/utils/formatUtils';
 import TableLoader from '@shared/components/data/TableLoader';
 import ImportExitModal from './modals/ImportExitModal';
@@ -97,6 +98,8 @@ const HEADERS = [
 const MultihopManager: React.FC = () => {
   const { locale } = useLocale();
   const t = translate(locale);
+  const { can } = useUser();
+  const canManage = can('multihop');
 
   const [status, setStatus] = useState<MultihopStatus | null>(null);
   const [exits, setExits] = useState<ExitSummary[]>([]);
@@ -118,13 +121,13 @@ const MultihopManager: React.FC = () => {
   const fetchAll = useCallback(async () => {
     const [statusRes, listRes] = await Promise.all([
       apiClient.get<MultihopStatus>('/api/multihop/status'),
-      apiClient.get<ExitListResponse>('/api/multihop/list'),
+      canManage ? apiClient.get<ExitListResponse>('/api/multihop/list') : null,
     ]);
 
     if (statusRes.ok) setStatus(statusRes.data);
-    if (listRes.ok) setExits(listRes.data.exits);
+    if (listRes?.ok) setExits(listRes.data.exits);
     setLoading(false);
-  }, []);
+  }, [canManage]);
 
   useEffect(() => {
     void fetchAll();
@@ -242,11 +245,13 @@ const MultihopManager: React.FC = () => {
             </Tile>
           </Column>
         </Grid>
-        <Grid>
-          <Column lg={16} md={8} sm={4}>
-            <TableLoader columnCount={6} rowCount={3} />
-          </Column>
-        </Grid>
+        {canManage && (
+          <Grid>
+            <Column lg={16} md={8} sm={4}>
+              <TableLoader columnCount={6} rowCount={3} />
+            </Column>
+          </Grid>
+        )}
       </>
     );
   }
@@ -380,148 +385,154 @@ const MultihopManager: React.FC = () => {
       </Grid>
 
       {/* Exits table */}
-      <Grid>
-        <Column lg={16} md={8} sm={4}>
-          <DataTable rows={rows} headers={headers} size="lg">
-            {({
-              rows: tableRows,
-              headers: tableHeaders,
-              getTableProps,
-              getHeaderProps,
-              getRowProps,
-            }) => (
-              <TableContainer data-testid="vpn-mh-table">
-                <TableToolbar>
-                  <TableToolbarContent>
-                    <Button
-                      renderIcon={Renew}
-                      kind="ghost"
-                      size="sm"
-                      iconDescription={t.multihop.refresh}
-                      hasIconOnly
-                      onClick={() => void fetchAll()}
-                      data-testid="vpn-mh-refresh"
-                    />
-                    <Button
-                      renderIcon={Add}
-                      size="sm"
-                      kind="primary"
-                      onClick={() => setImportOpen(true)}
-                      data-testid="vpn-mh-import-btn"
-                    >
-                      {t.multihop.importExit}
-                    </Button>
-                  </TableToolbarContent>
-                </TableToolbar>
+      {canManage && (
+        <Grid>
+          <Column lg={16} md={8} sm={4}>
+            <DataTable rows={rows} headers={headers} size="lg">
+              {({
+                rows: tableRows,
+                headers: tableHeaders,
+                getTableProps,
+                getHeaderProps,
+                getRowProps,
+              }) => (
+                <TableContainer data-testid="vpn-mh-table">
+                  <TableToolbar>
+                    <TableToolbarContent>
+                      <Button
+                        renderIcon={Renew}
+                        kind="ghost"
+                        size="sm"
+                        iconDescription={t.multihop.refresh}
+                        hasIconOnly
+                        onClick={() => void fetchAll()}
+                        data-testid="vpn-mh-refresh"
+                      />
+                      <Button
+                        renderIcon={Add}
+                        size="sm"
+                        kind="primary"
+                        onClick={() => setImportOpen(true)}
+                        data-testid="vpn-mh-import-btn"
+                      >
+                        {t.multihop.importExit}
+                      </Button>
+                    </TableToolbarContent>
+                  </TableToolbar>
 
-                <Table {...getTableProps()}>
-                  <TableHead>
-                    <TableRow>
-                      {tableHeaders.map((header) => (
-                        <TableHeader {...getHeaderProps({ header })} key={header.key}>
-                          {header.header}
-                        </TableHeader>
-                      ))}
-                    </TableRow>
-                  </TableHead>
-                  <TableBody>
-                    {tableRows.length === 0 ? (
+                  <Table {...getTableProps()}>
+                    <TableHead>
                       <TableRow>
-                        <TableCell colSpan={headers.length}>
-                          <p className="multihop__empty">{t.multihop.noExits}</p>
-                        </TableCell>
+                        {tableHeaders.map((header) => (
+                          <TableHeader {...getHeaderProps({ header })} key={header.key}>
+                            {header.header}
+                          </TableHeader>
+                        ))}
                       </TableRow>
-                    ) : (
-                      tableRows.map((row) => {
-                        const raw = exits.find((e) => e.id === row.id);
-                        const exitName = raw?.name ?? '';
-                        const isActive = enabled && activeName === exitName;
-                        const isToggleDisabled =
-                          actionLoading === exitName ||
-                          (enabled && !isActive);
+                    </TableHead>
+                    <TableBody>
+                      {tableRows.length === 0 ? (
+                        <TableRow>
+                          <TableCell colSpan={headers.length}>
+                            <p className="multihop__empty">{t.multihop.noExits}</p>
+                          </TableCell>
+                        </TableRow>
+                      ) : (
+                        tableRows.map((row) => {
+                          const raw = exits.find((e) => e.id === row.id);
+                          const exitName = raw?.name ?? '';
+                          const isActive = enabled && activeName === exitName;
+                          const isToggleDisabled =
+                            actionLoading === exitName ||
+                            (enabled && !isActive);
 
-                        return (
-                          <TableRow
-                            {...getRowProps({ row })}
-                            key={row.id}
-                            className={isActive ? 'multihop__row--active' : ''}
-                            data-testid={`vpn-mh-row-${exitName}`}
-                          >
-                            {row.cells.map((cell) => {
-                              if (cell.info.header === 'toggle') {
-                                return (
-                                  <TableCell key={cell.id}>
-                                    <Toggle
-                                      id={`toggle-${exitName}`}
-                                      size="sm"
-                                      toggled={isActive}
-                                      disabled={isToggleDisabled}
-                                      onToggle={() => handleToggle(exitName, isActive)}
-                                      labelA=""
-                                      labelB=""
-                                      aria-label={`${t.multihop.connection} ${exitName}`}
-                                      data-testid={`vpn-mh-toggle-${exitName}`}
-                                    />
-                                  </TableCell>
-                                );
-                              }
-                              if (cell.info.header === 'actions') {
-                                return (
-                                  <TableCell key={cell.id}>
-                                    <OverflowMenu
-                                      size="sm"
-                                      flipped
-                                      data-testid={`vpn-mh-overflow-${exitName}`}
-                                    >
-                                      <OverflowMenuItem
-                                        itemText={t.multihop.edit}
-                                        disabled={isActive}
-                                        onClick={() => setEditName(exitName)}
-                                        data-testid={`vpn-mh-action-edit-${exitName}`}
+                          return (
+                            <TableRow
+                              {...getRowProps({ row })}
+                              key={row.id}
+                              className={isActive ? 'multihop__row--active' : ''}
+                              data-testid={`vpn-mh-row-${exitName}`}
+                            >
+                              {row.cells.map((cell) => {
+                                if (cell.info.header === 'toggle') {
+                                  return (
+                                    <TableCell key={cell.id}>
+                                      <Toggle
+                                        id={`toggle-${exitName}`}
+                                        size="sm"
+                                        toggled={isActive}
+                                        disabled={isToggleDisabled}
+                                        onToggle={() => handleToggle(exitName, isActive)}
+                                        labelA=""
+                                        labelB=""
+                                        aria-label={`${t.multihop.connection} ${exitName}`}
+                                        data-testid={`vpn-mh-toggle-${exitName}`}
                                       />
-                                      <OverflowMenuItem
-                                        itemText={t.multihop.remove}
-                                        isDelete
-                                        disabled={isActive}
-                                        onClick={() => handleRemove(exitName)}
-                                        data-testid={`vpn-mh-action-remove-${exitName}`}
-                                      />
-                                    </OverflowMenu>
-                                  </TableCell>
+                                    </TableCell>
+                                  );
+                                }
+                                if (cell.info.header === 'actions') {
+                                  return (
+                                    <TableCell key={cell.id}>
+                                      <OverflowMenu
+                                        size="sm"
+                                        flipped
+                                        data-testid={`vpn-mh-overflow-${exitName}`}
+                                      >
+                                        <OverflowMenuItem
+                                          itemText={t.multihop.edit}
+                                          disabled={isActive}
+                                          onClick={() => setEditName(exitName)}
+                                          data-testid={`vpn-mh-action-edit-${exitName}`}
+                                        />
+                                        <OverflowMenuItem
+                                          itemText={t.multihop.remove}
+                                          isDelete
+                                          disabled={isActive}
+                                          onClick={() => handleRemove(exitName)}
+                                          data-testid={`vpn-mh-action-remove-${exitName}`}
+                                        />
+                                      </OverflowMenu>
+                                    </TableCell>
+                                  );
+                                }
+                                return (
+                                  <TableCell key={cell.id}>{cell.value}</TableCell>
                                 );
-                              }
-                              return (
-                                <TableCell key={cell.id}>{cell.value}</TableCell>
-                              );
-                            })}
-                          </TableRow>
-                        );
-                      })
-                    )}
-                  </TableBody>
-                </Table>
-              </TableContainer>
-            )}
-          </DataTable>
-        </Column>
-      </Grid>
+                              })}
+                            </TableRow>
+                          );
+                        })
+                      )}
+                    </TableBody>
+                  </Table>
+                </TableContainer>
+              )}
+            </DataTable>
+          </Column>
+        </Grid>
+      )}
 
-      {/* Import modal */}
-      <ImportExitModal
-        open={importOpen}
-        t={t}
-        onClose={() => setImportOpen(false)}
-        onSuccess={handleImportSuccess}
-      />
+      {canManage && (
+        <>
+          {/* Import modal */}
+          <ImportExitModal
+            open={importOpen}
+            t={t}
+            onClose={() => setImportOpen(false)}
+            onSuccess={handleImportSuccess}
+          />
 
-      {/* Edit modal */}
-      <EditExitModal
-        open={editName !== null}
-        exitName={editName ?? ''}
-        t={t}
-        onClose={() => setEditName(null)}
-        onSuccess={handleEditSuccess}
-      />
+          {/* Edit modal */}
+          <EditExitModal
+            open={editName !== null}
+            exitName={editName ?? ''}
+            t={t}
+            onClose={() => setEditName(null)}
+            onSuccess={handleEditSuccess}
+          />
+        </>
+      )}
     </>
   );
 };

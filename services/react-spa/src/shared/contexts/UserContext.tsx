@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useCallback, useMemo, ReactNode } from 'react';
 import useSWR, { mutate as globalMutate } from 'swr';
 import { swrFetcher, USER_KEY } from '@shared/api/swrFetcher';
+import { holds, type Access } from '@shared/types/access';
 
 export interface UserInfo {
   id: string;
@@ -15,6 +16,7 @@ interface UserContextValue {
   user: UserInfo | null;
   isLoading: boolean;
   isSuperadmin: boolean;
+  can: (access: Access) => boolean;
   mutateUser: () => Promise<void>;
   clearUser: () => void;
 }
@@ -41,10 +43,13 @@ export const UserProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   }, []);
 
   const isSuperadmin = user?.role === 'superadmin';
+  const role = user?.role;
+
+  const can = useCallback((access: Access) => holds(role, access), [role]);
 
   const value = useMemo(
-    () => ({ user, isLoading, isSuperadmin, mutateUser, clearUser }),
-    [user, isLoading, isSuperadmin, mutateUser, clearUser]
+    () => ({ user, isLoading, isSuperadmin, can, mutateUser, clearUser }),
+    [user, isLoading, isSuperadmin, can, mutateUser, clearUser]
   );
 
   return <UserContext.Provider value={value}>{children}</UserContext.Provider>;

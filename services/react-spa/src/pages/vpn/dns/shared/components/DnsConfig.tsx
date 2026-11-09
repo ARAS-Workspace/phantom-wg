@@ -11,6 +11,7 @@ import { Edit, Renew } from '@carbon/icons-react';
 import { useLocale } from '@shared/hooks';
 import { translate } from '@shared/translations';
 import { apiClient } from '@shared/api/client';
+import { useUser } from '@shared/contexts/UserContext';
 import EditDnsModal from './modals/EditDnsModal';
 import './styles/DnsConfig.scss';
 
@@ -29,6 +30,8 @@ type DnsFamily = 'v4' | 'v6';
 const DnsConfig: React.FC = () => {
   const { locale } = useLocale();
   const t = translate(locale);
+  const { can } = useUser();
+  const canOperate = can('operate');
 
   const [v4, setV4] = useState<DnsRecord | null>(null);
   const [v6, setV6] = useState<DnsRecord | null>(null);
@@ -121,15 +124,17 @@ const DnsConfig: React.FC = () => {
                   disabled={loading}
                   data-testid="vpn-dns-refresh-v4"
                 />
-                <Button
-                  renderIcon={Edit}
-                  size="sm"
-                  kind="ghost"
-                  iconDescription={t.dns.edit}
-                  hasIconOnly
-                  onClick={() => setEditFamily('v4')}
-                  data-testid="vpn-dns-edit-v4"
-                />
+                {canOperate && (
+                  <Button
+                    renderIcon={Edit}
+                    size="sm"
+                    kind="ghost"
+                    iconDescription={t.dns.edit}
+                    hasIconOnly
+                    onClick={() => setEditFamily('v4')}
+                    data-testid="vpn-dns-edit-v4"
+                  />
+                )}
               </div>
             </div>
             <div className="dns__kv-grid">
@@ -165,15 +170,17 @@ const DnsConfig: React.FC = () => {
                   disabled={loading}
                   data-testid="vpn-dns-refresh-v6"
                 />
-                <Button
-                  renderIcon={Edit}
-                  size="sm"
-                  kind="ghost"
-                  iconDescription={t.dns.edit}
-                  hasIconOnly
-                  onClick={() => setEditFamily('v6')}
-                  data-testid="vpn-dns-edit-v6"
-                />
+                {canOperate && (
+                  <Button
+                    renderIcon={Edit}
+                    size="sm"
+                    kind="ghost"
+                    iconDescription={t.dns.edit}
+                    hasIconOnly
+                    onClick={() => setEditFamily('v6')}
+                    data-testid="vpn-dns-edit-v6"
+                  />
+                )}
               </div>
             </div>
             <div className="dns__kv-grid">
@@ -194,12 +201,14 @@ const DnsConfig: React.FC = () => {
         </Column>
       </Grid>
 
-      <EditDnsModal
-        family={editFamily}
-        record={editRecord}
-        onClose={() => setEditFamily(null)}
-        onSaved={handleSaved}
-      />
+      {canOperate && (
+        <EditDnsModal
+          family={editFamily}
+          record={editRecord}
+          onClose={() => setEditFamily(null)}
+          onSaved={handleSaved}
+        />
+      )}
     </>
   );
 };
