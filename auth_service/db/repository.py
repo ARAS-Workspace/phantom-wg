@@ -354,12 +354,12 @@ class AuthDB:
         """Get audit log entries with server-side pagination, filtering and ordering.
 
         Joins with users table to resolve username from user_id.
-        sort_by is reserved for future multi-column support; currently only 'timestamp'.
+        sort_by accepts 'timestamp' only, ordered by al.id.
         Returns: { items, total, page, limit, pages, order, sort_by }
         """
         # Normalise and guard order / sort_by to prevent SQL injection
         safe_order = "DESC" if order.lower() != "asc" else "ASC"
-        # Only timestamp (al.id proxy) is supported for now
+        # timestamp is the only sort key; al.id follows insertion order
         safe_sort_key = "al.id"
 
         # Build WHERE clause dynamically
@@ -429,7 +429,7 @@ def resolve_db_path(db_dir: str) -> str:
     db_file = path / "auth.db"
     if not db_file.exists():
         raise AuthDatabaseError(
-            f"Auth database not found: {db_file} — run tools/setup.sh first"
+            f"Auth database not found: {db_file} — run the bootstrap (tools/bootstrap.py) first"
         )
     return str(db_file)
 
@@ -443,7 +443,7 @@ def open_auth_db(db_path: str) -> AuthDB:
 def bootstrap_auth_db(db_dir: str) -> tuple[AuthDB, str]:
     """Create auth.db with schema. Returns (AuthDB, db_path).
 
-    Used by tools/setup.sh bootstrap and test fixtures.
+    Used by the test fixtures; tools/bootstrap.py carries its own copy of the schema.
     """
     path = Path(db_dir)
     path.mkdir(parents=True, exist_ok=True)

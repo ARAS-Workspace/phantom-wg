@@ -28,8 +28,9 @@ Pipeline overview
   6. Commit       Workflow commits "Build: Update auth-service to
                   v<VERSION>" as github-actions[bot] and pushes to
                   dev/daemon.
-  7. Consumption  phantom-daemon's Docker build picks up the updated
-                  services/auth-service/ on its next build.
+  7. Consumption  The daemon's compose stack mounts
+                  services/auth-service/auth_service read-only; the
+                  auth container runs it after a restart.
 
 
 Stage 1 — Bump
@@ -160,8 +161,9 @@ End-to-end example
   #   Build: Update auth-service to v1.1.2
 
   # On dev/daemon: a pull surfaces the new auth-service under
-  # services/auth-service/. The next phantom-daemon Docker build
-  # picks it up automatically.
+  # services/auth-service/. The code is mounted, not built into the
+  # image: the auth container runs it after a restart. A change in
+  # requirements.txt reaches the container with a rebuilt image.
 
 
 Rollback

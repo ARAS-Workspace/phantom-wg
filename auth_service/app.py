@@ -49,7 +49,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         verify_key = build_verify_key(keys)
         log.info("Auth keys loaded")
 
-        # Phase 3: Validate auth database path (must exist — created by tools/setup.sh)
+        # Phase 3: Validate auth database path (must exist — created by tools/bootstrap.py)
         db_path = resolve_db_path(db_dir=config.db_dir)
         log.info("Auth database ready: %s", db_path)
 
@@ -133,7 +133,7 @@ _STATUS_CODES: dict[int, str] = {
 
 
 def _register_error_handlers(app: FastAPI) -> None:
-    """Register global exception handlers — all errors return ApiErr envelope with error_code."""
+    """Register handlers: HTTPException and RequestValidationError return the ApiErr envelope."""
 
     @app.exception_handler(HTTPException)
     async def _http_error(_request, exc):

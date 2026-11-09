@@ -22,7 +22,7 @@ from pydantic import BaseModel, Field, field_validator
 
 T = TypeVar("T")
 
-# Password policy: min 8 chars, at least 1 uppercase, 1 lowercase, 1 digit, 1 special
+# Password policy: 8-256 chars, at least 1 uppercase, 1 lowercase, 1 digit, 1 special
 PASSWORD_PATTERN = re.compile(
     r"^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[!@#$%^&*()_+\-=\[\]{}|;:'\",.<>?/`~\\])"
     r".{8,256}$"

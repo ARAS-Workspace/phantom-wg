@@ -1,6 +1,7 @@
 """
 Bootstrap: generate Ed25519 keys, create auth.db, create initial admin user.
-Standalone script — no auth_service imports. Runs inside container via tools/setup.sh.
+Standalone script — no auth_service imports. Runs inside a container, started by
+tools/setup.sh here and by the daemon's setup tools in the product.
 """
 
 from __future__ import annotations

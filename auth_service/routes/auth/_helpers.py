@@ -33,8 +33,8 @@ def issue_access_token(request: Request, username: str, user_id: str, role: str 
 
     # The single success gate for all three auth paths (password login,
     # TOTP verify, backup code). The limiter resets only here — after
-    # full authentication — so a correct password alone no longer
-    # clears the bucket while MFA is still pending.
+    # full authentication — so a correct password alone does not
+    # clear the bucket while MFA is still pending.
     request.app.state.rate_limiter.reset(get_client_ip(request))
 
     jti = uuid.uuid4().hex

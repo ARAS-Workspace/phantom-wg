@@ -19,7 +19,7 @@ import nacl.pwhash
 
 
 def hash_password(password: str) -> str:
-    """Hash password using Argon2id (libsodium MODERATE defaults)."""
+    """Hash password using Argon2id (PyNaCl defaults, OPSLIMIT/MEMLIMIT_INTERACTIVE)."""
     hashed = nacl.pwhash.argon2id.str(password.encode("utf-8"))
     return hashed.decode("ascii")
 

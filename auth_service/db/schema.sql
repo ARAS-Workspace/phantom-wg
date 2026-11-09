@@ -2,7 +2,8 @@
 --
 -- WAL mode, foreign keys ON (set at connection level)
 --
--- Bootstrap: tools/setup.sh creates DB + initial admin
+-- Bootstrap: tools/bootstrap.py creates DB + initial admin (run by tools/setup.sh
+--            or the daemon's setup tools)
 -- Runtime: auth-service opens existing DB (fails if missing)
 
 PRAGMA journal_mode = WAL;

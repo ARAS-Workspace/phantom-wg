@@ -10,7 +10,7 @@ Copyright (c) 2025 Rıza Emre ARAS <r.emrearas@proton.me>
 Licensed under AGPL-3.0 - see LICENSE file for details
 WireGuard® is a registered trademark of Jason A. Donenfeld.
 
-In-memory sliding window rate limiter for login endpoint.
+In-memory sliding window rate limiter for the login, MFA verify and backup code routes.
 """
 
 from __future__ import annotations
@@ -45,6 +45,6 @@ class RateLimiter:
             return True
 
     def reset(self, ip: str) -> None:
-        """Reset attempts for an IP (on successful login)."""
+        """Reset attempts for an IP (when an access token is issued)."""
         with self._lock:
             self._attempts.pop(ip, None)
