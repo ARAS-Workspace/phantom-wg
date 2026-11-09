@@ -83,8 +83,8 @@ def bootstrap(image: str, username: str = DEFAULT_USERNAME) -> None:
     print(f"  Password: {paths.SECRETS_DIR}/.admin_password")
 
 
-def first_bootstrap() -> None:
+def first_bootstrap(username: str = DEFAULT_USERNAME) -> None:
     """The bootstrap of setup: it leaves an auth.db it finds to setup-auth -f."""
     if database().is_file():
         raise ToolError(f"{paths.AUTH_DB_DIR}/auth.db exists without its keys. Use -f to start over.")
-    bootstrap(ready())
+    bootstrap(ready(), username)

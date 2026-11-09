@@ -31,11 +31,14 @@ from stack.prod.libs import (
 )
 
 ABOUT = "Full setup (env + keys + auth + TLS)"
-ARGUMENTS = (argument("--terazi-ipv4-subnet", default=""),)
-USAGE = "setup [--terazi-ipv4-subnet=<subnet>]"
+ARGUMENTS = (
+    argument("--terazi-ipv4-subnet", default=""),
+    argument("--admin-username", default=auth.DEFAULT_USERNAME),
+)
+USAGE = "setup [--terazi-ipv4-subnet=<subnet>] [--admin-username <name>]"
 
 
-def run(terazi_ipv4_subnet: str) -> None:
+def run(terazi_ipv4_subnet: str, admin_username: str) -> None:
     gates.enforce(host.SETUP_GATES)
     if not environment.missing():
         raise ToolError(
@@ -58,7 +61,7 @@ def run(terazi_ipv4_subnet: str) -> None:
     if not keys.present():
         keys.provide()
     if not auth.bootstrapped():
-        auth.first_bootstrap()
+        auth.first_bootstrap(admin_username)
     if not tls.present():
         tls.generate()
     if not terazi.present():

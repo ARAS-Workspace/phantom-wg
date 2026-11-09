@@ -16,13 +16,16 @@ setup-auth and setup-tls.
 
 from __future__ import annotations
 
+from core.commands import argument
 from core.runner import ToolError
 from stack.dev.libs import auth, environment, keys, tls, wallet
 
 ABOUT = "Create what is missing: keys, auth, TLS, wallet"
+ARGUMENTS = (argument("--admin-username", default=auth.DEFAULT_USERNAME),)
+USAGE = "setup [--admin-username <name>]"
 
 
-def run() -> None:
+def run(admin_username: str) -> None:
     if not environment.missing():
         raise ToolError(
             "Setup is already complete.\n"
@@ -34,7 +37,7 @@ def run() -> None:
     if not keys.present():
         keys.generate()
     if not auth.bootstrapped():
-        auth.first_bootstrap()
+        auth.first_bootstrap(admin_username)
     if not tls.present():
         tls.generate()
     if not wallet.present():

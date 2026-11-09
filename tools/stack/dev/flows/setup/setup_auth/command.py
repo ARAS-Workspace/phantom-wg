@@ -19,11 +19,11 @@ from core.commands import FORCE, argument
 from stack.dev.libs import auth
 
 ABOUT = "Bootstrap auth service"
-ARGUMENTS = (FORCE, argument("--username", default=auth.DEFAULT_USERNAME))
-USAGE = "setup-auth [-f] [--username <name>]"
+ARGUMENTS = (FORCE, argument("--admin-username", default=auth.DEFAULT_USERNAME))
+USAGE = "setup-auth [-f] [--admin-username <name>]"
 
 
-def run(force: bool, username: str) -> None:
+def run(force: bool, admin_username: str) -> None:
     exists = auth.database().is_file()
     if exists and not force:
         if auth.bootstrapped():
@@ -33,6 +33,6 @@ def run(force: bool, username: str) -> None:
 
     image = auth.ready()
     archived = auth.archive() if exists else ""
-    auth.bootstrap(image, username)
+    auth.bootstrap(image, admin_username)
     if archived:
         print(f"  Previous: {archived}")

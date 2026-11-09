@@ -60,6 +60,9 @@ Quick Start:
 
      Setup Recipe below lists the commands it runs.
 
+     The superadmin account is named admin. To name it otherwise:
+       ./tools/prod.sh setup --admin-username <name>
+
      Setup refuses a complete install and otherwise creates only what is
      missing. To start over, use ./tools/prod.sh hard-reset.
 
@@ -244,6 +247,7 @@ Commands:
   With -f, gen-keys, setup-auth and setup-tls regenerate what exists.
   gen-keys -f invalidates every WireGuard client config. setup-auth -f moves
   auth.db aside as auth.db.<time>.bak and creates a new admin account.
+  setup and setup-auth take --admin-username <name> (default admin).
 
 Ports:
   443/tcp     HTTPS (nginx → auth-service → daemon)
