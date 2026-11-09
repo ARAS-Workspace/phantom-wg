@@ -5,6 +5,82 @@ passwords, TOTP MFA, RBAC, audit log, authenticated reverse proxy
 to the daemon UDS.
 
 
+v1.3.0 - 2026-11-09
+-------------------
+
+  Audit release. The audit log keeps what an identified account does,
+  names who did it in every row and commits each change with its row.
+  A superadmin can be added from the host. The schema, the
+  configuration and the 28 routes of ROUTES are unchanged.
+
+  * Host superadmin. tools/add_superadmin.py adds a superadmin to
+    auth.db from the host. The password comes on stdin, one line, and
+    from nowhere else: a terminal stdin and a password argument are
+    refused, and the name and the password follow CreateUserRequest.
+    One result line and an exit code come out, never the password.
+    tools/dev.sh add-superadmin asks for the password twice without
+    echo, takes it as typed and pipes it to the script in the running
+    container. The package ships the script.
+
+  * Refused logins. A login refused before the account is known
+    (login_failed, login_rate_limited, mfa_rate_limited,
+    backup_code_rate_limited) writes one WARNING line to the service
+    log, with the client IP and the sent name as a JSON string, and no
+    audit row. A wrong TOTP or backup code after a correct password
+    stays in the audit log. The logger phantom-auth writes to stdout
+    with time and level, and uvicorn writes no access log.
+    docker-compose.yml rotates the container log: json-file, three
+    files of 10 MB.
+
+  * Actor. user_id holds who acted, written with the row as
+    "<id>-<name>": the name stays readable after the account is
+    deleted. A writer with no account is "system:<source>":
+    system:bootstrap for the first account, system:host for
+    add_superadmin. A row about another account holds that account in
+    detail.target in the same form, and detail repeats no name. Logout
+    and an own password change name their actor too.
+
+  * Proxy record. Each ROUTES row names what the audit log keeps of
+    it: change (10 routes) and secret (5 routes that hand out a
+    private key or the data set) write every outcome, read (the 13
+    VIEW routes) writes a refusal only. A read the daemon answers,
+    the multihop status the panel asks every second among them,
+    writes no row. A path outside the table is written as 404.
+
+  * Refusals and reads. A refused /auth request of an authenticated
+    account is written: reauth_failed for a wrong password or code of
+    the token holder, request_refused for any other, with method,
+    path, status and code. A change route writes every refusal, a 422
+    included; a read route writes a 403 only. GET /auth/audit writes
+    audit_viewed with its query.
+
+  * Pages. GET /auth/audit answers as_of, the highest row id of the
+    page, and takes it back on the next pages of the query: rows
+    written in between shift no page. The username filter matches the
+    name of the actor.
+
+  * One commit. A change in auth.db and its audit row commit together
+    (AuthDB.atomic): logins, logout, password changes, TOTP, user
+    management and add_superadmin. When the row cannot be written, the
+    change is rolled back and the request ends in an error.
+    tools/bootstrap.py writes the first account and its row in one
+    commit.
+
+  * Maintenance. Comments, docstrings and the DISTRIBUTION consumption
+    text follow the code, and five error classes no module imported
+    are removed. ARCHITECTURE and ARCHITECTURE_TR describe the audit
+    log, the service log, the host superadmin and the Audit column of
+    the proxy table.
+
+  No schema migration. A row written before 1.3.0 holds a bare account
+  id: its name comes from the users table, and in user_created,
+  user_deleted, totp_disabled and a password reset that id is the
+  target. login_failed and the rate-limited events reach the
+  container log of the auth service, not the audit log. The panel
+  pages the audit log with as_of and lists the new actions; until it
+  does, a page turn repeats one row.
+
+
 v1.2.0 - 2026-11-09
 -------------------
 
