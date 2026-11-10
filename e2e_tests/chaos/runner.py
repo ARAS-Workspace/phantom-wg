@@ -106,7 +106,6 @@ def main() -> None:
             docker_cmd,
             stdout=subprocess.PIPE,
             stderr=subprocess.STDOUT,
-            bufsize=1,
         )
         for raw in proc.stdout:
             line = raw.decode("utf-8", errors="replace").rstrip("\n")
