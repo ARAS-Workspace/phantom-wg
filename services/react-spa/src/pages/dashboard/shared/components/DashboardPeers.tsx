@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useEffect } from 'react';
+import React, { useState } from 'react';
 import {
   Grid,
   Column,
@@ -14,11 +14,11 @@ import {
 } from '@carbon/react';
 import { useLocale } from '@shared/hooks';
 import { translate } from '@shared/translations';
-import { apiClient } from '@shared/api/client';
 import { formatBytes, formatHandshake } from '@shared/utils/formatUtils';
 import TableLoader from '@shared/components/data/TableLoader';
 import PeerStatusTag from '@shared/components/data/PeerStatusTag';
-import { getPeerStatus, sortPeers, type WireGuardStatusData } from '@shared/types/wireguard';
+import { getPeerStatus, sortPeers } from '@shared/types/wireguard';
+import { useDashboardData } from '../contexts/DashboardDataContext';
 
 // ── Constants ─────────────────────────────────────────────────────
 
@@ -32,21 +32,9 @@ const DashboardPeers: React.FC = () => {
   const { locale } = useLocale();
   const t = translate(locale);
 
-  const [data, setData] = useState<WireGuardStatusData | null>(null);
-  const [loading, setLoading] = useState(true);
+  const { wireguard, loading } = useDashboardData();
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(DEFAULT_PAGE_SIZE);
-
-  const fetchStatus = useCallback(async () => {
-    setLoading(true);
-    const res = await apiClient.get<WireGuardStatusData>('/api/core/wireguard');
-    if (res.ok) setData(res.data);
-    setLoading(false);
-  }, []);
-
-  useEffect(() => {
-    void fetchStatus();
-  }, [fetchStatus]);
 
   const handlePaginationChange = ({
     page: p,
@@ -59,7 +47,7 @@ const DashboardPeers: React.FC = () => {
     setPageSize(ps);
   };
 
-  if (loading && !data) {
+  if (loading && !wireguard) {
     return (
       <Grid>
         <Column lg={16} md={8} sm={4}>
@@ -74,7 +62,7 @@ const DashboardPeers: React.FC = () => {
   }
 
   // Latest handshake first, equal values in name order
-  const peers = sortPeers(data?.peers ?? [], 'last_handshake', 'DESC');
+  const peers = sortPeers(wireguard?.peers ?? [], 'last_handshake', 'DESC');
   const peersMap = new Map(peers.map((p) => [p.public_key, p]));
   const pageCount = Math.max(1, Math.ceil(peers.length / pageSize));
   const currentPage = Math.min(page, pageCount);

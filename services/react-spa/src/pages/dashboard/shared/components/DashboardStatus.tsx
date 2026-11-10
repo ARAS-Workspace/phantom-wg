@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback } from 'react';
+import React from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ClickableTile, Tile, Grid, Column, SkeletonText, Tag } from '@carbon/react';
 import {
@@ -9,94 +9,23 @@ import {
   ServerDns,
   ConnectionTwoWay,
 } from '@carbon/icons-react';
-import { apiClient } from '@shared/api/client';
 import { useLocale } from '@shared/hooks';
 import { translate } from '@shared/translations';
-import { type PeerInfo, type WireGuardStatusData } from '@shared/types/wireguard';
+import { type PeerInfo } from '@shared/types/wireguard';
+import { useDashboardData } from '../contexts/DashboardDataContext';
 import './styles/DashboardStatus.scss';
-
-interface HelloData {
-  message: string;
-  version: string;
-}
-
-interface PoolStats {
-  total: number;
-  assigned: number;
-  free: number;
-}
-
-interface DnsDetail {
-  primary: string;
-  secondary: string;
-}
-
-interface NetworkData {
-  ipv4_subnet: string;
-  ipv6_subnet: string;
-  dns_v4: DnsDetail;
-  dns_v6: DnsDetail;
-  pool: PoolStats;
-}
-
-interface MultihopData {
-  enabled: boolean;
-  active: string;
-}
-
-interface DashboardState {
-  hello: HelloData | null;
-  network: NetworkData | null;
-  wireguard: WireGuardStatusData | null;
-  multihop: MultihopData | null;
-  loading: boolean;
-  error: boolean;
-}
 
 const DashboardStatus: React.FC = () => {
   const { locale } = useLocale();
   const t = translate(locale);
   const navigate = useNavigate();
 
-  const [state, setState] = useState<DashboardState>({
-    hello: null,
-    network: null,
-    wireguard: null,
-    multihop: null,
-    loading: true,
-    error: false,
-  });
-
-  const fetchAll = useCallback(async () => {
-    setState((prev) => ({ ...prev, loading: true, error: false }));
-
-    const [helloRes, networkRes, wireguardRes, multihopRes] = await Promise.all([
-      apiClient.get<HelloData>('/api/core/hello'),
-      apiClient.get<NetworkData>('/api/core/network'),
-      apiClient.get<WireGuardStatusData>('/api/core/wireguard'),
-      apiClient.get<MultihopData>('/api/multihop/status'),
-    ]);
-
-    setState({
-      hello: helloRes.ok ? helloRes.data : null,
-      network: networkRes.ok ? networkRes.data : null,
-      wireguard: wireguardRes.ok ? wireguardRes.data : null,
-      multihop: multihopRes.ok ? multihopRes.data : null,
-      loading: false,
-      error: !helloRes.ok,
-    });
-  }, []);
-
-  useEffect(() => {
-    void fetchAll();
-  }, [fetchAll]);
-
   const countOnlinePeers = (peers: PeerInfo[]): number => {
     const now = Math.floor(Date.now() / 1000);
     return peers.filter((p) => p.latest_handshake > 0 && now - p.latest_handshake < 180).length;
   };
 
-  const { hello, network, wireguard, multihop, loading } = state;
+  const { hello, network, wireguard, multihop, loading } = useDashboardData();
 
   return (
     <Grid className="dashboard-status" data-testid="dashboard-status">

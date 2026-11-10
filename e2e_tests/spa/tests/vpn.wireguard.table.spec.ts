@@ -318,12 +318,20 @@ test.describe.serial("WireGuard peers table", () => {
   });
 
   // ── 6. Dashboard ───────────────────────────────────────────────
-  test("Dashboard: latest handshake first, ten rows, total peers", async ({ page }) => {
+  test("Dashboard: latest handshake first, ten rows, total peers, one read", async ({ page }) => {
+    // Every read of /api/core/wireguard, the test's own peers() included
+    const reads: string[] = [];
+    page.on("request", (r) => {
+      if (new URL(r.url()).pathname === "/api/core/wireguard") reads.push(r.url());
+    });
+
     // Login lands on the dashboard
     await login(page, adminPassword);
-    const all = await peers(page);
     const table = page.getByTestId("dashboard-wg-table");
     await expect(table).toBeVisible({ timeout: 10_000 });
+    // The tile and the table show one read
+    expect(reads, "reads of the dashboard").toHaveLength(1);
+    const all = await peers(page);
 
     // Latest handshake first (the connected clients), equal values in name order
     await expect
@@ -336,6 +344,13 @@ test.describe.serial("WireGuard peers table", () => {
 
     // The WireGuard tile counts every peer
     await expect(page.getByTestId("dashboard-wg-total")).toHaveText(new RegExp(`^${all.length}\\s`));
+
+    // The content of the other language reads the dashboard again, once
+    const before = reads.length;
+    await page.getByRole("button", { name: "Türkçe'ye geç" }).click();
+    await expect(page.getByText("Sistem durumu ve genel bakış.")).toBeVisible();
+    await expect(table).toBeVisible({ timeout: 10_000 });
+    expect(reads.length - before, "reads after a language change").toBe(1);
   });
 
   // ── 7. Cleanup ─────────────────────────────────────────────────
