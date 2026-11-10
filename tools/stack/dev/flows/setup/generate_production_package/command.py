@@ -34,6 +34,7 @@ SKIPPED_SUFFIXES = (".pyc", ".pyo")
 INCLUDE = (
     "SETUP",
     "UPDATE",
+    "CHANGELOG",
     "LICENSE",
     "THIRD_PARTY_LICENSES",
     "Dockerfile",
