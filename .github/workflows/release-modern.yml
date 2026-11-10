@@ -1,5 +1,10 @@
 name: Release Phantom-WG Modern
 
+# Packages the release with package-release.yml and publishes it: the tree
+# goes to main as the release commit, tagged v<version>, and the zip of each
+# architecture goes to the GitHub Release. The text of the Release is
+# .github/docs/release.md, with {{VERSION}} set to the version.
+
 on:
   push:
     tags:
@@ -10,13 +15,18 @@ permissions:
   actions: read
 
 jobs:
-  # ── Build, push to main, create release ─────────────────────────
-  # Tests already run on push to dev/daemon via test-phantom-daemon.yml
+  package:
+    name: Package the release
+    uses: ./.github/workflows/package-release.yml
+
   release:
-    name: Package & Release
+    name: Publish the release
+    needs: package
     runs-on: ubuntu-26.04
     permissions:
       contents: write
+    env:
+      VERSION: ${{ needs.package.outputs.version }}
 
     steps:
       - name: Harden runner
@@ -31,74 +41,59 @@ jobs:
           persist-credentials: false
           token: ${{ secrets.RELEASE_TOKEN }}
 
-      - name: Extract version from tag
-        id: version
-        run: |
-          TAG="${GITHUB_REF#refs/tags/release-v}"
-          echo "number=${TAG}" >> "$GITHUB_OUTPUT"
+      - name: Write the release text
+        run: sed "s/{{VERSION}}/${VERSION}/g" .github/docs/release.md > /tmp/release.md
 
-      - name: Check the image pins
-        run: bash .github/scripts/images/check-image-pins.sh
-
-      - name: Set up Node
-        uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # v6.3.0
+      - name: Download the tree
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
-          node-version: '24'
-          cache: ''
+          name: release-tree
+          path: /tmp/release-tree
 
-      - name: Install SPA dependencies
-        run: npm ci
-        working-directory: services/react-spa
+      - name: Unpack the tree
+        run: tar -xzf /tmp/release-tree/release-tree.tar.gz -C /tmp
 
-      - name: Build SPA
-        run: npm run build
-        working-directory: services/react-spa
+      - name: Download the amd64 archive
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: release-amd64
+          path: /tmp/release-archives
 
-      - name: Run packager
-        run: ./tools/dev.sh generate-production-package --no-spa
+      - name: Download the arm64 archive
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: release-arm64
+          path: /tmp/release-archives
 
-      - name: Stash packager output
-        run: |
-          cp -r dist/phantom-wg-modern /tmp/phantom-release
-          echo "Stashed to /tmp/phantom-release"
-          ls -la /tmp/phantom-release/
-
+      # main keeps its documents (*.md and assets/) and takes everything else
+      # from the tree; the packager decides what is in, .gitignore is for the
+      # runtime only. A release of the same version amends its commit and
+      # moves its tag. persist-credentials is off, the push carries the token.
       - name: Push to main
         env:
-          VERSION: ${{ steps.version.outputs.number }}
           RELEASE_TOKEN: ${{ secrets.RELEASE_TOKEN }}
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-
-          # Configure remote with token (persist-credentials: false)
           git remote set-url origin "https://x-access-token:${RELEASE_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
 
-          # Checkout main (create orphan if not exists)
           git checkout main 2>/dev/null || git checkout --orphan main
 
-          # Preserve docs and assets already on main
           mkdir -p /tmp/main-preserve
           for item in *.md assets/; do
             [ -e "$item" ] && cp -r "$item" /tmp/main-preserve/
           done
 
-          # Remove everything except .git (including ignored files)
           git rm -rf . 2>/dev/null || true
           git clean -fdx 2>/dev/null || true
 
-          # Copy from stash (trailing dot includes hidden files like .gitignore)
-          cp -a /tmp/phantom-release/. .
+          cp -a /tmp/phantom-wg-modern/. .
 
-          # Restore preserved docs and assets
           cp -r /tmp/main-preserve/* . 2>/dev/null || true
           rm -rf /tmp/main-preserve
 
-          # Stage all (force — packager decides what's in, .gitignore is for runtime only)
           git add -A -f
 
-          # Amend if HEAD is already the release commit for this version,
-          # otherwise create a new commit
           RELEASE_MSG="Release: Phantom-WG Modern v${VERSION}"
           LAST_MSG=$(git log -1 --pretty=%s 2>/dev/null || echo "")
           if [[ "$LAST_MSG" == "$RELEASE_MSG" ]]; then
@@ -107,59 +102,18 @@ jobs:
             git commit -m "$RELEASE_MSG"
           fi
 
-          # Tag (force if already exists — tag points to new commit)
           git tag -f "v${VERSION}"
 
-          # Push
           git push origin main --force-with-lease
           git push origin "v${VERSION}" --force
-
-      - name: Create release archive
-        env:
-          VERSION: ${{ steps.version.outputs.number }}
-        run: |
-          cd /tmp
-          mv phantom-release phantom-wg-modern
-          zip -r "${GITHUB_WORKSPACE}/phantom-wg-modern-v${VERSION}.zip" phantom-wg-modern/
-          echo "Archive created:"
-          ls -lh "${GITHUB_WORKSPACE}/phantom-wg-modern-v${VERSION}.zip"
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@efb35369e0ad2afab669f228072c1b0d510eae64 # v3.0.3
         with:
-          tag_name: v${{ steps.version.outputs.number }}
-          name: Phantom-WG Modern v${{ steps.version.outputs.number }}
-          body: |
-            ## Phantom-WG Modern v${{ steps.version.outputs.number }}
-
-            ### Quick Start
-
-            **Option 1 — Git (recommended):**
-            ```bash
-            curl -sSL get.phantom.tc | bash
-            ```
-
-            **Option 2 — Download:**
-            ```bash
-            unzip phantom-wg-modern-v${{ steps.version.outputs.number }}.zip
-            cd phantom-wg-modern
-            ```
-
-            **Setup:**
-            ```bash
-            ./tools/prod.sh setup
-            nano .env.daemon              # set WIREGUARD_ENDPOINT_V4
-            ./tools/prod.sh up
-            ```
-
-            - Dashboard: `https://<server-ip>`
-            - WireGuard: UDP port `51820`
-            - Documentation: https://www.phantom.tc/docs
-
-            See `SETUP` for full guide.
-
-          files: |
-            phantom-wg-modern-v${{ steps.version.outputs.number }}.zip
+          tag_name: v${{ env.VERSION }}
+          name: Phantom-WG Modern v${{ env.VERSION }}
+          body_path: /tmp/release.md
+          files: /tmp/release-archives/*.zip
           draft: false
           prerelease: false
           generate_release_notes: false
