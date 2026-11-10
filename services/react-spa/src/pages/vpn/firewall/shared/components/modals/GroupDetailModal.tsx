@@ -115,7 +115,7 @@ const GroupDetailModal: React.FC<GroupDetailModalProps> = ({ groupName, onClose 
           {group && (
             <div className="firewall__detail-section">
               <h5 className="firewall__detail-heading">{t.firewall.group}</h5>
-              <CodeSnippet type="multi" data-testid="vpn-fw-detail-group">
+              <CodeSnippet type="multi" align="bottom-end" data-testid="vpn-fw-detail-group">
                 {formatJson(group)}
               </CodeSnippet>
             </div>
@@ -125,7 +125,7 @@ const GroupDetailModal: React.FC<GroupDetailModalProps> = ({ groupName, onClose 
             <h5 className="firewall__detail-heading">
               {t.firewall.rules} ({rules.length})
             </h5>
-            <CodeSnippet type="multi" data-testid="vpn-fw-detail-rules">
+            <CodeSnippet type="multi" align="bottom-end" data-testid="vpn-fw-detail-rules">
               {rules.length > 0 ? formatJson(rules) : '[]'}
             </CodeSnippet>
           </div>
@@ -134,7 +134,7 @@ const GroupDetailModal: React.FC<GroupDetailModalProps> = ({ groupName, onClose 
             <h5 className="firewall__detail-heading">
               {t.firewall.routing} ({routing.length})
             </h5>
-            <CodeSnippet type="multi" data-testid="vpn-fw-detail-routing">
+            <CodeSnippet type="multi" align="bottom-end" data-testid="vpn-fw-detail-routing">
               {routing.length > 0 ? formatJson(routing) : '[]'}
             </CodeSnippet>
           </div>

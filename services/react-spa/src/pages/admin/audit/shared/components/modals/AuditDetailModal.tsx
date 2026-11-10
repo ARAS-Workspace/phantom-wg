@@ -91,7 +91,7 @@ const AuditDetailModal: React.FC<Props> = ({ open, entry, t, actionTagType, onCl
           {hasDetail && (
             <div className="audit-log__detail-section">
               <p className="audit-log__detail-label">{t.audit.detail}</p>
-              <CodeSnippet type="multi" feedback="Copied">
+              <CodeSnippet type="multi" align="bottom-end" feedback="Copied">
                 {JSON.stringify(detail, null, 2)}
               </CodeSnippet>
             </div>

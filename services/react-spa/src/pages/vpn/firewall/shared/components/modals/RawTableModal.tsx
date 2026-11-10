@@ -46,7 +46,7 @@ const RawTableModal: React.FC<RawTableModalProps> = ({ open, onClose }) => {
       {loading ? (
         <p className="firewall__loading">{t.firewall.loading}</p>
       ) : (
-        <CodeSnippet type="multi" data-testid="vpn-fw-raw-snippet">
+        <CodeSnippet type="multi" align="bottom-end" data-testid="vpn-fw-raw-snippet">
           {tableData ? JSON.stringify(tableData, null, 2) : '{}'}
         </CodeSnippet>
       )}

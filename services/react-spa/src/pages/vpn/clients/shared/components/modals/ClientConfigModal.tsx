@@ -147,7 +147,12 @@ const ClientConfigModal: React.FC<Props> = ({ open, clientName, t, onClose }) =>
                 </div>
               )}
 
-              <CodeSnippet type="multi" feedback="Copied!" data-testid="vpn-cl-config-snippet">
+              <CodeSnippet
+                type="multi"
+                align="bottom-end"
+                feedback="Copied!"
+                data-testid="vpn-cl-config-snippet"
+              >
                 {config}
               </CodeSnippet>
             </div>
