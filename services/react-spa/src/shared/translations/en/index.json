@@ -156,11 +156,9 @@
       }
     },
     "users": {
-      "title": "User Management",
       "username": "Username",
       "totpStatus": "2FA",
       "createdAt": "Created",
-      "actions": "Actions",
       "addUser": "Add User",
       "addUserTitle": "Create New User",
       "deleteUser": "Delete",
@@ -178,9 +176,6 @@
       "createSuccess": "User created successfully.",
       "deleteSuccess": "User deleted successfully.",
       "passwordChangeSuccess": "Password changed successfully.",
-      "cannotDeleteSelf": "You cannot delete yourself.",
-      "userAlreadyExists": "This username already exists.",
-      "userNotFound": "User not found.",
       "confirm": "Confirm",
       "cancel": "Cancel",
       "you": "(you)"

@@ -156,11 +156,9 @@
       }
     },
     "users": {
-      "title": "Kullanıcı Yönetimi",
       "username": "Kullanıcı Adı",
       "totpStatus": "2FA",
       "createdAt": "Oluşturulma",
-      "actions": "İşlemler",
       "addUser": "Kullanıcı Ekle",
       "addUserTitle": "Yeni Kullanıcı Oluştur",
       "deleteUser": "Sil",
@@ -178,9 +176,6 @@
       "createSuccess": "Kullanıcı başarıyla oluşturuldu.",
       "deleteSuccess": "Kullanıcı başarıyla silindi.",
       "passwordChangeSuccess": "Şifre başarıyla değiştirildi.",
-      "cannotDeleteSelf": "Kendinizi silemezsiniz.",
-      "userAlreadyExists": "Bu kullanıcı adı zaten mevcut.",
-      "userNotFound": "Kullanıcı bulunamadı.",
       "confirm": "Onayla",
       "cancel": "İptal",
       "you": "(sen)"
