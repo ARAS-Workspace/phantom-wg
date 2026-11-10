@@ -80,9 +80,21 @@ class E2ETestEnvironment:
             self._started = False
             log.info("  All services stopped")
 
+    def remove_images(self) -> None:
+        """Remove the images built for this project (bridge has no image API)."""
+        log.info("  Removing images...")
+        done = subprocess.run(
+            ["docker", "compose", "-f", self._compose_path,
+             "-p", self._bridge.project_name, "down", "--rmi", "local"],
+            check=False,
+        )
+        if done.returncode != 0:
+            log.warning("  Image removal exited %d", done.returncode)
+
     def close(self) -> None:
-        """Release bridge resources."""
+        """Release bridge resources and the images of the project."""
         self.down()
+        self.remove_images()
         self._bridge.close()
 
     # -- exec --
