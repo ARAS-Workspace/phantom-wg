@@ -88,6 +88,7 @@ const ClientKeysModal: React.FC<Props> = ({ open, clientName, t, onClose }) => {
                   readOnly
                   hidePasswordLabel={t.clients.hideKey}
                   showPasswordLabel={t.clients.showKey}
+                  tooltipAlignment="end"
                 />
               ))}
             </Stack>

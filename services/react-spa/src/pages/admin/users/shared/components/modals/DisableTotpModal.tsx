@@ -68,6 +68,7 @@ const DisableTotpModal: React.FC<Props> = ({ open, username, isSelf, t, onClose,
             <PasswordInput
               id="disable-totp-pw"
               labelText={t.settings.account.totp.confirmPassword}
+              tooltipAlignment="end"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               autoFocus

@@ -84,6 +84,7 @@ const ChangePasswordModal: React.FC<Props> = ({ open, username, t, onClose, onSu
                   size="md"
                   renderIcon={Renew}
                   hasIconOnly
+                  tooltipAlignment="end"
                   iconDescription={t.settings.users.generatePassword}
                   onClick={() => setPassword(generatePassword())}
                   data-testid="um-password-generate"

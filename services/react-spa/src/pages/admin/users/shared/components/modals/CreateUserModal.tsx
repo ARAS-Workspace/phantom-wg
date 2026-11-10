@@ -92,6 +92,7 @@ const CreateUserModal: React.FC<Props> = ({ open, t, onClose, onSuccess }) => {
                   size="md"
                   renderIcon={Renew}
                   hasIconOnly
+                  tooltipAlignment="end"
                   iconDescription={t.settings.users.generatePassword}
                   onClick={() => setPassword(generatePassword())}
                   data-testid="um-create-generate"
