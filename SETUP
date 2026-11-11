@@ -332,8 +332,9 @@ Cloudflare:
   certificate revokes it again.
 
     ./tools/prod.sh cloudflare           Show the mode
-    ./tools/prod.sh cloudflare refresh   Take Cloudflare's address list again,
-                                         then: ./tools/prod.sh restart nginx
+    ./tools/prod.sh cloudflare refresh   Take Cloudflare's address list and
+                                         origin pull CA again, then:
+                                         ./tools/prod.sh restart nginx
     ./tools/prod.sh cloudflare off       Revoke the certificate and take the
                                          mode back, then: ./tools/prod.sh up
     ./tools/prod.sh cloudflare off --keep-certificate
