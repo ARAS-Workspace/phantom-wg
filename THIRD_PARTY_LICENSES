@@ -142,6 +142,8 @@ Nginx container:
 | Library            | License      | SPDX Identifier | Purpose                  |
 |--------------------|--------------|-----------------|--------------------------|
 | nginx              | BSD 2-Clause | BSD-2-Clause    | TLS front, SPA, proxy    |
+| libnftables1       | GPL-2.0      | GPL-2.0-only    | nft runtime              |
+| nftables           | GPL-2.0      | GPL-2.0-only    | Netfilter management     |
 
 Beyond python3, the auth-service container installs no system library
 of its own.
@@ -150,11 +152,12 @@ Usage Note:
 iproute2 and nftables are installed as separate programs; the daemon
 invokes ip as a subprocess, and firewall-bridge runs nft as one, as its
 own notice states. libnftables1 is the library nft is linked against.
-These and nginx are installed from Debian's package repository when the
-images are built, and the published images carry them. MANIFEST.json in
-tools/compose lists every Debian package in the images with its source
-files; ghcr.io/aras-workspace/phantom-sources holds those files under the
-image version.
+The nginx container installs nftables as well, as a separate program
+for its firewall rules. These and nginx are installed from Debian's
+package repository when the images are built, and the published images
+carry them. MANIFEST.json in tools/compose lists every Debian package in
+the images with its source files; ghcr.io/aras-workspace/phantom-sources
+holds those files under the image version.
 
 ================================================================================
 SOURCE CODE OF THE IMAGES
