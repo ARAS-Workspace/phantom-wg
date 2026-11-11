@@ -4,8 +4,9 @@ DESTRUCTIVE like test_user_flows: the tree is wiped at the start and at the end,
 .env.cf included. The first tests need no Cloudflare account: they stop the
 mode before it takes a certificate, one of them on a token Cloudflare refuses.
 The whole cycle runs when the run is given a token and its zone, which has
-SSL/TLS Full (strict) and Authenticated Origin Pulls on; each certificate it
-takes is revoked again by the tool:
+SSL/TLS Full (strict) and Authenticated Origin Pulls on. Each certificate it
+takes is revoked again: by the tool, or at the end of the module when a test
+fails before the tool does:
 
     read -rs PHANTOM_TEST_CF_TOKEN; export PHANTOM_TEST_CF_TOKEN
     PHANTOM_TEST_CF_ZONE=example.com pytest tests/integration_tests/prod/test_cloudflare.py -x -s
@@ -49,6 +50,7 @@ REFUSED_TOKEN = "phantom-test-refused-token"
 TOKEN = os.environ.get("PHANTOM_TEST_CF_TOKEN", "")
 ZONE = os.environ.get("PHANTOM_TEST_CF_ZONE", "")
 ORIGINAL = {}
+TAKEN = []
 
 with_cloudflare = pytest.mark.skipif(
     not (TOKEN and ZONE), reason="PHANTOM_TEST_CF_TOKEN and PHANTOM_TEST_CF_ZONE are not set",
@@ -116,19 +118,36 @@ def certificate_id() -> str:
     return json.loads(STATE.read_text(encoding="utf-8"))["certificate_id"]
 
 
+def cloudflare(*args: str, timeout: int = 120) -> subprocess.CompletedProcess:
+    """prod.sh cloudflare; the certificates it takes go to TAKEN, as it prints them."""
+    done = prod("cloudflare", *args, timeout=timeout)
+    TAKEN.extend(re.findall(r"Origin CA certificate (\S+):", done.stdout))
+    return done
+
+
+@pytest.fixture(scope="module", autouse=True)
+def revoke_what_the_run_took():
+    """A certificate of the run that is not revoked at the end, after a failed test, is revoked here."""
+    yield
+    for identifier in dict.fromkeys(TAKEN):
+        if not revoked(identifier):
+            revoke_in_cloudflare(identifier)
+            print(f"teardown: Origin CA certificate {identifier} revoked", flush=True)
+
+
 # ── Before Cloudflare ───────────────────────────────────────────────
 
 def test_a_new_host_is_off():
     done = prod("setup", timeout=LONG)
     assert done.returncode == 0, done.stdout
     ORIGINAL["override"] = OVERRIDE.read_bytes()
-    done = prod("cloudflare")
+    done = cloudflare()
     assert done.returncode == 0, done.stdout
     assert done.stdout.strip().endswith("Cloudflare mode: off")
 
 
 def test_on_writes_env_cf_from_its_example():
-    done = prod("cloudflare", "on")
+    done = cloudflare("on")
     assert done.returncode == 1
     assert ".env.cf is written from .env.cf.example. Fill CF_API_TOKEN and CF_ZONE in it, then run again." in done.stdout
     assert CLOUDFLARE_SETTINGS.read_bytes() == EXAMPLE.read_bytes()
@@ -137,7 +156,7 @@ def test_on_writes_env_cf_from_its_example():
 
 
 def test_on_asks_for_the_token_and_the_zone():
-    done = prod("cloudflare", "on")
+    done = cloudflare("on")
     assert done.returncode == 1
     assert done.stdout.strip().endswith("Fill CF_API_TOKEN and CF_ZONE in .env.cf, then run again.")
     unchanged()
@@ -146,7 +165,7 @@ def test_on_asks_for_the_token_and_the_zone():
 def test_on_holds_env_cf_at_600():
     settings(REFUSED_TOKEN, "localhost")
     CLOUDFLARE_SETTINGS.chmod(0o644)
-    done = prod("cloudflare", "on")
+    done = cloudflare("on")
     assert done.returncode == 1
     assert done.stdout.strip().endswith("CF_ZONE of .env.cf is not a domain name: localhost")
     assert CLOUDFLARE_SETTINGS.stat().st_mode & 0o777 == 0o600
@@ -155,7 +174,7 @@ def test_on_holds_env_cf_at_600():
 
 def test_on_refuses_a_hostname_outside_the_zone():
     settings(REFUSED_TOKEN, "example.com", "example.com, www.example.org")
-    done = prod("cloudflare", "on")
+    done = cloudflare("on")
     assert done.returncode == 1
     assert "CF_HOSTNAMES of .env.cf holds names outside example.com:\n  www.example.org" in done.stdout
     unchanged()
@@ -163,7 +182,7 @@ def test_on_refuses_a_hostname_outside_the_zone():
 
 def test_on_refuses_a_line_it_does_not_know():
     CLOUDFLARE_SETTINGS.write_text(f"CF_API_TOKEN={REFUSED_TOKEN}\nCF_ZONE=example.com\nCF_PROXY=on\n", encoding="utf-8")
-    done = prod("cloudflare", "on")
+    done = cloudflare("on")
     assert done.returncode == 1
     assert ".env.cf line 3: expected one of CF_API_TOKEN, CF_ZONE, CF_HOSTNAMES, as KEY=value." in done.stdout
     unchanged()
@@ -173,7 +192,7 @@ def test_on_refuses_an_override_that_holds_its_entries():
     settings(REFUSED_TOKEN, "example.com")
     OVERRIDE.write_bytes(ORIGINAL["override"] + b"secrets:\n  tls_cert:\n    file: ./elsewhere\n")
     try:
-        done = prod("cloudflare", "on", timeout=LONG)
+        done = cloudflare("on", timeout=LONG)
         assert done.returncode == 1
         assert "docker-compose.override.yml holds what the Cloudflare mode writes:\n  secrets.tls_cert" in done.stdout
         assert "Cloudflare refused" not in done.stdout
@@ -184,7 +203,7 @@ def test_on_refuses_an_override_that_holds_its_entries():
 
 def test_on_stops_on_a_token_cloudflare_refuses():
     settings(REFUSED_TOKEN, "example.com")
-    done = prod("cloudflare", "on", timeout=LONG)
+    done = cloudflare("on", timeout=LONG)
     assert done.returncode == 1
     assert "Cloudflare refused GET /zones?name=example.com" in done.stdout
     assert REFUSED_TOKEN not in done.stdout
@@ -193,13 +212,13 @@ def test_on_stops_on_a_token_cloudflare_refuses():
 
 def test_refresh_and_off_need_the_mode():
     for args in (("refresh",), ("off",), ("off", "--keep-certificate")):
-        done = prod("cloudflare", *args)
+        done = cloudflare(*args)
         assert done.returncode == 1
         assert done.stdout.strip().endswith("Cloudflare mode is off.")
 
 
 def test_keep_certificate_belongs_to_off():
-    done = prod("cloudflare", "on", "--keep-certificate")
+    done = cloudflare("on", "--keep-certificate")
     assert done.returncode == 1
     assert done.stdout.strip().endswith("Usage: ./tools/prod.sh cloudflare [status|on|refresh|off [--keep-certificate]]")
     unchanged()
@@ -210,7 +229,7 @@ def test_keep_certificate_belongs_to_off():
 @with_cloudflare
 def test_on_turns_the_mode_on():
     settings(TOKEN, ZONE)
-    done = prod("cloudflare", "on", timeout=LONG)
+    done = cloudflare("on", timeout=LONG)
     assert done.returncode == 0, done.stdout
     assert done.stdout.strip().endswith("Cloudflare mode is on. Apply it: ./tools/prod.sh up")
     assert TOKEN not in done.stdout
@@ -229,7 +248,7 @@ def test_on_turns_the_mode_on():
 
 @with_cloudflare
 def test_on_twice_stops():
-    done = prod("cloudflare", "on")
+    done = cloudflare("on")
     assert done.returncode == 1
     assert "Cloudflare mode is on. Turn it off first: ./tools/prod.sh cloudflare off" in done.stdout
 
@@ -266,7 +285,7 @@ def test_restart_loads_the_rules_again():
 def test_refresh_writes_the_lists_again():
     rules = CLOUDFLARE / "phantom.d/firewall.nft"
     rules.write_text("# stale\n", encoding="utf-8")
-    done = prod("cloudflare", "refresh", timeout=LONG)
+    done = cloudflare("refresh", timeout=LONG)
     assert done.returncode == 0, done.stdout
     assert done.stdout.strip().endswith("Apply the new lists: ./tools/prod.sh restart nginx")
     assert "set cloudflare_v4" in rules.read_text(encoding="utf-8")
@@ -274,7 +293,7 @@ def test_refresh_writes_the_lists_again():
 
 @with_cloudflare
 def test_status_reads_the_mode():
-    done = prod("cloudflare", timeout=LONG)
+    done = cloudflare(timeout=LONG)
     assert done.returncode == 0, done.stdout
     assert "Cloudflare mode: on" in done.stdout
     assert f"Zone: {ZONE}" in done.stdout
@@ -288,7 +307,7 @@ def test_off_stops_on_an_entry_changed_by_hand():
     written = OVERRIDE.read_text(encoding="utf-8")
     OVERRIDE.write_text(written.replace('"NET_ADMIN"', '"NET_RAW"'), encoding="utf-8")
     try:
-        done = prod("cloudflare", "off", timeout=LONG)
+        done = cloudflare("off", timeout=LONG)
         assert done.returncode == 1
         assert "services.nginx.cap_add" in done.stdout
         assert STATE.exists()
@@ -300,7 +319,7 @@ def test_off_stops_on_an_entry_changed_by_hand():
 @with_cloudflare
 def test_off_revokes_and_puts_the_override_back():
     identifier = certificate_id()
-    done = prod("cloudflare", "off", timeout=LONG)
+    done = cloudflare("off", timeout=LONG)
     assert done.returncode == 0, done.stdout
     assert done.stdout.strip().endswith("Cloudflare mode is off. Apply it: ./tools/prod.sh up")
     assert revoked(identifier)
@@ -320,12 +339,12 @@ def test_up_serves_without_the_mode():
 
 @with_cloudflare
 def test_off_keeps_what_the_operator_added_since():
-    done = prod("cloudflare", "on", timeout=LONG)
+    done = cloudflare("on", timeout=LONG)
     assert done.returncode == 0, done.stdout
     identifier = certificate_id()
     with OVERRIDE.open("a", encoding="utf-8") as override:
         override.write(NOTE)
-    done = prod("cloudflare", "off", timeout=LONG)
+    done = cloudflare("off", timeout=LONG)
     assert done.returncode == 0, done.stdout
     assert "the rest stays as changed" in done.stdout
     assert OVERRIDE.read_text(encoding="utf-8") == ORIGINAL["override"].decode("utf-8") + NOTE
@@ -335,19 +354,19 @@ def test_off_keeps_what_the_operator_added_since():
 
 @with_cloudflare
 def test_off_keep_certificate_takes_the_mode_back_without_the_token():
-    done = prod("cloudflare", "on", timeout=LONG)
+    done = cloudflare("on", timeout=LONG)
     assert done.returncode == 0, done.stdout
     identifier = certificate_id()
 
     settings(REFUSED_TOKEN, ZONE)
-    done = prod("cloudflare", "off", timeout=LONG)
+    done = cloudflare("off", timeout=LONG)
     assert done.returncode == 1
     assert "The certificate is not revoked and the mode stays on." in done.stdout
     assert "./tools/prod.sh cloudflare off --keep-certificate" in done.stdout
     assert STATE.exists()
     assert not revoked(identifier)
 
-    done = prod("cloudflare", "off", "--keep-certificate", timeout=LONG)
+    done = cloudflare("off", "--keep-certificate", timeout=LONG)
     assert done.returncode == 0, done.stdout
     assert f"Origin CA certificate {identifier} stays in Cloudflare" in done.stdout
     assert OVERRIDE.read_bytes() == ORIGINAL["override"]
@@ -365,7 +384,7 @@ def test_on_revokes_its_certificate_when_compose_refuses():
     kept = env.read_bytes()
     env.write_bytes(kept + b"PHANTOM_IMAGE_SOURCE=nowhere\n")
     try:
-        done = prod("cloudflare", "on", timeout=LONG)
+        done = cloudflare("on", timeout=LONG)
     finally:
         env.write_bytes(kept)
     assert done.returncode == 1
