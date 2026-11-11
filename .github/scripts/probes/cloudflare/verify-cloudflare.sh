@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Trigger the Verify Cloudflare workflow.
-# The tag verify-cloudflare moves to HEAD on every run; each run takes two
-# Origin CA certificates for its hostname and revokes them.
+# The tag verify-cloudflare moves to HEAD on every run; each run takes Origin
+# CA certificates, in the tool tests and on the host, and revokes them.
 # Usage: .github/scripts/probes/cloudflare/verify-cloudflare.sh
 set -euo pipefail
 
