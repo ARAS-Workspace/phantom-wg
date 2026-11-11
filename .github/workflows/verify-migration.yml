@@ -372,6 +372,12 @@ jobs:
       - name: Prove certbot of 2.0.0 kept the certificate of 1.1.5
         run: python3 -B "$PROBE" same-certificate
 
+      # 2.0.0 serves: the images of 1.1.5 go, and the way back builds them again.
+      - name: "After Migration: remove the images of 1.1.5"
+        run: |
+          docker image ls
+          docker image rm phantom-wg-daemon phantom-wg-auth-service nginx:1-alpine
+
       - name: "Rollback: back to 1.1.5"
         run: |
           cd /opt/phantom-wg-modern
@@ -379,18 +385,17 @@ jobs:
           cd /opt/phantom-wg
           ./tools/prod.sh up
 
+      - name: Prove the rollback built the images of 1.1.5 again
+        run: |
+          docker image inspect --format '{{index .RepoTags 0}} created {{.Created}}' \
+            phantom-wg-daemon phantom-wg-auth-service nginx:1-alpine
+          echo "ok   the images of 1.1.5 are back: the up of 1.1.5 built and pulled them"
+
       - name: Prove 1.1.5 serves again
         run: python3 -B "$PROBE" serves /opt/phantom-wg
 
       - name: Prove 1.1.5 lists its clients again
         run: python3 -B "$PROBE" clients
-
-      - name: "After Migration: remove the images of 1.1.5"
-        working-directory: /opt/phantom-wg
-        run: |
-          ./tools/prod.sh down
-          docker image ls
-          docker image rm phantom-wg-daemon phantom-wg-auth-service nginx:1-alpine
 
   leave:
     name: Leave the host
