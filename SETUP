@@ -306,7 +306,8 @@ TLS Certificate:
 Cloudflare:
   The stack can sit behind Cloudflare's proxy. In the Cloudflare dashboard
   of the zone, set the SSL/TLS mode to Full (strict) and turn
-  Authenticated Origin Pulls on. Then:
+  Authenticated Origin Pulls (Global) on; on stops on any other setting.
+  Then:
     ./tools/prod.sh cloudflare on       (writes .env.cf from .env.cf.example)
     (fill CF_API_TOKEN and CF_ZONE in .env.cf)
     ./tools/prod.sh cloudflare on
@@ -314,8 +315,8 @@ Cloudflare:
 
   .env.cf belongs to this machine and the tool holds it at 600. Its token
   is of this zone only, with Zone - Zone - Read, Zone - Zone Settings -
-  Read and Zone - SSL and Certificates - Edit. CF_HOSTNAMES lists the names
-  of the certificate; empty, the zone and *.<zone>.
+  Read and Zone - SSL and Certificates - Read and Edit. CF_HOSTNAMES lists
+  the names of the certificate; empty, the zone and *.<zone>.
 
   on makes a key here and takes an Origin CA certificate for it, writes the
   nginx snippets and the firewall rules to container-data/cloudflare/, and
@@ -333,6 +334,9 @@ Cloudflare:
                                          then: ./tools/prod.sh restart nginx
     ./tools/prod.sh cloudflare off       Revoke the certificate and take the
                                          mode back, then: ./tools/prod.sh up
+    ./tools/prod.sh cloudflare off --keep-certificate
+                                         Take the mode back without the token;
+                                         the certificate stays in Cloudflare
 
   off puts the override back, removes container-data/cloudflare/, and nginx
   takes its certificate from container-data/secrets/production/ again.
