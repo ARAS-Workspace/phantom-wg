@@ -12,8 +12,8 @@
 # Environment: .env + .env.daemon + .env.auth-service (see .example files)
 # Set WIREGUARD_ENDPOINT_V4 to your server's public IP.
 #
-# Images: PHANTOM_IMAGE_SOURCE in .env selects tools/compose/registry.yml
-# or tools/compose/build.yml.
+# Images: PHANTOM_IMAGE_SOURCE in .env selects tools/compose/registry.yml,
+# build.yml or archive.yml.
 # ──────────────────────────────────────────────────────────────────
 
 # Every container log is rotated: three files of 10 MB.
