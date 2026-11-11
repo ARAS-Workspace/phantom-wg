@@ -92,9 +92,9 @@ class Refused(Exception):
 class CloudflareRefused(Refused):
     """An answer of the Cloudflare API that is not a success."""
 
-    def __init__(self, method: str, path: str, status: int, errors: str, need: str) -> None:
-        super().__init__(f"Cloudflare refused {method} {path} ({status}): {errors}. The token needs: {need}.")
-        self.status = status
+    def __init__(self, method: str, path: str, code: int, errors: str, need: str) -> None:
+        super().__init__(f"Cloudflare refused {method} {path} ({code}): {errors}. The token needs: {need}.")
+        self.code = code
 
 
 # ── Helpers ──────────────────────────────────────────────────────
@@ -234,13 +234,13 @@ class Cloudflare:
         """Full (strict) and Authenticated Origin Pulls: nginx requires Cloudflare's certificate."""
         need = "Zone - Zone Settings - Read"
         mode = self.call("GET", f"/zones/{zone_id}/settings/ssl", need)["value"]
-        if mode in ("off", "flexible"):
-            raise Refused(f"The SSL/TLS mode of {zone} is {mode}. Set it to Full (strict), then run on again.")
         if mode != "strict":
-            say(f"Warning: the SSL/TLS mode of {zone} is {mode}; Full (strict) checks the Origin CA certificate.")
+            raise Refused(f"The SSL/TLS mode of {zone} is {mode}. The mode needs Full (strict): set it, then run on again.")
         pulls = self.call("GET", f"/zones/{zone_id}/settings/tls_client_auth", need)["value"]
         if pulls != "on":
-            raise Refused(f"Authenticated Origin Pulls is {pulls} for {zone}. Turn it on in {DASHBOARD}, then run on again.")
+            raise Refused(
+                f"Authenticated Origin Pulls (Global) is {pulls} for {zone}. Turn it on in {DASHBOARD}, then run on again."
+            )
 
     def create_certificate(self, hostnames: list, csr: str) -> dict:
         body = {"hostnames": hostnames, "requested_validity": VALIDITY_DAYS, "request_type": "origin-ecc", "csr": csr}
@@ -248,17 +248,17 @@ class Cloudflare:
 
     def revoke(self, certificate_id: str) -> None:
         """Revokes the certificate; one Cloudflare answers as revoked or unknown counts as gone."""
-        need = "Zone - SSL and Certificates - Edit"
         try:
-            self.call("DELETE", f"/certificates/{certificate_id}", need)
+            self.call("DELETE", f"/certificates/{certificate_id}", "Zone - SSL and Certificates - Edit")
             say(f"Origin CA certificate {certificate_id}: revoked")
             return
         except CloudflareRefused as refused:
             first = refused
         try:
-            gone = bool(self.call("GET", f"/certificates/{certificate_id}", need).get("revoked_at"))
+            read = self.call("GET", f"/certificates/{certificate_id}", "Zone - SSL and Certificates - Read")
+            gone = bool(read.get("revoked_at"))
         except CloudflareRefused as refused:
-            gone = refused.status == 404
+            gone = refused.code == 404
         if not gone:
             raise first
         say(f"Origin CA certificate {certificate_id}: already revoked")
@@ -433,7 +433,14 @@ def on() -> None:
     cloudflare.require_origin_pulls(zone_id, zone)
     csr = key_and_csr(zone)
 
-    issued = cloudflare.create_certificate(settings["hostnames"], csr)
+    try:
+        issued = cloudflare.create_certificate(settings["hostnames"], csr)
+    except CloudflareRefused:
+        raise
+    except Refused as lost:
+        raise Refused(
+            f"{lost}\nCloudflare may have issued the certificate before its answer was lost: look in {DASHBOARD}."
+        ) from None
     certificate = {
         "zone": zone,
         "zone_id": zone_id,
@@ -517,8 +524,11 @@ def revoke() -> None:
 
 def rollback() -> None:
     settings = read_settings()
-    state = json.loads(STATE_CANDIDATE.read_text(encoding="utf-8"))
-    Cloudflare(settings["token"]).revoke(state["certificate_id"])
+    certificate_id = json.loads(STATE_CANDIDATE.read_text(encoding="utf-8"))["certificate_id"]
+    try:
+        Cloudflare(settings["token"]).revoke(certificate_id)
+    except Refused as refused:
+        raise Refused(f"{refused}\nThe certificate {certificate_id} stays in Cloudflare: revoke it in {DASHBOARD}.") from None
 
 
 def refresh() -> None:

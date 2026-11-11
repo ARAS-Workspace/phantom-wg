@@ -102,6 +102,16 @@ def revoked(identifier: str) -> bool:
         return error.code == 404
 
 
+def revoke_in_cloudflare(identifier: str) -> None:
+    """What a keep-certificate run leaves to the operator, done by the test with the token of the run."""
+    request = urllib.request.Request(
+        f"https://api.cloudflare.com/client/v4/certificates/{identifier}", method="DELETE",
+        headers={"Authorization": f"Bearer {TOKEN}"},
+    )
+    with urllib.request.urlopen(request, timeout=30) as response:
+        assert json.loads(response.read())["success"]
+
+
 def certificate_id() -> str:
     return json.loads(STATE.read_text(encoding="utf-8"))["certificate_id"]
 
@@ -182,10 +192,17 @@ def test_on_stops_on_a_token_cloudflare_refuses():
 
 
 def test_refresh_and_off_need_the_mode():
-    for action in ("refresh", "off"):
-        done = prod("cloudflare", action)
+    for args in (("refresh",), ("off",), ("off", "--keep-certificate")):
+        done = prod("cloudflare", *args)
         assert done.returncode == 1
         assert done.stdout.strip().endswith("Cloudflare mode is off.")
+
+
+def test_keep_certificate_belongs_to_off():
+    done = prod("cloudflare", "on", "--keep-certificate")
+    assert done.returncode == 1
+    assert done.stdout.strip().endswith("Usage: ./tools/prod.sh cloudflare [status|on|refresh|off [--keep-certificate]]")
+    unchanged()
 
 
 # ── Through Cloudflare ──────────────────────────────────────────────
@@ -314,6 +331,32 @@ def test_off_keeps_what_the_operator_added_since():
     assert OVERRIDE.read_text(encoding="utf-8") == ORIGINAL["override"].decode("utf-8") + NOTE
     assert revoked(identifier)
     OVERRIDE.write_bytes(ORIGINAL["override"])
+
+
+@with_cloudflare
+def test_off_keep_certificate_takes_the_mode_back_without_the_token():
+    done = prod("cloudflare", "on", timeout=LONG)
+    assert done.returncode == 0, done.stdout
+    identifier = certificate_id()
+
+    settings(REFUSED_TOKEN, ZONE)
+    done = prod("cloudflare", "off", timeout=LONG)
+    assert done.returncode == 1
+    assert "The certificate is not revoked and the mode stays on." in done.stdout
+    assert "./tools/prod.sh cloudflare off --keep-certificate" in done.stdout
+    assert STATE.exists()
+    assert not revoked(identifier)
+
+    done = prod("cloudflare", "off", "--keep-certificate", timeout=LONG)
+    assert done.returncode == 0, done.stdout
+    assert f"Origin CA certificate {identifier} stays in Cloudflare" in done.stdout
+    assert OVERRIDE.read_bytes() == ORIGINAL["override"]
+    assert not CLOUDFLARE.exists()
+    assert not revoked(identifier)
+
+    revoke_in_cloudflare(identifier)
+    assert revoked(identifier)
+    settings(TOKEN, ZONE)
 
 
 @with_cloudflare

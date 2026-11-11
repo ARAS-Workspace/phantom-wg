@@ -16,7 +16,8 @@ the zone through the API token, takes an Origin CA certificate for a key made
 here, and writes the mode: nginx requires Cloudflare's authenticated origin
 pull certificate, its port 443 drops what does not come from Cloudflare's
 addresses, and it logs the visitor's address. off revokes the certificate and
-takes the mode back; refresh writes Cloudflare's address list again. The work
+takes the mode back; with --keep-certificate it takes the mode back and leaves
+the certificate in Cloudflare. refresh writes Cloudflare's address list again. The work
 runs in phantom-nginx-tools, built here from helper/; the override changes
 only after Compose accepts the new one, and the last one stays as
 docker-compose.override.yml.bak. A step of on that fails after the
@@ -37,8 +38,13 @@ from core.runner import ToolError
 from stack.prod.libs import compose, gates, host, identity, paths
 
 ABOUT = "Serve through Cloudflare (Origin CA, origin pulls, firewall)"
-ARGUMENTS = (argument("action", nargs="?", default="status", choices=("status", "on", "refresh", "off")),)
-USAGE = "cloudflare [status|on|refresh|off]"
+ARGUMENTS = (
+    argument("action", nargs="?", default="status", choices=("status", "on", "refresh", "off")),
+    argument("--keep-certificate", action="store_true"),
+)
+USAGE = "cloudflare [status|on|refresh|off [--keep-certificate]]"
+KEEP = "./tools/prod.sh cloudflare off --keep-certificate"
+DASHBOARD = "SSL/TLS, Origin Server, in the Cloudflare dashboard"
 
 HELPER = Path(__file__).resolve().parent / "helper"
 IMAGE = "phantom-nginx-tools:latest"
@@ -156,22 +162,28 @@ def _on() -> None:
         raise ToolError(f"{OVERRIDE} is missing. Run: ./tools/prod.sh setup")
     settings = _settings()
 
+    _build()
     directory = paths.cloudflare()
     identity.make_dir(directory)
-    _build()
     try:
         _tools("on", settings)
-        try:
-            _validate()
-        except ToolError:
-            _tools("rollback", settings)
-            raise
     except ToolError:
         shutil.rmtree(directory, ignore_errors=True)
         raise
 
+    # A certificate is out from here: a stop before the state is kept revokes it.
+    try:
+        _validate()
+        os.replace(directory / STATE_CANDIDATE, directory / STATE)
+    except BaseException:
+        try:
+            _tools("rollback", settings)
+        finally:
+            shutil.rmtree(directory, ignore_errors=True)
+        raise
+
+    # The state is kept: a stop from here leaves the mode on, and off takes it back.
     _replace()
-    os.replace(directory / STATE_CANDIDATE, directory / STATE)
     print("Cloudflare mode is on. Apply it: ./tools/prod.sh up")
 
 
@@ -183,22 +195,39 @@ def _refresh() -> None:
     print("Apply the new lists: ./tools/prod.sh restart nginx")
 
 
-def _off() -> None:
+def _off(keep_certificate: bool) -> None:
     if not _active():
         raise ToolError("Cloudflare mode is off.")
-    settings = _settings()
+    settings = None
+    if not keep_certificate:
+        try:
+            settings = _settings()
+        except ToolError as error:
+            raise ToolError(f"{error}\nOr take the mode back and leave its certificate in Cloudflare: {KEEP}") from None
 
+    directory = paths.cloudflare()
+    certificate_id = json.loads((directory / STATE).read_text(encoding="utf-8"))["certificate_id"]
     _build()
     try:
         _tools("off")
         _validate()
-        _tools("revoke", settings)
+        if settings is not None:
+            try:
+                _tools("revoke", settings)
+            except ToolError:
+                raise ToolError("\n".join([
+                    "The certificate is not revoked and the mode stays on. Fix CF_API_TOKEN in .env.cf and run off",
+                    f"again, or take the mode back and revoke the certificate in {DASHBOARD} yourself:",
+                    f"  {KEEP}",
+                ])) from None
     except ToolError:
-        (paths.cloudflare() / CANDIDATE).unlink(missing_ok=True)
+        (directory / CANDIDATE).unlink(missing_ok=True)
         raise
 
     _replace()
-    shutil.rmtree(paths.cloudflare())
+    shutil.rmtree(directory)
+    if keep_certificate:
+        print(f"Origin CA certificate {certificate_id} stays in Cloudflare: revoke it in {DASHBOARD}.")
     print("Cloudflare mode is off. Apply it: ./tools/prod.sh up")
 
 
@@ -210,9 +239,14 @@ def _status() -> None:
     _tools("status")
 
 
-ACTIONS = {"status": _status, "on": _on, "refresh": _refresh, "off": _off}
+ACTIONS = {"status": _status, "on": _on, "refresh": _refresh}
 
 
-def run(action: str) -> None:
+def run(action: str, keep_certificate: bool) -> None:
+    if keep_certificate and action != "off":
+        raise ToolError(f"Usage: ./tools/prod.sh {USAGE}")
     gates.enforce(host.DOCKER_GATES)
-    ACTIONS[action]()
+    if action == "off":
+        _off(keep_certificate)
+    else:
+        ACTIONS[action]()
