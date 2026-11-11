@@ -14,7 +14,8 @@ Prerequisites:
   - bash
   - git, to install from a clone and to update
   - unzip, to install from a release zip
-  - A user of the docker group, or root, to run the tools
+  - A user of the docker group, or root, to run the tools; what they write
+    belongs to the owner of the install directory
 
   ./tools/prod.sh gates reports what this host has: Python, Docker, Compose,
   kernel, TUN, git and free disk.
