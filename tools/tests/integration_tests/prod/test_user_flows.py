@@ -54,6 +54,13 @@ from prod_host import (
     wipe_the_tree,
 )
 
+# The directories a clone of the repository makes under container-data.
+CLONED = (
+    "container-data", "container-data/auth-db", "container-data/db", "container-data/secrets",
+    "container-data/secrets/development", "container-data/secrets/production", "container-data/state",
+    "container-data/state/db",
+)
+
 # ── First install ───────────────────────────────────────────────────
 
 
@@ -595,6 +602,24 @@ def test_setup_under_sudo_leaves_the_host_to_the_operator():
     assert done.returncode == 0, done.stdout
     assert_the_operator_owns_the_host()
     assert prod("gen-keys", "-f", timeout=LONG).returncode == 0
+
+
+@linux_only
+def test_setup_under_sudo_in_a_tree_of_root_writes_as_root():
+    """sudo -i, then a clone of root: setup writes as the owner of the tree."""
+    assert prod("hard-reset", stdin="yes\n", timeout=LONG).returncode == 0
+    for name in LOCAL_FILES:
+        (ROOT / name).unlink(missing_ok=True)
+    assert sudo("chown", "root:root", str(ROOT), *(str(ROOT / name) for name in CLONED)).returncode == 0
+    try:
+        done = sudo(ENTRY, "setup")
+        assert done.returncode == 0, done.stdout
+        written = [*(ROOT / name for name in LOCAL_FILES), *(SECRETS / name for name in SECRET_FILES), AUTH_DB]
+        assert not [str(path) for path in written if path.stat().st_uid != 0]
+    finally:
+        sudo("chown", "-R", OPERATOR, str(ROOT / "container-data"))
+        sudo("chown", OPERATOR, str(ROOT), *(str(ROOT / name) for name in LOCAL_FILES if (ROOT / name).exists()))
+    assert_the_operator_owns_the_host()
 
 
 @linux_only

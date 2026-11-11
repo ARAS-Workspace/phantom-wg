@@ -18,11 +18,14 @@ from __future__ import annotations
 import os
 from pathlib import Path
 
+from core import runner
+
 
 def operator() -> tuple[int, int]:
-    """The owner of what the tool writes: under sudo, who ran sudo."""
-    if os.geteuid() == 0 and "SUDO_UID" in os.environ:
-        return int(os.environ["SUDO_UID"]), int(os.environ["SUDO_GID"])
+    """The owner of what the tool writes: run as root, the owner of the install directory."""
+    if os.geteuid() == 0:
+        info = runner.ROOT.stat()
+        return info.st_uid, info.st_gid
     return os.getuid(), os.getgid()
 
 
