@@ -218,6 +218,10 @@ Environment Files:
   They are NOT tracked by git — safe for user-specific values.
   Edit them to customize subnets, timeouts, or any service parameter.
 
+  A change in .env.daemon or .env.auth-service reaches a running stack with
+  ./tools/prod.sh up, which starts the service again; restart does not read
+  the file.
+
 Compose Override:
   docker-compose.override.yml is created from its .example during setup.
   It is NOT tracked by git and belongs to this machine. Compose applies it
@@ -306,6 +310,9 @@ TLS Certificate:
   Let's Encrypt (optional):
     ./tools/prod.sh certbot <domain>
     ./tools/prod.sh restart nginx
+
+  The same two commands renew it: certbot takes a new certificate only when
+  the one in place is near its end. They can run from cron.
 
 Cloudflare:
   The stack can sit behind Cloudflare's proxy. In the Cloudflare dashboard

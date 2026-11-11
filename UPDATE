@@ -7,7 +7,9 @@ Standard Update:
   This pulls the latest release, syncs the images of the selected source and
   recreates all services. Environment files (.env, .env.daemon,
   .env.auth-service, .env.cf) and docker-compose.override.yml are always
-  preserved. If an update stops halfway, run it again.
+  preserved. If an update stops halfway, run it again. Until then the stack
+  runs as it was; a restart in between starts the code of the new release
+  on the images of the last one.
 
   update follows a git clone. A package installed from the release zip has no
   git remote, and update stops there.
