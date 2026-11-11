@@ -1,0 +1,202 @@
+name: Verify Cloudflare
+
+# The Cloudflare mode of ./tools/prod.sh on a host with a public address: an
+# EC2 instance whose self-hosted runner carries the label cf-probe-ec2. DOMAIN
+# is a proxied record of ZONE that points to ORIGIN_IP, the Elastic IP of the
+# instance; ZONE has SSL/TLS Full (strict) and Authenticated Origin Pulls
+# (Global) on, and the secret PHANTOM_TEST_CF_TOKEN is a token of ZONE. The
+# release tree is built as package-release builds it, and the host takes it
+# as a release zip install would.
+#
+# Every step below is one thing a person would do or check. The "Host" steps
+# are the commands an operator types, the "Prove" steps run
+# .github/scripts/probes/cloudflare/cloudflare-probe.py on the host. The
+# visitor is the instance itself, through Cloudflare. The mode goes on and off
+# twice; each Origin CA certificate the run takes is revoked again at the end.
+# .github/scripts/probes/cloudflare/verify-cloudflare.sh moves the tag and
+# starts the run.
+
+on:
+  push:
+    tags:
+      - 'verify-cloudflare'
+
+permissions:
+  contents: read
+
+# One instance, one Elastic IP.
+concurrency:
+  group: verify-cloudflare
+
+env:
+  ZONE: phantom-wg.dev
+  DOMAIN: cf-probe-ec2.phantom-wg.dev
+  ORIGIN_IP: 34.227.212.117
+  PROBE: .github/scripts/probes/cloudflare/cloudflare-probe.py
+
+jobs:
+  cloudflare:
+    name: Cloudflare mode on an EC2 host
+    runs-on: [self-hosted, Linux, X64, cf-probe-ec2]
+    timeout-minutes: 45
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+
+      # Outside the checkout: the containers write files as root, and the
+      # next checkout cleans its directory as the runner.
+      - name: Name the install directory
+        run: |
+          echo "WORK=$HOME/verify-cloudflare" >> "$GITHUB_ENV"
+          echo "HOST=$HOME/verify-cloudflare/phantom-wg" >> "$GITHUB_ENV"
+
+      - name: Prove the host
+        run: python3 -B "$PROBE" host
+
+      - name: Set up Node
+        uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # v6.3.0
+        with:
+          node-version: '24'
+          cache: ''
+
+      - name: Install SPA dependencies
+        run: npm ci
+        working-directory: services/react-spa
+
+      - name: Build SPA
+        run: npm run build
+        working-directory: services/react-spa
+
+      - name: Run packager
+        run: ./tools/dev.sh generate-production-package --no-spa
+
+      - name: Host takes the release tree
+        run: |
+          mkdir -p "$WORK"
+          cp -a dist/phantom-wg-modern "$HOST"
+
+      - name: Host runs gates
+        working-directory: ${{ env.HOST }}
+        run: ./tools/prod.sh gates
+
+      - name: Host runs setup
+        working-directory: ${{ env.HOST }}
+        run: ./tools/prod.sh setup
+
+      - name: Host fills .env.cf
+        working-directory: ${{ env.HOST }}
+        env:
+          CF_API_TOKEN: ${{ secrets.PHANTOM_TEST_CF_TOKEN }}
+        run: |
+          umask 077
+          {
+            echo "CF_API_TOKEN=$CF_API_TOKEN"
+            echo "CF_ZONE=$ZONE"
+            echo "CF_HOSTNAMES=$DOMAIN"
+          } > .env.cf
+
+      - name: Host runs cloudflare on
+        working-directory: ${{ env.HOST }}
+        run: ./tools/prod.sh cloudflare on | tee -a "$WORK/cloudflare.log"
+
+      - name: Host runs up
+        working-directory: ${{ env.HOST }}
+        run: ./tools/prod.sh up
+
+      - name: Prove the Cloudflare path
+        run: python3 -B "$PROBE" path
+
+      - name: Prove the visitor's address
+        run: python3 -B "$PROBE" visitor
+
+      - name: Prove a request around Cloudflare drops
+        run: python3 -B "$PROBE" around
+
+      - name: Host restarts nginx
+        working-directory: ${{ env.HOST }}
+        run: ./tools/prod.sh restart nginx
+
+      - name: Prove the Cloudflare path after the restart
+        run: python3 -B "$PROBE" path
+
+      - name: Host runs down and up
+        working-directory: ${{ env.HOST }}
+        run: |
+          ./tools/prod.sh down
+          ./tools/prod.sh up
+
+      - name: Prove the Cloudflare path after down and up
+        run: python3 -B "$PROBE" path
+
+      - name: Host refreshes the address list and restarts nginx
+        working-directory: ${{ env.HOST }}
+        run: |
+          ./tools/prod.sh cloudflare refresh
+          ./tools/prod.sh restart nginx
+
+      - name: Prove the Cloudflare path after the refresh
+        run: python3 -B "$PROBE" path
+
+      - name: Host reads the mode
+        working-directory: ${{ env.HOST }}
+        run: ./tools/prod.sh cloudflare status
+
+      - name: Host turns the mode off and runs up
+        working-directory: ${{ env.HOST }}
+        run: |
+          ./tools/prod.sh cloudflare off | tee -a "$WORK/cloudflare.log"
+          ./tools/prod.sh up
+
+      - name: Prove the mode is off
+        env:
+          CF_API_TOKEN: ${{ secrets.PHANTOM_TEST_CF_TOKEN }}
+        run: python3 -B "$PROBE" off
+
+      - name: Host turns the mode on again and runs up
+        working-directory: ${{ env.HOST }}
+        run: |
+          ./tools/prod.sh cloudflare on | tee -a "$WORK/cloudflare.log"
+          ./tools/prod.sh up
+
+      - name: Prove the Cloudflare path of the second certificate
+        run: python3 -B "$PROBE" path
+
+      - name: Host turns the mode off again and runs up
+        working-directory: ${{ env.HOST }}
+        run: |
+          ./tools/prod.sh cloudflare off | tee -a "$WORK/cloudflare.log"
+          ./tools/prod.sh up
+
+      - name: Prove the mode is off again
+        env:
+          CF_API_TOKEN: ${{ secrets.PHANTOM_TEST_CF_TOKEN }}
+        run: python3 -B "$PROBE" off
+
+      - name: Stack logs on failure
+        if: failure() && env.HOST != ''
+        run: |
+          if [ -d "$HOST" ]; then
+            cd "$HOST"
+            docker compose logs --tail 60
+          fi
+
+      - name: Revoke what the run took
+        if: always() && env.WORK != ''
+        env:
+          CF_API_TOKEN: ${{ secrets.PHANTOM_TEST_CF_TOKEN }}
+        run: python3 -B "$PROBE" revoke-taken
+
+      - name: Leave the host
+        if: always() && env.WORK != ''
+        run: |
+          if [ -d "$HOST" ]; then
+            cd "$HOST"
+            ./tools/prod.sh down
+            echo yes | ./tools/prod.sh hard-reset
+          fi
+          rm -rf "$WORK"
