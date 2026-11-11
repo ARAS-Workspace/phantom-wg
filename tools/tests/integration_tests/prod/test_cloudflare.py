@@ -303,6 +303,24 @@ def test_status_reads_the_mode():
 
 
 @with_cloudflare
+def test_a_missing_override_stops_the_mode_commands():
+    written = OVERRIDE.read_bytes()
+    OVERRIDE.unlink()
+    try:
+        for args in ((), ("refresh",), ("off",), ("off", "--keep-certificate")):
+            done = cloudflare(*args, timeout=LONG)
+            assert done.returncode == 1
+            assert not OVERRIDE.exists()
+            assert done.stdout.strip().endswith("docker-compose.override.yml is missing. Run: ./tools/prod.sh setup")
+        assert STATE.exists()
+        assert not revoked(certificate_id())
+    finally:
+        if OVERRIDE.is_dir():
+            OVERRIDE.rmdir()
+        OVERRIDE.write_bytes(written)
+
+
+@with_cloudflare
 def test_off_stops_on_an_entry_changed_by_hand():
     written = OVERRIDE.read_text(encoding="utf-8")
     OVERRIDE.write_text(written.replace('"NET_ADMIN"', '"NET_RAW"'), encoding="utf-8")

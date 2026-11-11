@@ -62,6 +62,11 @@ def _active() -> bool:
     return (paths.cloudflare() / STATE).is_file()
 
 
+def _require_override() -> None:
+    if not (runner.ROOT / OVERRIDE).is_file():
+        raise ToolError(f"{OVERRIDE} is missing. Run: ./tools/prod.sh setup")
+
+
 def _domain(name: str) -> bool:
     labels = name.split(".")
     return len(labels) >= 2 and all(LABEL.match(label) for label in labels)
@@ -158,8 +163,7 @@ def _replace() -> None:
 def _on() -> None:
     if _active():
         raise ToolError("Cloudflare mode is on. Turn it off first: ./tools/prod.sh cloudflare off")
-    if not (runner.ROOT / OVERRIDE).is_file():
-        raise ToolError(f"{OVERRIDE} is missing. Run: ./tools/prod.sh setup")
+    _require_override()
     settings = _settings()
 
     _build()
@@ -190,6 +194,7 @@ def _on() -> None:
 def _refresh() -> None:
     if not _active():
         raise ToolError("Cloudflare mode is off.")
+    _require_override()
     _build()
     _tools("refresh")
     print("Apply the new lists: ./tools/prod.sh restart nginx")
@@ -198,6 +203,7 @@ def _refresh() -> None:
 def _off(keep_certificate: bool) -> None:
     if not _active():
         raise ToolError("Cloudflare mode is off.")
+    _require_override()
     settings = None
     if not keep_certificate:
         try:
@@ -235,6 +241,7 @@ def _status() -> None:
     if not _active():
         print("Cloudflare mode: off")
         return
+    _require_override()
     _build()
     _tools("status")
 
