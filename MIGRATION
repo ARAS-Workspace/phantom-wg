@@ -17,7 +17,8 @@ Before You Start:
     - .env.daemon
 
   The stack is down from the down of 1.1.5 (step 3) to the up of 2.0.0
-  (step 7).
+  (step 7): 20 seconds in the rehearsal, with the images pulled in step 2
+  (see What Was Measured).
 
   The examples run as root, as the 1.1.5 quick start does, with 1.1.5 in
   /opt/phantom-wg and 2.0.0 in /opt/phantom-wg-modern. Any other directory
@@ -29,7 +30,7 @@ Host Requirements:
 
     1.1.5   Docker Engine 20.10+, Docker Compose v2, bash, git
     2.0.0   Docker Engine 27.0.1+, Docker Compose 2.27.2+, kernel 5.15+,
-            /dev/net/tun, python3 3.9+, bash, git
+            /dev/net/tun, python3 3.9+, bash, git, unzip for a release zip
 
   ./tools/prod.sh gates of 2.0.0 reports what the host has (step 2). The
   tools stop on a python3 under 3.9; setup and up stop on a kernel under
@@ -85,8 +86,12 @@ Migration:
 
   2. Get 2.0.0 next to it, and check the host
 
-       git clone https://github.com/ARAS-Workspace/phantom-wg.git \
+       git clone --depth 1 --branch main \
+         https://github.com/ARAS-Workspace/phantom-wg.git \
          /opt/phantom-wg-modern
+
+     --depth 1 takes the last commit of main only; update follows the clone
+     from there.
 
      or from a release zip:
 
@@ -97,6 +102,14 @@ Migration:
 
        cd /opt/phantom-wg-modern
        ./tools/prod.sh gates
+
+     From a git clone, pull the images now to keep their download out of
+     the down time; 1.1.5 still serves:
+
+       ./tools/prod.sh pull
+
+     A release zip carries its images in images/: setup loads them in
+     step 5.
 
   3. Stop 1.1.5
 
@@ -115,7 +128,8 @@ Migration:
 
      cp -a keeps the owners of 1.1.5. chown gives the copy to the owner of
      this directory, the user the tools of 2.0.0 write as; as root in a
-     directory of root it changes nothing.
+     directory of root it changes nothing. Run this step as root, or with
+     sudo: container-data holds files of root, written by the daemon.
 
   5. Write what 2.0.0 adds
 
@@ -128,9 +142,13 @@ Migration:
 
   6. Organize the environment files
 
-     .env.auth-service, as 2.0.0 sets it:
+     .env.auth-service, as 2.0.0 sets it: AUTH_PROXY_MAX_BODY changes, and
+     AUTH_PROXY_BACKUP_MAX_BODY goes on the line below it:
        AUTH_PROXY_MAX_BODY=65536
        AUTH_PROXY_BACKUP_MAX_BODY=67108864
+
+     The file of 1.1.5 ends without a line break: a line added with
+     echo >> joins its last line, and auth-service stops on that value.
 
      Ports of its own from step 1: docker-compose.override.yml.
      Subnets of its own from step 1: PHANTOM_SUBNET_V4 and PHANTOM_SUBNET_V6
@@ -150,6 +168,8 @@ Check:
   - The clients of 1.1.5 are listed
   - A client connects with its config of 1.1.5: its handshake shows in the
     dashboard
+  - The traffic of that client leaves through the server: the address the
+    internet sees is the one of the server
   - The audit log lists the entries of 1.1.5 before the new ones
 
 Rollback:
@@ -168,13 +188,13 @@ After Migration:
   cron job or timer that renews the certificate names the directory of
   1.1.5: point it to the new one.
 
-  Images of 1.1.5: they were built on this host, under the name of its
-  directory. To list and remove them:
+  Images of 1.1.5: they were built on this host and carry the name of its
+  directory. With 1.1.5 in /opt/phantom-wg:
 
-    docker image ls
-    docker image rm <the images of 1.1.5>
+    docker image rm phantom-wg-daemon phantom-wg-auth-service nginx:1-alpine
 
-  The directory of 1.1.5 is the way back: remove it once 2.0.0 serves.
+  The directory and the images of 1.1.5 are the way back: remove them once
+  2.0.0 serves. A rollback after the removal builds the images again.
 
   Updates of 2.0.0: see UPDATE.
 
@@ -187,6 +207,9 @@ What Was Measured:
       shallow, sparse git clone of main in /opt/phantom-wg.
     - The 2.0.0 release text clones into phantom-wg and unzips into
       phantom-wg-modern.
+    - A clone of main with --depth 1 holds the last commit only. The git
+      steps of update (fetch, merge-base --is-ancestor, merge --ff-only)
+      move it to a new release of main (measured with git alone).
 
   Data
     - Both docker-compose.yml bind the same paths: container-data/db,
@@ -220,10 +243,24 @@ What Was Measured:
     - 1.1.5 renews no certificate by itself; 2.0.0 leaves the schedule to
       the operator. Both keep the state in container-data/certbot.
 
-  Still to measure, in the rehearsal:
-    - setup of step 5 on the data of a real 1.1.5 (read from the code, not
-      run)
-    - The names of the 1.1.5 images to remove
-    - The entries of 1.1.5 in the audit log of the 2.0.0 dashboard
-    - A client of 1.1.5 connecting to 2.0.0
-    - Pulling the images of 2.0.0 before step 3, to shorten the down time
+  Rehearsal
+    .github/workflows/verify-migration.yml runs this file on an EC2 host, as
+    root: 1.1.5 from a git clone of main, with a Let's Encrypt certificate
+    and three clients, then steps 1 to 7, Check, the certbot of 2.0.0,
+    Rollback and the removal of the images of 1.1.5. A WireGuard client on a
+    GitHub runner connects with the config of 1.1.5 before and after. Run:
+      https://github.com/ARAS-Workspace/phantom-wg/actions/runs/43003262475
+    - setup of step 5 on the data of 1.1.5 writes .env and the override
+      only; the 28 copied files stay byte for byte as step 4 left them.
+    - The images of 1.1.5 are phantom-wg-daemon, phantom-wg-auth-service
+      and nginx:1-alpine.
+    - The audit log of 2.0.0 lists the 10 entries of 1.1.5 first, with
+      their ids, actions, addresses and times; the entries of 2.0.0 follow.
+    - The client of 1.1.5 shakes hands with 2.0.0 with the same config, and
+      its traffic leaves through the server.
+    - ./tools/prod.sh pull works in step 2, before setup. The images were on
+      the host already: the run does not measure how long a first pull
+      takes.
+    - The certbot of 2.0.0 keeps the certificate of 1.1.5: the server serves
+      the same certificate before and after it.
+    - Steps 3 to 7 took 20 seconds.
