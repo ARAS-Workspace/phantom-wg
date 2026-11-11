@@ -69,9 +69,10 @@ What Changes:
 
   tools/
     ./tools/prod.sh stays the entry; the commands run on python3. New:
-    gates, images, pull, add-superadmin, cloudflare. Gone: compose, use
-    docker compose in the directory instead. What the tools write belongs to
-    the owner of the install directory.
+    gates, images, pull, add-superadmin, cloudflare. Gone: compose (lock,
+    unlock, status): what a host changes goes into
+    docker-compose.override.yml, and an update leaves that file as it is.
+    What the tools write belongs to the owner of the install directory.
 
 Migration:
   1. Look at 1.1.5
@@ -79,9 +80,12 @@ Migration:
        cd /opt/phantom-wg
        ./tools/prod.sh status
        git status --short
+       git show HEAD:docker-compose.yml | diff - docker-compose.yml
 
-     git status lists the files changed on this host. A changed
-     docker-compose.yml holds ports or subnets of its own: note them for
+     git status lists the files changed on this host, but not a
+     docker-compose.yml under compose lock. The diff prints what this host
+     changed in docker-compose.yml, locked or not, and nothing when it
+     changed none. Ports or subnets of its own are there: note them for
      step 6.
 
   2. Get 2.0.0 next to it, and check the host
@@ -242,6 +246,10 @@ What Was Measured:
       address pool it finds.
     - 1.1.5 renews no certificate by itself; 2.0.0 leaves the schedule to
       the operator. Both keep the state in container-data/certbot.
+    - compose lock of 1.1.5 is git update-index --assume-unchanged, and
+      its update names it for a changed docker-compose.yml. git status and
+      git diff leave a locked file out; git show HEAD:docker-compose.yml
+      against the file shows its changes.
 
   Rehearsal
     .github/workflows/verify-migration.yml runs this file on an EC2 host, as
