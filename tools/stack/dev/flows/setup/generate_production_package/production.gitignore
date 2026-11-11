@@ -1,5 +1,7 @@
 # Runtime environment files
 docker-compose.override.yml
+docker-compose.override.yml.bak
+.env.cf
 .env
 .env.daemon
 .env.auth-service

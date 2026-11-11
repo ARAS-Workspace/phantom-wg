@@ -9,6 +9,7 @@ import os
 import pty
 import re
 import select
+import shutil
 import sqlite3
 import ssl
 import subprocess
@@ -33,9 +34,13 @@ LOCAL_FILES = (".env", ".env.daemon", ".env.auth-service", "docker-compose.overr
 STACK_SECRETS = ("wg_private_key", "wg_public_key", "auth_signing_key", "auth_verify_key", "tls_cert", "tls_key")
 SECRET_FILES = (*STACK_SECRETS, ".admin_password")
 COMMANDS = (
-    "setup", "gen-keys", "setup-auth", "setup-tls", "certbot", "add-superadmin", "up", "down", "restart", "logs",
-    "status", "show-versions", "shell", "exec", "hard-reset", "gates", "images", "pull", "build", "rebuild", "update",
+    "setup", "gen-keys", "setup-auth", "setup-tls", "certbot", "cloudflare", "add-superadmin", "up", "down", "restart",
+    "logs", "status", "show-versions", "shell", "exec", "hard-reset", "gates", "images", "pull", "build", "rebuild",
+    "update",
 )
+CLOUDFLARE = ROOT / "container-data/cloudflare"
+CLOUDFLARE_SETTINGS = ROOT / ".env.cf"
+OVERRIDE_BACKUP = ROOT / "docker-compose.override.yml.bak"
 SERVICES = ("phantom-daemon", "phantom-auth", "phantom-nginx")
 API = "https://127.0.0.1"
 LONG = 600
@@ -132,6 +137,9 @@ def wipe_the_tree() -> None:
     prod("down")
     for name in LOCAL_FILES:
         (ROOT / name).unlink(missing_ok=True)
+    OVERRIDE_BACKUP.unlink(missing_ok=True)
+    CLOUDFLARE_SETTINGS.unlink(missing_ok=True)
+    shutil.rmtree(CLOUDFLARE, ignore_errors=True)
     done = prod("hard-reset", stdin="yes\n", timeout=LONG)
     assert done.returncode == 0, done.stdout
 

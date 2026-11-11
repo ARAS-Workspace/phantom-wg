@@ -22,6 +22,8 @@ build/
 
 # Environment (user-specific, created from .example files)
 docker-compose.override.yml
+docker-compose.override.yml.bak
+.env.cf
 .env
 .env.daemon
 .env.auth-service
@@ -38,6 +40,7 @@ container-data/state/db/*
 container-data/auth-db/*
 !container-data/auth-db/.gitkeep
 container-data/certbot/
+container-data/cloudflare/
 
 # Type stubs (generated)
 typings/

@@ -244,6 +244,9 @@ Commands:
   ./tools/prod.sh shell [service]  Open shell (default: daemon)
   ./tools/prod.sh exec <svc> <cmd> Execute command in service
   ./tools/prod.sh certbot <domain> Obtain Let's Encrypt TLS certificate
+  ./tools/prod.sh cloudflare [action]
+                                   Serve through Cloudflare (status, on,
+                                   refresh, off)
   ./tools/prod.sh hard-reset       Wipe ALL data (destructive)
 
   With -f, gen-keys, setup-auth and setup-tls regenerate what exists.
@@ -287,7 +290,8 @@ Data Directories (created at runtime):
   ├── db/                         Address pool, client and peer databases
   ├── state/db/                   Runtime state (bridges)
   ├── auth-db/                    Authentication database
-  └── certbot/                    Let's Encrypt state (certbot only)
+  ├── certbot/                    Let's Encrypt state (certbot only)
+  └── cloudflare/                 Cloudflare mode (hard-reset leaves it)
 
 TLS Certificate:
   Default is self-signed. To use your own certificate,
@@ -298,6 +302,41 @@ TLS Certificate:
   Let's Encrypt (optional):
     ./tools/prod.sh certbot <domain>
     ./tools/prod.sh restart nginx
+
+Cloudflare:
+  The stack can sit behind Cloudflare's proxy. In the Cloudflare dashboard
+  of the zone, set the SSL/TLS mode to Full (strict) and turn
+  Authenticated Origin Pulls on. Then:
+    ./tools/prod.sh cloudflare on       (writes .env.cf from .env.cf.example)
+    (fill CF_API_TOKEN and CF_ZONE in .env.cf)
+    ./tools/prod.sh cloudflare on
+    ./tools/prod.sh up
+
+  .env.cf belongs to this machine and the tool holds it at 600. Its token
+  is of this zone only, with Zone - Zone - Read, Zone - Zone Settings -
+  Read and Zone - SSL and Certificates - Edit. CF_HOSTNAMES lists the names
+  of the certificate; empty, the zone and *.<zone>.
+
+  on makes a key here and takes an Origin CA certificate for it, writes the
+  nginx snippets and the firewall rules to container-data/cloudflare/, and
+  adds the mode to docker-compose.override.yml: NET_ADMIN for nginx, the
+  command that loads the rules, the snippets and the certificate. nginx
+  then requires Cloudflare's origin pull certificate, its port 443 drops
+  connections from addresses outside Cloudflare's list, and it logs the
+  visitor's address from CF-Connecting-IP. The override changes only after
+  Compose accepts the new one; the last one stays as
+  docker-compose.override.yml.bak. A step of on that fails after the
+  certificate revokes it again.
+
+    ./tools/prod.sh cloudflare           Show the mode
+    ./tools/prod.sh cloudflare refresh   Take Cloudflare's address list again,
+                                         then: ./tools/prod.sh restart nginx
+    ./tools/prod.sh cloudflare off       Revoke the certificate and take the
+                                         mode back, then: ./tools/prod.sh up
+
+  off puts the override back, removes container-data/cloudflare/, and nginx
+  takes its certificate from container-data/secrets/production/ again.
+  .env.cf stays for the next on. hard-reset leaves the mode in place.
 
 Updating:
   See the UPDATE file for the full update and maintenance guide.

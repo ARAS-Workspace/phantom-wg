@@ -25,6 +25,8 @@ DB_DIR = "container-data/db"
 STATE_DIR = "container-data/state/db"
 CERTBOT_DIR = "container-data/certbot"
 BOUND_DIRS = (SECRETS_DIR, AUTH_DB_DIR, DB_DIR, STATE_DIR, CERTBOT_DIR)
+# Configuration of the Cloudflare mode, like the env files: hard-reset leaves it.
+CLOUDFLARE_DIR = "container-data/cloudflare"
 
 
 def filled(path: Path) -> bool:
@@ -41,3 +43,7 @@ def auth_db() -> Path:
 
 def wallet() -> Path:
     return runner.ROOT / DB_DIR / "wallet.db"
+
+
+def cloudflare() -> Path:
+    return runner.ROOT / CLOUDFLARE_DIR

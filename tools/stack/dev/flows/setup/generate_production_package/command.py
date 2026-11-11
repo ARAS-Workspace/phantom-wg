@@ -44,6 +44,7 @@ INCLUDE = (
     ".env.example",
     ".env.daemon.example",
     ".env.auth-service.example",
+    ".env.cf.example",
     "requirements.txt",
     "phantom_daemon",
     "services/auth-service",
