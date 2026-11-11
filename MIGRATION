@@ -17,7 +17,7 @@ Before You Start:
     - .env.daemon
 
   The stack is down from the down of 1.1.5 (step 3) to the up of 2.0.0
-  (step 7): 20 seconds in the rehearsal, with the images pulled in step 2
+  (step 7): 28 seconds in the rehearsal, with the images pulled in step 2
   (see What Was Measured).
 
   The examples run as root, as the 1.1.5 quick start does, with 1.1.5 in
@@ -246,10 +246,11 @@ What Was Measured:
   Rehearsal
     .github/workflows/verify-migration.yml runs this file on an EC2 host, as
     root: 1.1.5 from a git clone of main, with a Let's Encrypt certificate
-    and three clients, then steps 1 to 7, Check, the certbot of 2.0.0,
-    Rollback and the removal of the images of 1.1.5. A WireGuard client on a
-    GitHub runner connects with the config of 1.1.5 before and after. Run:
-      https://github.com/ARAS-Workspace/phantom-wg/actions/runs/43003262475
+    and three clients, then steps 1 to 7, Check, the certbot of 2.0.0, the
+    removal of the images of 1.1.5 and a Rollback after it. A WireGuard
+    client on a GitHub runner connects with the config of 1.1.5 before and
+    after. Run:
+      https://github.com/ARAS-Workspace/phantom-wg/actions/runs/43006742722
     - setup of step 5 on the data of 1.1.5 writes .env and the override
       only; the 28 copied files stay byte for byte as step 4 left them.
     - The images of 1.1.5 are phantom-wg-daemon, phantom-wg-auth-service
@@ -263,4 +264,7 @@ What Was Measured:
       takes.
     - The certbot of 2.0.0 keeps the certificate of 1.1.5: the server serves
       the same certificate before and after it.
-    - Steps 3 to 7 took 20 seconds.
+    - After the removal of its images, the up of the Rollback builds the
+      images of 1.1.5 again, from the build cache of the host, and pulls
+      nginx:1-alpine; 1.1.5 serves its clients again.
+    - Steps 3 to 7 took 28 seconds.
