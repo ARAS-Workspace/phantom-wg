@@ -4,10 +4,6 @@ on:
   push:
     branches:
       - dev/daemon
-    paths:
-      - 'tools/**'
-      - '.github/workflows/test-production-tools.yml'
-      - '.github/workflows/update-chain.yml'
 
 permissions:
   contents: read
