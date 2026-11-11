@@ -1,13 +1,13 @@
 {
-  "version": "1.0.0",
-  "commit": "59421c571eb345f1229c7a070c4201fa2f796d62",
-  "sources_image": "ghcr.io/aras-workspace/phantom-sources:1.0.0@sha256:de25a04f005562feaa653df5dc7e231693bffad3db3ae85efa08da393f9edded",
+  "version": "1.1.0",
+  "commit": "d8d661ef24e5e7b12e6d6a3f56cefc4970ea41d3",
+  "sources_image": "ghcr.io/aras-workspace/phantom-sources:1.1.0@sha256:e557cde147fbec7ca0ec254ebeddcc6a4f3a9c825f055cd81d1f6c651c15bc21",
   "images": {
     "phantom-daemon-base": {
-      "reference": "ghcr.io/aras-workspace/phantom-daemon-base:1.0.0@sha256:7e2d1069b61caa24f49a9c8c816f8828ede195c9762a030a7cebbf583e26101c",
+      "reference": "ghcr.io/aras-workspace/phantom-daemon-base:1.1.0@sha256:a8efd20bb5cf66320706cebe6b5bf98094ab9746078c01df910f96972a3faa85",
       "architectures": {
         "amd64": {
-          "digest": "sha256:9abe8b51cc46fdc6066d2f1372c5cd9569c5791beaf0b3c0fffbc2a45e7eff39",
+          "digest": "sha256:2b805da2bf0331687977e3c612719f9702f56125402a3b3033b8542e6735556d",
           "packages": [
             {
               "name": "base-files",
@@ -617,9 +617,9 @@
             },
             {
               "name": "zlib1g",
-              "version": "1:1.3.dfsg+really1.3.1-1+b1",
+              "version": "1:1.3.dfsg+really1.3.1-1+deb13u1",
               "source": "zlib",
-              "source_version": "1:1.3.dfsg+really1.3.1-1"
+              "source_version": "1:1.3.dfsg+really1.3.1-1+deb13u1"
             }
           ],
           "python": [
@@ -700,7 +700,7 @@
           ]
         },
         "arm64": {
-          "digest": "sha256:fc0d20356ddbd91c8fb04abda0bb102d99d7c8920c4b851bb9e94c8c39872a5a",
+          "digest": "sha256:ae95352bfd20a960048d95da312d20647ba6e52c6ffa14c89d1fd07c74dffb1a",
           "packages": [
             {
               "name": "base-files",
@@ -1310,9 +1310,9 @@
             },
             {
               "name": "zlib1g",
-              "version": "1:1.3.dfsg+really1.3.1-1+b1",
+              "version": "1:1.3.dfsg+really1.3.1-1+deb13u1",
               "source": "zlib",
-              "source_version": "1:1.3.dfsg+really1.3.1-1"
+              "source_version": "1:1.3.dfsg+really1.3.1-1+deb13u1"
             }
           ],
           "python": [
@@ -1395,10 +1395,10 @@
       }
     },
     "phantom-auth-base": {
-      "reference": "ghcr.io/aras-workspace/phantom-auth-base:1.0.0@sha256:61b2a0fdb6e9c5a20d77e4cd9d2afc4d24a307b695562e02b700222554e364a6",
+      "reference": "ghcr.io/aras-workspace/phantom-auth-base:1.1.0@sha256:45fd8b07f238c822e6a9ad76e55223304447908edd3f63170359f1bea0a9cb62",
       "architectures": {
         "amd64": {
-          "digest": "sha256:7fef328544eb8010b6b08d8102ef10b120eb8149838acffe5632f9fd0de05d3d",
+          "digest": "sha256:aa8964c34743fc9f09c2a454e947318568767375cb9973b2e710fc7e711174d0",
           "packages": [
             {
               "name": "base-files",
@@ -1894,9 +1894,9 @@
             },
             {
               "name": "zlib1g",
-              "version": "1:1.3.dfsg+really1.3.1-1+b1",
+              "version": "1:1.3.dfsg+really1.3.1-1+deb13u1",
               "source": "zlib",
-              "source_version": "1:1.3.dfsg+really1.3.1-1"
+              "source_version": "1:1.3.dfsg+really1.3.1-1+deb13u1"
             }
           ],
           "python": [
@@ -2007,7 +2007,7 @@
           ]
         },
         "arm64": {
-          "digest": "sha256:1e334f893a1d21f86597d2adee93900f45398e6ea3e696d2ac1e8062c738a7b4",
+          "digest": "sha256:7cf480be921f845c099891168b7e13794bc2e01c2a5d73572508dd8c1b74b958",
           "packages": [
             {
               "name": "base-files",
@@ -2503,9 +2503,9 @@
             },
             {
               "name": "zlib1g",
-              "version": "1:1.3.dfsg+really1.3.1-1+b1",
+              "version": "1:1.3.dfsg+really1.3.1-1+deb13u1",
               "source": "zlib",
-              "source_version": "1:1.3.dfsg+really1.3.1-1"
+              "source_version": "1:1.3.dfsg+really1.3.1-1+deb13u1"
             }
           ],
           "python": [
@@ -2618,10 +2618,10 @@
       }
     },
     "phantom-nginx-base": {
-      "reference": "ghcr.io/aras-workspace/phantom-nginx-base:1.0.0@sha256:76e232110c71b43dc0afbc49eea89d3ffd2a4eb0af16aa7e2a603c3dfe01f563",
+      "reference": "ghcr.io/aras-workspace/phantom-nginx-base:1.1.0@sha256:784ce5100dbb2c3f231d5df13a233fb0b060b5d85445439570656cfb5e8ca09e",
       "architectures": {
         "amd64": {
-          "digest": "sha256:6c99c9451483b2edcdf83f8819b04bc97f97a37ef4f635afd59861e9ee08492f",
+          "digest": "sha256:7c4cf4bef2dd60646cde9934e0bee0e8454b1adb0ce0ffefacb8a3e4b354efea",
           "packages": [
             {
               "name": "base-files",
@@ -2828,6 +2828,12 @@
               "source_version": "0.280"
             },
             {
+              "name": "libedit2",
+              "version": "3.1-20250104-1",
+              "source": "libedit",
+              "source_version": "3.1-20250104-1"
+            },
+            {
               "name": "libelf1t64",
               "version": "0.192-4",
               "source": "elfutils",
@@ -2850,6 +2856,12 @@
               "version": "1.21.3-5+deb13u1",
               "source": "krb5",
               "source_version": "1.21.3-5+deb13u1"
+            },
+            {
+              "name": "libjansson4",
+              "version": "2.14-2+b3",
+              "source": "jansson",
+              "source_version": "2.14-2"
             },
             {
               "name": "libk5crypto3",
@@ -2904,6 +2916,18 @@
               "version": "2.41.5-0+deb13u1",
               "source": "util-linux",
               "source_version": "2.41.5-0+deb13u1"
+            },
+            {
+              "name": "libnftables1",
+              "version": "1.1.3-1",
+              "source": "nftables",
+              "source_version": "1.1.3-1"
+            },
+            {
+              "name": "libnftnl11",
+              "version": "1.2.9-1",
+              "source": "libnftnl",
+              "source_version": "1.2.9-1"
             },
             {
               "name": "libpam-modules",
@@ -3056,6 +3080,12 @@
               "source_version": "6.5+20250216-2"
             },
             {
+              "name": "nftables",
+              "version": "1.1.3-1",
+              "source": "nftables",
+              "source_version": "1.1.3-1"
+            },
+            {
               "name": "nginx",
               "version": "1.26.3-3+deb13u10",
               "source": "nginx",
@@ -3117,14 +3147,14 @@
             },
             {
               "name": "zlib1g",
-              "version": "1:1.3.dfsg+really1.3.1-1+b1",
+              "version": "1:1.3.dfsg+really1.3.1-1+deb13u1",
               "source": "zlib",
-              "source_version": "1:1.3.dfsg+really1.3.1-1"
+              "source_version": "1:1.3.dfsg+really1.3.1-1+deb13u1"
             }
           ]
         },
         "arm64": {
-          "digest": "sha256:02c33f4a20e336a5b1fa488c7fb7ba67dd3f2162ff0527f87193f21687f8bc3b",
+          "digest": "sha256:e080deac597e82ba0edcaee8fdb4e2f3fc62fa0b4a8f054dd0ae5f5b979e4327",
           "packages": [
             {
               "name": "base-files",
@@ -3331,6 +3361,12 @@
               "source_version": "0.280"
             },
             {
+              "name": "libedit2",
+              "version": "3.1-20250104-1",
+              "source": "libedit",
+              "source_version": "3.1-20250104-1"
+            },
+            {
               "name": "libelf1t64",
               "version": "0.192-4",
               "source": "elfutils",
@@ -3353,6 +3389,12 @@
               "version": "1.21.3-5+deb13u1",
               "source": "krb5",
               "source_version": "1.21.3-5+deb13u1"
+            },
+            {
+              "name": "libjansson4",
+              "version": "2.14-2+b3",
+              "source": "jansson",
+              "source_version": "2.14-2"
             },
             {
               "name": "libk5crypto3",
@@ -3407,6 +3449,18 @@
               "version": "2.41.5-0+deb13u1",
               "source": "util-linux",
               "source_version": "2.41.5-0+deb13u1"
+            },
+            {
+              "name": "libnftables1",
+              "version": "1.1.3-1",
+              "source": "nftables",
+              "source_version": "1.1.3-1"
+            },
+            {
+              "name": "libnftnl11",
+              "version": "1.2.9-1",
+              "source": "libnftnl",
+              "source_version": "1.2.9-1"
             },
             {
               "name": "libpam-modules",
@@ -3559,6 +3613,12 @@
               "source_version": "6.5+20250216-2"
             },
             {
+              "name": "nftables",
+              "version": "1.1.3-1",
+              "source": "nftables",
+              "source_version": "1.1.3-1"
+            },
+            {
               "name": "nginx",
               "version": "1.26.3-3+deb13u10",
               "source": "nginx",
@@ -3620,9 +3680,9 @@
             },
             {
               "name": "zlib1g",
-              "version": "1:1.3.dfsg+really1.3.1-1+b1",
+              "version": "1:1.3.dfsg+really1.3.1-1+deb13u1",
               "source": "zlib",
-              "source_version": "1:1.3.dfsg+really1.3.1-1"
+              "source_version": "1:1.3.dfsg+really1.3.1-1+deb13u1"
             }
           ]
         }
@@ -5161,17 +5221,17 @@
     },
     {
       "name": "zlib",
-      "version": "1:1.3.dfsg+really1.3.1-1",
+      "version": "1:1.3.dfsg+really1.3.1-1+deb13u1",
       "files": [
         {
-          "name": "zlib_1.3.dfsg+really1.3.1-1.debian.tar.xz",
-          "size": 16576,
-          "sha256": "9ed525955ce9fb0c1b39be8ff98f73450dbfc6305a9a27e6149c8972d38a0a9e"
+          "name": "zlib_1.3.dfsg+really1.3.1-1+deb13u1.debian.tar.xz",
+          "size": 17836,
+          "sha256": "4e99de80447700cf16ecf8ed3e77fabb39f085a5fffc66713466ccf07397cc04"
         },
         {
-          "name": "zlib_1.3.dfsg+really1.3.1-1.dsc",
-          "size": 2637,
-          "sha256": "ede2791e29c1d3b422f9208bdd7edf040c20445ea1e7453a72037576e64fa197"
+          "name": "zlib_1.3.dfsg+really1.3.1-1+deb13u1.dsc",
+          "size": 3271,
+          "sha256": "7954224611bd043d62c094abf81cefcf9d97276479fc495767fcbc92cc6552f2"
         },
         {
           "name": "zlib_1.3.dfsg+really1.3.1.orig.tar.gz",
