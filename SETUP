@@ -29,10 +29,12 @@ Directory Structure:
   ├── .env.example                         Image source and network subnets
   ├── .env.daemon.example                  Daemon environment template
   ├── .env.auth-service.example            Auth service environment template
+  ├── .env.cf.example                      Cloudflare mode settings template
   ├── requirements.txt                     Python dependencies (pinned, hashed)
   ├── SETUP                                This file
   ├── UPDATE                               Update and maintenance guide
   ├── MIGRATION                            Migration from 1.1.5 to 2.0.0
+  ├── CHANGELOG                            Changes of each release
   ├── LICENSE                              AGPL-3.0
   ├── THIRD_PARTY_LICENSES                 Dependency licenses
   ├── images/                              Image archive (release zip only)
@@ -242,7 +244,7 @@ Commands:
   ./tools/prod.sh update           Pull latest (git clone), recreate stack
   ./tools/prod.sh show-versions    Show daemon + bridge versions
   ./tools/prod.sh logs [service]   Follow logs (all, or one service)
-  ./tools/prod.sh status          Container status
+  ./tools/prod.sh status           Container status
   ./tools/prod.sh shell [service]  Open shell (default: daemon)
   ./tools/prod.sh exec <svc> <cmd> Execute command in service
   ./tools/prod.sh certbot <domain> Obtain Let's Encrypt TLS certificate
