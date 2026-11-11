@@ -5,7 +5,7 @@
 From a git clone, which updates in place:
 
 ```bash
-git clone https://github.com/ARAS-Workspace/phantom-wg.git
+git clone --depth 1 --branch main https://github.com/ARAS-Workspace/phantom-wg.git
 cd phantom-wg
 ```
 
@@ -39,3 +39,5 @@ A git clone updates with:
 A zip install keeps its version; a new version installs from its own zip.
 
 See `SETUP`, `UPDATE` and `CHANGELOG` in the package.
+
+An install of 1.1.5 moves over with `MIGRATION` in the package.
