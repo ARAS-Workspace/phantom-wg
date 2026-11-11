@@ -183,8 +183,10 @@ def host() -> None:
     outside = [address for address in resolved if not any(ipaddress.ip_address(address) in net for net in networks)]
     proved(bool(resolved) and not outside, f"{DOMAIN} resolves to Cloudflare: {', '.join(resolved)}")
 
-    running = run("docker", "ps", "-q", "--filter", "name=phantom")
-    proved(running.returncode == 0 and not running.stdout.strip(), "no phantom container runs")
+    running = run("docker", "ps", "--filter", "name=phantom", "--format", "{{.Names}}")
+    proved(running.returncode == 0, f"docker answers the runner {running.stderr.strip()}".rstrip())
+    names = running.stdout.split()
+    proved(not names, f"no phantom container runs {', '.join(names)}".rstrip())
     proved(not HOST.exists(), f"no install of an earlier run at {HOST}")
 
 
@@ -203,7 +205,8 @@ def visitor() -> None:
     proved(seen == ORIGIN_IP, f"Cloudflare sees the visitor as {seen}")
 
     token = login()
-    lines = run("docker", "exec", NGINX, "tail", "-n", "200", "/var/log/nginx/access.log").stdout.splitlines()
+    # nginx.Dockerfile links the access log to the container's stdout.
+    lines = run("docker", "logs", "--tail", "200", NGINX).stdout.splitlines()
     logins = [line for line in lines if '"POST /auth/login ' in line]
     proved(bool(logins), "nginx logs the login")
     logged = logins[-1].split(" ", 1)[0]
