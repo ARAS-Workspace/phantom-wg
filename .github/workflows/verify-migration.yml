@@ -253,7 +253,8 @@ jobs:
         working-directory: /opt/phantom-wg-modern
         run: |
           sed -i 's/^AUTH_PROXY_MAX_BODY=.*/AUTH_PROXY_MAX_BODY=65536/' .env.auth-service
-          echo 'AUTH_PROXY_BACKUP_MAX_BODY=67108864' >> .env.auth-service
+          sed -i '/^AUTH_PROXY_MAX_BODY=/a AUTH_PROXY_BACKUP_MAX_BODY=67108864' .env.auth-service
+          grep '^AUTH_' .env.auth-service
 
       - name: "Step 7: Start 2.0.0"
         working-directory: /opt/phantom-wg-modern
