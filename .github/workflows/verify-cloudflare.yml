@@ -191,6 +191,8 @@ jobs:
           CF_API_TOKEN: ${{ secrets.PHANTOM_TEST_CF_TOKEN }}
         run: python3 -B "$PROBE" revoke-taken
 
+      # Docker makes container-data/state/db as root and hard-reset empties it:
+      # a container of the daemon image removes the install, as hard-reset does.
       - name: Leave the host
         if: always() && env.WORK != ''
         run: |
@@ -198,5 +200,8 @@ jobs:
             cd "$HOST"
             ./tools/prod.sh down
             echo yes | ./tools/prod.sh hard-reset
+            image=$(sed -n 's/^ *image: \(.*phantom-daemon-base.*\)$/\1/p' tools/compose/registry.yml)
+            cd "$WORK"
+            docker run --rm --network none --cap-drop ALL --cap-add DAC_OVERRIDE -v "$WORK:/work" "$image" rm -rf /work/phantom-wg
           fi
           rm -rf "$WORK"
