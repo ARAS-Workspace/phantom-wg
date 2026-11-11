@@ -51,16 +51,16 @@ DASHBOARD = "SSL/TLS, Origin Server, in the Cloudflare dashboard"
 TRIES = 90
 TIMEOUT = 10
 AROUND = 5
-TAKEN = re.compile(r"Origin CA certificate (\S+):")
-REVOKED = re.compile(r"Origin CA certificate (\S+): (?:already )?revoked")
+TAKEN = re.compile(r"Origin CA certificate (\d+):")
+REVOKED = re.compile(r"Origin CA certificate (\d+): (?:already )?revoked")
 
 # DOMAIN has an A record and this host reaches Cloudflare over IPv4: every
 # connection of this script goes over IPv4, so the visitor is ORIGIN_IP.
 _getaddrinfo = socket.getaddrinfo
 
 
-def _ipv4(host, port, family=0, *args, **kwargs):
-    return _getaddrinfo(host, port, socket.AF_INET, *args, **kwargs)
+def _ipv4(*args, **kwargs):
+    return [entry for entry in _getaddrinfo(*args, **kwargs) if entry[0] == socket.AF_INET]
 
 
 socket.getaddrinfo = _ipv4
@@ -123,12 +123,14 @@ def run(*args: str) -> subprocess.CompletedProcess:
 
 def dropped() -> int:
     """The packets the rules of the mode dropped, once nginx holds them."""
+    reason = ""
     for _ in range(TRIES):
         done = run("docker", "exec", NGINX, "nft", "list", "chain", "inet", TABLE, "input")
         if done.returncode == 0:
             return sum(int(packets) for packets in re.findall(r"counter packets (\d+)", done.stdout))
+        reason = done.stderr.strip()
         time.sleep(1)
-    sys.exit(f"FAIL nginx holds no rules of the mode: {done.stderr.strip()}")
+    sys.exit(f"FAIL nginx holds no rules of the mode: {reason}")
 
 
 def login() -> str:
@@ -164,7 +166,7 @@ def revoked(identifier: str) -> bool:
 # ── Stages ───────────────────────────────────────────────────────────
 
 
-def host() -> None:
+def stage_host() -> None:
     session = urllib.request.Request(
         f"{IMDS}/api/token", method="PUT", headers={"X-aws-ec2-metadata-token-ttl-seconds": "60"},
     )
@@ -190,7 +192,7 @@ def host() -> None:
     proved(not HOST.exists(), f"no install of an earlier run at {HOST}")
 
 
-def path() -> None:
+def stage_path() -> None:
     proved(True, f"nginx holds the rules of the mode, {dropped()} packets dropped so far")
     page = answered(lambda: through("/"), 200, "the dashboard answers through Cloudflare")
     proved(b'<div id="root">' in page, "the answer is the dashboard of this install")
@@ -199,7 +201,7 @@ def path() -> None:
     answered(lambda: through("/api/core/hello", token), 200, "an authorized request reaches the daemon through Cloudflare")
 
 
-def visitor() -> None:
+def stage_visitor() -> None:
     trace = answered(lambda: through("/cdn-cgi/trace"), 200, "Cloudflare traces the request")
     seen = dict(line.split("=", 1) for line in trace.decode().splitlines() if "=" in line).get("ip", "")
     proved(seen == ORIGIN_IP, f"Cloudflare sees the visitor as {seen}")
@@ -219,7 +221,7 @@ def visitor() -> None:
     proved(recorded == ORIGIN_IP, f"auth-service records the login from the visitor's address: {recorded}")
 
 
-def around() -> None:
+def stage_around() -> None:
     before = dropped()
     status, _ = direct("/api/core/hello", timeout=AROUND)
     proved(status == 0, f"a request to {ORIGIN_IP} that skips Cloudflare gets no answer in {AROUND} seconds")
@@ -227,7 +229,7 @@ def around() -> None:
     proved(after > before, f"the rules of the mode dropped it: {before} -> {after} packets")
 
 
-def off() -> None:
+def stage_off() -> None:
     proved(not MODE_DIR.exists(), "the directory of the mode is gone")
     found = REVOKED.findall(LOG.read_text(encoding="utf-8"))
     proved(bool(found), "off names the certificate it revoked")
@@ -238,7 +240,7 @@ def off() -> None:
     answered(lambda: through("/api/core/hello"), 526, "Cloudflare refuses the certificate of the origin")
 
 
-def revoke_taken() -> None:
+def stage_revoke_taken() -> None:
     if not LOG.is_file():
         print(f"     {LOG} is missing: the run took no certificate", flush=True)
         return
@@ -257,7 +259,8 @@ def revoke_taken() -> None:
 
 
 STAGES = {
-    "host": host, "path": path, "visitor": visitor, "around": around, "off": off, "revoke-taken": revoke_taken,
+    "host": stage_host, "path": stage_path, "visitor": stage_visitor, "around": stage_around, "off": stage_off,
+    "revoke-taken": stage_revoke_taken,
 }
 
 
