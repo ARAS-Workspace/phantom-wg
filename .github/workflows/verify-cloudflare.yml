@@ -8,11 +8,14 @@ name: Verify Cloudflare
 # release tree is built as package-release builds it, and the host takes it
 # as a release zip install would.
 #
-# Every step below is one thing a person would do or check. The "Host" steps
-# are the commands an operator types, the "Prove" steps run
-# .github/scripts/probes/cloudflare/cloudflare-probe.py on the host. The
-# visitor is the instance itself, through Cloudflare. The mode goes on and off
-# twice; each Origin CA certificate the run takes is revoked again at the end.
+# The first job runs tools/tests/integration_tests/prod/test_cloudflare.py with
+# the token and ZONE, on the tree as its host. The second job runs once it
+# passes. Every step of the second job is one thing a person would do or
+# check. The "Host" steps are the commands an operator types, the "Prove"
+# steps run .github/scripts/probes/cloudflare/cloudflare-probe.py on the
+# host. The visitor is the instance itself, through Cloudflare. The mode goes
+# on and off twice; each Origin CA certificate the run takes is revoked again
+# at the end.
 # .github/scripts/probes/cloudflare/verify-cloudflare.sh moves the tag and
 # starts the run.
 
@@ -35,8 +38,44 @@ env:
   PROBE: .github/scripts/probes/cloudflare/cloudflare-probe.py
 
 jobs:
+  tools:
+    name: Tool tests with a Cloudflare token
+    runs-on: ubuntu-26.04
+    steps:
+      - name: Harden runner
+        uses: step-security/harden-runner@46b06cea07f9e64621fdf066ba77ac6915163d43 # v2.22.3
+        with:
+          egress-policy: audit
+
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+
+      - name: Set up Python
+        uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: '3.14'
+
+      - name: Install test dependencies
+        run: python -m pip install --require-hashes -r tools/tests/requirements.txt
+
+      # Without the token the tests of the whole cycle skip: the job stops instead.
+      - name: Run the Cloudflare tests with the token
+        working-directory: tools
+        env:
+          PHANTOM_TEST_CF_TOKEN: ${{ secrets.PHANTOM_TEST_CF_TOKEN }}
+          PHANTOM_TEST_CF_ZONE: ${{ env.ZONE }}
+        run: |
+          if [ -z "$PHANTOM_TEST_CF_TOKEN" ]; then
+            echo "::error::The secret PHANTOM_TEST_CF_TOKEN is empty"
+            exit 1
+          fi
+          python -B -m pytest tests/integration_tests/prod/test_cloudflare.py -x -s -rs
+
   cloudflare:
     name: Cloudflare mode on an EC2 host
+    needs: tools
     runs-on: [self-hosted, Linux, X64, cf-probe-ec2]
     timeout-minutes: 45
     defaults:
