@@ -253,12 +253,12 @@ What Was Measured:
       against the file shows its changes.
 
   Rehearsal
-    .github/workflows/verify-migration.yml runs this file on an EC2 host, as
-    root: 1.1.5 from a git clone of main, with a Let's Encrypt certificate
-    and three clients, then steps 1 to 7, Check, the certbot of 2.0.0, the
-    removal of the images of 1.1.5 and a Rollback after it. A WireGuard
-    client on a GitHub runner connects with the config of 1.1.5 before and
-    after. Run:
+    .github/workflows/verify-migration.yml of the dev/daemon branch runs
+    this file on an EC2 host, as root: 1.1.5 from a git clone of main, with
+    a Let's Encrypt certificate and three clients, then steps 1 to 7, Check,
+    the certbot of 2.0.0, the removal of the images of 1.1.5 and a Rollback
+    after it. A WireGuard client on a GitHub runner connects with the config
+    of 1.1.5 before and after. Run:
       https://github.com/ARAS-Workspace/phantom-wg/actions/runs/43006742722
     - setup of step 5 on the data of 1.1.5 writes .env and the override
       only; the 28 copied files stay byte for byte as step 4 left them.
