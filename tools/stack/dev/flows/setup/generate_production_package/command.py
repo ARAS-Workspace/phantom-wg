@@ -34,6 +34,7 @@ SKIPPED_SUFFIXES = (".pyc", ".pyo")
 INCLUDE = (
     "SETUP",
     "UPDATE",
+    "MIGRATION",
     "CHANGELOG",
     "LICENSE",
     "THIRD_PARTY_LICENSES",
