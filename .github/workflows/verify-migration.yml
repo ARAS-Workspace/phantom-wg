@@ -31,7 +31,7 @@ concurrency:
   group: migration-v1.1.5-v2.0.0
 
 env:
-  DOMAIN: migration-probe-ec2.phantom-wg.dev
+  DOMAIN: cf-probe-ec2-1.phantom-wg.dev
   ORIGIN_IP: 34.227.212.117
   OLD: /opt/phantom-wg
   NEW: /opt/phantom-wg-modern
@@ -79,7 +79,7 @@ jobs:
       - name: "1.1.5: Let's Encrypt certificate"
         working-directory: /opt/phantom-wg
         run: |
-          ./tools/prod.sh certbot migration-probe-ec2.phantom-wg.dev
+          ./tools/prod.sh certbot cf-probe-ec2-1.phantom-wg.dev
           ./tools/prod.sh restart nginx
 
       - name: Prove 1.1.5 serves
@@ -366,7 +366,7 @@ jobs:
       - name: "After Migration: Let's Encrypt with 2.0.0"
         working-directory: /opt/phantom-wg-modern
         run: |
-          ./tools/prod.sh certbot migration-probe-ec2.phantom-wg.dev
+          ./tools/prod.sh certbot cf-probe-ec2-1.phantom-wg.dev
           ./tools/prod.sh restart nginx
 
       - name: Prove certbot of 2.0.0 kept the certificate of 1.1.5
