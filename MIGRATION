@@ -196,6 +196,7 @@ After Migration:
   directory. With 1.1.5 in /opt/phantom-wg:
 
     docker image rm phantom-wg-daemon phantom-wg-auth-service nginx:1-alpine
+    docker volume rm phantom-wg_phantom-sock
 
   The directory and the images of 1.1.5 are the way back: remove them once
   2.0.0 serves. A rollback after the removal builds the images again.
