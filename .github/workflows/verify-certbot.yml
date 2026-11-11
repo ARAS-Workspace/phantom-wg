@@ -1,9 +1,18 @@
 name: Verify certbot
 
-# Takes a real certificate with tools/prod.sh certbot: the job boots a pinned
-# Debian 13 image under KVM, port 80 of the runner goes to the guest, and the
-# guest runs .github/scripts/probes/certbot/certbot-probe-guest.sh on the
-# repository it gets on a payload disk. DOMAIN points to the runner.
+# Takes a real certificate with ./tools/prod.sh certbot on a host with a
+# public address: the EC2 instance whose self-hosted runner carries the label
+# cf-probe-ec2. DOMAIN is a DNS-only record of phantom-wg.dev that points to
+# ORIGIN_IP, the Elastic IP of the instance: Let's Encrypt reaches port 80 of
+# the host for it. The release tree is built as package-release builds it,
+# with a placeholder for the dashboard, and the host takes it as a release zip
+# install would.
+#
+# Every step is one thing a person would do or check. The "Host" steps are the
+# commands an operator types, the "Prove" steps run
+# .github/scripts/probes/certbot/certbot-probe.py on the host. Each run takes
+# one certificate from Let's Encrypt, which gives a name five of them in seven
+# days.
 # .github/scripts/probes/certbot/verify-certbot.sh moves the tag and starts the run.
 
 on:
@@ -14,102 +23,117 @@ on:
 permissions:
   contents: read
 
-# The runners with KVM share one host, and so one port 80.
+# One instance, one port 80.
 concurrency:
   group: verify-certbot
 
 env:
-  DOMAIN: baremetal-runner.phantom-wg.dev
-  IMAGE: https://cloud.debian.org/images/cloud/trixie/20261103-2651/debian-13-generic-amd64-20261103-2651.qcow2
-  IMAGE_DIGEST: 1207e6e3efaff8ee77ab7a32c156a3eea6a9e53f94cfc48efbd1f49ba554ca36ac62ab27395aa813a1775a8c0a393b1a1ce5377d9e5670f6113e3110c57fee4b
-  # Docker CE from download.docker.com, pinned to these versions.
-  DOCKER_OS: debian
-  DOCKER_CODENAME: trixie
-  DOCKER_SUFFIX: '~debian.13~trixie'
-  DOCKER_CE: '5:29.9.3-1'
-  CONTAINERD_IO: '2.4.2-3'
-  BUILDX: '0.38.1-1'
-  COMPOSE: '5.7.0-1'
+  DOMAIN: certbot-probe-ec2.phantom-wg.dev
+  ORIGIN_IP: 34.227.212.117
+  PROBE: .github/scripts/probes/certbot/certbot-probe.py
 
 jobs:
   certbot:
-    name: Certificate in a Debian 13 guest
-    # The self-hosted bare-metal runners with KVM.
-    runs-on: [self-hosted, linux, x64, kvm]
-    timeout-minutes: 60
+    name: Certificate on an EC2 host
+    runs-on: [self-hosted, Linux, X64, cf-probe-ec2]
+    timeout-minutes: 30
+    defaults:
+      run:
+        shell: bash
     steps:
       - name: Checkout
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
           persist-credentials: false
 
-      - name: Check the host
+      # Outside the checkout: the containers write files as root, and the
+      # next checkout cleans its directory as the runner.
+      - name: Name the install directory
         run: |
-          for c in qemu-system-x86_64 qemu-img cloud-localds git curl python3 mawk; do
-            command -v "$c" > /dev/null || { echo "::error::$c is not installed on this runner"; exit 1; }
-          done
-          python3 -c 'import os; os.close(os.open("/dev/kvm", os.O_RDWR))' \
-            || { echo "::error::/dev/kvm cannot be opened by $(id -un)"; exit 1; }
-          echo "user $(id -un), kernel $(uname -r), $(nproc) cpus, $(df -h --output=avail "$RUNNER_TEMP" | tail -1 | tr -d ' ') free"
+          echo "WORK=$HOME/verify-certbot" >> "$GITHUB_ENV"
+          echo "HOST=$HOME/verify-certbot/phantom-wg" >> "$GITHUB_ENV"
 
-      - name: Fetch the image
+      - name: Prove the host
+        run: python3 -B "$PROBE" host
+
+      - name: Prepare SPA dist (placeholder for nginx)
+        run: mkdir -p services/react-spa/dist && echo '<!DOCTYPE html><html><body>CI</body></html>' > services/react-spa/dist/index.html
+
+      - name: Run packager
+        run: ./tools/dev.sh generate-production-package --no-spa
+
+      - name: Host takes the release tree
         run: |
-          mkdir -p "$RUNNER_TEMP/vm"
-          curl -fSL --retry 3 --retry-delay 2 -o "$RUNNER_TEMP/vm/base.img" "$IMAGE"
-          echo "$IMAGE_DIGEST  $RUNNER_TEMP/vm/base.img" | sha512sum -c -
-          qemu-img create -f qcow2 -b base.img -F qcow2 "$RUNNER_TEMP/vm/disk.qcow2" 40G
+          mkdir -p "$WORK"
+          cp -a dist/phantom-wg-modern "$HOST"
 
-      - name: Make the payload, seed and results disks
+      - name: Host runs gates
+        working-directory: ${{ env.HOST }}
+        run: ./tools/prod.sh gates
+
+      - name: Host runs setup
+        working-directory: ${{ env.HOST }}
+        run: ./tools/prod.sh setup
+
+      - name: Host runs up
+        working-directory: ${{ env.HOST }}
+        run: ./tools/prod.sh up
+
+      - name: Prove the certificate of setup is not a public one
+        run: python3 -B "$PROBE" before
+
+      - name: Host takes a certificate and restarts nginx
+        working-directory: ${{ env.HOST }}
         run: |
-          vm="$RUNNER_TEMP/vm"
-          {
-            echo "DOMAIN='$DOMAIN'"
-            echo "DOCKER_OS='$DOCKER_OS'"
-            echo "DOCKER_CODENAME='$DOCKER_CODENAME'"
-            echo "DOCKER_SUFFIX='$DOCKER_SUFFIX'"
-            echo "DOCKER_CE='$DOCKER_CE'"
-            echo "CONTAINERD_IO='$CONTAINERD_IO'"
-            echo "BUILDX='$BUILDX'"
-            echo "COMPOSE='$COMPOSE'"
-          } > probe.env
-          git archive --format=tar -o "$vm/payload.tar" HEAD
-          tar -rf "$vm/payload.tar" probe.env
-          truncate -s 1G "$vm/results.img"
-          cat > "$vm/user-data" <<'EOF'
-          #cloud-config
-          runcmd:
-            - [sh, -c, 'mkdir -p /work && tar -xf /dev/disk/by-id/virtio-payload -C /work && exec bash /work/.github/scripts/probes/certbot/certbot-probe-guest.sh || { echo "PROBE | payload unreadable" > /dev/ttyS0; poweroff; }']
-          EOF
-          echo "instance-id: certbot-probe" > "$vm/meta-data"
-          cloud-localds "$vm/seed.img" "$vm/user-data" "$vm/meta-data"
+          ./tools/prod.sh certbot "$DOMAIN"
+          ./tools/prod.sh restart nginx
 
-      - name: Run the guest
-        run: bash .github/scripts/probes/certbot/certbot-probe.sh "$RUNNER_TEMP/vm"
+      - name: Prove the certificate
+        run: python3 -B "$PROBE" certificate
 
-      - name: Check the steps
-        if: always()
-        shell: bash
+      # A cron job: no terminal, no input, a bare environment, and another
+      # directory. The certificate is not due for renewal: the same one stays.
+      - name: Host runs the same commands as a cron job
         run: |
-          steps="$RUNNER_TEMP/vm/results/steps"
-          {
-            echo '| Step | Exit | Seconds |'
-            echo '| --- | --- | --- |'
-            while read -r name code seconds; do
-              echo "| $name | $code | $seconds |"
-            done < "$steps"
-          } >> "$GITHUB_STEP_SUMMARY"
-          for name in docker tree stack certbot cron reset; do
-            grep -q "^$name 0 " "$steps" || { echo "::error::$name did not pass"; exit 1; }
-          done
+          env -i PATH=/usr/bin:/bin HOME="$HOME" sh -c \
+            "cd / && '$HOST/tools/prod.sh' certbot '$DOMAIN' && '$HOST/tools/prod.sh' restart nginx" < /dev/null
 
-      - name: Keep the guest's logs
-        if: always()
-        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
-        with:
-          name: certbot-probe
-          path: |
-            ${{ runner.temp }}/vm/results
-            ${{ runner.temp }}/vm/guest.log
-            ${{ runner.temp }}/vm/serial.log
-          retention-days: 14
-          if-no-files-found: ignore
+      - name: Prove the certificate is the same one
+        run: python3 -B "$PROBE" same-certificate
+
+      - name: Host runs down
+        working-directory: ${{ env.HOST }}
+        run: ./tools/prod.sh down
+
+      - name: Prove the certbot state holds entries of root
+        run: python3 -B "$PROBE" state
+
+      - name: Host runs hard-reset
+        working-directory: ${{ env.HOST }}
+        run: echo yes | ./tools/prod.sh hard-reset
+
+      - name: Prove hard-reset left nothing of the certbot state
+        run: python3 -B "$PROBE" reset
+
+      - name: Stack logs on failure
+        if: failure() && env.HOST != ''
+        run: |
+          if [ -d "$HOST" ]; then
+            cd "$HOST"
+            docker compose logs --tail 60
+          fi
+
+      # Docker makes container-data/state/db as root and hard-reset empties it:
+      # a container of the daemon image removes the install, as hard-reset does.
+      - name: Leave the host
+        if: always() && env.WORK != ''
+        run: |
+          if [ -d "$HOST" ]; then
+            cd "$HOST"
+            ./tools/prod.sh down
+            echo yes | ./tools/prod.sh hard-reset
+            image=$(sed -n 's/^ *image: \(.*phantom-daemon-base.*\)$/\1/p' tools/compose/registry.yml)
+            cd "$WORK"
+            docker run --rm --network none --cap-drop ALL --cap-add DAC_OVERRIDE -v "$WORK:/work" "$image" rm -rf /work/phantom-wg
+          fi
+          rm -rf "$WORK"
