@@ -1,0 +1,395 @@
+name: Verify migration
+
+# MIGRATION, from 1.1.5 to 2.0.0, on a host with a public address: the EC2
+# instance whose self-hosted runner carries the label cf-probe-ec2. DOMAIN is
+# a DNS-only record of phantom-wg.dev that points to ORIGIN_IP, the Elastic IP
+# of the instance. The first job installs 1.1.5 from a git clone of main, as
+# its quick start does, up to a Let's Encrypt certificate. The release tree of
+# this commit, built as package-release builds it, stands for the clone of
+# main that 2.0.0 will be. A WireGuard client on a GitHub runner connects with
+# the config of 1.1.5 before and after the migration.
+#
+# Every step is one thing a person would do or check. The "1.1.5:" and
+# "Step N:" steps run the commands of the 1.1.5 quick start and of MIGRATION,
+# as root as there. The "Prove" and "Check" steps run
+# .github/scripts/probes/migration/migration-probe.py on the host. The config
+# of the client travels as an artifact kept for a day: it holds the private key
+# of a client of this run, and the last job wipes the server it belongs to.
+# One run: main is 1.1.5 until 2.0.0 is out.
+# .github/scripts/probes/migration/verify-migration.sh moves the tag and starts
+# the run.
+
+on:
+  push:
+    tags:
+      - 'migration-v1.1.5-v2.0.0'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: migration-v1.1.5-v2.0.0
+
+env:
+  DOMAIN: migration-probe-ec2.phantom-wg.dev
+  ORIGIN_IP: 34.227.212.117
+  OLD: /opt/phantom-wg
+  NEW: /opt/phantom-wg-modern
+  WORK: /opt/verify-migration
+  PROBE: .github/scripts/probes/migration/migration-probe.py
+
+jobs:
+  v115:
+    name: 1.1.5 with its clients
+    runs-on: [self-hosted, Linux, X64, cf-probe-ec2]
+    timeout-minutes: 40
+    defaults:
+      run:
+        # Root, as the 1.1.5 quick start and the examples of MIGRATION run.
+        shell: sudo -E bash --noprofile --norc -eo pipefail {0}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+
+      - name: Prove the host
+        run: python3 -B "$PROBE" host
+
+      - name: "1.1.5: clone main"
+        run: git clone https://github.com/ARAS-Workspace/phantom-wg.git /opt/phantom-wg
+
+      - name: Prove the clone is 1.1.5
+        run: python3 -B "$PROBE" version /opt/phantom-wg 1.1.5
+
+      - name: "1.1.5: setup"
+        working-directory: /opt/phantom-wg
+        run: ./tools/prod.sh setup
+
+      - name: "1.1.5: set the WireGuard endpoint"
+        working-directory: /opt/phantom-wg
+        run: sed -i "s/WIREGUARD_ENDPOINT_V4=.*/WIREGUARD_ENDPOINT_V4=34.227.212.117/" .env.daemon
+
+      - name: "1.1.5: up"
+        working-directory: /opt/phantom-wg
+        run: |
+          ./tools/prod.sh up
+          ./tools/prod.sh status
+
+      - name: "1.1.5: Let's Encrypt certificate"
+        working-directory: /opt/phantom-wg
+        run: |
+          ./tools/prod.sh certbot migration-probe-ec2.phantom-wg.dev
+          ./tools/prod.sh restart nginx
+
+      - name: Prove 1.1.5 serves
+        run: python3 -B "$PROBE" serves /opt/phantom-wg
+
+      - name: The admin adds three clients in 1.1.5
+        run: python3 -B "$PROBE" add-clients
+
+      - name: The admin exports the v4 config of migration-1
+        run: python3 -B "$PROBE" export
+
+      - name: Keep the config for the client jobs
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
+        with:
+          name: migration-1-config
+          path: ${{ runner.temp }}/client/wg0.conf
+          retention-days: 1
+          if-no-files-found: error
+
+      - name: Record what 1.1.5 holds
+        run: python3 -B "$PROBE" record
+
+  client-v115:
+    name: A client connects to 1.1.5
+    needs: v115
+    runs-on: ubuntu-26.04
+    timeout-minutes: 15
+    steps:
+      - name: Harden runner
+        uses: step-security/harden-runner@46b06cea07f9e64621fdf066ba77ac6915163d43 # v2.22.3
+        with:
+          egress-policy: audit
+
+      - name: Download the config of migration-1
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: migration-1-config
+          path: client
+
+      - name: The WireGuard module of this runner
+        run: |
+          uname -r
+          modinfo -F filename wireguard
+
+      - name: Build the WireGuard client image
+        run: |
+          docker build -t phantom-migration-client - <<'EOF'
+          FROM debian:trixie-20261027-slim@sha256:f6b08b09a05725f9431502d3b5714f5c4576e82c1a84fa1debe0c24a7e0c3ec4
+          RUN apt-get update \
+           && apt-get install -y --no-install-recommends \
+              wireguard-tools iproute2 iputils-ping curl ca-certificates openresolv iptables nftables procps \
+           && rm -rf /var/lib/apt/lists/*
+          EOF
+
+      - name: The client connects with the config of 1.1.5
+        run: |
+          chmod 600 client/wg0.conf
+          docker run -d --name phantom-migration-client --privileged \
+            -v "$PWD/client/wg0.conf:/etc/wireguard/wg0.conf:ro" phantom-migration-client sleep infinity
+          docker exec phantom-migration-client wg-quick up wg0
+
+      - name: Prove the traffic of the client leaves through 34.227.212.117
+        run: |
+          for try in $(seq 30); do
+            docker exec phantom-migration-client curl -s --max-time 5 https://www.cloudflare.com/cdn-cgi/trace > trace.txt && break
+            sleep 1
+          done
+          grep '^ip=' trace.txt || true
+          grep -qx 'ip=34.227.212.117' trace.txt || { echo "FAIL the traffic of the client does not leave through 34.227.212.117"; exit 1; }
+          echo "ok   the traffic of the client leaves through 34.227.212.117"
+          docker exec phantom-migration-client wg show wg0 latest-handshakes
+
+      - name: The client disconnects
+        if: always()
+        run: docker rm -f phantom-migration-client
+
+  migrate:
+    name: MIGRATION, steps 1 to 7, and its checks
+    needs: client-v115
+    runs-on: [self-hosted, Linux, X64, cf-probe-ec2]
+    timeout-minutes: 40
+    defaults:
+      run:
+        shell: sudo -E bash --noprofile --norc -eo pipefail {0}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+
+      - name: Prove migration-1 shook hands with 1.1.5
+        run: python3 -B "$PROBE" handshake
+
+      # The release package, as package-release builds it, as the runner: the
+      # checkout belongs to the runner.
+      - name: Set up Node
+        uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # v6.3.0
+        with:
+          node-version: '24'
+          cache: ''
+
+      - name: Install SPA dependencies
+        shell: bash
+        working-directory: services/react-spa
+        run: npm ci
+
+      - name: Build SPA
+        shell: bash
+        working-directory: services/react-spa
+        run: npm run build
+
+      - name: Run packager
+        shell: bash
+        run: ./tools/dev.sh generate-production-package --no-spa
+
+      - name: "Step 1: Look at 1.1.5"
+        working-directory: /opt/phantom-wg
+        run: |
+          ./tools/prod.sh status
+          git status --short
+
+      # The release tree of this commit is what a clone of main gives once
+      # 2.0.0 is out; root makes it, as in the examples of MIGRATION.
+      - name: "Step 2: Get 2.0.0 next to it, and check the host"
+        run: |
+          cp -r dist/phantom-wg-modern /opt/phantom-wg-modern
+          cd /opt/phantom-wg-modern
+          ./tools/prod.sh gates
+
+      - name: "Measure: pull the images of 2.0.0 before step 3"
+        continue-on-error: true
+        working-directory: /opt/phantom-wg-modern
+        run: ./tools/prod.sh pull
+
+      - name: "Step 3: Stop 1.1.5"
+        working-directory: /opt/phantom-wg
+        run: ./tools/prod.sh down
+
+      - name: "Step 4: Copy the data and the environment files"
+        working-directory: /opt/phantom-wg-modern
+        run: |
+          cp -a /opt/phantom-wg/container-data /opt/phantom-wg/.env.daemon \
+            /opt/phantom-wg/.env.auth-service .
+          chown -R --reference=. container-data .env.daemon .env.auth-service
+
+      - name: Prove the copy is whole
+        run: python3 -B "$PROBE" copied
+
+      - name: "Step 5: Write what 2.0.0 adds"
+        working-directory: /opt/phantom-wg-modern
+        run: ./tools/prod.sh setup | tee /opt/verify-migration/setup.log
+
+      - name: Prove setup wrote only .env and the override
+        run: python3 -B "$PROBE" setup
+
+      - name: "Step 6: Organize the environment files"
+        working-directory: /opt/phantom-wg-modern
+        run: |
+          sed -i 's/^AUTH_PROXY_MAX_BODY=.*/AUTH_PROXY_MAX_BODY=65536/' .env.auth-service
+          echo 'AUTH_PROXY_BACKUP_MAX_BODY=67108864' >> .env.auth-service
+
+      - name: "Step 7: Start 2.0.0"
+        working-directory: /opt/phantom-wg-modern
+        run: |
+          ./tools/prod.sh up
+          ./tools/prod.sh status
+          ./tools/prod.sh show-versions
+
+      - name: "Check: the dashboard answers, and the admin of 1.1.5 logs in with the same password"
+        run: python3 -B "$PROBE" serves /opt/phantom-wg
+
+      - name: "Check: the certificate of 1.1.5 serves"
+        run: python3 -B "$PROBE" same-certificate
+
+      - name: "Check: the clients of 1.1.5 are listed"
+        run: python3 -B "$PROBE" clients
+
+      - name: "Check: the audit log lists the entries of 1.1.5"
+        run: python3 -B "$PROBE" audit
+
+      - name: "Check: the stack runs the images of the release"
+        run: python3 -B "$PROBE" pins
+
+  client-v200:
+    name: The client connects to 2.0.0 with the config of 1.1.5
+    needs: migrate
+    runs-on: ubuntu-26.04
+    timeout-minutes: 15
+    steps:
+      - name: Harden runner
+        uses: step-security/harden-runner@46b06cea07f9e64621fdf066ba77ac6915163d43 # v2.22.3
+        with:
+          egress-policy: audit
+
+      - name: Download the config of migration-1
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: migration-1-config
+          path: client
+
+      - name: The WireGuard module of this runner
+        run: |
+          uname -r
+          modinfo -F filename wireguard
+
+      - name: Build the WireGuard client image
+        run: |
+          docker build -t phantom-migration-client - <<'EOF'
+          FROM debian:trixie-20261027-slim@sha256:f6b08b09a05725f9431502d3b5714f5c4576e82c1a84fa1debe0c24a7e0c3ec4
+          RUN apt-get update \
+           && apt-get install -y --no-install-recommends \
+              wireguard-tools iproute2 iputils-ping curl ca-certificates openresolv iptables nftables procps \
+           && rm -rf /var/lib/apt/lists/*
+          EOF
+
+      - name: The client connects with the config of 1.1.5
+        run: |
+          chmod 600 client/wg0.conf
+          docker run -d --name phantom-migration-client --privileged \
+            -v "$PWD/client/wg0.conf:/etc/wireguard/wg0.conf:ro" phantom-migration-client sleep infinity
+          docker exec phantom-migration-client wg-quick up wg0
+
+      - name: Prove the traffic of the client leaves through 34.227.212.117
+        run: |
+          for try in $(seq 30); do
+            docker exec phantom-migration-client curl -s --max-time 5 https://www.cloudflare.com/cdn-cgi/trace > trace.txt && break
+            sleep 1
+          done
+          grep '^ip=' trace.txt || true
+          grep -qx 'ip=34.227.212.117' trace.txt || { echo "FAIL the traffic of the client does not leave through 34.227.212.117"; exit 1; }
+          echo "ok   the traffic of the client leaves through 34.227.212.117"
+          docker exec phantom-migration-client wg show wg0 latest-handshakes
+
+      - name: The client disconnects
+        if: always()
+        run: docker rm -f phantom-migration-client
+
+  after:
+    name: After the migration, and the way back
+    needs: client-v200
+    runs-on: [self-hosted, Linux, X64, cf-probe-ec2]
+    timeout-minutes: 30
+    defaults:
+      run:
+        shell: sudo -E bash --noprofile --norc -eo pipefail {0}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+
+      - name: "Check: a client connects with its config of 1.1.5"
+        run: python3 -B "$PROBE" handshake
+
+      - name: "After Migration: Let's Encrypt with 2.0.0"
+        working-directory: /opt/phantom-wg-modern
+        run: |
+          ./tools/prod.sh certbot migration-probe-ec2.phantom-wg.dev
+          ./tools/prod.sh restart nginx
+
+      - name: Prove certbot of 2.0.0 kept the certificate of 1.1.5
+        run: python3 -B "$PROBE" same-certificate
+
+      - name: "Rollback: back to 1.1.5"
+        run: |
+          cd /opt/phantom-wg-modern
+          ./tools/prod.sh down
+          cd /opt/phantom-wg
+          ./tools/prod.sh up
+
+      - name: Prove 1.1.5 serves again
+        run: python3 -B "$PROBE" serves /opt/phantom-wg
+
+      - name: Prove 1.1.5 lists its clients again
+        run: python3 -B "$PROBE" clients
+
+      - name: "After Migration: remove the images of 1.1.5"
+        working-directory: /opt/phantom-wg
+        run: |
+          ./tools/prod.sh down
+          docker image ls
+          docker image rm phantom-wg-daemon phantom-wg-auth-service nginx:1-alpine
+
+  leave:
+    name: Leave the host
+    needs: [v115, client-v115, migrate, client-v200, after]
+    if: always()
+    runs-on: [self-hosted, Linux, X64, cf-probe-ec2]
+    timeout-minutes: 15
+    defaults:
+      run:
+        shell: sudo -E bash --noprofile --norc -eo pipefail {0}
+    steps:
+      - name: Stack logs on failure
+        if: contains(needs.*.result, 'failure')
+        run: |
+          for install in /opt/phantom-wg-modern /opt/phantom-wg; do
+            if [ -d "$install" ]; then
+              echo "--- $install"
+              (cd "$install" && docker compose logs --tail 60) || true
+            fi
+          done
+
+      - name: Leave the host
+        run: |
+          for install in /opt/phantom-wg-modern /opt/phantom-wg; do
+            if [ -d "$install" ]; then
+              (cd "$install" && ./tools/prod.sh down && echo yes | ./tools/prod.sh hard-reset) \
+                || echo "::warning::$install did not go down and reset by its own tools"
+            fi
+          done
+          docker ps -aq --filter name=phantom | xargs -r docker rm -f
+          rm -rf /opt/phantom-wg /opt/phantom-wg-modern /opt/verify-migration
