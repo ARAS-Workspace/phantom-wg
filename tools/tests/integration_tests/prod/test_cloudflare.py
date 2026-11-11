@@ -292,6 +292,16 @@ def test_refresh_writes_the_lists_again():
 
 
 @with_cloudflare
+def test_refresh_takes_the_origin_pull_ca_again():
+    ca = CLOUDFLARE / "phantom.d/cf_origin_pull_ca.pem"
+    taken = ca.read_bytes()
+    ca.write_text("# stale\n", encoding="utf-8")
+    done = cloudflare("refresh", timeout=LONG)
+    assert done.returncode == 0, done.stdout
+    assert ca.read_bytes() == taken
+
+
+@with_cloudflare
 def test_status_reads_the_mode():
     done = cloudflare(timeout=LONG)
     assert done.returncode == 0, done.stdout

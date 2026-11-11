@@ -17,9 +17,9 @@ here, and writes the mode: nginx requires Cloudflare's authenticated origin
 pull certificate, its port 443 drops what does not come from Cloudflare's
 addresses, and it logs the visitor's address. off revokes the certificate and
 takes the mode back; --keep-certificate leaves the certificate in Cloudflare.
-refresh writes Cloudflare's address list again. The work runs in
-phantom-nginx-tools, built here from helper/; the override changes only after
-Compose accepts the new one, and the last one stays as
+refresh takes Cloudflare's origin pull CA and address list again. The work
+runs in phantom-nginx-tools, built here from helper/; the override changes
+only after Compose accepts the new one, and the last one stays as
 docker-compose.override.yml.bak. A step of on that fails after the
 certificate revokes it again.
 """

@@ -17,7 +17,7 @@ stdin as one JSON document: token, zone, hostnames.
             without the lines the mode added
   revoke    revokes the certificate of the mode in Cloudflare
   rollback  revokes the certificate of the candidate state
-  refresh   writes the address list again
+  refresh   takes the origin pull CA and the address list again
   status    prints the mode, its certificate and its address list
 
 ./tools/prod.sh cloudflare checks the candidate with Compose and puts it in
@@ -281,11 +281,17 @@ def key_and_csr(zone: str) -> str:
 
 
 def take_ca() -> None:
-    """The origin pull CA Cloudflare publishes."""
+    """The origin pull CA Cloudflare publishes; the one in place stays until the new one reads as a certificate."""
     target = SNIPPETS / "cf_origin_pull_ca.pem"
     target.parent.mkdir(parents=True, exist_ok=True)
-    target.write_bytes(fetch(ORIGIN_PULL_CA_URL))
-    openssl("x509", "-in", str(target), "-noout")
+    taken = target.with_name(f"{target.name}.new")
+    taken.write_bytes(fetch(ORIGIN_PULL_CA_URL))
+    try:
+        openssl("x509", "-in", str(taken), "-noout")
+    except Refused:
+        taken.unlink()
+        raise
+    os.replace(taken, target)
     say(f"Origin pull CA: {ORIGIN_PULL_CA_URL}")
 
 
@@ -533,7 +539,9 @@ def rollback() -> None:
 
 def refresh() -> None:
     mode_state()
-    write_lists(*addresses())
+    lists = addresses()
+    take_ca()
+    write_lists(*lists)
 
 
 def status() -> None:
