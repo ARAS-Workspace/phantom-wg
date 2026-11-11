@@ -1,0 +1,229 @@
+Phantom-WG Modern — Migration Guide
+=====================================
+
+From 1.1.5 to 2.0.0. This file is the draft of the migration document: the
+steps, and under "What Was Measured" the facts they rest on.
+
+Before You Start:
+  2.0.0 is installed next to 1.1.5, in a directory of its own. The data and
+  the environment files of 1.1.5 are copied into it; the directory of 1.1.5
+  stays as it is and is the way back (see Rollback).
+
+  What carries over as it is:
+    - The WireGuard server keys: the client configs of 1.1.5 keep working
+    - Clients, the address pool, multihop exits and the firewall state
+    - Users, their roles and passwords, TOTP, and the audit log
+    - The TLS certificate, self-signed or from Let's Encrypt
+    - .env.daemon
+
+  The stack is down from the down of 1.1.5 (step 3) to the up of 2.0.0
+  (step 7).
+
+  The examples run as root, as the 1.1.5 quick start does, with 1.1.5 in
+  /opt/phantom-wg and 2.0.0 in /opt/phantom-wg-modern. Any other directory
+  works the same way. A git clone without a directory name takes
+  phantom-wg, which in /opt is the directory of 1.1.5: git stops there.
+
+Host Requirements:
+  2.0.0 asks more of the host than 1.1.5:
+
+    1.1.5   Docker Engine 20.10+, Docker Compose v2, bash, git
+    2.0.0   Docker Engine 27.0.1+, Docker Compose 2.27.2+, kernel 5.15+,
+            /dev/net/tun, python3 3.9+, bash, git
+
+  ./tools/prod.sh gates of 2.0.0 reports what the host has (step 2). The
+  tools stop on a python3 under 3.9; setup and up stop on a kernel under
+  5.15, without /dev/net/tun, or when Docker or Compose does not answer. The
+  versions of Docker and Compose are reported, not compared: check them
+  against the list above.
+
+What Changes:
+  .env (new)
+    PHANTOM_IMAGE_SOURCE     registry: the images come from the registry,
+                             pinned by the release. 1.1.5 built the daemon
+                             and auth-service images on the host and ran
+                             nginx:1-alpine.
+    PHANTOM_SUBNET_V4        The network of the stack. 1.1.5 fixed it in
+    PHANTOM_SUBNET_V6        docker-compose.yml; the defaults are the same,
+                             172.28.0.0/24 and fd00:d0ce::/64.
+
+  docker-compose.override.yml (new)
+    The published ports, 51820/udp and 443 as in 1.1.5. 1.1.5 kept them in
+    docker-compose.yml.
+
+  .env.daemon
+    The same keys and the same defaults: the file of 1.1.5 is used as it is.
+
+  .env.auth-service
+    AUTH_PROXY_MAX_BODY         67108864 in 1.1.5, 65536 in 2.0.0: the
+                                largest request body through the API
+    AUTH_PROXY_BACKUP_MAX_BODY  New, 67108864: the largest backup upload
+    AUTH_TRUSTED_PROXIES        In 1.1.5 it replaced the networks
+                                auth-service trusts; in 2.0.0 it adds to the
+                                subnets of the stack
+
+    The file of 1.1.5 works as it is: without AUTH_PROXY_BACKUP_MAX_BODY,
+    2.0.0 takes 67108864. With AUTH_PROXY_MAX_BODY=67108864 every API
+    request may carry 64 MiB, where 2.0.0 sets 64 KiB.
+
+  tools/
+    ./tools/prod.sh stays the entry; the commands run on python3. New:
+    gates, images, pull, add-superadmin, cloudflare. Gone: compose, use
+    docker compose in the directory instead. What the tools write belongs to
+    the owner of the install directory.
+
+Migration:
+  1. Look at 1.1.5
+
+       cd /opt/phantom-wg
+       ./tools/prod.sh status
+       git status --short
+
+     git status lists the files changed on this host. A changed
+     docker-compose.yml holds ports or subnets of its own: note them for
+     step 6.
+
+  2. Get 2.0.0 next to it, and check the host
+
+       git clone https://github.com/ARAS-Workspace/phantom-wg.git \
+         /opt/phantom-wg-modern
+
+     or from a release zip:
+
+       cd /opt
+       unzip phantom-wg-modern-v2.0.0-amd64.zip    # or -arm64
+
+     then:
+
+       cd /opt/phantom-wg-modern
+       ./tools/prod.sh gates
+
+  3. Stop 1.1.5
+
+       cd /opt/phantom-wg
+       ./tools/prod.sh down
+
+     The databases are copied in step 4: a running stack could leave them
+     halfway written.
+
+  4. Copy the data and the environment files
+
+       cd /opt/phantom-wg-modern
+       cp -a /opt/phantom-wg/container-data /opt/phantom-wg/.env.daemon \
+         /opt/phantom-wg/.env.auth-service .
+       chown -R --reference=. container-data .env.daemon .env.auth-service
+
+     cp -a keeps the owners of 1.1.5. chown gives the copy to the owner of
+     this directory, the user the tools of 2.0.0 write as; as root in a
+     directory of root it changes nothing.
+
+  5. Write what 2.0.0 adds
+
+       ./tools/prod.sh setup
+
+     setup creates only what is missing: here .env and
+     docker-compose.override.yml, each from its .example. The keys, the auth
+     database, the TLS certificate and the address pool of 1.1.5 are in
+     place, and setup leaves them.
+
+  6. Organize the environment files
+
+     .env.auth-service, as 2.0.0 sets it:
+       AUTH_PROXY_MAX_BODY=65536
+       AUTH_PROXY_BACKUP_MAX_BODY=67108864
+
+     Ports of its own from step 1: docker-compose.override.yml.
+     Subnets of its own from step 1: PHANTOM_SUBNET_V4 and PHANTOM_SUBNET_V6
+     in .env.
+     A WIREGUARD_LISTEN_PORT of its own in .env.daemon: the same port as the
+     container side of the udp entry in docker-compose.override.yml.
+
+  7. Start 2.0.0
+
+       ./tools/prod.sh up
+       ./tools/prod.sh status
+       ./tools/prod.sh show-versions
+
+Check:
+  - The dashboard answers, and the admin of 1.1.5 logs in with the same
+    password
+  - The clients of 1.1.5 are listed
+  - A client connects with its config of 1.1.5: its handshake shows in the
+    dashboard
+  - The audit log lists the entries of 1.1.5 before the new ones
+
+Rollback:
+  The directory of 1.1.5 is as it was: step 4 copied from it.
+
+    cd /opt/phantom-wg-modern
+    ./tools/prod.sh down
+    cd /opt/phantom-wg
+    ./tools/prod.sh up
+
+  What 2.0.0 wrote after step 7 (new clients, users, audit entries) stays in
+  /opt/phantom-wg-modern; 1.1.5 does not have it.
+
+After Migration:
+  Let's Encrypt: its state is in container-data/certbot, copied in step 4. A
+  cron job or timer that renews the certificate names the directory of
+  1.1.5: point it to the new one.
+
+  Images of 1.1.5: they were built on this host, under the name of its
+  directory. To list and remove them:
+
+    docker image ls
+    docker image rm <the images of 1.1.5>
+
+  The directory of 1.1.5 is the way back: remove it once 2.0.0 serves.
+
+  Updates of 2.0.0: see UPDATE.
+
+What Was Measured:
+  1.1.5 is main at v1.1.5 (8de545c3), 2.0.0 is dev/daemon before its
+  release. Read from the two trees:
+
+  Install
+    - The 1.1.5 quick start installs as root: get.phantom.tc makes a
+      shallow, sparse git clone of main in /opt/phantom-wg.
+    - The 2.0.0 release text clones into phantom-wg and unzips into
+      phantom-wg-modern.
+
+  Data
+    - Both docker-compose.yml bind the same paths: container-data/db,
+      container-data/state/db, container-data/auth-db and the six files of
+      container-data/secrets/production. The containers have the same
+      names: phantom-daemon, phantom-auth, phantom-nginx.
+    - The tools of 1.1.5 make secrets/production and auth-db as the user
+      who runs them; Docker makes db and state/db as root on the first up.
+      2.0.0 makes db as the owner of the install directory, and Docker
+      makes state/db as root, as in 1.1.5.
+    - auth-service is 1.1.7 in 1.1.5 and 1.3.0 in 2.0.0. Its schema.sql
+      differs in one comment; the tables of tools/bootstrap.py are the same.
+      Both bootstraps make the admin a superadmin.
+    - The repositories and the firewall state of the daemon keep their
+      schemas; db.py migrates what it finds.
+
+  Environment
+    - .env.daemon.example: the same keys and the same values.
+    - .env.auth-service.example: AUTH_PROXY_MAX_BODY 67108864 to 65536,
+      AUTH_PROXY_BACKUP_MAX_BODY added with 67108864, the default of the
+      code when the key is missing.
+    - AUTH_TRUSTED_PROXIES: 1.1.5 reads it in place of its default
+      networks, 2.0.0 adds it to PHANTOM_SUBNET_V4 and PHANTOM_SUBNET_V6.
+    - .env and docker-compose.override.yml.example: in 2.0.0 only.
+
+  Tools
+    - 2.0.0 setup refuses a complete install and otherwise creates only
+      what is missing: it writes .env and docker-compose.override.yml from
+      their examples, and leaves keys, auth database, TLS certificate and
+      address pool it finds.
+    - 1.1.5 renews no certificate by itself; 2.0.0 leaves the schedule to
+      the operator. Both keep the state in container-data/certbot.
+
+  Still to measure, in the rehearsal:
+    - setup of step 5 on the data of a real 1.1.5 (read from the code, not
+      run)
+    - The names of the 1.1.5 images to remove
+    - The entries of 1.1.5 in the audit log of the 2.0.0 dashboard
+    - A client of 1.1.5 connecting to 2.0.0
+    - Pulling the images of 2.0.0 before step 3, to shorten the down time

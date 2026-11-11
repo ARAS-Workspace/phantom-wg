@@ -32,6 +32,7 @@ Directory Structure:
   ├── requirements.txt                     Python dependencies (pinned, hashed)
   ├── SETUP                                This file
   ├── UPDATE                               Update and maintenance guide
+  ├── MIGRATION                            Migration from 1.1.5 to 2.0.0
   ├── LICENSE                              AGPL-3.0
   ├── THIRD_PARTY_LICENSES                 Dependency licenses
   ├── images/                              Image archive (release zip only)
