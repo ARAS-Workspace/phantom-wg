@@ -64,8 +64,10 @@ What Changes:
                                 subnets of the stack
 
     The file of 1.1.5 works as it is: without AUTH_PROXY_BACKUP_MAX_BODY,
-    2.0.0 takes 67108864. With AUTH_PROXY_MAX_BODY=67108864 every API
-    request may carry 64 MiB, where 2.0.0 sets 64 KiB.
+    2.0.0 takes 67108864. nginx of 2.0.0 answers 413 to a body over 64 KiB;
+    only the two backup routes carry up to 64 MiB. AUTH_PROXY_MAX_BODY is
+    the limit of auth-service behind nginx: with 67108864 it accepts 64 MiB
+    on every route, where 2.0.0 sets 64 KiB.
 
   tools/
     ./tools/prod.sh stays the entry; the commands run on python3. New:
@@ -192,14 +194,16 @@ After Migration:
   cron job or timer that renews the certificate names the directory of
   1.1.5: point it to the new one.
 
-  Images of 1.1.5: they were built on this host and carry the name of its
-  directory. With 1.1.5 in /opt/phantom-wg:
+  Images and volume of 1.1.5: the daemon and auth-service images, built on
+  this host, and the volume carry the name of its directory. With 1.1.5 in
+  /opt/phantom-wg:
 
     docker image rm phantom-wg-daemon phantom-wg-auth-service nginx:1-alpine
     docker volume rm phantom-wg_phantom-sock
 
   The directory and the images of 1.1.5 are the way back: remove them once
-  2.0.0 serves. A rollback after the removal builds the images again.
+  2.0.0 serves. With the directory in place, a rollback after the removal
+  of the images builds them again.
 
   Updates of 2.0.0: see UPDATE.
 
@@ -229,7 +233,8 @@ What Was Measured:
       differs in one comment; the tables of tools/bootstrap.py are the same.
       Both bootstraps make the admin a superadmin.
     - The repositories and the firewall state of the daemon keep their
-      schemas; db.py migrates what it finds.
+      schemas; firewall_bridge/db.py, in the tree of the firewall bridge,
+      migrates what it finds.
 
   Environment
     - .env.daemon.example: the same keys and the same values.
@@ -259,7 +264,7 @@ What Was Measured:
     the certbot of 2.0.0, the removal of the images of 1.1.5 and a Rollback
     after it. A WireGuard client on a GitHub runner connects with the config
     of 1.1.5 before and after. Run:
-      https://github.com/ARAS-Workspace/phantom-wg/actions/runs/43006742722
+      https://github.com/ARAS-Workspace/phantom-wg/actions/runs/43071378252
     - setup of step 5 on the data of 1.1.5 writes .env and the override
       only; the 28 copied files stay byte for byte as step 4 left them.
     - The images of 1.1.5 are phantom-wg-daemon, phantom-wg-auth-service
