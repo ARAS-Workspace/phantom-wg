@@ -214,6 +214,7 @@ jobs:
         run: |
           ./tools/prod.sh status
           git status --short
+          git show HEAD:docker-compose.yml | diff - docker-compose.yml
 
       # The release tree of this commit is what a clone of main gives once
       # 2.0.0 is out; root makes it, as in the examples of MIGRATION.
@@ -372,11 +373,14 @@ jobs:
       - name: Prove certbot of 2.0.0 kept the certificate of 1.1.5
         run: python3 -B "$PROBE" same-certificate
 
-      # 2.0.0 serves: the images of 1.1.5 go, and the way back builds them again.
-      - name: "After Migration: remove the images of 1.1.5"
+      # 2.0.0 serves: the images and the volume of 1.1.5 go, and the way back
+      # builds and makes them again.
+      - name: "After Migration: remove the images and the volume of 1.1.5"
         run: |
           docker image ls
+          docker volume ls
           docker image rm phantom-wg-daemon phantom-wg-auth-service nginx:1-alpine
+          docker volume rm phantom-wg_phantom-sock
 
       - name: "Rollback: back to 1.1.5"
         run: |
@@ -385,11 +389,12 @@ jobs:
           cd /opt/phantom-wg
           ./tools/prod.sh up
 
-      - name: Prove the rollback built the images of 1.1.5 again
+      - name: Prove the rollback built the images and made the volume of 1.1.5 again
         run: |
           docker image inspect --format '{{index .RepoTags 0}} created {{.Created}}' \
             phantom-wg-daemon phantom-wg-auth-service nginx:1-alpine
-          echo "ok   the images of 1.1.5 are back: the up of 1.1.5 built and pulled them"
+          docker volume inspect --format '{{.Name}} created {{.CreatedAt}}' phantom-wg_phantom-sock
+          echo "ok   the images and the volume of 1.1.5 are back: the up of 1.1.5 built, pulled and made them"
 
       - name: Prove 1.1.5 serves again
         run: python3 -B "$PROBE" serves /opt/phantom-wg
