@@ -203,7 +203,8 @@ After Migration:
 
   The directory and the images of 1.1.5 are the way back: remove them once
   2.0.0 serves. With the directory in place, a rollback after the removal
-  of the images builds them again.
+  of the images and the volume builds the images and makes the volume
+  again.
 
   Updates of 2.0.0: see UPDATE.
 
@@ -261,14 +262,14 @@ What Was Measured:
     .github/workflows/verify-migration.yml of the dev/daemon branch runs
     this file on an EC2 host, as root: 1.1.5 from a git clone of main, with
     a Let's Encrypt certificate and three clients, then steps 1 to 7, Check,
-    the certbot of 2.0.0, the removal of the images of 1.1.5 and a Rollback
-    after it. A WireGuard client on a GitHub runner connects with the config
-    of 1.1.5 before and after. Run:
-      https://github.com/ARAS-Workspace/phantom-wg/actions/runs/43071378252
+    the certbot of 2.0.0, the removal of the images and the volume of 1.1.5
+    and a Rollback after it. A WireGuard client on a GitHub runner connects
+    with the config of 1.1.5 before and after. Run:
+      https://github.com/ARAS-Workspace/phantom-wg/actions/runs/43168361592
     - setup of step 5 on the data of 1.1.5 writes .env and the override
       only; the 28 copied files stay byte for byte as step 4 left them.
     - The images of 1.1.5 are phantom-wg-daemon, phantom-wg-auth-service
-      and nginx:1-alpine.
+      and nginx:1-alpine; its volume is phantom-wg_phantom-sock.
     - The audit log of 2.0.0 lists the 10 entries of 1.1.5 first, with
       their ids, actions, addresses and times; the entries of 2.0.0 follow.
     - The client of 1.1.5 shakes hands with 2.0.0 with the same config, and
@@ -278,7 +279,8 @@ What Was Measured:
       takes.
     - The certbot of 2.0.0 keeps the certificate of 1.1.5: the server serves
       the same certificate before and after it.
-    - After the removal of its images, the up of the Rollback builds the
-      images of 1.1.5 again, from the build cache of the host, and pulls
-      nginx:1-alpine; 1.1.5 serves its clients again.
+    - After the removal of its images and its volume, the up of the
+      Rollback builds the images of 1.1.5 again, from the build cache of
+      the host, pulls nginx:1-alpine and makes the volume; 1.1.5 serves
+      its clients again.
     - Steps 3 to 7 took 28 seconds.
