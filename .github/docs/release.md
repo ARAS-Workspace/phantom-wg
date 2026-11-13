@@ -38,6 +38,12 @@ A git clone updates with:
 
 A zip install keeps its version; a new version installs from its own zip.
 
-See `SETUP`, `UPDATE` and `CHANGELOG` in the package.
+See [`SETUP`][setup], [`UPDATE`][update] and [`CHANGELOG`][changelog] in the
+package.
 
-An install of 1.1.5 moves over with `MIGRATION` in the package.
+An install of 1.1.5 moves over with [`MIGRATION`][migration] in the package.
+
+[setup]: https://github.com/ARAS-Workspace/phantom-wg/blob/v{{VERSION}}/SETUP
+[update]: https://github.com/ARAS-Workspace/phantom-wg/blob/v{{VERSION}}/UPDATE
+[changelog]: https://github.com/ARAS-Workspace/phantom-wg/blob/v{{VERSION}}/CHANGELOG
+[migration]: https://github.com/ARAS-Workspace/phantom-wg/blob/v{{VERSION}}/MIGRATION
