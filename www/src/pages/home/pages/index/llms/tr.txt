@@ -1,37 +1,16 @@
 > **Phantom-WG — machine-readable page content.**
 >
-> **EN:** Root site index (llms.txt) — a machine-readable map of the Phantom-WG documentation for LLM agents. Each entry links to that page's `llms.txt`. English is the default (the bare URL, or `?locale=en`); append `?locale=tr` for Turkish.
+> **EN:** Root site index (llms.txt) — the machine-readable form of the Phantom-WG home page for LLM agents. English is the default (the bare URL, or `?locale=en`); append `?locale=tr` for Turkish.
 >
-> **TR:** Kök site indeksi (llms.txt) — LLM ajanları için Phantom-WG dokümantasyonunun makine-okunur haritası. Her giriş ilgili sayfanın `llms.txt`'sine bağlanır. Varsayılan dil İngilizce (parametresiz URL veya `?locale=en`); Türkçe için `?locale=tr` ekleyin.
+> **TR:** Kök site indeksi (llms.txt) — LLM ajanları için Phantom-WG anasayfasının makine-okunur hâli. Varsayılan dil İngilizce (parametresiz URL veya `?locale=en`); Türkçe için `?locale=tr` ekleyin.
 
 **path:** / · **locale:** tr · **en:** https://www.phantom.tc/llms.txt?locale=en
 
 # Phantom-WG
 
-Kendinden barındırılan, WireGuard tabanlı VPN platformu: kendi sunucunuzda kendi WireGuard VPN altyapınızı kurun ve yönetin — sansüre dayanıklı bağlantılar, çok katmanlı şifreleme ve gelişmiş gizlilik senaryoları.
+VPN Yönetim Çözümü / Sunucu & İstemci
 
-**Tek dosyada tamamı:** [llms-full.txt](https://www.phantom.tc/llms-full.txt) — aşağıda listelenen tüm sayfaların tek belgede birleştirilmiş hâli (Türkçe için `?locale=tr` ekleyin).
+Kendi sunucunuzda çalıştırabileceğiniz, WireGuard için bir VPN yönetim çözümü: sunucu tarafında bir web kontrol paneli, istemci tarafında macOS ve iOS için imzalı native uygulamalar ve bağlantıları TCP 443 üzerinden taşıyarak UDP'nin kısıtlı olduğu ortamlarda da istemcilerin bağlanabilmesini sağlayan, ayrı ve isteğe bağlı bir ön uç düğümü.
 
-**Buradan başlayın:**
-- [**Hızlı Başlangıç Rehberi**](https://www.phantom.tc/docs/quickstart-guide/llms.txt): boş bir sunucudan çalışan bir tünele giden rehberli yol — sunucu hazırlama, Phantom-WG, ardından Phantom-Frontmatter.
-- [**Kurulum ve Güncelleme**](https://www.phantom.tc/docs/installation-update/llms.txt): Phantom-WG'yi sunucunuzda çalışır hale getirin, ardından güncel tutun.
-- [**Dokümantasyon**](https://www.phantom.tc/docs/llms.txt): tam teknik dokümantasyon ana sayfası.
-
-## Dokümantasyon
-- [Dokümantasyon Ana Sayfası](https://www.phantom.tc/docs/llms.txt): mimari, API referansı ve kurulum rehberleri.
-- [Hızlı Başlangıç Rehberi](https://www.phantom.tc/docs/quickstart-guide/llms.txt): uçtan uca anlatım — sunucu hazırlama, Phantom-WG kurulum ve yapılandırması, Phantom-Frontmatter (Ghost Mode); bölümlü video ve adım adım sekmeler.
-- [Kurulum ve Güncelleme](https://www.phantom.tc/docs/installation-update/llms.txt): kurulum, yapılandırma, yönetim komutları ve güncelleme mekanizması.
-- [API Referansı](https://www.phantom.tc/docs/api/llms.txt): Phantom Daemon'un Unix Domain Socket (UDS) üzerinden sunduğu uç noktalar; OpenAPI `/openapi.json` adresinde.
-- [Mac İstemci Uygulaması](https://www.phantom.tc/docs/client-applications/mac/llms.txt): yerel macOS istemcisi — Ghost Mode (wstunnel + WireGuard), standalone WireGuard, split-tunneling.
-
-## Mimari
-- [Sistem Mimarisi](https://www.phantom.tc/docs/architecture/llms.txt): üretim topolojisi, container yapısı, bridge mimarisi, istek yaşam döngüsü, veritabanları.
-- [Bridge Yapıları](https://www.phantom.tc/docs/architecture/bridge/llms.txt): wireguard-go-bridge + firewall-bridge FFI entegrasyonu, yaşam döngüsü, firewall preset sistemi.
-- [Veritabanı Yapısı](https://www.phantom.tc/docs/architecture/database/llms.txt): wallet.db, exit.db, device.db, firewall.db şemaları.
-- [Multihop](https://www.phantom.tc/docs/architecture/multihop/llms.txt): trafiği harici bir WireGuard sunucusu üzerinden yönlendiren çift-VPN katmanı.
-- [Yedekleme ve Geri Yükleme](https://www.phantom.tc/docs/architecture/backup/llms.txt): tar arşiv yapısı, dışa/içe aktarım akışı, doğrulama katmanları.
-- [Terazi Sistemi](https://www.phantom.tc/docs/architecture/terazi/llms.txt): deterministik IPv4/IPv6 adres eşleme — dual-stack havuzun nasıl oluşturulduğu, dengelendiği ve doğrulandığı.
-
-## Araçlar
-- [IP Adresim](https://www.phantom.tc/docs/tools/ip/llms.txt): genel IP adresinizi, konumunuzu, İSS ve ASN bilginizi görün; VPN çıkış IP'nizi doğrulayın.
-- [DNS Sızıntı Testi](https://www.phantom.tc/docs/tools/dns/llms.txt): sorgularınızı hangi çözümleyicilerin yanıtladığını göstererek DNS'in tünel dışına sızıp sızmadığını tespit edin.
+- [**Kaynak Kod**](https://github.com/ARAS-Workspace/phantom-wg): Kurulum ve Yapılandırma
+- [**Dokümantasyon**](https://www.phantom.tc/docs/llms.txt): Mimari ve Özellikler
