@@ -74,7 +74,9 @@ What Changes:
     gates, images, pull, add-superadmin, cloudflare. Gone: compose (lock,
     unlock, status): what a host changes goes into
     docker-compose.override.yml, and an update leaves that file as it is.
-    What the tools write belongs to the owner of the install directory.
+    The environment files, the keys, the auth database, the self-signed
+    certificate and the Cloudflare mode belong to the owner of the install
+    directory, also when root runs the tools.
 
 Migration:
   1. Look at 1.1.5

@@ -8,14 +8,16 @@ Prerequisites:
     dual-stack network of the stack needs; Compose 2.27.2 is the first with
     "docker compose config --environment", which the tools read .env with.
   - /dev/net/tun
-  - Python 3.9 or newer as python3. Without it, tools/prod.sh stops and, on
-    the Debian, Fedora/RHEL and Arch families, names the command that
-    installs it.
+  - Python 3.9 or newer as python3. Without python3, tools/prod.sh stops and,
+    on the Debian, Fedora/RHEL and Arch families, names the command that
+    installs it; on an older python3 it stops and names the version it found.
   - bash
   - git, to install from a clone and to update
   - unzip, to install from a release zip
-  - A user of the docker group, or root, to run the tools; what they write
-    belongs to the owner of the install directory
+  - A user of the docker group, or root, to run the tools. The environment
+    files, the keys, the auth database, the self-signed certificate and the
+    Cloudflare mode belong to the owner of the install directory; the address
+    pool, the data of the running stack and what certbot writes belong to root
 
   ./tools/prod.sh gates reports what this host has: Python, Docker, Compose,
   kernel, TUN, git and free disk.
@@ -30,6 +32,7 @@ Directory Structure:
   ├── .env.daemon.example                  Daemon environment template
   ├── .env.auth-service.example            Auth service environment template
   ├── .env.cf.example                      Cloudflare mode settings template
+  ├── .gitignore                           Files of this machine, out of git
   ├── requirements.txt                     Python dependencies (pinned, hashed)
   ├── SETUP                                This file
   ├── UPDATE                               Update and maintenance guide
@@ -48,7 +51,7 @@ Directory Structure:
       ├── __main__.py                      Toolchain entry (Python floor check)
       ├── core/                            Command discovery and process runner
       ├── stack/prod/                      Production commands and libraries
-      └── compose/                         Image sources (registry, build, archive)
+      └── compose/                         Image sources and their manifest
 
 Quick Start:
   1. Setup (first time only):
@@ -68,7 +71,9 @@ Quick Start:
        ./tools/prod.sh setup --admin-username <name>
 
      Setup refuses a complete install and otherwise creates only what is
-     missing. To start over, use ./tools/prod.sh hard-reset.
+     missing. It stops on what it cannot finish: a certificate without its
+     key or the reverse, an auth database without its keys, a subnet for a
+     pool that exists. To start over, use ./tools/prod.sh hard-reset.
 
      Credentials are written to:
        container-data/secrets/production/
@@ -90,8 +95,9 @@ Quick Start:
      WireGuard:  UDP port 51820
 
 Setup Recipe:
-  The commands ./tools/prod.sh setup and up run, without the tool, from the
-  install directory, as a user of the docker group.
+  The install as commands to run by hand, without the tool, from the install
+  directory, as a user of the docker group. It is for a directory before
+  setup: the tool checks what is in place and stops, these commands do not.
 
     # Host: Engine 27.0.1+ on kernel 5.15+, Compose 2.27.2+
     docker info --format '{{.ServerVersion}} {{.KernelVersion}}'
@@ -107,6 +113,8 @@ Setup Recipe:
     SOURCE=registry
     docker compose pull                                # registry
     docker compose build                               # build
+    cat images/VERSION                                 # archive: the version
+    grep image: tools/compose/registry.yml             #   of the three pins
     (cd images && sha256sum -c SHA256SUMS)             # archive
     while read -r _ t; do
       docker load -q -i "images/$t"
@@ -114,6 +122,14 @@ Setup Recipe:
     LEG="tools/compose/$SOURCE.yml"
     DAEMON=$(docker compose -f "$LEG" config --images daemon)
     AUTH=$(docker compose -f "$LEG" config --images auth-service)
+
+    # Subnet. SUBNET is the value of --terazi-ipv4-subnet, or empty. A check
+    # that refuses it prints its reason and leaves SUBNET empty: stop there,
+    # the pool would take the default.
+    SUBNET=
+    [ -z "$SUBNET" ] || SUBNET=$(docker run --rm \
+      -v "$PWD/phantom_daemon:/app/phantom_daemon:ro" \
+      "$DAEMON" python -m phantom_daemon.base.wallet.subnet_check "$SUBNET")
 
     SECRETS=container-data/secrets/production
     mkdir -p "$SECRETS" container-data/auth-db container-data/db
@@ -151,11 +167,7 @@ Setup Recipe:
       -addext 'extendedKeyUsage=serverAuth'
     chmod 600 "$SECRETS/tls_cert" "$SECRETS/tls_key"
 
-    # Address pool. SUBNET is the value of --terazi-ipv4-subnet, or empty.
-    SUBNET=
-    [ -z "$SUBNET" ] || SUBNET=$(docker run --rm \
-      -v "$PWD/phantom_daemon:/app/phantom_daemon:ro" \
-      "$DAEMON" python -m phantom_daemon.base.wallet.subnet_check "$SUBNET")
+    # Address pool
     docker run --rm --network none \
       -v "$PWD/phantom_daemon:/app/phantom_daemon:ro" \
       --mount "type=bind,src=$PWD/container-data/db,dst=/db" \
@@ -201,7 +213,8 @@ Images:
 
   A release zip carries the images in images/ and starts on the archive
   source, so it installs without reaching the registry. Each of the three
-  sources can be selected at any time:
+  sources can be selected once .env is written; archive needs the images/ of
+  a release zip:
 
     ./tools/prod.sh images use <source>
     ./tools/prod.sh images sync
@@ -295,7 +308,7 @@ Logs:
 Data Directories (created at runtime):
   container-data/
   ├── secrets/production/         Keys and certificates
-  ├── db/                         Address pool, client and peer databases
+  ├── db/                         Address pool with its clients, multihop exits
   ├── state/db/                   Runtime state (bridges)
   ├── auth-db/                    Authentication database
   ├── certbot/                    Let's Encrypt state (certbot only)
@@ -338,7 +351,8 @@ Cloudflare:
   visitor's address from CF-Connecting-IP. The override changes only after
   Compose accepts the new one; the last one stays as
   docker-compose.override.yml.bak. A step of on that fails after the
-  certificate revokes it again.
+  certificate revokes it again, until the mode is recorded; a stop after
+  that leaves the mode on, and off takes it back.
 
     ./tools/prod.sh cloudflare           Show the mode
     ./tools/prod.sh cloudflare refresh   Take Cloudflare's address list and

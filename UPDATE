@@ -10,14 +10,16 @@ Standard Update:
   preserved. If an update stops halfway, run it again. A stop before the
   line "Recreating stack..." leaves the stack running as it was; once the
   release is pulled, a restart starts its code on the images of the last
-  one. A stop after that line prints the services that did not settle.
+  one. After that line the update recreates the services and waits for
+  them; a stop in the wait prints the services that did not settle.
 
   update follows a git clone. A package installed from the release zip has no
   git remote, and update stops there.
 
 Update Recipe:
-  The commands ./tools/prod.sh update runs, without the tool, from the clone.
-  Nothing is rolled back for you.
+  The update as commands to run by hand, without the tool, from the clone.
+  The tool also checks the install before it recreates the stack. Nothing is
+  rolled back for you.
 
     # Host and clone
     docker info --format '{{.ServerVersion}}'
@@ -100,11 +102,11 @@ Hard Reset:
 
   Destroys ALL data: secrets, auth database, the address pool, client
   databases, Let's Encrypt state and Docker volumes. It stops while the stack
-  runs and requires typing 'yes' to confirm. Environment files and
-  docker-compose.override.yml stay. The daemon writes its data as root; the
-  tool removes those files from a throwaway container without network
-  (--cap-drop ALL --cap-add DAC_OVERRIDE), so a user of the docker group runs
-  it without sudo.
+  runs and requires typing 'yes' to confirm. Environment files,
+  docker-compose.override.yml and the Cloudflare mode stay. The daemon writes
+  its data as root; the tool removes those files from a throwaway container
+  without network (--cap-drop ALL --cap-add DAC_OVERRIDE), so a user of the
+  docker group runs it without sudo.
 
   After hard reset, run setup again:
     ./tools/prod.sh setup
