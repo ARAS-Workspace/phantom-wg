@@ -6,345 +6,288 @@
   <img alt="Phantom-WG" src="https://raw.githubusercontent.com/ARAS-Workspace/phantom-wg/press-kit/assets/phantom-vertical-master-midnight-phantom.svg" width="600">
 </picture>
 
-[![CI](https://img.shields.io/github/actions/workflow/status/ARAS-Workspace/phantom-wg/release-modern.yml?label=CI)](https://github.com/ARAS-Workspace/phantom-wg/actions/workflows/release-modern.yml)
-[![License: AGPL-3.0](https://img.shields.io/badge/License-AGPL--3.0-blue.svg)](LICENSE)
-[![Documentation](https://img.shields.io/badge/Docs-www.phantom.tc-black)](https://www.phantom.tc/docs)
-
-<picture>
-  <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/ARAS-Workspace/phantom-wg/press-kit/assets/dashboard-screenshot-dark-en.png">
-  <source media="(prefers-color-scheme: light)" srcset="https://raw.githubusercontent.com/ARAS-Workspace/phantom-wg/press-kit/assets/dashboard-screenshot-light-en.png">
-  <img alt="Phantom-WG Dashboard" src="https://raw.githubusercontent.com/ARAS-Workspace/phantom-wg/press-kit/assets/dashboard-screenshot-light-en.png">
-</picture>
+[![License: AGPL-3.0](https://raw.githubusercontent.com/ARAS-Workspace/phantom-wg/press-kit/assets/badges/license.svg)](LICENSE)
+[![Documentation](https://raw.githubusercontent.com/ARAS-Workspace/phantom-wg/press-kit/assets/badges/docs.svg)](https://www.phantom.tc/docs)
 
 </div>
 
-> [!TIP]
-> **Looking for where to start?** Follow the [Quickstart Guide](https://www.phantom.tc/docs/quickstart-guide) hands-on — from server provisioning to installing and configuring **Phantom-WG** and **Phantom-Frontmatter** — alongside a chaptered video.
+## What is Phantom-WG?
+
+***Phantom-WG*** is a VPN management solution built on WireGuard that you run in your own server environment. It offers a web dashboard on the server side and signed applications for macOS and iOS on the client side. A separate and optional front node (**Phantom-Frontmatter**) carries connections as WebSocket Secure over TCP 443. This way, clients can also connect from networks where UDP is restricted.
+
+Phantom-WG is made of several products. They fall into two groups by where they run, the server side and the client side:
+
+- **Server side:** Phantom-WG Modern, Phantom-Frontmatter
+- **Client side:** Phantom-WG Mac, Phantom-WG iOS
+
+> [!IMPORTANT]
+> **Running 1.1.5?** The steps to move to 2.0.0 are in the [Migration Guide](https://github.com/ARAS-Workspace/phantom-wg/blob/press-kit/MIGRATION.md). 2.0.0 brings architectural changes. The old automatic update flow is not suitable for moving to this version. The steps of the [Migration Guide](https://github.com/ARAS-Workspace/phantom-wg/blob/press-kit/MIGRATION.md) need to be followed with care.
 
 ---
 
-## What is Phantom-WG Modern?
+## Phantom-WG Modern Installation and Configuration
 
-***Phantom-WG*** is a modular tool that lets you set up and manage a WireGuard VPN infrastructure on your own server. Beyond basic VPN management, it offers censorship-resistant connections, multi-layered encryption, and advanced privacy scenarios.
-
-***Phantom-WG Modern*** is the container-native implementation of this vision. All components run within Docker and are isolated from the host system:
-
-- **Userspace WireGuard** — Container-scoped TUN device via Go FFI bridge. No kernel module required, does not touch the host's network namespace.
-- **nftables netlink FFI** — Rust backend communicates directly with the kernel. No subprocess calls, firewall rules are managed programmatically.
-- **SQLite State Persistence** — All state is stored in SQLite databases. A daemon restart after a crash is sufficient — kernel state is rebuilt from the DB.
-- **Dual-Stack IPv6** — Even without IPv6 on the host, an IPv6 subnet is assigned within the container and traffic is carried through the tunnel.
-- **Container Isolation** — `NET_ADMIN` + `NET_RAW` is sufficient. WireGuard interfaces live within the container namespace. Configurations that weaken host security such as `SYS_ADMIN`, `privileged`, or `host` network mode are not used.
-
-<img alt="Phantom-WG Modern" src="https://raw.githubusercontent.com/ARAS-Workspace/phantom-wg/press-kit/assets/phantom-modern-banner.png">
-
----
-
-## Topology
-
-Three containers, managed via Docker Compose. Management traffic passes through TLS + JWT authentication, WireGuard traffic reaches the daemon directly.
+Phantom-WG comes with three core containers managed by Docker Compose. The diagram shows the container topology.
 
 ```mermaid
 flowchart
-    A[Internet] -->|"HTTPS :443"| B[nginx]
-    B --> C[auth-service]
-    C <-->|"UDS"| D[daemon]
+    A[Internet]
+
+    subgraph HOST["Host"]
+        subgraph DOCKER["Docker Compose"]
+            B["nginx"]
+            C["auth-service"]
+            D["daemon"]
+        end
+    end
+
+    A -->|"HTTPS :443"| B
+    B --> C
+    C <-->|"UDS"| D
     A -->|"WireGuard :51820/udp"| D
 ```
 
-| Component        | Role                                                                                                |
-|------------------|-----------------------------------------------------------------------------------------------------|
-| **nginx**        | TLS termination, React SPA (static compiled files), reverse proxy configuration                     |
-| **auth-service** | Comprehensive authentication system, API proxy to daemon over UDS                                   |
-| **daemon**       | Userspace WireGuard (Go FFI), nftables firewall (Rust FFI), client and tunnel management, databases |
+### Requirements
 
----
+| Requirement      | Detail                                                                             |
+|------------------|------------------------------------------------------------------------------------|
+| Operating system | Linux, kernel 5.15 or newer                                                        |
+| Docker           | Docker Engine 27.0.1 or newer, Docker Compose plugin 2.27.2 or newer               |
+| Python           | `python3` 3.9 or newer                                                             |
+| TUN              | `/dev/net/tun`                                                                     |
+| Tools            | `bash`, `git` to install from a clone and to update, `unzip` for a release archive |
+| User             | A member of the `docker` group, or root                                            |
 
-## Key Features
+#### Install Matrix
 
-### Bridge Architecture
+The install is tested on the current image of eight distributions by the [`Verify install matrix`](https://github.com/ARAS-Workspace/phantom-wg/actions/runs/42452212400) workflow. On each distribution Docker is installed, the server reboots, and the project's own tool set runs the `setup`, `up`, authenticated check, `down`, `hard-reset` steps for two rounds. Last run (8 November 2026):
 
-The daemon performs system-level operations through two native bridges. Python manages the business logic, bridges communicate directly with the kernel.
+| Distribution   | Kernel | Docker Engine | Docker Compose |
+|----------------|--------|---------------|----------------|
+| Ubuntu 22.04   | 5.15   | 29.9.3        | 5.7.0          |
+| Ubuntu 24.04   | 6.8    | 29.9.3        | 5.7.0          |
+| Ubuntu 26.04   | 7.0    | 29.9.3        | 5.7.0          |
+| Debian 12      | 6.1    | 29.9.3        | 5.7.0          |
+| Debian 13      | 6.12   | 29.9.3        | 5.7.0          |
+| Fedora 45      | 7.2    | 29.9.3        | 5.7.0          |
+| Arch Linux     | 7.2    | 29.9.3        | 5.7.0          |
+| AlmaLinux 10.2 | 6.12   | 29.9.3        | 5.7.0          |
 
-```mermaid
-graph
-    D["Daemon (Python)"] -->|"ctypes FFI"| WG["wireguard-go-bridge (Go)"]
-    D -->|"ctypes FFI"| FW["firewall-bridge (Rust)"]
-    WG --> TUN["TUN device"]
-    FW --> NFT["nftables kernel"]
-```
+### 1. Download
 
-| Bridge                  | Language | Responsibility                                         |
-|-------------------------|----------|--------------------------------------------------------|
-| **wireguard-go-bridge** | Go       | Userspace WireGuard, TUN device, IPC state persistence |
-| **firewall-bridge**     | Rust     | nftables rule groups, policy routing, preset system    |
+There are two ways to download the Phantom-WG Modern distribution to your server. They differ in where the images come from and in how updates are handled.
 
-### Multihop Exit Routing
+#### Git Clone
 
-You can define your exit tunnel to route traffic through an external WireGuard VPN server. IPv4 and IPv6 tunnels are supported simultaneously.
-
-```mermaid
-flowchart LR
-    C[Client] -->|"WireGuard"| M["wg_main"] -->|"forward + masquerade"| E["wg_exit"] --> X[Exit Server]
-```
-
-### IPv6 Dual-Stack
-
-IPv6 support across all layers — firewall rules, policy routing, masquerade, and multihop presets operate with `family: 10` (AF_INET6). IPv6 tunnel traffic can be carried from within the container even without an IPv6 address on the host.
-
-### Crash Recovery
-
-When the service starts, kernel state (nftables rules, routing policies) is rebuilt from SQLite state databases. No data loss after an unexpected shutdown.
-
----
-
-## Auth-Service (Authentication and Secure Proxy Layer)
-
-Access to the daemon is protected by an independent authentication service. Auth-service runs in a separate container from the daemon and proxies API requests over UDS.
-
-### Authentication
-
-| Feature                     | Detail                                                                                           |
-|-----------------------------|--------------------------------------------------------------------------------------------------|
-| Session management          | JWT (Ed25519 signed)                                                                             |
-| Multi-factor authentication | TOTP (RFC 6238), backup code access                                                              |
-| Password storage            | Argon2id hash                                                                                    |
-| Brute-force protection      | IP-based rate limiting (configurable sliding window and attempt-based configuration)             |
-| Audit log                   | All authentication and API proxy events are logged per user (login, logout, failed attempt, MFA) |
-
-### RBAC (Role-Based Access Control)
-
-| Permission                                             | Superadmin | Admin |
-|--------------------------------------------------------|:----------:|:-----:|
-| Daemon management (client, multihop, firewall, backup) |     ✓      |   ✓   |
-| Change own password                                    |     ✓      |   ✓   |
-| Configure own TOTP                                     |     ✓      |   ✓   |
-| Create / delete admin accounts                         |     ✓      |   —   |
-| Change any user's password                             |     ✓      |   —   |
-| Disable another user's TOTP                            |     ✓      |   —   |
-| View audit log                                         |     ✓      |   —   |
-
-> [!TIP]
-> The account created during initial setup has the `superadmin` role. If multiple people manage the server, `admin` accounts can be created for operational access — administrative privileges remain with the superadmin.
-
-Both roles can manage the daemon at the same permission level — all operations executed through the daemon such as client creation, multihop, firewall, and backup are shared. The distinction is only on the auth-service side: superadmin has user management and audit authority, while admin has only operational access. Auth-service is an independent component — customizations do not affect the daemon structure. The daemon is unaware of this service's existence and only handles network operations. If you want to isolate different user groups, instead of authorization through auth-service, you can set up a multi-tenant structure running on the same host through configuration changes. This way, you can create independent instances by multiplying port and network configurations while ensuring isolation on both the network and user access sides. These operational configurations are for advanced users who want to adapt the existing structure to their own scenario.
-
----
-
-## Installation
-
-**Prerequisites:** Docker Engine 20.10+, Docker Compose v2, bash.
+A git clone takes the distribution from the `main` branch of the GitHub repository. The `main` branch carries the latest published release. This method suits servers with internet access.
 
 ```bash
-curl -sSL get.phantom.tc | bash
+git clone --depth 1 --branch main https://github.com/ARAS-Workspace/phantom-wg.git
+cd phantom-wg
 ```
 
-<picture>
-  <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/ARAS-Workspace/phantom-wg/press-kit/assets/phantom-wg-install-dark.gif">
-  <source media="(prefers-color-scheme: light)" srcset="https://raw.githubusercontent.com/ARAS-Workspace/phantom-wg/press-kit/assets/phantom-wg-install-light.gif">
-  <img alt="Phantom-WG Installation" src="https://raw.githubusercontent.com/ARAS-Workspace/phantom-wg/press-kit/assets/phantom-wg-install-light.gif">
-</picture>
+- `--depth 1` takes only the last commit of `main`. The update flow moves the clone forward from there.
+- The images are pulled from the registry during setup. Which image is used is fixed by the distribution. The image addresses and digests are in [`tools/compose/registry.yml`](tools/compose/registry.yml).
+- A new release is taken in the same directory with `./tools/prod.sh update`.
+- Required tool: `git`.
+
+#### Release Archive
+
+The release archive carries the images inside it, and they are installed without reaching the registry. This method is ideal for offline installs, but it does not include in-place update support (git) by default. The operator has to handle the update process manually.
+
+Download the file for your architecture from the [Releases](https://github.com/ARAS-Workspace/phantom-wg/releases) page:
+
+```bash
+uname -m                                       # x86_64: amd64, aarch64: arm64
+unzip phantom-wg-modern-v<version>-amd64.zip   # or -arm64
+cd phantom-wg-modern
+```
+
+- There is one archive per architecture: `amd64` and `arm64`.
+- The images are in the `images/` directory of the archive. `setup` loads them after checking their checksums.
+- The `update` command stops on this install. A new release is installed from its own archive.
+- Required tool: `unzip`.
+
+### 2. Setup
+
+```bash
+./tools/prod.sh gates    # reports what the host provides
+./tools/prod.sh setup
+```
+
+`setup` creates what is missing, in this order:
+
+1. `.env`, `.env.daemon`, `.env.auth-service` and `docker-compose.override.yml` (each from its own `.example` file)
+2. WireGuard server key pair
+3. Auth-service keys, the `admin` account and the database
+4. Self-signed TLS certificate
+5. Address pool
+
+By default, clients take their addresses from the `10.8.0.0/24` pool. Another subnet can be given only at the first setup:
+
+```bash
+./tools/prod.sh setup --terazi-ipv4-subnet=10.9.0.0/24
+```
+
+**Terazi** is the architecture that handles the address pool in Phantom-WG. It pairs IPv4 and IPv6 addresses through the same index. For this reason a single IPv4 subnet sets both pools, and each client takes its two addresses together.
+
+- The pool is created at setup and is full from the start. Adding a client marks the first free slot, and revoking a client frees its slot.
+- A `/24` subnet holds 253 clients. The network, broadcast and server addresses are reserved.
+- The subnet is chosen from a private (RFC 1918) range, between `/16` and `/30`. After setup, only the prefix length can be changed, from the dashboard. The client configurations then need to be exported again.
+
+### 3. Endpoint
+
+Write the public IP address of the server into `.env.daemon`:
+
+```bash
+nano .env.daemon
+```
+
+```ini
+WIREGUARD_ENDPOINT_V4=203.0.113.1
+WIREGUARD_ENDPOINT_V6=2001:db8::1
+```
+
+These addresses go into the client configurations the dashboard exports. The daemon reads them when it starts, so they are written before `up`.
+
+### 4. Start
+
+```bash
+./tools/prod.sh up
+```
+
+| Access    | Value                                                   |
+|-----------|---------------------------------------------------------|
+| Dashboard | `https://<server-ip>`                                   |
+| WireGuard | UDP port `51820`                                        |
+| Username  | `admin`                                                 |
+| Password  | `cat container-data/secrets/production/.admin_password` |
 
 ### Configuration
 
-```bash
-cd phantom-wg
+**Container-specific settings.** To change a container-specific setting, edit `docker-compose.override.yml`, not `docker-compose.yml`. `docker-compose.yml` comes with every release, and `update` stops when it carries local changes. `docker-compose.override.yml` is not tracked by git, and an update does not touch it. This is the recommended way to apply container-specific changes to the stack.
 
-# First-time setup
-./tools/prod.sh setup
-
-# Or with a custom subnet (see https://www.phantom.tc/docs/architecture/terazi)
-# ./tools/prod.sh setup --terazi-ipv4-subnet=10.9.0.0/24
-
-# Endpoint configuration
-IPV4=$(curl -4 -sSL https://get.phantom.tc/ip)
-IPV6=$(curl -6 -sSL https://get.phantom.tc/ip)
-sed -i "s/^WIREGUARD_ENDPOINT_V4=.*/WIREGUARD_ENDPOINT_V4=${IPV4}/" .env.daemon
-sed -i "s/^WIREGUARD_ENDPOINT_V6=.*/WIREGUARD_ENDPOINT_V6=${IPV6}/" .env.daemon
-
-# Start
-./tools/prod.sh up
-```
-
-**Access:**
-- Dashboard: `https://<server-ip>`
-- WireGuard: UDP port `51820`
-- Admin password: `cat container-data/secrets/production/.admin_password`
-
-> [!TIP]
-> To access the dashboard while connected to the VPN, use the nginx container's Docker network address:
-> ```bash
-> docker inspect phantom-nginx --format '{{range .NetworkSettings.Networks}}IPv4: {{.IPAddress}} | IPv6: {{.GlobalIPv6Address}}{{end}}'
-> ```
-> Accessible via `https://<IPv4>` or `https://[<IPv6>]` through the tunnel. You can also remove the `ports: "443:443"` line from `docker-compose.yml` to make the dashboard accessible only through the VPN tunnel.
-
----
-
-## Environment Variables
-
-Configuration is managed through env files created from templates during setup:
-
-| File                | Service      |
-|---------------------|--------------|
-| `.env.daemon`       | daemon       |
-| `.env.auth-service` | auth-service |
-
-See `.example` files for all available options.
-
----
-
-## Management
-
-A convenient tool is available at `./tools/prod.sh` for management.
-
-| Command                             | Description                                   |
-|-------------------------------------|-----------------------------------------------|
-| `setup`                             | Full Setup                                    |
-| `setup --terazi-ipv4-subnet=SUBNET` | Setup with custom subnet (e.g. `10.9.0.0/24`) |
-| `up`                                | Start                                         |
-| `down`                              | Stop                                          |
-| `restart [service]`                 | Restart (All or Specific Service)             |
-| `build`                             | Build Images                                  |
-| `rebuild`                           | Build Images from Scratch (no-cache)          |
-| `update`                            | Update (git pull + restart)                   |
-| `compose lock`                      | Permanently lock docker-compose.yml           |
-| `compose unlock`                    | Unlock docker-compose.yml                     |
-| `logs [service]`                    | Log Tracking (All or Specific Service)        |
-| `status`                            | Docker Compose Status                         |
-| `certbot <domain>`                  | Obtain Let's Encrypt TLS certificate          |
-| `show-versions`                     | Component Versions (Daemon, Vendor Packages)  |
-| `shell [service]`                   | Shell (default: daemon)                       |
-| `exec <svc> <cmd>`                  | Execute Command                               |
-| `hard-reset`                        | Delete All Data                               |
-
-### Setup
-
-The `setup` command creates all required components during first-time installation:
-
-1. Creates `.env.daemon` and `.env.auth-service` files from `.example` templates.
-2. Generates WireGuard server key pair. (Curve25519 — `wg_private_key`, `wg_public_key`)
-3. Auth-Service bootstrap cycle:
-   - Generates Ed25519 signing key pair. (`auth_signing_key`, `auth_verify_key`)
-   - Creates auth database. (`auth.db` — users, sessions, TOTP, audit log)
-   - Creates admin account. (32-character random password encrypted with Argon2id hash)
-4. Generates self-signed TLS certificate for nginx. (`tls_cert`, `tls_key`)
-
-All of these operations take place within the container — no additional dependencies or tools need to be installed on the host.
-
-Terazi requires a base subnet to create the IP pool. The default is `10.8.0.0/24` and can be customized at setup with the `--terazi-ipv4-subnet` argument. This value is only used when `wallet.db` is created — once the database exists, the subnet is stored there and the argument is no longer needed. See the [Terazi documentation](https://www.phantom.tc/docs/architecture/terazi) for details.
-
-> [!TIP]
-> Secret keys are stored under `container-data/secrets/production/`. The admin password is written to `.admin_password` in the same directory — you can safely remove it after logging in.
-
-### Update Mechanism
-
-> [!IMPORTANT]
-> The update mechanism operates via git. You must create your installation directory using `git clone` or the [`get.phantom.tc`](https://get.phantom.tc) installer service.
-
-The daemon and auth-service source code is mounted read-only into containers (`phantom_daemon:/app/phantom_daemon:ro`, `services/auth-service:/app/auth-service:ro`). Dockerfiles provide only system dependencies (Python, runtime packages) — application code is not baked into the image. This enables:
-
-- **Fast updates**: `git pull` + `restart` is sufficient, no image rebuild required for code changes
-- **Fast rollback**: `git checkout <previous-version>` + `restart` for immediate rollback
-- **Build independence**: Code changes do not trigger a container build cycle
-
-```bash
-./tools/prod.sh update                 # git pull + restart
-```
-
-#### Compose Lock
-
-If you have modified `docker-compose.yml` (ports, volumes, environment), updates may overwrite your changes. Compose lock protects this file from git updates:
-
-```bash
-./tools/prod.sh compose lock           # Permanently lock
-./tools/prod.sh update                 # docker-compose.yml is preserved
-./tools/prod.sh compose unlock         # Release the lock
-```
-
-#### Rebuild
-
-When system dependencies change (Dockerfile, requirements.txt), an image rebuild is required:
-
-```bash
-./tools/prod.sh rebuild
-./tools/prod.sh up
-```
-
-> [!NOTE]
-> From **v1.1.3** onward, `./tools/prod.sh update` detects `Dockerfile` and `requirements.txt` changes automatically and rebuilds the affected service (`build` + `up`) — a manual rebuild is normally unnecessary. Run the command above only as a one-time step when upgrading **from v1.1.2 or earlier**, whose update logic predates this auto-detection.
-
-#### Let's Encrypt (Optional)
-
-The default self-signed certificate can be replaced with a Let's Encrypt certificate. Uses HTTP-01 standalone challenge — the domain must have an A record pointing to the server and port 80 must be available.
+**Let's Encrypt.** The default certificate is self-signed. A Let's Encrypt certificate can be obtained when the A record of your domain points to the server and port 80 is reachable.
 
 ```bash
 ./tools/prod.sh certbot <domain>
 ./tools/prod.sh restart nginx
 ```
 
-Certificate files are written to `container-data/secrets/production/tls_cert` and `tls_key`. Renewal is idempotent — run the same command again when the certificate is near expiry.
+The same two commands renew the certificate. The same command chain can also run from cron.
+
+**Cloudflare mode.** The stack can run behind the Cloudflare proxy. In this mode the dashboard is reached only through Cloudflare. The setup has five stages.
+
+1. **API Token**
+
+   - In the Cloudflare dashboard, open **My Profile** > **API Tokens** and select **Create Token**.
+   - Start without a template and add the four permissions below.
+   - As the zone resource, select only the zone you will use in this mode.
+   - Select **Continue to summary**, then **Create Token**.
+   - The token value is shown only once. It goes into `.env.cf` in the third stage.
+
+   | Permission                           | What the tool does with it                                               |
+   |--------------------------------------|--------------------------------------------------------------------------|
+   | `Zone - Zone - Read`                 | Finds the zone by its name.                                              |
+   | `Zone - Zone Settings - Read`        | Reads the SSL/TLS mode and the Authenticated Origin Pulls setting.       |
+   | `Zone - SSL and Certificates - Edit` | Takes the Origin CA certificate. Revokes it when the mode is turned off. |
+   | `Zone - SSL and Certificates - Read` | Reads the state of the certificate when the revoke request is refused.   |
+
+2. **Zone Settings**
+
+   - On the **SSL/TLS** > **Overview** page, set the encryption mode to **Full (strict)**.
+   - On the **SSL/TLS** > **Origin Server** page, open the **Authenticated Origin Pulls** tab. Switch the option in the **Global** section to **On**.
+   - The DNS record of the domain you will use for the dashboard has to point to the IP address of the server. The proxy status of the record has to be **Proxied**.
+
+3. **The `.env.cf` File**
+
+   ```bash
+   ./tools/prod.sh cloudflare on
+   nano .env.cf
+   ```
+
+   - The first `cloudflare on` writes `.env.cf` from `.env.cf.example` and stops.
+   - Write the token value on the `CF_API_TOKEN` line.
+   - Write the zone name on the `CF_ZONE` line. Example: `example.com`.
+   - `CF_HOSTNAMES` holds the names the certificate covers, comma separated. When it is empty, the zone and `*.<zone>` are used. The domain of the dashboard has to be among these names.
+   - The file belongs to this server. Git does not track it. The tool holds its permission at 600.
+
+4. **Turning the Mode On**
+
+   ```bash
+   ./tools/prod.sh cloudflare on
+   ```
+
+   - The tool reads the SSL/TLS mode and the Authenticated Origin Pulls setting of the zone. It stops when the mode is not Full (strict) or Authenticated Origin Pulls is off.
+   - It makes the private key on the server and takes an Origin CA certificate for it from Cloudflare, valid for 15 years (5475 days).
+   - It downloads Cloudflare's origin pull CA certificate and address list.
+   - It writes the nginx settings and the firewall rules to `container-data/cloudflare/`.
+   - It adds the entries of the mode to `docker-compose.override.yml`. The previous file stays as `docker-compose.override.yml.bak`.
+
+5. **Applying**
+
+   ```bash
+   ./tools/prod.sh up
+   ./tools/prod.sh cloudflare    # shows the state of the mode
+   ```
+
+   - `up` recreates nginx with the new settings.
+   - Port 443 drops connections from addresses outside Cloudflare's list, and nginx requires Cloudflare's origin pull certificate.
+   - The dashboard is reached through your domain, not at `https://<server-ip>`.
+   - The logs and the audit log carry the real IP address of the visitor.
+
+Turning the mode off and refreshing the address list are in the Cloudflare section of the `SETUP` file.
+
+### Update
+
+```bash
+./tools/prod.sh update
+```
+
+A server installed from a git clone pulls the latest release, syncs the images and recreates the services. The env files and `docker-compose.override.yml` are preserved.
+
+### Details
+
+| Source                 | Content                                                                 |
+|------------------------|-------------------------------------------------------------------------|
+| [SETUP](SETUP)         | Setup guide: commands, image sources, data directories, Cloudflare mode |
+| [UPDATE](UPDATE)       | Update, rollback to the previous release, hard reset                    |
+| [CHANGELOG](CHANGELOG) | Changes of each release                                                 |
+| `./tools/prod.sh help` | All commands                                                            |
 
 ---
 
-## Architecture
+## Phantom-Frontmatter Installation and Configuration
 
-For detailed architecture documentation, visit [www.phantom.tc/docs/architecture](https://www.phantom.tc/docs/architecture).
-
-| Resource      | URL                                                                          |
-|---------------|------------------------------------------------------------------------------|
-| Website       | [www.phantom.tc](https://www.phantom.tc)                                     |
-| Architecture  | [www.phantom.tc/docs/architecture](https://www.phantom.tc/docs/architecture) |
-| API Reference | [www.phantom.tc/docs/api](https://www.phantom.tc/docs/api)                   |
-| Setup Guide   | [SETUP](SETUP)                                                               |
-
----
-
-## Development
-
-Active development takes place on the [`dev/daemon`](https://github.com/ARAS-Workspace/phantom-wg/tree/dev/daemon) branch. The `main` branch contains production-ready releases only.
-
----
-
-## Phantom-Frontmatter
-
-A WSS/TLS tunnel layer placed in front of your Phantom-WG Modern server. Accepts wstunnel connections on TCP 443 and forwards traffic to the backend server. Network observers see only standard HTTPS traffic.
+Phantom-Frontmatter is an optional transport layer placed in front of the Phantom-WG Modern server, and it is installed on a separate server. It accepts client connections with TLS on TCP 443 and forwards the traffic to the Phantom-WG Modern server.
 
 ![Frontmatter Flow](https://raw.githubusercontent.com/ARAS-Workspace/phantom-wg/press-kit/assets/connection-flow-frontmatter.svg)
 
 ### Requirements
 
-Phantom-Frontmatter is installed on a separate, dedicated bare-metal server from the Phantom-WG Modern backend.
-
 | Requirement      | Detail                                           |
 |------------------|--------------------------------------------------|
-| Operating System | Debian 12 / 13, Ubuntu 22.04 / 24.04             |
+| Operating system | Debian 12 / 13, Ubuntu 22.04 / 24.04 / 26.04     |
 | Access           | Root (sudo)                                      |
 | Backend          | A reachable Phantom-WG Modern server (UDP 51820) |
 
-### Installation
+### 1. Installation
 
-Latest release: [frontmatter-v1.0.1](https://github.com/ARAS-Workspace/phantom-wg/releases/tag/frontmatter-v1.0.1)
+Latest release: [frontmatter-v1.0.2](https://github.com/ARAS-Workspace/phantom-wg/releases/tag/frontmatter-v1.0.2)
 
 ```bash
-wget https://github.com/ARAS-Workspace/phantom-wg/releases/download/frontmatter-v1.0.1/phantom-wg-frontmatter-v1.0.1.zip
-unzip phantom-wg-frontmatter-v1.0.1.zip
-cd phantom-wg-frontmatter-v1.0.1
+# Install the required packages
+sudo apt-get update
+sudo apt-get install -y wget unzip jq
+
+# Download the package and install it
+wget https://github.com/ARAS-Workspace/phantom-wg/releases/download/frontmatter-v1.0.2/phantom-wg-frontmatter-v1.0.2.zip
+unzip phantom-wg-frontmatter-v1.0.2.zip
+cd phantom-wg-frontmatter-v1.0.2
 sudo ./frontmatter-install.sh
 ```
 
-### Update
-
-An existing host is updated in place. The SQLite state, the TLS material and the tunnel secret are preserved, so client configurations keep working across the update. `frontmatter-install.sh` is for first-time installs only.
-
-```bash
-wget https://github.com/ARAS-Workspace/phantom-wg/releases/download/frontmatter-v1.0.1/phantom-wg-frontmatter-v1.0.1.zip
-unzip phantom-wg-frontmatter-v1.0.1.zip
-cd phantom-wg-frontmatter-v1.0.1
-sudo ./frontmatter-update.sh
-```
-
-**v1.0.0 → v1.0.1** introduces the updater itself and moves the bundled tunnel binary from [wstunnel](https://github.com/erebe/wstunnel) 10.5.2 to our fork's [10.5.2+Phantom.Patch.1](https://github.com/ARAS-Workspace/wstunnel), which carries two upstream fixes on top of 10.5.2: a WebSocket keep-alive and receive-deadlock fix that covers the server role Frontmatter runs, and a TLS handshake timeout in the client connection pool.
-
-### Configuration
+### 2. Configuration
 
 ```bash
 # Define the backend server (IPv4 or IPv6)
@@ -353,15 +296,47 @@ sudo frontmatter-api setup init backend=<BACKEND_IP[:PORT]>
 # Bring the data path up
 sudo frontmatter-api ghost start
 
-# Verify
+# Verify the state
 sudo frontmatter-api ghost status
-
-# Client configuration block
-sudo frontmatter-api ghost client_config
-
-# Client connection command (standalone wstunnel)
-sudo frontmatter-api ghost client_command
 ```
+
+### 3. Client Block
+
+```bash
+sudo frontmatter-api ghost client_config | jq -r '.data.wstunnel_block'
+```
+
+The output is the `[Wstunnel]` block to add to a client configuration. Add the block to the client configuration you took from the dashboard, and write the address of this server in place of `<FRONTMATTER-PUBLIC-IP>`.
+
+```ini
+# The block from "frontmatter-api ghost client_config"
+[Wstunnel]
+Url = ...
+Secret = ...
+Tunnel = ...
+
+# The WireGuard client configuration from the dashboard
+[Interface]
+PrivateKey = ...
+Address = ...
+DNS = ...
+MTU = ...
+
+[Peer]
+PublicKey = ...
+PresharedKey = ...
+AllowedIPs = ...
+Endpoint = ...
+PersistentKeepalive = ...
+```
+
+For clients that run wstunnel on its own, the connection command is taken this way:
+
+```bash
+sudo frontmatter-api ghost client_command | jq -r '.data.command'
+```
+
+Before running the command in the output, write the address of this server in place of `<FRONTMATTER-PUBLIC-IP>`.
 
 ### Let's Encrypt (Optional)
 
@@ -371,14 +346,31 @@ sudo frontmatter-certbot front.example.com
 sudo frontmatter-api ghost start
 ```
 
-### Explore
+### Update
 
-| Resource          | Link                                                                                             |
+An installed server is updated in place. The archive of the new release is downloaded to the server and unpacked. Then the update script is run. The database state, the certificate material and the secret are preserved during the update. `frontmatter-install.sh` is for first-time installs only.
+
+```bash
+sudo ./frontmatter-update.sh
+```
+
+### Details
+
+| Source            | Link                                                                                             |
 |-------------------|--------------------------------------------------------------------------------------------------|
 | Setup Guide       | [SETUP](https://github.com/ARAS-Workspace/phantom-wg/blob/frontmatter/SETUP)                     |
 | Architecture      | [ARCHITECTURE](https://github.com/ARAS-Workspace/phantom-wg/blob/frontmatter/ARCHITECTURE)       |
 | Architecture (TR) | [ARCHITECTURE_TR](https://github.com/ARAS-Workspace/phantom-wg/blob/frontmatter/ARCHITECTURE_TR) |
 | Source Code       | [GitHub](https://github.com/ARAS-Workspace/phantom-wg/tree/frontmatter)                          |
+
+---
+
+## Client Applications
+
+| Platform | Download                                                                                                                                                                                                            |
+|----------|---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| iOS      | [![iOS: App Store](https://raw.githubusercontent.com/ARAS-Workspace/phantom-wg/press-kit/assets/badges/ios-app-store.svg)](https://apps.apple.com/app/phantom-wg/id6812090582)                                      |
+| macOS    | [![macOS: Download](https://raw.githubusercontent.com/ARAS-Workspace/phantom-wg/press-kit/assets/badges/macos-download.svg)](https://github.com/ARAS-Workspace/phantom-wg/releases/tag/mac-v2.1.3)                  |
 
 ---
 

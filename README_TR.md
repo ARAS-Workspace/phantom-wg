@@ -6,363 +6,337 @@
   <img alt="Phantom-WG" src="https://raw.githubusercontent.com/ARAS-Workspace/phantom-wg/press-kit/assets/phantom-vertical-master-midnight-phantom.svg" width="600">
 </picture>
 
-[![CI](https://img.shields.io/github/actions/workflow/status/ARAS-Workspace/phantom-wg/release-modern.yml?label=CI)](https://github.com/ARAS-Workspace/phantom-wg/actions/workflows/release-modern.yml)
-[![License: AGPL-3.0](https://img.shields.io/badge/License-AGPL--3.0-blue.svg)](LICENSE)
-[![Documentation](https://img.shields.io/badge/Docs-www.phantom.tc-black)](https://www.phantom.tc/docs)
-
-<picture>
-  <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/ARAS-Workspace/phantom-wg/press-kit/assets/dashboard-screenshot-dark-tr.png">
-  <source media="(prefers-color-scheme: light)" srcset="https://raw.githubusercontent.com/ARAS-Workspace/phantom-wg/press-kit/assets/dashboard-screenshot-light-tr.png">
-  <img alt="Phantom-WG Dashboard" src="https://raw.githubusercontent.com/ARAS-Workspace/phantom-wg/press-kit/assets/dashboard-screenshot-light-tr.png">
-</picture>
+[![License: AGPL-3.0](https://raw.githubusercontent.com/ARAS-Workspace/phantom-wg/press-kit/assets/badges/license.svg)](LICENSE)
+[![Documentation](https://raw.githubusercontent.com/ARAS-Workspace/phantom-wg/press-kit/assets/badges/docs.svg)](https://www.phantom.tc/docs)
 
 </div>
 
-> [!TIP]
-> **Nereden başlayacağınızı mı arıyorsunuz?** [Hızlı Başlangıç Rehberi](https://www.phantom.tc/docs/quickstart-guide) ile sunucu hazırlama sürecinden **Phantom-WG** ve **Phantom-Frontmatter** kurulum ve konfigürasyonuna kadar bölümlü bir video eşliğinde uygulamalı olarak izleyin.
+## Phantom-WG Nedir?
+
+***Phantom-WG***, kendi sunucu ortamınızda çalıştırabileceğiniz WireGuard altyapısına sahip bir VPN yönetim çözümüdür. Sunucu tarafında web kontrol paneli, istemci tarafında macOS ve iOS için imzalı uygulamalar sunar. Ayrı ve isteğe bağlı bir ön uç düğümü (**Phantom-Frontmatter**), bağlantıları TCP 443 üzerinden WebSocket Secure olarak taşır. Böylece istemciler, UDP'nin kısıtlandığı ağlardan da bağlantı sağlayabilir.
+
+Phantom-WG kendi içinde alt ürünler barındırır. Bu ürünleri çalıştıkları yere göre sunucu tarafı ve istemci tarafı olarak gruplayabiliriz:
+
+- **Sunucu tarafı:** Phantom-WG Modern, Phantom-Frontmatter
+- **İstemci tarafı:** Phantom-WG Mac, Phantom-WG iOS
+
+> [!IMPORTANT]
+> **1.1.5 kurulumunuz mu var?** 2.0.0'a geçiş adımları [Taşıma Rehberi](https://github.com/ARAS-Workspace/phantom-wg/blob/press-kit/MIGRATION_TR.md)'nde belirtilmiştir. 2.0.0 mimari değişiklikler içerir. Eski otomatik güncelleme akışı bu sürüme geçiş için uygun değildir. [Taşıma Rehberi](https://github.com/ARAS-Workspace/phantom-wg/blob/press-kit/MIGRATION_TR.md) dokümanındaki adımların hassas bir şekilde takip edilmesi gereklidir.
 
 ---
 
-## Phantom-WG Modern Nedir?
+## Phantom-WG Modern Kurulum ve Konfigürasyonu
 
-***Phantom-WG***, kendi sunucunuzda WireGuard VPN altyapısı kurmanızı ve yönetmenizi sağlayan modüler bir araçtır. Temel VPN yönetiminin ötesinde; sansüre dayanıklı bağlantılar, çok katmanlı şifreleme ve gelişmiş gizlilik senaryoları sunar.
-
-***Phantom-WG Modern***, bu vizyonun container-native implementasyonudur. Tüm bileşenler Docker yapısı içerisinde çalışır ve host sistemden izole edilir:
-
-- **Userspace WireGuard** — Go FFI bridge ile container-scoped TUN device. Kernel modülü gerektirmez, host'un network namespace'ine dokunmaz.
-- **nftables netlink FFI** — Rust backend doğrudan kernel ile konuşur. Subprocess çağrısı yoktur, firewall kuralları programatik olarak yönetilir.
-- **SQLite State Persistence** — Tüm state SQLite veritabanlarında tutulur. Crash sonrası daemon restart yeterlidir — kernel state DB'den yeniden oluşturulur.
-- **Dual-Stack IPv6** — Host'ta IPv6 olmasa bile container içinde IPv6 subnet atanır, tünel içinde trafik taşınabilir.
-- **Container İzolasyonu** — `NET_ADMIN` + `NET_RAW` yeterlidir. WireGuard arayüzleri container namespace içerisinde yaşar. `SYS_ADMIN`, `privileged` veya `host` network mode gibi host güvenliğini zayıflatan konfigürasyonlar kullanılmaz.
-
-<img alt="Phantom-WG Modern" src="https://raw.githubusercontent.com/ARAS-Workspace/phantom-wg/press-kit/assets/phantom-modern-banner.png">
-
----
-
-## Topoloji
-
-Üç container, Docker Compose ile yönetilir. Yönetim trafiği TLS + JWT kimlik doğrulamadan geçer, WireGuard trafiği doğrudan daemon'a ulaşır.
+Phantom-WG, Docker Compose ile yönetilen üç temel konteyner yapısını beraberinde bulundurur. Konteyner topolojisi diyagram üzerinde açıklanmaktadır.
 
 ```mermaid
 flowchart
-    A[Internet] -->|"HTTPS :443"| B[nginx]
-    B --> C[auth-service]
-    C <-->|"UDS"| D[daemon]
+    A[Internet]
+
+    subgraph HOST["Host"]
+        subgraph DOCKER["Docker Compose"]
+            B["nginx"]
+            C["auth-service"]
+            D["daemon"]
+        end
+    end
+
+    A -->|"HTTPS :443"| B
+    B --> C
+    C <-->|"UDS"| D
     A -->|"WireGuard :51820/udp"| D
 ```
 
-| Bileşen          | Görev                                                                                                |
-|------------------|------------------------------------------------------------------------------------------------------|
-| **nginx**        | TLS sonlandırma, React SPA (Statik Derlenmiş Dosyalar), Reverse Proxy Yapılandırması                 |
-| **auth-service** | Kapsamlı Kimlik Doğrulama (Authentication) Sistemi, UDS üzerinden daemon'a API proxy                 |
-| **daemon**       | Userspace WireGuard (Go FFI), nftables firewall (Rust FFI), İstemci ve Tünel yönetimi, Veritabanları |
+### Gereksinimler
 
----
+| Gereksinim      | Detay                                                                        |
+|-----------------|------------------------------------------------------------------------------|
+| İşletim sistemi | Linux, Kernel 5.15 veya üstü                                                 |
+| Docker          | Docker Engine 27.0.1 veya üstü, Docker Compose eklentisi 2.27.2 veya üstü    |
+| Python          | `python3` 3.9 veya üstü                                                      |
+| TUN             | `/dev/net/tun`                                                               |
+| Araçlar         | `bash`, klonla kurulum ve güncelleme için `git`, release arşivi için `unzip` |
+| Kullanıcı       | `docker` grubunun bir üyesi ya da root                                       |
 
-## Temel Özellikler
+#### Kurulum Matrisi
 
-### Bridge Mimarisi
+Kurulum, sekiz dağıtımın güncel imajında [`Verify install matrix`](https://github.com/ARAS-Workspace/phantom-wg/actions/runs/42452212400) iş akışıyla sınanır. Her dağıtımda Docker kurulur, sunucu yeniden başlatılır ve projenin kendi araç setiyle `setup`, `up`, yetkili denetim, `down`, `hard-reset` adımları iki tur koşulur. Son koşu (8 Kasım 2026):
 
-Daemon, sistem düzeyindeki işlemleri iki native bridge aracılığıyla gerçekleştirir. Python iş mantığını yönetir, bridge'ler kernel ile doğrudan iletişim kurar.
+| Dağıtım        | Kernel | Docker Engine | Docker Compose |
+|----------------|--------|---------------|----------------|
+| Ubuntu 22.04   | 5.15   | 29.9.3        | 5.7.0          |
+| Ubuntu 24.04   | 6.8    | 29.9.3        | 5.7.0          |
+| Ubuntu 26.04   | 7.0    | 29.9.3        | 5.7.0          |
+| Debian 12      | 6.1    | 29.9.3        | 5.7.0          |
+| Debian 13      | 6.12   | 29.9.3        | 5.7.0          |
+| Fedora 45      | 7.2    | 29.9.3        | 5.7.0          |
+| Arch Linux     | 7.2    | 29.9.3        | 5.7.0          |
+| AlmaLinux 10.2 | 6.12   | 29.9.3        | 5.7.0          |
 
-```mermaid
-graph 
-    D["Daemon (Python)"] -->|"ctypes FFI"| WG["wireguard-go-bridge (Go)"]
-    D -->|"ctypes FFI"| FW["firewall-bridge (Rust)"]
-    WG --> TUN["TUN device"]
-    FW --> NFT["nftables kernel"]
-```
+### 1. İndirme
 
-| Bridge                  | Dil  | Sorumluluk                                              |
-|-------------------------|------|---------------------------------------------------------|
-| **wireguard-go-bridge** | Go   | Userspace WireGuard, TUN device, IPC state persistence  |
-| **firewall-bridge**     | Rust | nftables kural grupları, policy routing, preset sistemi |
+Phantom-WG Modern dağıtımını sunucunuza indirmek için iki farklı yolu tercih edebilirsiniz. Bu iki yol arasındaki fark, imajların nereden geldiği ve güncellemenin nasıl ele alındığıdır.
 
-### Multihop Exit Routing
+#### Git Klonu
 
-Trafiğinizi harici bir WireGuard VPN sunucusu üzerinden aktarmak için exit tünelinizi tanımlayabilirsiniz. IPv4 ve IPv6 tünelleri eş zamanlı olarak desteklenir.
-
-```mermaid
-flowchart LR
-    C[Client] -->|"WireGuard"| M["wg_main"] -->|"forward + masquerade"| E["wg_exit"] --> X[Exit Server]
-```
-
-### IPv6 Dual-Stack
-
-IPv6 desteği tüm katmanlarda — firewall kuralları, policy routing, masquerade ve multihop preset'leri `family: 10` (AF_INET6) ile çalışır. Host'ta IPv6 adresi olmadan da container içinden IPv6 tünel trafiği taşınabilir.
-
-### Crash Recovery
-
-Servis başlatıldığında kernel state (nftables kuralları, routing policy'leri) SQLite durum veritabanlarından yeniden oluşturulur. Beklenmeyen kapanma sonrası veri kaybı yaşanmaz.
-
----
-
-## Auth-Service (Kimlik Doğrulama ve Güvenli Proxy Katmanı)
-
-Daemon'a erişim, bağımsız bir kimlik doğrulama servisi tarafından korunur. Auth-service daemon'dan ayrı bir container'da çalışır ve UDS üzerinden API isteklerini proxy mekanizmasında aktarır.
-
-### Kimlik Doğrulama
-
-| Özellik                       | Detay                                                                                                        |
-|-------------------------------|--------------------------------------------------------------------------------------------------------------|
-| Oturum yönetimi               | JWT (Ed25519 imzalı),                                                                                        |
-| Çok faktörlü kimlik doğrulama | TOTP (RFC 6238), yedek kodlar ile erişim                                                                     |
-| Şifre depolama                | Argon2id hash                                                                                                |
-| Brute-force koruması          | IP tabanlı rate limiting (yapılandırılabilir sliding window ve deneme sayısı bazlı konfigürasyon)            |
-| Denetim kaydı                 | Tüm kimlik doğrulama ve API proxy olayları kullanıcı özelinde loglanır (giriş, çıkış, başarısız deneme, MFA) |
-
-### RBAC (Rol Tabanlı Erişim Kontrolü)
-
-| Yetki                                                | Superadmin | Admin |
-|------------------------------------------------------|:----------:|:-----:|
-| Daemon yönetimi (client, multihop, firewall, backup) |     ✓      |   ✓   |
-| Kendi şifresini değiştirme                           |     ✓      |   ✓   |
-| Kendi TOTP yapılandırması                            |     ✓      |   ✓   |
-| Admin hesabı oluşturma / silme                       |     ✓      |   —   |
-| Herhangi bir kullanıcının şifresini değiştirme       |     ✓      |   —   |
-| Başka kullanıcının TOTP'sini devre dışı bırakma      |     ✓      |   —   |
-| Audit log görüntüleme                                |     ✓      |   —   |
-
-> [!TIP]
-> İlk kurulumda oluşturulan hesap `superadmin` rolündedir. Sunucuyu birden fazla kişi yönetiyorsa operasyonel erişim için `admin` hesapları oluşturulabilir — idari yetkiler superadmin'de kalır.
-
-Her iki rol de daemon'u aynı yetki düzeyinde yönetebilir — client oluşturma, multihop, firewall, backup gibi daemon üzerinden yürütülen tüm operasyonlar ortaktır. 
-Ayrım yalnızca auth-service üzerindedir: superadmin kullanıcı yönetimi ve denetim yetkisine sahipken, admin yalnızca operasyonel erişime sahiptir. Auth-service bağımsız bir bileşendir — özelleştirmeler daemon yapısını etkilemez. Daemon bu servisin varlığından haberdar değildir ve yalnızca ağ operasyonları ile ilgilenir. Farklı kullanıcı gruplarını izole etmek istiyorsanız auth-service üzerinde yetkilendirme yerine, yapılandırma değişiklikleri ile aynı host üzerinde çalışan multi-tenant bir yapı kurabilirsiniz. Böylece hem ağ hem de kullanıcı erişimi tarafında izolasyon sağlarken, port ve network konfigürasyonunu çoğaltarak bağımsız instance'lar oluşturabilirsiniz. Bu operasyonel konfigürasyonlar, varolan yapıyı kendi senaryosuna uyarlamak isteyen ileri düzey kullanıcılar içindir.
-
----
-
-## Kurulum
-
-**Gereksinimler:** Docker Engine 20.10+, Docker Compose v2, bash.
+Git klonu, dağıtımı GitHub deposunun `main` dalından alır. `main` dalı yayınlanan son sürümü taşır. Bu yöntem internet erişimi olan sunucular için uygundur.
 
 ```bash
-curl -sSL get.phantom.tc | bash
-```
-
-<picture>
-  <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/ARAS-Workspace/phantom-wg/press-kit/assets/phantom-wg-install-dark.gif">
-  <source media="(prefers-color-scheme: light)" srcset="https://raw.githubusercontent.com/ARAS-Workspace/phantom-wg/press-kit/assets/phantom-wg-install-light.gif">
-  <img alt="Phantom-WG Kurulum" src="https://raw.githubusercontent.com/ARAS-Workspace/phantom-wg/press-kit/assets/phantom-wg-install-light.gif">
-</picture>
-
-### Yapılandırma
-
-```bash
+git clone --depth 1 --branch main https://github.com/ARAS-Workspace/phantom-wg.git
 cd phantom-wg
+```
 
-# İlk kurulum
+- `--depth 1`, `main` dalından yalnızca son commit'i alır. Güncelleme akışı ise klonu buradan ileri taşır.
+- İmajlar kurulum sırasında registry üzerinden çekilir. Hangi imajın kullanılacağı dağıtım üzerinde sabittir. İmaj adresleri ve digest değerleri [`tools/compose/registry.yml`](tools/compose/registry.yml) dosyasındadır.
+- Yeni sürüm aynı dizinde `./tools/prod.sh update` ile alınır.
+- Gereken araç: `git`.
+
+#### Release Arşivi
+
+Release arşivi imajları içinde taşır ve registry tarafına ulaşmadan imajlar kurulur. Bu yöntem çevrimdışı kurulumlar için ideal bir çözümdür ancak yerel güncelleme desteğini (git) varsayılan olarak içerisinde barındırmaz. Güncelleme sürecinin operatör tarafından manuel olarak ele alınması gerekir.
+
+[Releases](https://github.com/ARAS-Workspace/phantom-wg/releases) sayfasından mimarinize uygun dosyayı indirin:
+
+```bash
+uname -m                                      # x86_64: amd64, aarch64: arm64
+unzip phantom-wg-modern-v<sürüm>-amd64.zip    # ya da -arm64
+cd phantom-wg-modern
+```
+
+- Arşiv her mimari için ayrıdır: `amd64` ve `arm64`.
+- İmajlar arşivin `images/` dizinindedir. `setup` onları sağlama toplamlarını denetleyerek yükler.
+- `update` komutu bu kurulumda durur. Yeni sürüm kendi arşivinden kurulur.
+- Gereken araç: `unzip`.
+
+### 2. Kurulum
+
+```bash
+./tools/prod.sh gates    # host'un sağladıklarını raporlar
 ./tools/prod.sh setup
+```
 
-# Veya özel subnet ile (bkz. https://www.phantom.tc/docs/architecture/terazi)
-# ./tools/prod.sh setup --terazi-ipv4-subnet=10.9.0.0/24
+`setup` eksik olanı şu sırayla oluşturur:
 
-# Endpoint yapılandırması
-IPV4=$(curl -4 -sSL https://get.phantom.tc/ip)
-IPV6=$(curl -6 -sSL https://get.phantom.tc/ip)
-sed -i "s/^WIREGUARD_ENDPOINT_V4=.*/WIREGUARD_ENDPOINT_V4=${IPV4}/" .env.daemon
-sed -i "s/^WIREGUARD_ENDPOINT_V6=.*/WIREGUARD_ENDPOINT_V6=${IPV6}/" .env.daemon
+1. `.env`, `.env.daemon`, `.env.auth-service` ve `docker-compose.override.yml` (her biri kendi `.example` dosyasından)
+2. WireGuard sunucu anahtar çifti
+3. Auth-service anahtarları, `admin` hesabı ve veritabanı
+4. Self-signed TLS sertifikası
+5. Adres havuzu
 
-# Başlatma
+İstemciler adreslerini varsayılan olarak `10.8.0.0/24` havuzundan alır. Başka bir subnet yalnızca ilk kurulumda verilir:
+
+```bash
+./tools/prod.sh setup --terazi-ipv4-subnet=10.9.0.0/24
+```
+
+**Terazi**, Phantom-WG üzerinde adres havuzunu ele alan mimarinin kendisidir. IPv4 ve IPv6 adreslerini aynı sıra numarası (index) üzerinden eşler. Bu yüzden tek bir IPv4 subnet'i iki havuzu da belirler ve her istemci iki adresini birlikte alır.
+
+- Havuz kurulumda oluşturulur ve baştan doludur. İstemci eklemek ilk boş yuvayı işaretler, istemciyi iptal etmek yuvayı serbest bırakır.
+- `/24` bir subnet 253 istemci taşır. Ağ, yayın ve sunucu adresleri ayrılmıştır.
+- Subnet özel (RFC 1918) bir aralıktan, `/16` ile `/30` arasında seçilir. Kurulumdan sonra yalnızca prefix uzunluğu kontrol panelinden değiştirilebilir. Ardından istemci yapılandırmalarının yeniden dışa aktarılması gerekir.
+
+### 3. Endpoint
+
+`.env.daemon` dosyasına sunucunun dışarıya açılan IP adresini yazın:
+
+```bash
+nano .env.daemon
+```
+
+```ini
+WIREGUARD_ENDPOINT_V4=203.0.113.1
+WIREGUARD_ENDPOINT_V6=2001:db8::1
+```
+
+Bu adresler kontrol panelinin dışa aktardığı istemci yapılandırmalarına girer. Daemon onları açılışta okur, bu yüzden `up` komutundan önce yazılır.
+
+### 4. Başlatma
+
+```bash
 ./tools/prod.sh up
 ```
 
-**Erişim:**
-- Kontrol Paneli: `https://<sunucu-ip>`
-- WireGuard: UDP port `51820`
-- Admin şifresi: `cat container-data/secrets/production/.admin_password`
+| Erişim         | Değer                                                   |
+|----------------|---------------------------------------------------------|
+| Kontrol paneli | `https://<sunucu-ip>`                                   |
+| WireGuard      | UDP port `51820`                                        |
+| Kullanıcı adı  | `admin`                                                 |
+| Şifre          | `cat container-data/secrets/production/.admin_password` |
 
-> [!TIP]
-> VPN'e bağlıyken kontrol paneline erişmek için nginx container'ın Docker network adresini kullanabilirsiniz:
-> ```bash
-> docker inspect phantom-nginx --format '{{range .NetworkSettings.Networks}}IPv4: {{.IPAddress}} | IPv6: {{.GlobalIPv6Address}}{{end}}'
-> ```
-> Tünel içerisinden `https://<IPv4>` veya `https://[<IPv6>]` adresi ile erişilebilir. Dilerseniz `docker-compose.yml` dosyasından `ports: "443:443"` satırını kaldırarak kontrol panelini yalnızca VPN tüneli üzerinden erişilebilir hale getirebilirsiniz.
+### Konfigürasyon
 
----
+**Konteyner yapısına özgü ayarlar.** Konteyner yapısına özgü bir ayar değiştirilecekse `docker-compose.yml` değil, `docker-compose.override.yml` düzenlenir. `docker-compose.yml` her sürümle birlikte gelir ve yerel değişiklik taşıyorsa `update` durur. `docker-compose.override.yml` ise git tarafından izlenmez ve güncelleme ona dokunmaz. Stack üzerinde konteyner yapısına özgü değişikliklerin uygulanması gerekiyorsa tavsiye edilen yöntem budur.
 
-## Ortam Değişkenleri
-
-Yapılandırma, kurulum sırasında şablonlardan oluşturulan env dosyaları ile yönetilir:
-
-| Dosya               | Servis       |
-|---------------------|--------------|
-| `.env.daemon`       | daemon       |
-| `.env.auth-service` | auth-service |
-
-Tüm seçenekler için `.example` dosyalarına bakın.
-
----
-
-## Yönetim
-
-Yönetim için `./tools/prod.sh` konumunda kullanışlı bir araç bulunur.
-
-| Komut                               | Açıklama                                        |
-|-------------------------------------|-------------------------------------------------|
-| `setup`                             | Tam Kurulum                                     |
-| `setup --terazi-ipv4-subnet=SUBNET` | Özel subnet ile kurulum (ör. `10.9.0.0/24`)     |
-| `up`                                | Başlat                                          |
-| `down`                              | Durdur                                          |
-| `restart [service]`                 | Yeniden Başlat (Tümü veya Belirli Servis)       |
-| `build`                             | İmaj Derle                                      |
-| `rebuild`                           | Sıfırdan İmaj Derle (no-cache)                  |
-| `update`                            | Güncelle (git pull + restart)                   |
-| `compose lock`                      | docker-compose.yml kalıcı kilitle               |
-| `compose unlock`                    | docker-compose.yml kilidini kaldır              |
-| `logs [service]`                    | Log Takibi (Tümü veya Belirli Servis)           |
-| `status`                            | Docker Compose Durumu                           |
-| `certbot <domain>`                  | Let's Encrypt TLS sertifikası al                |
-| `show-versions`                     | Bileşen Versiyonları (Daemon, Vendor Paketleri) |
-| `shell [service]`                   | Shell (varsayılan: daemon)                      |
-| `exec <svc> <cmd>`                  | Komut Çalıştır                                  |
-| `hard-reset`                        | Tüm Veriyi Sil                                  |
-
-### Kurulum
-
-`setup` komutu ilk kurulumda gerekli tüm bileşenleri oluşturur:
-
-1. `.env.daemon` ve `.env.auth-service` dosyalarını `.example` şablonlarından oluşturur.
-2. WireGuard sunucu anahtar çifti üretir. (Curve25519 — `wg_private_key`, `wg_public_key`)
-3. Auth-Service için bootstrap döngüsü:
-   - Ed25519 imzalama anahtar çifti üretir. (`auth_signing_key`, `auth_verify_key`)
-   - Auth veritabanını oluşturur. (`auth.db` — kullanıcılar, oturumlar, TOTP, audit log)
-   - Admin hesabı oluşturur. (Argon2id hash ile şifrelenen 32 karakterlik rastgele şifre)
-4. Nginx için self-signed TLS sertifikası üretir. (`tls_cert`, `tls_key`)
-
-Tüm bu işlemler container içerisinde gerçekleşir — host tarafında ek bir bağımlılık veya araç kurulumu gerekmez.
-
-Terazi, IP havuzunu oluşturmak için bir base subnet'e ihtiyaç duyar. Varsayılan `10.8.0.0/24` olup `--terazi-ipv4-subnet` argümanı ile kurulumda özelleştirilebilir. Bu değer yalnızca `wallet.db` oluşturulurken kullanılır — veritabanı oluştuktan sonra subnet burada saklanır ve argümana tekrar ihtiyaç duyulmaz. Detaylar için [Terazi dokümantasyonuna](https://www.phantom.tc/docs/architecture/terazi) bakın.
-
-> [!TIP]
-> Gizli anahtarlar `container-data/secrets/production/` altında saklanır. Admin şifresi aynı dizindeki `.admin_password` dosyasına yazılır — giriş yaptıktan sonra güvenle kaldırabilirsiniz.
-
-### Güncelleme Mekanizması
-
-> [!IMPORTANT]
-> Güncelleme mekanizması git üzerinden çalışır. Kurulum alanınızı `git clone` ile veya aynı işi yapan [`get.phantom.tc`](https://get.phantom.tc) servisi ile oluşturmanız gerekir.
-
-Daemon ve auth-service kaynak kodları container'lara read-only olarak mount edilir (`phantom_daemon:/app/phantom_daemon:ro`, `services/auth-service:/app/auth-service:ro`). Dockerfile'lar yalnızca sistem bağımlılıklarını (Python, runtime paketleri) sağlar — uygulama kodu image içinde değildir. Bu yapı sayesinde:
-
-- **Hızlı güncelleme**: `git pull` + `restart` yeterlidir, kod değişiklikleri için image rebuild gerekmez
-- **Hızlı rollback**: `git checkout <önceki-versiyon>` + `restart` ile anında geri dönüş
-- **Build bağımsızlığı**: Kod değişiklikleri container build sürecini tetiklemez
-
-```bash
-./tools/prod.sh update                 # git pull + restart
-```
-
-#### Compose Lock
-
-`docker-compose.yml` üzerinde port, volume veya environment değişikliği yaptıysanız, güncellemelerin bu dosyayı ezme riski vardır. Compose lock bu dosyayı git güncellemelerinden korur:
-
-```bash
-./tools/prod.sh compose lock           # Kalıcı kilitle
-./tools/prod.sh update                 # docker-compose.yml korunur
-./tools/prod.sh compose unlock         # Kilidi kaldır
-```
-
-#### Rebuild
-
-Sistem bağımlılıkları değiştiğinde (Dockerfile, requirements.txt) image rebuild gerekir:
-
-```bash
-./tools/prod.sh rebuild
-./tools/prod.sh up
-```
-
-> [!NOTE]
-> **v1.1.3** ve sonrasında `./tools/prod.sh update`, `Dockerfile` ve `requirements.txt` değişikliklerini otomatik algılayıp etkilenen servisi yeniden derler (`build` + `up`) — elle rebuild normalde gerekmez. Yukarıdaki komutu yalnızca **v1.1.2 veya öncesinden** yükseltirken tek seferlik bir adım olarak çalıştırın; o sürümlerin update mantığı bu otomatik algılamadan önceye dayanır.
-
-#### Let's Encrypt (Opsiyonel)
-
-Varsayılan self-signed sertifika, Let's Encrypt sertifikası ile değiştirilebilir. HTTP-01 standalone challenge kullanır — domain'in A kaydı sunucuyu işaret etmeli ve 80 portu müsait olmalıdır.
+**Let's Encrypt.** Varsayılan sertifika self-signed'dır. Alan adınızın A kaydı sunucuyu gösteriyorsa ve 80 portu erişilebilirse Let's Encrypt sertifikası alınabilir.
 
 ```bash
 ./tools/prod.sh certbot <domain>
 ./tools/prod.sh restart nginx
 ```
 
-Sertifika dosyaları `container-data/secrets/production/tls_cert` ve `tls_key` olarak yazılır. Yenileme idempotent'tir — sertifika süresine yaklaşınca aynı komutu tekrar çalıştırın.
+Aynı iki komut sertifikayı yeniler. Aynı komut zinciri cron üzerinden de çalıştırılmaya uygundur.
+
+**Cloudflare modu.** Stack, Cloudflare proxy arkasında çalışabilir. Bu modda kontrol paneline yalnızca Cloudflare üzerinden ulaşılır. Kurulum beş aşamadır.
+
+1. **API Token**
+
+   - Cloudflare panelinde **My Profile** > **API Tokens** sayfasını açın ve **Create Token** seçin.
+   - Şablon seçmeden başlayın ve aşağıdaki dört izni ekleyin.
+   - Zone kaynağı olarak yalnızca bu modda kullanacağınız zone'u seçin.
+   - **Continue to summary** ve ardından **Create Token** seçin.
+   - Token değeri yalnızca bir kez gösterilir. Bu değer üçüncü aşamada `.env.cf` dosyasına yazılır.
+
+   | İzin                                 | Araç bu izinle ne yapar                                    |
+   |--------------------------------------|------------------------------------------------------------|
+   | `Zone - Zone - Read`                 | Zone'u adından bulur.                                      |
+   | `Zone - Zone Settings - Read`        | SSL/TLS modunu ve Authenticated Origin Pulls ayarını okur. |
+   | `Zone - SSL and Certificates - Edit` | Origin CA sertifikasını alır. Mod kapatılırken iptal eder. |
+   | `Zone - SSL and Certificates - Read` | İptal isteği reddedilirse sertifikanın durumunu okur.      |
+
+2. **Zone Ayarları**
+
+   - **SSL/TLS** > **Overview** sayfasında şifreleme modunu **Full (strict)** olarak seçin.
+   - **SSL/TLS** > **Origin Server** sayfasında **Authenticated Origin Pulls** sekmesini açın. **Global** bölümündeki seçeneği **On** konumuna getirin.
+   - Kontrol paneli için kullanacağınız alan adının DNS kaydı sunucunun IP adresini göstermelidir. Kaydın proxy durumu **Proxied** olmalıdır.
+
+3. **`.env.cf` Dosyası**
+
+   ```bash
+   ./tools/prod.sh cloudflare on
+   nano .env.cf
+   ```
+
+   - İlk `cloudflare on` çağrısı `.env.cf` dosyasını `.env.cf.example` dosyasından yazar ve durur.
+   - `CF_API_TOKEN` satırına token değerini yazın.
+   - `CF_ZONE` satırına zone adını yazın. Örnek: `example.com`.
+   - `CF_HOSTNAMES` sertifikanın kapsayacağı adları virgülle ayrılmış olarak taşır. Boş bırakılırsa zone ve `*.<zone>` kullanılır. Kontrol panelinin alan adı bu adlar arasında olmalıdır.
+   - Dosya bu sunucuya aittir. Git onu izlemez. Araç dosya iznini 600 olarak tutar.
+
+4. **Modu Açma**
+
+   ```bash
+   ./tools/prod.sh cloudflare on
+   ```
+
+   - Araç zone'un SSL/TLS modunu ve Authenticated Origin Pulls ayarını okur. Mod Full (strict) değilse ya da Authenticated Origin Pulls kapalıysa durur.
+   - Özel anahtarı sunucuda üretir ve bu anahtar için Cloudflare'den 15 yıl (5475 gün) geçerli bir Origin CA sertifikası alır.
+   - Cloudflare'in origin pull CA sertifikasını ve adres listesini indirir.
+   - nginx ayarlarını ve firewall kurallarını `container-data/cloudflare/` dizinine yazar.
+   - Modun girdilerini `docker-compose.override.yml` dosyasına ekler. Önceki dosya `docker-compose.override.yml.bak` adıyla kalır.
+
+5. **Uygulama**
+
+   ```bash
+   ./tools/prod.sh up
+   ./tools/prod.sh cloudflare    # modun durumunu gösterir
+   ```
+
+   - `up` nginx'i yeni ayarlarla yeniden oluşturur.
+   - 443 portu Cloudflare adresleri dışından gelen bağlantıları düşürür ve nginx Cloudflare'in origin pull sertifikasını ister.
+   - Kontrol paneline `https://<sunucu-ip>` adresinden değil, alan adınız üzerinden ulaşılır.
+   - Loglar ve audit kaydı ziyaretçinin gerçek IP adresini taşır.
+
+Modun kapatılması ve adres listesinin yenilenmesi `SETUP` dosyasının Cloudflare bölümündedir.
+
+### Güncelleme
+
+```bash
+./tools/prod.sh update
+```
+
+Git klonu ile kurulan sunucu son sürümü çeker, imajları eşitler ve servisleri yeniden oluşturur. Env dosyaları ve `docker-compose.override.yml` korunur.
+
+### Ayrıntılar
+
+| Kaynak                 | İçerik                                                                      |
+|------------------------|-----------------------------------------------------------------------------|
+| [SETUP](SETUP)         | Kurulum rehberi: komutlar, imaj kaynakları, veri dizinleri, Cloudflare modu |
+| [UPDATE](UPDATE)       | Güncelleme, önceki sürüme dönüş, hard reset                                 |
+| [CHANGELOG](CHANGELOG) | Sürüm değişiklikleri                                                        |
+| `./tools/prod.sh help` | Bütün komutlar                                                              |
 
 ---
 
-## Mimari
+## Phantom-Frontmatter Kurulum ve Konfigürasyonu
 
-Detaylı mimari dokümantasyonu için [www.phantom.tc/docs/architecture](https://www.phantom.tc/docs/architecture) adresini ziyaret edin.
-
-| Kaynak          | URL                                                                          |
-|-----------------|------------------------------------------------------------------------------|
-| Web Sitesi      | [www.phantom.tc](https://www.phantom.tc)                                     |
-| Mimari          | [www.phantom.tc/docs/architecture](https://www.phantom.tc/docs/architecture) |
-| API Referansı   | [www.phantom.tc/docs/api](https://www.phantom.tc/docs/api)                   |
-| Kurulum Rehberi | [SETUP](SETUP)                                                               |
-
----
-
-## Geliştirme
-
-Aktif geliştirme [`dev/daemon`](https://github.com/ARAS-Workspace/phantom-wg/tree/dev/daemon) branch'inde yapılmaktadır. `main` branch'i yalnızca üretime hazır sürümleri içerir.
-
----
-
-## Phantom-Frontmatter
-
-Phantom-WG Modern sunucunuzun önüne yerleştirilen WSS/TLS tünel katmanı. TCP 443 üzerinden wstunnel bağlantıları kabul eder ve trafiği backend sunucuya iletir. Ağ gözlemcileri yalnızca standart HTTPS trafiği görür.
+Phantom-Frontmatter, Phantom-WG Modern sunucusunun önüne yerleştirilen isteğe bağlı bir taşıma katmanıdır ve ayrı bir sunucuya kurulur. İstemci bağlantılarını TCP 443 üzerinde TLS ile karşılar ve trafiği Phantom-WG Modern sunucusuna iletir.
 
 ![Frontmatter Flow](https://raw.githubusercontent.com/ARAS-Workspace/phantom-wg/press-kit/assets/connection-flow-frontmatter.svg)
 
 ### Gereksinimler
 
-Phantom-Frontmatter, Phantom-WG Modern sunucusundan ayrı ve bağımsız bir bare-metal sunucuya kurulur.
-
 | Gereksinim      | Detay                                                   |
 |-----------------|---------------------------------------------------------|
-| İşletim Sistemi | Debian 12 / 13, Ubuntu 22.04 / 24.04                    |
+| İşletim sistemi | Debian 12 / 13, Ubuntu 22.04 / 24.04 / 26.04            |
 | Erişim          | Root (sudo)                                             |
 | Backend         | Erişilebilir bir Phantom-WG Modern sunucusu (UDP 51820) |
 
-### Kurulum
+### 1. Kurulum
 
-Güncel sürüm: [frontmatter-v1.0.1](https://github.com/ARAS-Workspace/phantom-wg/releases/tag/frontmatter-v1.0.1)
+Güncel sürüm: [frontmatter-v1.0.2](https://github.com/ARAS-Workspace/phantom-wg/releases/tag/frontmatter-v1.0.2)
 
 ```bash
-wget https://github.com/ARAS-Workspace/phantom-wg/releases/download/frontmatter-v1.0.1/phantom-wg-frontmatter-v1.0.1.zip
-unzip phantom-wg-frontmatter-v1.0.1.zip
-cd phantom-wg-frontmatter-v1.0.1
+# Gereken paketleri kurun
+sudo apt-get update
+sudo apt-get install -y wget unzip jq
+
+# Paketi indirin ve kurun
+wget https://github.com/ARAS-Workspace/phantom-wg/releases/download/frontmatter-v1.0.2/phantom-wg-frontmatter-v1.0.2.zip
+unzip phantom-wg-frontmatter-v1.0.2.zip
+cd phantom-wg-frontmatter-v1.0.2
 sudo ./frontmatter-install.sh
 ```
 
-### Güncelleme
-
-Kurulu bir sunucu yerinde güncellenir. SQLite durumu, TLS materyali ve tünel gizli anahtarı korunur; böylece istemci yapılandırmaları güncelleme boyunca çalışmaya devam eder. `frontmatter-install.sh` yalnızca ilk kurulum içindir.
+### 2. Yapılandırma
 
 ```bash
-wget https://github.com/ARAS-Workspace/phantom-wg/releases/download/frontmatter-v1.0.1/phantom-wg-frontmatter-v1.0.1.zip
-unzip phantom-wg-frontmatter-v1.0.1.zip
-cd phantom-wg-frontmatter-v1.0.1
-sudo ./frontmatter-update.sh
-```
-
-**v1.0.0 → v1.0.1** güncelleyicinin kendisini getirir ve paketlenmiş tünel ikilisini [wstunnel](https://github.com/erebe/wstunnel) 10.5.2'den forkumuzun [10.5.2+Phantom.Patch.1](https://github.com/ARAS-Workspace/wstunnel) sürümüne taşır. Bu sürüm 10.5.2 üzerine iki upstream düzeltme taşır: Frontmatter'ın koştuğu sunucu rolünü de kapsayan bir WebSocket keep-alive ve alım kilitlenmesi düzeltmesi ile istemci bağlantı havuzundaki TLS el sıkışma zaman aşımı.
-
-### Yapılandırma
-
-```bash
-# Backend sunucuyu tanımla (IPv4 veya IPv6)
+# Backend sunucuyu tanımlayın (IPv4 ya da IPv6)
 sudo frontmatter-api setup init backend=<BACKEND_IP[:PORT]>
 
-# Veri yolunu başlat
+# Veri yolunu başlatın
 sudo frontmatter-api ghost start
 
-# Durumu doğrula
+# Durumu doğrulayın
 sudo frontmatter-api ghost status
-
-# İstemci yapılandırma bloğu
-sudo frontmatter-api ghost client_config
-
-# İstemci bağlantı komutu (standalone wstunnel)
-sudo frontmatter-api ghost client_command
 ```
+
+### 3. İstemci Bloğu
+
+```bash
+sudo frontmatter-api ghost client_config | jq -r '.data.wstunnel_block'
+```
+
+Çıktı, istemci yapılandırmasına eklenecek `[Wstunnel]` bloğunu verir. Bloğu kontrol panelinden aldığınız istemci yapılandırmasına ekleyin ve `<FRONTMATTER-PUBLIC-IP>` yerine bu sunucunun adresini yazın.
+
+```ini
+# "frontmatter-api ghost client_config" komutundan alınan blok
+[Wstunnel]
+Url = ...
+Secret = ...
+Tunnel = ...
+
+# Kontrol panelinden alınan WireGuard istemci yapılandırması
+[Interface]
+PrivateKey = ...
+Address = ...
+DNS = ...
+MTU = ...
+
+[Peer]
+PublicKey = ...
+PresharedKey = ...
+AllowedIPs = ...
+Endpoint = ...
+PersistentKeepalive = ...
+```
+
+wstunnel'i kendi başına çalıştıran istemciler için bağlantı komutu şu şekilde alınır:
+
+```bash
+sudo frontmatter-api ghost client_command | jq -r '.data.command'
+```
+
+Çıktıdaki komutu çalıştırmadan önce `<FRONTMATTER-PUBLIC-IP>` yerine bu sunucunun adresini yazın.
 
 ### Let's Encrypt (Opsiyonel)
 
@@ -372,7 +346,15 @@ sudo frontmatter-certbot front.example.com
 sudo frontmatter-api ghost start
 ```
 
-### Keşfet
+### Güncelleme
+
+Kurulu bir sunucu yerinde güncellenir. Yeni sürümün arşivi hedef sunucuya indirilir ve açılır. Ardından güncelleme betiği çalıştırılır. Veritabanı durumu, sertifika materyali ve gizli anahtar güncelleme sürecinde korunur. `frontmatter-install.sh` yalnızca ilk kurulum içindir.
+
+```bash
+sudo ./frontmatter-update.sh
+```
+
+### Ayrıntılar
 
 | Kaynak          | Bağlantı                                                                                         |
 |-----------------|--------------------------------------------------------------------------------------------------|
@@ -380,6 +362,15 @@ sudo frontmatter-api ghost start
 | Mimari          | [ARCHITECTURE](https://github.com/ARAS-Workspace/phantom-wg/blob/frontmatter/ARCHITECTURE)       |
 | Mimari (TR)     | [ARCHITECTURE_TR](https://github.com/ARAS-Workspace/phantom-wg/blob/frontmatter/ARCHITECTURE_TR) |
 | Kaynak Kod      | [GitHub](https://github.com/ARAS-Workspace/phantom-wg/tree/frontmatter)                          |
+
+---
+
+## İstemci Uygulamaları
+
+| Platform | İndirme                                                                                                                                                                                                             |
+|----------|---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| iOS      | [![iOS: App Store](https://raw.githubusercontent.com/ARAS-Workspace/phantom-wg/press-kit/assets/badges/ios-app-store.svg)](https://apps.apple.com/app/phantom-wg/id6812090582)                                      |
+| macOS    | [![macOS: Download](https://raw.githubusercontent.com/ARAS-Workspace/phantom-wg/press-kit/assets/badges/macos-download.svg)](https://github.com/ARAS-Workspace/phantom-wg/releases/tag/mac-v2.1.3)                  |
 
 ---
 
