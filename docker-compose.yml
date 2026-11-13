@@ -2,7 +2,7 @@
 # phantom-daemon  ·  Production Compose
 # ──────────────────────────────────────────────────────────────────
 # Usage:
-#   ./tools/prod.sh setup       # first-time: keys + auth + TLS cert
+#   ./tools/prod.sh setup       # first-time: env, keys, auth, TLS cert, pool
 #   ./tools/prod.sh up          # start production stack
 #
 # Topology:

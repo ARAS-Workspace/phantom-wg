@@ -30,7 +30,7 @@ from stack.prod.libs import (
     tls,
 )
 
-ABOUT = "Full setup (env + keys + auth + TLS)"
+ABOUT = "Full setup (env + keys + auth + TLS + pool)"
 ARGUMENTS = (
     argument("--terazi-ipv4-subnet", default=""),
     argument("--admin-username", default=auth.DEFAULT_USERNAME),

@@ -22,7 +22,7 @@ from core import runner
 
 
 def operator() -> tuple[int, int]:
-    """The owner of what the tool writes: run as root, the owner of the install directory."""
+    """Who the tool writes its files as: run as root, the owner of the install directory."""
     if os.geteuid() == 0:
         info = runner.ROOT.stat()
         return info.st_uid, info.st_gid

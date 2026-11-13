@@ -10,7 +10,8 @@ Copyright (c) 2025 Rıza Emre ARAS <r.emrearas@proton.me>
 Licensed under AGPL-3.0 - see LICENSE file for details
 WireGuard® is a registered trademark of Jason A. Donenfeld.
 
-hard-reset: back to a host before setup.
+hard-reset: the data of the install is wiped; the env files, the override and
+the Cloudflare mode stay.
 """
 
 from __future__ import annotations

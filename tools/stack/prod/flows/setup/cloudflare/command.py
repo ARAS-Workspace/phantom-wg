@@ -21,7 +21,7 @@ refresh takes Cloudflare's origin pull CA and address list again. The work
 runs in phantom-nginx-tools, built here from helper/; the override changes
 only after Compose accepts the new one, and the last one stays as
 docker-compose.override.yml.bak. A step of on that fails after the
-certificate revokes it again.
+certificate revokes it again, until the mode is recorded.
 """
 
 from __future__ import annotations

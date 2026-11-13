@@ -11,7 +11,7 @@ Licensed under AGPL-3.0 - see LICENSE file for details
 WireGuard® is a registered trademark of Jason A. Donenfeld.
 
 A gate is one thing a production flow needs from the host. A flow enforces its
-gates on its first line.
+gates before it does anything.
 """
 
 from __future__ import annotations

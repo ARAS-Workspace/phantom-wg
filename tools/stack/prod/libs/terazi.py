@@ -39,7 +39,7 @@ def present() -> bool:
 
 
 def create(subnet: str) -> None:
-    """The pool, from the code of this host. db/ belongs to root: the container writes as root."""
+    """The pool, from the code of this host. wallet.db belongs to root: the container writes as root."""
     compose.require_down()
     directory = paths.wallet().parent
     identity.make_dir(directory)
