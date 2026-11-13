@@ -1,8 +1,8 @@
 Phantom-WG Modern — Migration Guide
 =====================================
 
-From 1.1.5 to 2.0.0. This file is the draft of the migration document: the
-steps, and under "What Was Measured" the facts they rest on.
+From 1.1.5 to 2.0.0: the steps, and under "What Was Measured" the facts
+they rest on.
 
 Before You Start:
   2.0.0 is installed next to 1.1.5, in a directory of its own. The data and
@@ -211,8 +211,8 @@ After Migration:
   Updates of 2.0.0: see UPDATE.
 
 What Was Measured:
-  1.1.5 is main at v1.1.5 (8de545c3), 2.0.0 is dev/daemon before its
-  release. Read from the two trees:
+  1.1.5 is main at v1.1.5, 2.0.0 is dev/daemon before its release. Read
+  from the two trees:
 
   Install
     - The 1.1.5 quick start installs as root: get.phantom.tc makes a
