@@ -122,13 +122,15 @@ function stopPreviewServer(serverProcess) {
 }
 
 /**
- * Pre-render a single route with locale and theme
+ * Pre-render a single route with locale and theme. Writes nothing: the
+ * document goes back to prerenderAll, which writes every document after the
+ * last render.
  * @param {import('@playwright/test').Page} page
  * @param {string} route
  * @param {string} locale
  * @param {string} theme
  * @param {Config} config
- * @returns {Promise<boolean>}
+ * @returns {Promise<{ outputPath: string, html: string } | null>} null when the render failed
  */
 async function prerenderRoute(page, route, locale, theme, config) {
   const renderUrl = `${config.production_url}${route}?__prerendering=true&locale=${locale}&theme=${theme}`;
@@ -141,17 +143,6 @@ async function prerenderRoute(page, route, locale, theme, config) {
 
   const label = `${route} [${locale}] [${theme}]`;
   log.info(`Rendering ${label}`);
-
-  /** @type {{ css: Set<string>, js: Set<string> }} */
-  const resources = { css: new Set(), js: new Set() };
-
-  page.on('response', (response) => {
-    const url = response.url();
-    if (!response.ok() || !url.includes('/assets/')) return;
-    const relativePath = url.replace(config.production_url, '');
-    if (url.endsWith('.css')) resources.css.add(relativePath);
-    else if (url.endsWith('.js') && !relativePath.includes('/assets/index-')) resources.js.add(relativePath);
-  });
 
   try {
     await page.goto(renderUrl, {
@@ -169,26 +160,14 @@ async function prerenderRoute(page, route, locale, theme, config) {
 
     await page.waitForTimeout(config.additional_wait * 1000);
 
-    let html = await page.content();
+    // The snapshot already names the page's own assets: Vite's runtime adds a
+    // modulepreload link for every chunk the route imports and a stylesheet
+    // link for its CSS, so no hints are added here.
+    const html = await page.content();
 
     if (html.length < 1000) {
       log.error(`Empty HTML for ${label}`);
-      return false;
-    }
-
-    // Inject preload hints
-    /** @type {string[]} */
-    const preloadHints = [];
-    Array.from(resources.css).forEach((href) => {
-      preloadHints.push(`  <link rel="preload" href="${href}" as="style" crossorigin>`);
-    });
-    Array.from(resources.js).forEach((href) => {
-      preloadHints.push(`  <link rel="modulepreload" href="${href}" crossorigin>`);
-    });
-
-    if (preloadHints.length > 0) {
-      html = html.replace('</head>', `\n${preloadHints.join('\n')}\n  </head>`);
-      log.info(`  → ${resources.css.size} CSS + ${resources.js.size} JS preload(s)`);
+      return null;
     }
 
     const beautifiedHtml = await prettier.format(html, {
@@ -198,15 +177,11 @@ async function prerenderRoute(page, route, locale, theme, config) {
       useTabs: false,
     });
 
-    const outputDir = dirname(outputPath);
-    if (!existsSync(outputDir)) mkdirSync(outputDir, { recursive: true });
-
-    writeFileSync(outputPath, beautifiedHtml, 'utf-8');
     log.info(`Success: ${label}`);
-    return true;
+    return { outputPath, html: beautifiedHtml };
   } catch (error) {
     log.error(`Failed ${label}: ${error.message.substring(0, 150)}`);
-    return false;
+    return null;
   }
 }
 
@@ -260,7 +235,18 @@ async function prerenderAll(config) {
   );
 
   await browser.close();
-  return results.filter((success) => success).length;
+
+  // Written only now. The preview server answers every route with
+  // dist/index.html, so a document written during the run would be the shell
+  // of every render that starts after it.
+  const rendered = results.filter((result) => result !== null);
+  for (const { outputPath, html } of rendered) {
+    const outputDir = dirname(outputPath);
+    if (!existsSync(outputDir)) mkdirSync(outputDir, { recursive: true });
+    writeFileSync(outputPath, html, 'utf-8');
+  }
+
+  return rendered.length;
 }
 
 /**
