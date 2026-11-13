@@ -1,0 +1,6 @@
+// Landing content — a flex column, so the page's section can grow into the
+// space between the header and the footer (Hero, UnderConstruction).
+.landing-content.cds--content {
+  display: flex;
+  flex-direction: column;
+}

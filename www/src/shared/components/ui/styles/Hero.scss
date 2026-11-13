@@ -3,12 +3,6 @@
 @use '@carbon/react/scss/type/index' as type;
 @use '@carbon/react/scss/breakpoint' as bp;
 
-// Landing Content — flex container so Hero fills remaining viewport space
-.landing-content.cds--content {
-  display: flex;
-  flex-direction: column;
-}
-
 .hero-section {
   // Grow into the space the flex chain (.app → .cds--content) already computes
   // exactly — viewport minus header minus footer — and never shrink below the

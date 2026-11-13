@@ -5,22 +5,23 @@ import { getSiteConfig } from '@shared/config/seoConfig';
 import { toISO } from '@shared/utils/date-helpers';
 import { createTechArticleSchema } from '@shared/utils/schema-helpers';
 import SEO from '@shared/components/content/SEO';
-import MDXPageRenderer from '@shared/components/content/MDXPageRenderer';
+import UnderConstruction from '@shared/components/ui/UnderConstruction';
+import type { UnderConstructionContent } from '@shared/components/ui/UnderConstruction';
 
 import metaEn from './meta/en.json';
 import metaTr from './meta/tr.json';
-import ContentTr from './index.mdx';
-import ContentEn from './index.en.mdx';
+import contentEn from '../../data/sections/en/under-construction.json';
+import contentTr from '../../data/sections/tr/under-construction.json';
 
 const META_MAP = { en: metaEn, tr: metaTr };
-const CONTENT_MAP: Record<string, React.ComponentType> = { tr: ContentTr, en: ContentEn };
+const CONTENT_MAP: Record<string, UnderConstructionContent> = { tr: contentTr, en: contentEn };
 
 // noinspection DuplicatedCode
 const HomePage: React.FC = () => {
   const { locale } = useLocale();
   const { pathname } = useLocation();
   const siteConfig = getSiteConfig(locale);
-  const Content = CONTENT_MAP[locale] || CONTENT_MAP.en;
+  const content = CONTENT_MAP[locale] || CONTENT_MAP.en;
   const meta = META_MAP[locale] || META_MAP.en;
 
   const schemas = useMemo(() => [
@@ -36,7 +37,7 @@ const HomePage: React.FC = () => {
   return (
     <>
       <SEO {...meta.seo} path={pathname} schemas={schemas} />
-      <MDXPageRenderer content={Content} />
+      <UnderConstruction content={content} />
     </>
   );
 };

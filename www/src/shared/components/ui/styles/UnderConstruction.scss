@@ -1,0 +1,79 @@
+@use '@carbon/react/scss/spacing' as spacing;
+@use '@carbon/react/scss/breakpoint' as bp;
+
+// The block of the error pages (shared/pages/error/styles/common.scss) as a
+// page section: it grows into the space the landing layout computes between
+// the header and the footer, where the error pages take the whole viewport.
+.under-construction {
+  flex: 1 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: spacing.$spacing-07 spacing.$spacing-05;
+}
+
+.under-construction__content {
+  max-width: 42rem;
+  text-align: center;
+}
+
+.under-construction__icon-wrapper {
+  display: inline-block;
+  margin-bottom: spacing.$spacing-06;
+
+  svg {
+    width: 6rem;
+    height: 6rem;
+  }
+}
+
+.under-construction__icon {
+  color: var(--cds-icon-primary);
+  opacity: 0.9;
+}
+
+.under-construction__title {
+  font-size: 1.5rem;
+  font-weight: 500;
+  margin-bottom: spacing.$spacing-05;
+  color: var(--cds-text-primary);
+}
+
+.under-construction__description {
+  margin-bottom: spacing.$spacing-07;
+  color: var(--cds-text-secondary);
+}
+
+.under-construction__game {
+  margin-block: spacing.$spacing-07;
+  padding: spacing.$spacing-05;
+}
+
+.under-construction__actions {
+  display: flex;
+  gap: spacing.$spacing-05;
+  justify-content: center;
+  flex-wrap: wrap;
+}
+
+@include bp.breakpoint-down(md) {
+  .under-construction__title {
+    font-size: 1.25rem;
+  }
+
+  .under-construction__icon-wrapper {
+    svg {
+      width: 4.5rem;
+      height: 4.5rem;
+    }
+  }
+
+  .under-construction__actions {
+    flex-direction: column;
+
+    .cds--btn {
+      width: 100%;
+      max-width: none;
+    }
+  }
+}

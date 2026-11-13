@@ -1,0 +1,17 @@
+{
+  "title": "Documentation Under Construction",
+  "description": "The documentation is being reorganized. Installation and configuration steps are in the README of the GitHub repository.",
+  "actions": [
+    {
+      "title": "Home",
+      "href": "/",
+      "icon": "arrow-left"
+    },
+    {
+      "title": "Source Code",
+      "href": "https://github.com/ARAS-Workspace/phantom-wg",
+      "external": true,
+      "icon": "github"
+    }
+  ]
+}

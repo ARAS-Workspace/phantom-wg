@@ -2,7 +2,6 @@ import React, { lazy, Suspense } from 'react';
 import { createBrowserRouter, RouterProvider } from 'react-router-dom';
 
 import LandingLayout from '@shared/components/layout/LandingLayout';
-import DocumentationLayout from '@shared/components/layout/DocumentationLayout';
 import ErrorPage from '@shared/pages/error/ErrorPage';
 import LoadingSpinner from '@shared/components/ui/LoadingSpinner';
 
@@ -26,10 +25,10 @@ const router = createBrowserRouter([
       },
     ],
   },
-  // Documentation — www.phantom.tc/docs/*
+  // Documentation — www.phantom.tc/docs
   {
     path: '/docs',
-    element: <DocumentationLayout />,
+    element: <LandingLayout />,
     errorElement: <ErrorPage />,
     children: [
       {

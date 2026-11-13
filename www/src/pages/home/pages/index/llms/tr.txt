@@ -13,4 +13,4 @@ VPN Yönetim Çözümü / Sunucu & İstemci
 Kendi sunucunuzda çalıştırabileceğiniz, WireGuard için bir VPN yönetim çözümü: sunucu tarafında bir web kontrol paneli, istemci tarafında macOS ve iOS için imzalı native uygulamalar ve bağlantıları TCP 443 üzerinden taşıyarak UDP'nin kısıtlı olduğu ortamlarda da istemcilerin bağlanabilmesini sağlayan, ayrı ve isteğe bağlı bir ön uç düğümü.
 
 - [**Kaynak Kod**](https://github.com/ARAS-Workspace/phantom-wg): Kurulum ve Yapılandırma
-- [**Dokümantasyon**](https://www.phantom.tc/docs/llms.txt): Mimari ve Özellikler
+- [**Dokümantasyon**](https://www.phantom.tc/docs/llms.txt): Yapım Aşamasında

@@ -16,6 +16,7 @@ import { translate } from '@shared/translations';
 import FlagIcon from '@shared/components/ui/FlagIcon';
 import Footer from './Footer';
 
+import './styles/LandingLayout.scss';
 import '../ui/styles/ThemeSwitcher.scss';
 
 const LandingLayout: React.FC = () => {

@@ -1,0 +1,17 @@
+{
+  "title": "Dokümantasyon Yapım Aşamasında",
+  "description": "Dokümantasyon yeniden düzenleniyor. Kurulum ve yapılandırma adımları GitHub deposundaki README dosyasında yer alıyor.",
+  "actions": [
+    {
+      "title": "Anasayfa",
+      "href": "/",
+      "icon": "arrow-left"
+    },
+    {
+      "title": "Kaynak Kod",
+      "href": "https://github.com/ARAS-Workspace/phantom-wg",
+      "external": true,
+      "icon": "github"
+    }
+  ]
+}

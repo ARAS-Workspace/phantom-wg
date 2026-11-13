@@ -13,4 +13,4 @@ VPN Management Solution / Server & Client
 A VPN management solution for WireGuard you can run on your own server: a web control panel on the server side, signed native apps for macOS and iOS on the client side, and a separate, optional front-end node that carries connections over TCP 443, so clients can connect where UDP is restricted.
 
 - [**Source Code**](https://github.com/ARAS-Workspace/phantom-wg): Setup & Configuration
-- [**Documentation**](https://www.phantom.tc/docs/llms.txt): Architecture & Features
+- [**Documentation**](https://www.phantom.tc/docs/llms.txt): Under Construction
