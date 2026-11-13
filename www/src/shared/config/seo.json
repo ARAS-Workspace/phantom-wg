@@ -1,7 +1,7 @@
 {
   "name": "Phantom-WG",
   "title": "Phantom-WG",
-  "description": "Temel VPN yönetiminin ötesinde; sansüre dayanıklı bağlantılar, çok katmanlı şifreleme ve gelişmiş gizlilik senaryoları sunar.",
+  "description": "Kendi sunucunuzda WireGuard VPN yönetimi: web kontrol paneli, imzalı macOS ve iOS uygulamaları ve UDP kısıtlı ağlar için isteğe bağlı WSS 443 tüneli.",
   "url": "https://www.phantom.tc",
   "locale": "tr_TR",
   "author": {

@@ -1,6 +1,6 @@
 {
   "seo": {
-    "title": "Kendi Sunucun. Kendi Ağın. Kendi Gizliliğin.",
-    "description": "Temel VPN yönetiminin ötesinde; sansüre dayanıklı bağlantılar, çok katmanlı şifreleme ve gelişmiş gizlilik senaryoları sunar."
+    "title": "VPN Yönetim Çözümü / Sunucu & İstemci",
+    "description": "Kendi sunucunuzda WireGuard VPN yönetimi: web kontrol paneli, imzalı macOS ve iOS uygulamaları ve UDP kısıtlı ağlar için isteğe bağlı WSS 443 tüneli."
   }
 }

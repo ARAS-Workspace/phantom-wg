@@ -1,13 +1,14 @@
 {
   "title": "Phantom-WG",
-  "subtitle": "Kendi Sunucun. Kendi Ağın. Kendi Gizliliğin.",
-  "description": "Phantom-WG, kendi sunucunuzda WireGuard VPN altyapısı kurmanızı ve yönetmenizi sağlayan modüler bir araçtır. Temel VPN yönetiminin ötesinde; sansüre dayanıklı bağlantılar, çok katmanlı şifreleme ve gelişmiş gizlilik senaryoları sunar.",
+  "subtitle": "VPN Yönetim Çözümü / Sunucu & İstemci",
+  "description": "Kendi sunucunuzda çalıştırabileceğiniz, WireGuard için bir VPN yönetim çözümü: sunucu tarafında bir web kontrol paneli, istemci tarafında macOS ve iOS için imzalı native uygulamalar ve bağlantıları TCP 443 üzerinden taşıyarak UDP'nin kısıtlı olduğu ortamlarda da istemcilerin bağlanabilmesini sağlayan, ayrı ve isteğe bağlı bir ön uç düğümü.",
   "versions": [
     {
-      "title": "Kurulum",
+      "title": "Kaynak Kod",
       "description": "Kurulum ve Yapılandırma",
-      "href": "/docs/installation-update",
-      "icon": "rocket"
+      "href": "https://github.com/ARAS-Workspace/phantom-wg",
+      "external": true,
+      "icon": "github"
     },
     {
       "title": "Dokümantasyon",

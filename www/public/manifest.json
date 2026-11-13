@@ -1,7 +1,7 @@
 {
-  "name": "Phantom-WG — Your Server, Your Network, Your Privacy",
+  "name": "Phantom-WG — VPN Management Solution / Server & Client",
   "short_name": "Phantom-WG",
-  "description": "Beyond basic VPN management; censorship-resistant connections, multi-layer encryption, and advanced privacy scenarios.",
+  "description": "Self-hosted WireGuard VPN management: web control panel, signed native macOS and iOS apps, and an optional WSS 443 tunnel for networks that restrict UDP.",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#ffffff",

@@ -1,6 +1,6 @@
 {
   "seo": {
-    "title": "Your Server. Your Network. Your Privacy",
-    "description": "Beyond basic VPN management; censorship-resistant connections, multi-layer encryption, and advanced privacy scenarios."
+    "title": "VPN Management Solution / Server & Client",
+    "description": "Self-hosted WireGuard VPN management: web control panel, signed native macOS and iOS apps, and an optional WSS 443 tunnel for networks that restrict UDP."
   }
 }

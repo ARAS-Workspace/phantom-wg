@@ -1,13 +1,14 @@
 {
   "title": "Phantom-WG",
-  "subtitle": "Your Server · Your Network · Your Privacy",
-  "description": "Phantom-WG is a modular tool for setting up and managing WireGuard VPN infrastructure on your own server. Beyond basic VPN management, it provides censorship-resistant connections, multi-layer encryption, and advanced privacy scenarios.",
+  "subtitle": "VPN Management Solution / Server & Client",
+  "description": "A VPN management solution for WireGuard you can run on your own server: a web control panel on the server side, signed native apps for macOS and iOS on the client side, and a separate, optional front-end node that carries connections over TCP 443, so clients can connect where UDP is restricted.",
   "versions": [
     {
-      "title": "Installation",
+      "title": "Source Code",
       "description": "Setup & Configuration",
-      "href": "/docs/installation-update",
-      "icon": "rocket"
+      "href": "https://github.com/ARAS-Workspace/phantom-wg",
+      "external": true,
+      "icon": "github"
     },
     {
       "title": "Documentation",
