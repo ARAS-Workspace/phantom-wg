@@ -11,23 +11,6 @@ const HomePage = lazy(() => import('@pages/home/pages/index/LandingPage'));
 
 // ── Documentation pages ───────────────────────────────────────────
 const DocsHomePage      = lazy(() => import('@pages/docs/home/pages/index/HomePage'));
-const QuickstartPage    = lazy(() => import('@pages/docs/quickstart-guide/QuickstartGuidePage'));
-const InstallUpdatePage = lazy(() => import('@pages/docs/installation-update/InstallationUpdatePage'));
-const MacPage = lazy(() => import('@pages/docs/client-applications/pages/mac/index/MacPage'));
-const ApiPage           = lazy(() => import('@pages/docs/api/pages/index/ApiPage'));
-const ArchitecturePage  = lazy(() => import('@pages/docs/architecture/pages/index/ArchitecturePage'));
-const TeraziPage        = lazy(() => import('@pages/docs/architecture/pages/terazi/pages/index/TeraziPage'));
-const MultihopPage      = lazy(() => import('@pages/docs/architecture/pages/multihop/pages/index/MultihopPage'));
-const BackupPage        = lazy(() => import('@pages/docs/architecture/pages/backup/pages/index/BackupPage'));
-const DatabasePage      = lazy(() => import('@pages/docs/architecture/pages/database/pages/index/DatabasePage'));
-const BridgePage        = lazy(() => import('@pages/docs/architecture/pages/bridge/pages/index/BridgePage'));
-
-// ── Tools pages ──────────────────────────────────────────────────
-const IPCheckPage       = lazy(() => import('@pages/docs/tools/pages/ip-check/pages/index/IPCheckPage'));
-const DnsLeakPage       = lazy(() => import('@pages/docs/tools/pages/dns-leak/pages/index/DnsLeakPage'));
-
-// ── AI page ──────────────────────────────────────────────────────
-const AiPage            = lazy(() => import('@pages/docs/ai/pages/index/AiPage'));
 
 // ── Router ────────────────────────────────────────────────────────
 const router = createBrowserRouter([
@@ -52,58 +35,6 @@ const router = createBrowserRouter([
       {
         index: true,
         element: <DocsHomePage />,
-      },
-      {
-        path: 'quickstart-guide',
-        element: <QuickstartPage />,
-      },
-      {
-        path: 'installation-update',
-        element: <InstallUpdatePage />,
-      },
-      {
-        path: 'client-applications/mac',
-        element: <MacPage />,
-      },
-      {
-        path: 'api',
-        element: <ApiPage />,
-      },
-      {
-        path: 'architecture',
-        element: <ArchitecturePage />,
-      },
-      {
-        path: 'architecture/terazi',
-        element: <TeraziPage />,
-      },
-      {
-        path: 'architecture/multihop',
-        element: <MultihopPage />,
-      },
-      {
-        path: 'architecture/backup',
-        element: <BackupPage />,
-      },
-      {
-        path: 'architecture/database',
-        element: <DatabasePage />,
-      },
-      {
-        path: 'architecture/bridge',
-        element: <BridgePage />,
-      },
-      {
-        path: 'tools/ip',
-        element: <IPCheckPage />,
-      },
-      {
-        path: 'tools/dns',
-        element: <DnsLeakPage />,
-      },
-      {
-        path: 'ai',
-        element: <AiPage />,
       },
     ],
   },

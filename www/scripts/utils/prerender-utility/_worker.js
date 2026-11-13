@@ -42,7 +42,7 @@ const REVALIDATE = 'no-cache';
 
 /**
  * Only Vite's hashed output lives at `/assets/*.{js,css,woff2}` (public/ ships
- * images, svg and the install cast there, never these), so that pattern is a
+ * images and svg there, never these), so that pattern is a
  * safe immutable signal; anything else revalidates. Widen the extension group
  * only together with everything that mirrors this contract in the build tooling.
  * @param {string} pathname

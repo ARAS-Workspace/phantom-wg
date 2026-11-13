@@ -1,8 +1,0 @@
-*Import a config and start your tunnel*
-
-Tüneli başlatmak için uygulamaya bir WireGuard `.conf` dosyası içe aktarılır. Mod, yapılandırma dosyasının içeriğine göre belirlenir:
-
-- **Standalone WireGuard** — Klasik `.conf` dosyası içe aktarıldığında uygulama doğrudan WireGuard tünelini başlatır.
-- **Ghost Mode (wstunnel + WireGuard)** — `.conf` dosyası `[Wstunnel]` bölümü içerirse uygulama otomatik olarak Ghost moduna geçer; trafik wstunnel katmanı içinde taşınır.
-
-Mod seçimi için ayrı bir uygulama veya ayar gerekmez; yapılandırma dosyası belirler.

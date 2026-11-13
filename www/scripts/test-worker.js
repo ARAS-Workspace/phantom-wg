@@ -246,8 +246,8 @@ async function run() {
     expect(header(r, 'content-type').startsWith('text/markdown'), header(r, 'content-type'));
   });
 
-  await test('/docs/quickstart-guide/llms.txt serves that page\'s dump', async () => {
-    const r = await probe('/docs/quickstart-guide/llms.txt');
+  await test('/docs/llms.txt serves that page\'s dump', async () => {
+    const r = await probe('/docs/llms.txt');
     expect(r.status === 200, `status ${r.status}`);
     expect(header(r, 'content-type').startsWith('text/markdown'), header(r, 'content-type'));
   });
@@ -338,12 +338,6 @@ async function run() {
     expect(header(r, 'cache-control') === 'no-cache', `Cache-Control ${header(r, 'cache-control')}`);
   });
 
-  await test('openapi.json revalidates', async () => {
-    const r = await probe('/openapi.json');
-    expect(r.status === 200, `status ${r.status}`);
-    expect(header(r, 'cache-control') === 'no-cache', `Cache-Control ${header(r, 'cache-control')}`);
-  });
-
   if (SIDECAR) {
     await test('a sidecar asked for directly is served but never immutable', async () => {
       const r = await probe(`/assets/${SIDECAR}`);
@@ -357,23 +351,23 @@ async function run() {
   section('3. Markdown negotiation — the same URL, a second representation');
 
   await test('Accept: text/markdown turns a page into its llms text', async () => {
-    const r = await probe('/docs/quickstart-guide', { accept: 'text/markdown' });
+    const r = await probe('/docs', { accept: 'text/markdown' });
     expect(r.status === 200, `status ${r.status}`);
     expect(header(r, 'content-type').startsWith('text/markdown'), header(r, 'content-type'));
   });
 
   await test('the markdown representation negotiates locale too', async () => {
-    const r = await probe('/docs/quickstart-guide', { accept: 'text/markdown', cookie: 'preferred_locale=tr' });
+    const r = await probe('/docs', { accept: 'text/markdown', cookie: 'preferred_locale=tr' });
     expect(header(r, 'content-language') === 'tr', `Content-Language ${header(r, 'content-language')}`);
   });
 
   await test('Accept: text/html keeps the page HTML', async () => {
-    const r = await probe('/docs/quickstart-guide', { accept: 'text/html' });
+    const r = await probe('/docs', { accept: 'text/html' });
     expect(header(r, 'content-type').startsWith('text/html'), header(r, 'content-type'));
   });
 
   await test('Accept: */* means no preference — HTML stays primary', async () => {
-    const r = await probe('/docs/quickstart-guide', { accept: '*/*' });
+    const r = await probe('/docs', { accept: '*/*' });
     expect(header(r, 'content-type').startsWith('text/html'), header(r, 'content-type'));
   });
 
@@ -398,7 +392,7 @@ async function run() {
   });
 
   await test('the full matrix resolves: g100 + tr on a subpage', async () => {
-    const r = await probe('/docs/quickstart-guide', { cookie: 'preferred_theme=g100; preferred_locale=tr' });
+    const r = await probe('/docs', { cookie: 'preferred_theme=g100; preferred_locale=tr' });
     expect(r.body.includes('data-carbon-theme="g100"'), 'theme lost');
     expect(r.body.includes('lang="tr"'), 'locale lost');
     expect(header(r, 'content-language') === 'tr', `Content-Language ${header(r, 'content-language')}`);

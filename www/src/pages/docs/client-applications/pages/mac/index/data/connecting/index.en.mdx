@@ -1,8 +1,0 @@
-*Import a config and start your tunnel*
-
-To start a tunnel, a WireGuard `.conf` file is imported into the app. The mode is determined by the file's contents:
-
-- **Standalone WireGuard** — A classic `.conf` file starts the WireGuard tunnel directly.
-- **Ghost Mode (wstunnel + WireGuard)** — A `.conf` file with a `[Wstunnel]` section switches the app to Ghost mode; traffic is carried within a wstunnel layer.
-
-No separate app or toggle is needed to choose between modes — the configuration decides.
