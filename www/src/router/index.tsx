@@ -1,5 +1,5 @@
 import React, { lazy, Suspense } from 'react';
-import { createBrowserRouter, RouterProvider } from 'react-router-dom';
+import { createBrowserRouter, Navigate, RouterProvider } from 'react-router-dom';
 
 import LandingLayout from '@shared/components/layout/LandingLayout';
 import ErrorPage from '@shared/pages/error/ErrorPage';
@@ -34,6 +34,11 @@ const router = createBrowserRouter([
       {
         index: true,
         element: <DocsHomePage />,
+      },
+      // Any path under /docs lands on the documentation page
+      {
+        path: '*',
+        element: <Navigate to="/docs" replace />,
       },
     ],
   },
