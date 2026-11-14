@@ -30,6 +30,7 @@ enum DNSResolver {
 
     private static func resolveSync(_ hostname: String, family: Int32) -> [String] {
         var hints = addrinfo()
+        hints.ai_flags = AI_ADDRCONFIG
         hints.ai_family = family
         hints.ai_socktype = SOCK_STREAM
 
