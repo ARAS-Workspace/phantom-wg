@@ -1,16 +1,18 @@
 """
 Bootstrap: generate Ed25519 keys, create auth.db, create initial admin user.
-Standalone script — no auth_service imports. Runs inside container via tools/setup.sh.
+Standalone script — no auth_service imports. Runs inside a container, started by
+tools/setup.sh here and by the daemon's setup tools in the product.
 """
 
 from __future__ import annotations
 
 import argparse
+import json
 import secrets
 import sqlite3
 import string
 import uuid
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 from nacl.pwhash import argon2id
@@ -108,21 +110,34 @@ def main() -> None:
     conn.execute("PRAGMA foreign_keys = ON")
     conn.executescript(_SCHEMA)
 
-    # 4. Create admin user
+    # 4. Create admin user and its audit row, committed together. The
+    #    forms are those of auth_service/audit.py (account, system),
+    #    written here: this script runs without the package.
     user_id = uuid.uuid4().hex
-    now = datetime.now(timezone.utc).isoformat()
+    now = datetime.now(UTC).isoformat()
     pw_hash = argon2id.str(password.encode("utf-8")).decode("ascii")
     conn.execute(
         "INSERT INTO users (id, username, password_hash, role, created_at, updated_at) "
         "VALUES (?, ?, ?, ?, ?, ?)",
         (user_id, args.admin_username, pw_hash, "superadmin", now, now),
     )
+    conn.execute(
+        "INSERT INTO audit_log (user_id, action, detail, ip_address, timestamp) "
+        "VALUES (?, ?, ?, ?, ?)",
+        (
+            "system:bootstrap",
+            "user_created",
+            json.dumps({"target": f"{user_id}-{args.admin_username}", "role": "superadmin"}),
+            "",
+            now,
+        ),
+    )
     conn.commit()
     conn.close()
 
     # 5. Output summary (setup.sh parses this)
-    print(f"SIGNING_KEY={signing_hex}")
-    print(f"VERIFY_KEY={verify_hex}")
+    print("SIGNING_KEY=[REDACTED]")
+    print("VERIFY_KEY=[REDACTED]")
     print(f"PASSWORD_FILE={password_file}")
     print(f"DB_PATH={db_dir / 'auth.db'}")
     print(f"ADMIN_USERNAME={args.admin_username}")

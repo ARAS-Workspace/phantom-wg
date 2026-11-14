@@ -13,6 +13,11 @@ WireGuard® is a registered trademark of Jason A. Donenfeld.
 Wallet database lifecycle: creation, opening, and IP pool management.
 """
 
-from phantom_daemon.base.wallet.wallet import Wallet, _calculate_terazi, open_wallet
+from phantom_daemon.base.wallet.wallet import (
+    Wallet,
+    _calculate_terazi,
+    create_wallet,
+    open_wallet,
+)
 
-__all__ = ["Wallet", "_calculate_terazi", "open_wallet"]
+__all__ = ["Wallet", "_calculate_terazi", "create_wallet", "open_wallet"]

@@ -2,25 +2,36 @@
 # phantom-daemon  ·  Production Compose
 # ──────────────────────────────────────────────────────────────────
 # Usage:
-#   ./tools/prod.sh setup       # first-time: keys + auth + TLS cert
+#   ./tools/prod.sh setup       # first-time: env, keys, auth, TLS cert, pool
 #   ./tools/prod.sh up          # start production stack
 #
 # Topology:
 #   Internet → :443 (nginx, TLS) → auth-service → daemon (UDS)
 #   Internet → :51820/udp (WireGuard) → daemon
 #
-# Environment: .env.daemon + .env.auth-service (see .example files)
+# Environment: .env + .env.daemon + .env.auth-service (see .example files)
 # Set WIREGUARD_ENDPOINT_V4 to your server's public IP.
+#
+# Images: PHANTOM_IMAGE_SOURCE in .env selects tools/compose/registry.yml,
+# build.yml or archive.yml.
 # ──────────────────────────────────────────────────────────────────
+
+# Every container log is rotated: three files of 10 MB.
+x-logging: &logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "3"
 
 services:
   daemon:
-    build:
-      context: .
-      dockerfile: Dockerfile
+    extends:
+      file: tools/compose/${PHANTOM_IMAGE_SOURCE:-registry}.yml
+      service: daemon
     container_name: phantom-daemon
-    command: ["python", "-m", "phantom_daemon.main", "/var/run/phantom/daemon.sock"]
     restart: unless-stopped
+    logging: *logging
+    command: ["python", "-m", "phantom_daemon.main", "/var/run/phantom/daemon.sock"]
     networks:
       - phantom-net
     volumes:
@@ -32,8 +43,6 @@ services:
       - wg_private_key
       - wg_public_key
     env_file: .env.daemon
-    environment:
-      - DEFAULT_IPV4_SUBNET=${DEFAULT_IPV4_SUBNET:-}  # setup-only: --terazi-ipv4-subnet
     cap_add:
       - NET_ADMIN
       - NET_RAW
@@ -42,15 +51,14 @@ services:
       - net.ipv6.conf.all.forwarding=1
     devices:
       - /dev/net/tun:/dev/net/tun
-    ports:
-      - "51820:51820/udp"
 
   auth-service:
-    build:
-      context: ./services/auth-service
-      dockerfile: Dockerfile
+    extends:
+      file: tools/compose/${PHANTOM_IMAGE_SOURCE:-registry}.yml
+      service: auth-service
     container_name: phantom-auth
     restart: unless-stopped
+    logging: *logging
     depends_on:
       - daemon
     networks:
@@ -58,16 +66,22 @@ services:
     volumes:
       - phantom-sock:/var/run/phantom
       - ./services/auth-service/auth_service:/app/auth_service:ro
+      - ./services/auth-service/tools/add_superadmin.py:/app/tools/add_superadmin.py:ro
       - ./container-data/auth-db:/var/lib/phantom/auth
     secrets:
       - auth_signing_key
       - auth_verify_key
-    env_file: .env.auth-service
+    env_file:
+      - .env
+      - .env.auth-service
 
   nginx:
-    image: nginx:1-alpine
+    extends:
+      file: tools/compose/${PHANTOM_IMAGE_SOURCE:-registry}.yml
+      service: nginx
     container_name: phantom-nginx
     restart: unless-stopped
+    logging: *logging
     depends_on:
       - auth-service
     networks:
@@ -78,8 +92,6 @@ services:
     secrets:
       - tls_cert
       - tls_key
-    ports:
-      - "443:443"
 
 secrets:
   wg_private_key:
@@ -95,13 +107,13 @@ secrets:
   tls_key:
     file: ./container-data/secrets/production/tls_key
 
+volumes:
+  phantom-sock:
+
 networks:
   phantom-net:
     enable_ipv6: true
     ipam:
       config:
-        - subnet: "172.28.0.0/24"
-        - subnet: "fd00:d0ce::/64"
-
-volumes:
-  phantom-sock:
+        - subnet: "${PHANTOM_SUBNET_V4:-172.28.0.0/24}"
+        - subnet: "${PHANTOM_SUBNET_V6:-fd00:d0ce::/64}"

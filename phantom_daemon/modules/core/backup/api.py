@@ -16,23 +16,24 @@ Backup endpoints: export (download) and import (upload + restore).
 from __future__ import annotations
 
 import logging
-
 import shutil
 import tempfile
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 from fastapi import APIRouter, Request, UploadFile
 from fastapi.responses import FileResponse
+from firewall_bridge import GroupNotFoundError
 from pydantic import BaseModel
 from starlette.background import BackgroundTask
 
 from phantom_daemon.base.backup import create_backup_tar, restore_backup_tar
-from firewall_bridge import GroupNotFoundError
-from phantom_daemon.base.services.firewall.service import MULTIHOP_PRESET_NAME, MULTIHOP_V6_PRESET_NAME
 from phantom_daemon.base.logging import LOGGER_NAME
+from phantom_daemon.base.services.firewall.service import (
+    MULTIHOP_PRESET_NAME,
+    MULTIHOP_V6_PRESET_NAME,
+)
 from phantom_daemon.modules._envelope import ApiOk
-
 
 log = logging.getLogger(LOGGER_NAME)
 
@@ -82,7 +83,7 @@ async def export_backup(request: Request):
         len(exit_store.list_exits()),
     )
 
-    timestamp = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H-%M-%S")
+    timestamp = datetime.now(UTC).strftime("%Y-%m-%dT%H-%M-%S")
     filename = f"phantom-backup-{timestamp}.tar"
 
     return FileResponse(

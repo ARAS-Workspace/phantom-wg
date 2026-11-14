@@ -1,10 +1,10 @@
 # Runtime environment files
+docker-compose.override.yml
+docker-compose.override.yml.bak
+.env.cf
 .env
 .env.daemon
 .env.auth-service
-
-# Runtime state
-.terazi-subnet
 
 # Container data (secrets, databases, logs)
 container-data/
@@ -12,12 +12,9 @@ container-data/
 # Backup artifacts
 *.tar
 dist/
+images/
 
 # Editor / OS
 .DS_Store
 *.swp
 *.swo
-
-# Vendor bridges — fetched at image build time, or shipped under vendor/
-# in the release package. Never committed either way.
-vendor/

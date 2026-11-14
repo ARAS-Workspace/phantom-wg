@@ -28,7 +28,7 @@ import shutil
 import sqlite3
 import tarfile
 import tempfile
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 from phantom_daemon.base.errors import BackupError
@@ -114,7 +114,7 @@ def _build_manifest(wallet_path: Path, exit_path: Path) -> dict:
     """Read metadata from backed-up databases for the manifest."""
     manifest: dict = {
         "version": MANIFEST_VERSION,
-        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "timestamp": datetime.now(UTC).isoformat(),
     }
 
     # Wallet metadata

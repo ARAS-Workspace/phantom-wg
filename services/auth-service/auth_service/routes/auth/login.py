@@ -20,12 +20,21 @@ import uuid
 from fastapi import APIRouter, Request
 from nacl.signing import VerifyKey
 
-from auth_service.audit import audit_log, get_client_ip
+from auth_service.audit import account, audit_log, get_client_ip, log_refused_login
 from auth_service.crypto.jwt import TokenPayload, decode_token, encode_token
 from auth_service.crypto.password import verify_password
 from auth_service.crypto.totp import hash_backup_code, verify_totp
-from auth_service.errors import ApiException, AuthTokenExpiredError, AuthTokenInvalidError
-from auth_service.models import ApiOk, MFARequiredResponse, MFAVerifyRequest, LoginRequest
+from auth_service.errors import (
+    ApiException,
+    AuthTokenExpiredError,
+    AuthTokenInvalidError,
+)
+from auth_service.models import (
+    ApiOk,
+    LoginRequest,
+    MFARequiredResponse,
+    MFAVerifyRequest,
+)
 from auth_service.routes.auth._helpers import issue_access_token
 
 router = APIRouter()
@@ -41,13 +50,14 @@ def login(body: LoginRequest, request: Request):
     rate_limiter = request.app.state.rate_limiter
     ip = get_client_ip(request)
 
+    # A refused login has no verified identity: service log, no audit row.
     if not rate_limiter.check(ip):
-        audit_log(db, request, "login_rate_limited", {"username": body.username})
+        log_refused_login(request, "login_rate_limited", body.username)
         raise ApiException(429, "RATE_LIMITED")
 
     user = db.get_user_by_username(body.username)
     if user is None or not verify_password(body.password, user.password_hash):
-        audit_log(db, request, "login_failed", {"username": body.username})
+        log_refused_login(request, "login_failed", body.username)
         raise ApiException(401, "INVALID_CREDENTIALS")
 
     # No limiter reset here: with TOTP enabled the password alone is not
@@ -65,7 +75,7 @@ def login(body: LoginRequest, request: Request):
             lifetime=config.mfa_token_lifetime,
             typ="mfa_pending",
         )
-        audit_log(db, request, "mfa_challenge", {"username": user.username}, user_id=user.id)
+        audit_log(db, request, "mfa_challenge", actor=account(user.id, user.username))
         return ApiOk(data=MFARequiredResponse(
             mfa_token=mfa_token,
             expires_in=config.mfa_token_lifetime,
@@ -83,8 +93,9 @@ def mfa_verify(body: MFAVerifyRequest, request: Request):
     db = request.state.db
 
     # A 6-digit TOTP is brute-forceable without this; same budget as login.
+    # Refused before the MFA token is read: no identity, service log only.
     if not request.app.state.rate_limiter.check(get_client_ip(request)):
-        audit_log(db, request, "mfa_rate_limited")
+        log_refused_login(request, "mfa_rate_limited")
         raise ApiException(429, "RATE_LIMITED")
 
     try:
@@ -99,11 +110,12 @@ def mfa_verify(body: MFAVerifyRequest, request: Request):
         raise ApiException(401, "INVALID_MFA_STATE")
 
     if not verify_totp(user.totp_secret, body.code):
-        audit_log(db, request, "mfa_failed", {"username": user.username}, user_id=user.id)
+        audit_log(db, request, "mfa_failed", actor=account(user.id, user.username))
         raise ApiException(401, "INVALID_TOTP_CODE")
 
-    audit_log(db, request, "mfa_success", {"username": user.username}, user_id=user.id)
-    return issue_access_token(request, user.username, user.id, user.role)
+    with db.atomic():
+        audit_log(db, request, "mfa_success", actor=account(user.id, user.username))
+        return issue_access_token(request, user.username, user.id, user.role)
 
 
 # ── MFA Backup Code ─────────────────────────────────────────────
@@ -115,8 +127,9 @@ def mfa_backup(body: MFAVerifyRequest, request: Request):
     db = request.state.db
 
     # Backup codes are single-use but guessable without a budget.
+    # Refused before the MFA token is read: no identity, service log only.
     if not request.app.state.rate_limiter.check(get_client_ip(request)):
-        audit_log(db, request, "backup_code_rate_limited")
+        log_refused_login(request, "backup_code_rate_limited")
         raise ApiException(429, "RATE_LIMITED")
 
     try:
@@ -130,18 +143,21 @@ def mfa_backup(body: MFAVerifyRequest, request: Request):
     if user is None or user.totp_secret is None:
         raise ApiException(401, "INVALID_MFA_STATE")
 
+    # The spent code, its audit row and the session commit together; a
+    # wrong code writes nothing in the block and is written after it.
     code_hash = hash_backup_code(body.code)
-    if not db.verify_backup_code(user.id, code_hash):
-        audit_log(db, request, "backup_code_failed", {"username": user.username}, user_id=user.id)
-        raise ApiException(401, "INVALID_BACKUP_CODE")
+    with db.atomic():
+        if db.verify_backup_code(user.id, code_hash):
+            remaining = db.count_remaining_backup_codes(user.id)
+            audit_log(
+                db, request, "backup_code_used",
+                actor=account(user.id, user.username),
+                detail={"remaining": remaining},
+            )
+            return issue_access_token(request, user.username, user.id, user.role)
 
-    remaining = db.count_remaining_backup_codes(user.id)
-    audit_log(
-        db, request, "backup_code_used",
-        {"username": user.username, "remaining": remaining},
-        user_id=user.id,
-    )
-    return issue_access_token(request, user.username, user.id, user.role)
+    audit_log(db, request, "backup_code_failed", actor=account(user.id, user.username))
+    raise ApiException(401, "INVALID_BACKUP_CODE")
 
 
 # ── Helper ───────────────────────────────────────────────────────

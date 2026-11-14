@@ -10,7 +10,8 @@ Copyright (c) 2025 Rıza Emre ARAS <r.emrearas@proton.me>
 Licensed under AGPL-3.0 - see LICENSE file for details
 WireGuard® is a registered trademark of Jason A. Donenfeld.
 
-Multihop exit tunnel endpoints: import, remove, list, enable, disable, status.
+Multihop exit tunnel endpoints: import, update, config, remove, list, enable,
+disable, status.
 """
 
 from __future__ import annotations
@@ -18,11 +19,15 @@ from __future__ import annotations
 import logging
 
 from fastapi import APIRouter, Request
+from firewall_bridge import GroupNotFoundError
 from pydantic import BaseModel, Field
 
-from firewall_bridge import GroupNotFoundError
 from phantom_daemon.base.errors import DaemonHTTPException
-from phantom_daemon.base.exit_store import parse_wireguard_config
+from phantom_daemon.base.exit_store import (
+    parse_wireguard_config,
+    render_wireguard_config,
+)
+from phantom_daemon.base.logging import LOGGER_NAME
 from phantom_daemon.base.services.firewall.service import (
     MULTIHOP_PRESET_NAME,
     MULTIHOP_V6_PRESET_NAME,
@@ -31,9 +36,7 @@ from phantom_daemon.base.services.firewall.service import (
 from phantom_daemon.base.services.wireguard import WG_INTERFACE_NAME_EXIT
 from phantom_daemon.base.services.wireguard.ipc import build_exit_config
 from phantom_daemon.base.services.wireguard.service import open_wireguard
-from phantom_daemon.base.logging import LOGGER_NAME
 from phantom_daemon.modules._envelope import ApiErr, ApiOk
-
 
 log = logging.getLogger(LOGGER_NAME)
 
@@ -47,6 +50,19 @@ class ImportRequest(BaseModel):
     name: str = Field(
         min_length=1, max_length=64, pattern=r"^[a-zA-Z0-9_-]+$",
         description="Unique name for this exit server.",
+    )
+    config: str = Field(
+        min_length=1,
+        description="WireGuard .conf file contents (plain text, not base64).",
+    )
+
+
+class UpdateRequest(BaseModel):
+    """Request body for replacing an exit server configuration."""
+
+    name: str = Field(
+        min_length=1, max_length=64, pattern=r"^[a-zA-Z0-9_-]+$",
+        description="Exit server name.",
     )
     config: str = Field(
         min_length=1,
@@ -154,12 +170,77 @@ async def import_exit(body: ImportRequest, request: Request):
 
 
 @router.post(
+    "/update",
+    response_model=ApiOk[ExitSummary],
+    responses={400: {"model": ApiErr}, 404: {"model": ApiErr}},
+    summary="Update Exit",
+    description="Replace the configuration of an exit server with a WireGuard "
+    ".conf file, parsed and validated the same way as on import. The exit keeps "
+    "its id, name and position in the list. Returns 400 if the config is invalid "
+    "or the exit is active, 404 if the exit does not exist.",
+)
+async def update_exit(body: UpdateRequest, request: Request):
+    """Replace an exit configuration. Must not be active."""
+    exit_store = request.app.state.exit_store
+
+    try:
+        parsed = parse_wireguard_config(body.config)
+    except ValueError as exc:
+        raise DaemonHTTPException(400, "INVALID_EXIT_CONFIG", str(exc))
+
+    result = exit_store.update_exit(
+        name=body.name,
+        endpoint=parsed.endpoint,
+        address=parsed.address,
+        private_key_hex=parsed.private_key_hex,
+        public_key_hex=parsed.public_key_hex,
+        preshared_key_hex=parsed.preshared_key_hex,
+        allowed_ips=parsed.allowed_ips,
+        keepalive=parsed.keepalive,
+    )
+    # Endpoint and AllowedIPs only, as on import.
+    log.info(
+        "exit updated: %s via %s (allowed_ips=%s)",
+        body.name, parsed.endpoint, parsed.allowed_ips,
+    )
+    return ApiOk(data=ExitSummary(
+        id=result["id"],
+        name=result["name"],
+        endpoint=result["endpoint"],
+        address=result["address"],
+        public_key_hex=result["public_key_hex"],
+        allowed_ips=result["allowed_ips"],
+        keepalive=result["keepalive"],
+    ))
+
+
+@router.post(
+    "/config",
+    response_model=ApiOk[str],
+    responses={404: {"model": ApiErr}},
+    summary="Export Exit Config",
+    description="Return the stored configuration of an exit server as WireGuard "
+    ".conf text (plain text, not base64), in the format import and update "
+    "accept. The text carries the exit's private and preshared keys. Returns "
+    "404 if the exit does not exist.",
+)
+async def export_exit_config(body: ExitNameRequest, request: Request):
+    """Render a stored exit configuration as .conf text."""
+    exit_store = request.app.state.exit_store
+    exit_data = exit_store.get_exit(body.name)
+    if exit_data is None:
+        raise DaemonHTTPException(404, "EXIT_NOT_FOUND", f"Exit not found: {body.name}")
+    return ApiOk(data=render_wireguard_config(exit_data))
+
+
+@router.post(
     "/remove",
     response_model=ApiOk[dict],
-    responses={400: {"model": ApiErr}},
+    responses={400: {"model": ApiErr}, 404: {"model": ApiErr}},
     summary="Remove Exit",
     description="Delete an exit server configuration by name. The exit must not "
-    "be currently active — disable multihop first if needed.",
+    "be currently active — disable multihop first if needed. Returns 400 if the "
+    "exit is active, 404 if it does not exist.",
 )
 async def remove_exit(body: ExitNameRequest, request: Request):
     """Remove an exit configuration. Must not be active."""

@@ -2,42 +2,78 @@ Phantom-WG Modern — Setup Guide
 =================================
 
 Prerequisites:
-  - Docker Engine 20.10+
-  - Docker Compose v2
+  - Linux with kernel 5.15 or newer (the kernel docker info reports)
+  - Docker Engine 27.0.1 or newer, with the Docker Compose plugin 2.27.2 or
+    newer. Engine 27.0.1 is the first with ip6tables on by default, which the
+    dual-stack network of the stack needs; Compose 2.27.2 is the first with
+    "docker compose config --environment", which the tools read .env with.
+  - /dev/net/tun
+  - Python 3.9 or newer as python3. Without python3, tools/prod.sh stops and,
+    on the Debian, Fedora/RHEL and Arch families, names the command that
+    installs it; on an older python3 it stops and names the version it found.
   - bash
-  - git (required for update mechanism and compose lock)
+  - git, to install from a clone and to update
+  - unzip, to install from a release zip
+  - A user of the docker group, or root, to run the tools. The environment
+    files, the keys, the auth database, the self-signed certificate and the
+    Cloudflare mode belong to the owner of the install directory; the address
+    pool, the data of the running stack and what certbot writes belong to root
+
+  ./tools/prod.sh gates reports what this host has: Python, Docker, Compose,
+  kernel, TUN, git and free disk.
 
 Directory Structure:
   phantom-wg/
-  ├── Dockerfile                  Daemon image (multi-stage build)
-  ├── docker-compose.yml          Production stack (3 services)
-  ├── .env.daemon.example         Daemon environment template
-  ├── .env.auth-service.example   Auth service environment template
-  ├── requirements.txt            Python dependencies (pinned, hashed)
-  ├── SETUP                       This file
-  ├── UPDATE                      Update and maintenance guide
-  ├── LICENSE                     AGPL-3.0
-  ├── THIRD_PARTY_LICENSES        Dependency licenses
-  ├── phantom_daemon/             Daemon source
+  ├── Dockerfile                           Daemon image (multi-stage build)
+  ├── nginx.Dockerfile                     Nginx image
+  ├── docker-compose.yml                   Production stack (3 services)
+  ├── docker-compose.override.yml.example  Compose override template
+  ├── .env.example                         Image source and network subnets
+  ├── .env.daemon.example                  Daemon environment template
+  ├── .env.auth-service.example            Auth service environment template
+  ├── .env.cf.example                      Cloudflare mode settings template
+  ├── .gitignore                           Files of this machine, out of git
+  ├── requirements.txt                     Python dependencies (pinned, hashed)
+  ├── SETUP                                This file
+  ├── UPDATE                               Update and maintenance guide
+  ├── MIGRATION                            Migration from 1.1.5 to 2.0.0
+  ├── CHANGELOG                            Changes of each release
+  ├── LICENSE                              AGPL-3.0
+  ├── THIRD_PARTY_LICENSES                 Dependency licenses
+  ├── images/                              Image archive (release zip only)
+  ├── phantom_daemon/                      Daemon source
   ├── services/
-  │   ├── auth-service/           Authentication service
-  │   ├── nginx/                  TLS reverse proxy config
-  │   └── react-spa/dist/         Web dashboard (pre-built)
+  │   ├── auth-service/                    Authentication service
+  │   ├── nginx/                           TLS reverse proxy config
+  │   └── react-spa/dist/                  Web dashboard (pre-built)
   └── tools/
-      ├── prod.sh                 Production CLI
-      ├── prod.vars               Environment variables
-      └── lib/                    Shell libraries
+      ├── prod.sh                          Production CLI, starts the toolchain
+      ├── __main__.py                      Toolchain entry (Python floor check)
+      ├── core/                            Command discovery and process runner
+      ├── stack/prod/                      Production commands and libraries
+      └── compose/                         Image sources and their manifest
 
 Quick Start:
   1. Setup (first time only):
      ./tools/prod.sh setup
 
-     This generates:
-       - .env.daemon from .env.daemon.example (if not exists)
-       - .env.auth-service from .env.auth-service.example (if not exists)
+     This creates what is missing, in this order:
+       - .env, .env.daemon, .env.auth-service and
+         docker-compose.override.yml, each from its .example
        - WireGuard server keypair
-       - Auth service keypair + admin account + database
+       - Auth service keypair, admin account and database
        - Self-signed TLS certificate
+       - Address pool (container-data/db/wallet.db)
+
+     Setup Recipe below lists the commands it runs.
+
+     The superadmin account is named admin. To name it otherwise:
+       ./tools/prod.sh setup --admin-username <name>
+
+     Setup refuses a complete install and otherwise creates only what is
+     missing. It stops on what it cannot finish: a certificate without its
+     key or the reverse, an auth database without its keys, a subnet for a
+     pool that exists. To start over, use ./tools/prod.sh hard-reset.
 
      Credentials are written to:
        container-data/secrets/production/
@@ -47,6 +83,9 @@ Quick Start:
      Edit .env.daemon and set your server's public IP:
        WIREGUARD_ENDPOINT_V4=203.0.113.1
        WIREGUARD_ENDPOINT_V6=2001:db8::1    (optional)
+     The stack starts without them: they go into the WireGuard client
+     configs the dashboard exports. The daemon reads them when it starts, so
+     set them before up.
 
   3. Start:
      ./tools/prod.sh up
@@ -55,46 +94,225 @@ Quick Start:
      Dashboard:  https://<server-ip>
      WireGuard:  UDP port 51820
 
+Setup Recipe:
+  The install as commands to run by hand, without the tool, from the install
+  directory, as a user of the docker group. It is for a directory before
+  setup: the tool checks what is in place and stops, these commands do not.
+
+    # Host: Engine 27.0.1+ on kernel 5.15+, Compose 2.27.2+
+    docker info --format '{{.ServerVersion}} {{.KernelVersion}}'
+    docker compose version --short
+    test -e /dev/net/tun
+
+    # Local files
+    for f in .env .env.daemon .env.auth-service docker-compose.override.yml; do
+      [ -f "$f" ] || cp "$f.example" "$f"
+    done
+
+    # Images: PHANTOM_IMAGE_SOURCE in .env, one of
+    SOURCE=registry
+    docker compose pull                                # registry
+    docker compose build                               # build
+    cat images/VERSION                                 # archive: the version
+    grep image: tools/compose/registry.yml             #   of the three pins
+    (cd images && sha256sum -c SHA256SUMS)             # archive
+    while read -r _ t; do
+      docker load -q -i "images/$t"
+    done < images/SHA256SUMS
+    LEG="tools/compose/$SOURCE.yml"
+    DAEMON=$(docker compose -f "$LEG" config --images daemon)
+    AUTH=$(docker compose -f "$LEG" config --images auth-service)
+
+    # Subnet. SUBNET is the value of --terazi-ipv4-subnet, or empty. A check
+    # that refuses it prints its reason and leaves SUBNET empty: stop there,
+    # the pool would take the default.
+    SUBNET=
+    [ -z "$SUBNET" ] || SUBNET=$(docker run --rm \
+      -v "$PWD/phantom_daemon:/app/phantom_daemon:ro" \
+      "$DAEMON" python -m phantom_daemon.base.wallet.subnet_check "$SUBNET")
+
+    SECRETS=container-data/secrets/production
+    mkdir -p "$SECRETS" container-data/auth-db container-data/db
+
+    # WireGuard keypair
+    GENERATE='from wireguard_go_bridge.keys import generate_private_key as new'
+    GENERATE="$GENERATE, derive_public_key as public"
+    GENERATE="$GENERATE; key = new(); print(key); print(public(key))"
+    docker run --rm "$DAEMON" python -c "$GENERATE" | {
+      read -r private; echo "$private" > "$SECRETS/wg_private_key"
+      read -r public; echo "$public" > "$SECRETS/wg_public_key"
+    }
+    chmod 600 "$SECRETS/wg_private_key" "$SECRETS/wg_public_key"
+
+    # Auth service: signing and verify keys, admin password, auth.db
+    docker run --rm --user "$(id -u):$(id -g)" \
+      -v "$PWD/$SECRETS:/secrets" -v "$PWD/container-data/auth-db:/db" \
+      -v "$PWD/services/auth-service/tools/bootstrap.py:/tmp/bootstrap.py:ro" \
+      "$AUTH" python /tmp/bootstrap.py \
+      --secrets-dir /secrets --db-dir /db --admin-username admin
+    chmod 600 "$SECRETS/auth_signing_key" "$SECRETS/auth_verify_key" \
+      "$SECRETS/.admin_password"
+
+    # Self-signed TLS certificate
+    SUBJECT='/C=TR/ST=Istanbul/L=Istanbul/O=Phantom-WG'
+    SUBJECT="$SUBJECT/OU=Phantom Certification Authority"
+    SUBJECT="$SUBJECT/CN=phantom-wg/emailAddress=ca@phantom.tc"
+    docker run --rm --user "$(id -u):$(id -g)" -v "$PWD/$SECRETS:/secrets" \
+      "$DAEMON" openssl req -x509 -newkey ec \
+      -pkeyopt ec_paramgen_curve:prime256v1 -days 365 -nodes \
+      -keyout /secrets/tls_key -out /secrets/tls_cert -subj "$SUBJECT" \
+      -addext 'subjectAltName=DNS:phantom-wg,DNS:localhost,IP:127.0.0.1' \
+      -addext 'basicConstraints=critical,CA:TRUE' \
+      -addext 'keyUsage=critical,digitalSignature,keyCertSign,keyEncipherment' \
+      -addext 'extendedKeyUsage=serverAuth'
+    chmod 600 "$SECRETS/tls_cert" "$SECRETS/tls_key"
+
+    # Address pool
+    docker run --rm --network none \
+      -v "$PWD/phantom_daemon:/app/phantom_daemon:ro" \
+      --mount "type=bind,src=$PWD/container-data/db,dst=/db" \
+      "$DAEMON" python -m phantom_daemon.base.wallet.bootstrap \
+      /db ${SUBNET:+"$SUBNET"}
+
+    # ./tools/prod.sh up
+    docker compose up -d
+    # All running, restart counts steady for 10 s:
+    docker compose ps -aq | xargs docker inspect \
+      --format '{{.Name}} {{.State.Status}} {{.RestartCount}}'
+    docker compose ps
+
+Custom Client Subnet:
+  VPN clients get their addresses from 10.8.0.0/24 by default. Terazi pairs
+  every IPv4 address with an IPv6 address by index, so this one value sets
+  both pools. A /24 holds 253 clients. To start with another subnet, pass it
+  to the first setup:
+
+    ./tools/prod.sh setup --terazi-ipv4-subnet=10.9.0.0/24
+
+  The value is used once: setup creates wallet.db and fills it with the pool,
+  and from then on the subnet lives there. To move to
+  another subnet, start over with ./tools/prod.sh hard-reset. The prefix length
+  alone can be changed from the dashboard (/16 to /30); every WireGuard client
+  config must then be exported again.
+
+  Use a private subnet with a prefix between /16 and /30.
+
+Images:
+  The stack runs the release images from the registry by default.
+  They are built by CI from the Dockerfiles in this directory.
+  To build the same Dockerfiles on this machine instead, after setup:
+
+    ./tools/prod.sh images use build
+    ./tools/prod.sh up
+
+  To stay off the registry from the first step, choose before setup:
+
+    cp .env.example .env
+    (set PHANTOM_IMAGE_SOURCE=build in .env)
+    ./tools/prod.sh setup
+
+  A release zip carries the images in images/ and starts on the archive
+  source, so it installs without reaching the registry. Each of the three
+  sources can be selected once .env is written; archive needs the images/ of
+  a release zip:
+
+    ./tools/prod.sh images use <source>
+    ./tools/prod.sh images sync
+    ./tools/prod.sh up
+
+  The choice is PHANTOM_IMAGE_SOURCE in .env (registry, build or archive).
+
 Environment Files:
+  .env                      Image source and network subnets
   .env.daemon               Daemon configuration (WireGuard, storage)
   .env.auth-service         Auth service configuration (JWT, rate limiting)
 
   These files are created from .example templates during setup.
   They are NOT tracked by git — safe for user-specific values.
-  Edit them to customize ports, timeouts, or any service parameter.
+  Edit them to customize subnets, timeouts, or any service parameter.
+
+  A change in .env.daemon or .env.auth-service reaches a running stack with
+  ./tools/prod.sh up, which starts the service again; restart does not read
+  the file.
+
+Compose Override:
+  docker-compose.override.yml is created from its .example during setup.
+  It is NOT tracked by git and belongs to this machine. Compose applies it
+  over docker-compose.yml: edit it to change anything specific to this server.
 
 Commands:
   ./tools/prod.sh help             Show all commands
-  ./tools/prod.sh setup            Full setup (env + keys + auth + TLS)
-  ./tools/prod.sh up               Start stack (builds images on first run)
+  ./tools/prod.sh gates            Report what this host provides
+  ./tools/prod.sh setup            First setup (env, keys, auth, TLS, pool)
+  ./tools/prod.sh gen-keys [-f]    Generate the WireGuard keypair
+  ./tools/prod.sh setup-auth [-f]  Bootstrap the auth service
+  ./tools/prod.sh setup-tls [-f]   Generate a self-signed TLS certificate
+  ./tools/prod.sh add-superadmin <name>
+                                   Add a superadmin account (running stack)
+  ./tools/prod.sh up               Start stack (stops if setup is incomplete)
   ./tools/prod.sh down             Stop stack
-  ./tools/prod.sh restart          Restart all services
-  ./tools/prod.sh build            Build images
-  ./tools/prod.sh rebuild          Rebuild images from scratch (no-cache)
-  ./tools/prod.sh update           Pull latest + restart
+  ./tools/prod.sh restart [svc]    Restart all services, or one
+  ./tools/prod.sh images           Show the image source and its images
+  ./tools/prod.sh images use <src> Select registry, build or archive
+  ./tools/prod.sh images sync      Pull, build or load the selected images
+  ./tools/prod.sh pull             Pull the registry images
+  ./tools/prod.sh build            Build images (build source)
+  ./tools/prod.sh rebuild          Rebuild from scratch (build source)
+  ./tools/prod.sh update           Pull latest (git clone), recreate stack
   ./tools/prod.sh show-versions    Show daemon + bridge versions
-  ./tools/prod.sh logs             Follow logs
+  ./tools/prod.sh logs [service]   Follow logs (all, or one service)
   ./tools/prod.sh status           Container status
   ./tools/prod.sh shell [service]  Open shell (default: daemon)
   ./tools/prod.sh exec <svc> <cmd> Execute command in service
   ./tools/prod.sh certbot <domain> Obtain Let's Encrypt TLS certificate
+  ./tools/prod.sh cloudflare [action]
+                                   Serve through Cloudflare (status, on,
+                                   refresh, off)
   ./tools/prod.sh hard-reset       Wipe ALL data (destructive)
 
-  Compose Lock:
-  ./tools/prod.sh compose lock     Preserve local docker-compose.yml on update
-  ./tools/prod.sh compose unlock   Release lock to pull upstream changes
-  ./tools/prod.sh compose status   Show current lock state
+  With -f, gen-keys, setup-auth and setup-tls regenerate what exists.
+  gen-keys -f invalidates every WireGuard client config. setup-auth -f moves
+  auth.db aside as auth.db.<time>.bak and creates a new admin account.
+  setup and setup-auth take --admin-username <name> (default admin).
+
+  add-superadmin adds a superadmin account through the running auth
+  service. It asks the password twice on the terminal, without echo, and
+  takes it as typed. The auth service checks the name (letters, digits, _
+  and -, up to 64) and the password (8 to 256 characters with an upper
+  case letter, a lower case letter, a digit and a special character), and
+  writes the account with its user_created audit row (actor system:host).
+  One line and the exit code tell the result:
+    SUPERADMIN_CREATED=<name>   0
+    INVALID_USERNAME            4
+    WEAK_PASSWORD               5
+    USER_ALREADY_EXISTS         7
+  A name that starts with "-" comes after "--": add-superadmin -- -name.
 
 Ports:
   443/tcp     HTTPS (nginx → auth-service → daemon)
   51820/udp   WireGuard
 
+  The published ports are set in docker-compose.override.yml.
+
+Logs:
+  docker-compose.yml rotates the log of each container: json-file driver,
+  three files of 10 MB at most. ./tools/prod.sh logs [service] follows them.
+
+  A login refused before the user is known is written to the auth-service
+  log, not to the audit log: a wrong name or password, or too many
+  attempts. Each is one line with the client IP and the name sent, if
+  any; the password is never written. A wrong TOTP or backup code comes
+  after a correct password and stays in the audit log.
+    ./tools/prod.sh logs auth-service
+
 Data Directories (created at runtime):
   container-data/
   ├── secrets/production/         Keys and certificates
-  ├── db/                         Client and peer databases
+  ├── db/                         Address pool with its clients, multihop exits
   ├── state/db/                   Runtime state (bridges)
-  └── auth-db/                    Authentication database
+  ├── auth-db/                    Authentication database
+  ├── certbot/                    Let's Encrypt state (certbot only)
+  └── cloudflare/                 Cloudflare mode (hard-reset leaves it)
 
 TLS Certificate:
   Default is self-signed. To use your own certificate,
@@ -106,12 +324,54 @@ TLS Certificate:
     ./tools/prod.sh certbot <domain>
     ./tools/prod.sh restart nginx
 
+  The same two commands renew it: certbot takes a new certificate only when
+  the one in place is near its end. They can run from cron.
+
+Cloudflare:
+  The stack can sit behind Cloudflare's proxy. In the Cloudflare dashboard
+  of the zone, set the SSL/TLS mode to Full (strict) and turn
+  Authenticated Origin Pulls (Global) on; on stops on any other setting.
+  Then:
+    ./tools/prod.sh cloudflare on       (writes .env.cf from .env.cf.example)
+    (fill CF_API_TOKEN and CF_ZONE in .env.cf)
+    ./tools/prod.sh cloudflare on
+    ./tools/prod.sh up
+
+  .env.cf belongs to this machine and the tool holds it at 600. Its token
+  is of this zone only, with Zone - Zone - Read, Zone - Zone Settings -
+  Read and Zone - SSL and Certificates - Read and Edit. CF_HOSTNAMES lists
+  the names of the certificate; empty, the zone and *.<zone>.
+
+  on makes a key here and takes an Origin CA certificate for it, writes the
+  nginx snippets and the firewall rules to container-data/cloudflare/, and
+  adds the mode to docker-compose.override.yml: NET_ADMIN for nginx, the
+  command that loads the rules, the snippets and the certificate. nginx
+  then requires Cloudflare's origin pull certificate, its port 443 drops
+  connections from addresses outside Cloudflare's list, and it logs the
+  visitor's address from CF-Connecting-IP. The override changes only after
+  Compose accepts the new one; the last one stays as
+  docker-compose.override.yml.bak. A step of on that fails after the
+  certificate revokes it again, until the mode is recorded; a stop after
+  that leaves the mode on, and off takes it back.
+
+    ./tools/prod.sh cloudflare           Show the mode
+    ./tools/prod.sh cloudflare refresh   Take Cloudflare's address list and
+                                         origin pull CA again, then:
+                                         ./tools/prod.sh restart nginx
+    ./tools/prod.sh cloudflare off       Revoke the certificate and take the
+                                         mode back, then: ./tools/prod.sh up
+    ./tools/prod.sh cloudflare off --keep-certificate
+                                         Take the mode back without the token;
+                                         the certificate stays in Cloudflare
+
+  off puts the override back, removes container-data/cloudflare/, and nginx
+  takes its certificate from container-data/secrets/production/ again.
+  .env.cf stays for the next on. hard-reset leaves the mode in place.
+
 Updating:
   See the UPDATE file for the full update and maintenance guide.
 
   Quick reference:
     ./tools/prod.sh update
 
-  If you have local docker-compose.yml changes, lock them first:
-    ./tools/prod.sh compose lock
-    ./tools/prod.sh update
+  Keep server-specific changes in docker-compose.override.yml.

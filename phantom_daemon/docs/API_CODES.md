@@ -54,27 +54,30 @@ All responses carry a `code` field for frontend translation. The `error` field i
 
 ### Multihop (`/api/multihop/`)
 
-| Code                  | HTTP | Trigger                                          |
-|-----------------------|------|--------------------------------------------------|
-| `INVALID_EXIT_CONFIG` | 400  | `ValueError` — WireGuard config parse failed     |
-| `EXIT_NOT_FOUND`      | 404  | Exit name not in exit store                      |
-| `EXIT_ALREADY_EXISTS` | 400  | `ExitStoreError` — duplicate name on import      |
-| `EXIT_IS_ACTIVE`      | 400  | `ExitStoreError` — remove attempted while active |
+| Code                  | HTTP | Trigger                                                                    |
+|-----------------------|------|----------------------------------------------------------------------------|
+| `INVALID_EXIT_CONFIG` | 400  | `ValueError` — WireGuard config parse failed on import or update           |
+| `EXIT_NOT_FOUND`      | 404  | Exit lookup on enable and config, `ExitNotFoundError` on remove and update |
+| `EXIT_ALREADY_EXISTS` | 400  | `ExitAlreadyExistsError` — duplicate name on import                        |
+| `EXIT_IS_ACTIVE`      | 400  | `ExitActiveError` — remove or update attempted while active                |
 
 ### Generic (Global Handler — Business Exceptions)
 
 `error` contains the full `str(exc)` message. `code` is fixed per exception type.
 
-| Code               | HTTP | Exception                                                                                    |
-|--------------------|------|----------------------------------------------------------------------------------------------|
-| `WALLET_FULL`      | 409  | `WalletFullError`                                                                            |
-| `WALLET_ERROR`     | 400  | `WalletError`                                                                                |
-| `EXIT_STORE_ERROR` | 400  | `ExitStoreError`                                                                             |
-| `BACKUP_ERROR`     | 400  | `BackupError`                                                                                |
-| `WIREGUARD_ERROR`  | 500  | `WireGuardError` — interface or IPC operation failed                                         |
-| `FIREWALL_ERROR`   | 500  | `FirewallError` — preset or rule operation failed                                            |
-| `BRIDGE_ERROR`     | 500  | `BridgeError` from either native bridge — `error` is prefixed with the bridge exception type |
-| `VALIDATION_ERROR` | 422  | `RequestValidationError` (Pydantic)                                                          |
+| Code                  | HTTP | Exception                                                                                    |
+|-----------------------|------|----------------------------------------------------------------------------------------------|
+| `WALLET_FULL`         | 409  | `WalletFullError`                                                                            |
+| `WALLET_ERROR`        | 400  | `WalletError`                                                                                |
+| `EXIT_NOT_FOUND`      | 404  | `ExitNotFoundError`                                                                          |
+| `EXIT_ALREADY_EXISTS` | 400  | `ExitAlreadyExistsError`                                                                     |
+| `EXIT_IS_ACTIVE`      | 400  | `ExitActiveError`                                                                            |
+| `EXIT_STORE_ERROR`    | 400  | `ExitStoreError`                                                                             |
+| `BACKUP_ERROR`        | 400  | `BackupError`                                                                                |
+| `WIREGUARD_ERROR`     | 500  | `WireGuardError` — interface or IPC operation failed                                         |
+| `FIREWALL_ERROR`      | 500  | `FirewallError` — preset or rule operation failed                                            |
+| `BRIDGE_ERROR`        | 500  | `BridgeError` from either native bridge — `error` is prefixed with the bridge exception type |
+| `VALIDATION_ERROR`    | 422  | `RequestValidationError` (Pydantic)                                                          |
 
 ### Generic Fallbacks (Framework `HTTPException`)
 

@@ -19,20 +19,19 @@ import importlib.resources
 import ipaddress
 import json
 import math
-import os
 import sqlite3
 import uuid
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
-from typing import Optional
+from typing import Self
 
-from phantom_daemon.base.errors import WalletError, WalletFullError
 from wireguard_go_bridge.keys import (
     derive_public_key,
     generate_preshared_key,
     generate_private_key,
 )
 
+from phantom_daemon.base.errors import WalletError, WalletFullError
 
 # ── Key Generation ────────────────────────────────────────────────
 
@@ -130,7 +129,7 @@ def _connect(db_path: Path) -> sqlite3.Connection:
     return conn
 
 
-def _create_wallet(db_path: Path) -> sqlite3.Connection:
+def _create_wallet(db_path: Path, ipv4_subnet: str) -> sqlite3.Connection:
     """Create a new wallet database with schema, config defaults, and IP pool."""
     conn = sqlite3.connect(str(db_path))
     try:
@@ -140,7 +139,6 @@ def _create_wallet(db_path: Path) -> sqlite3.Connection:
         conn.execute("PRAGMA wal_autocheckpoint = 1")
 
         # Config defaults
-        ipv4_subnet = os.environ.get("DEFAULT_IPV4_SUBNET") or _DEFAULT_IPV4_SUBNET
         ipv4_str, ipv6_str, _capacity, _host_bits = _calculate_terazi(
             ipv4_subnet
         )
@@ -175,7 +173,7 @@ class Wallet:
         self._conn = conn
         self._db_path = db_path
 
-    def get_config(self, key: str) -> Optional[str]:
+    def get_config(self, key: str) -> str | None:
         """Get a single config value by key."""
         row = self._conn.execute(
             "SELECT value FROM config WHERE key = ?", (key,)
@@ -232,7 +230,7 @@ class Wallet:
         ipv4, ipv6 = row
         client_id = uuid.uuid4().hex
         private_key, public_key, preshared_key = _generate_keys()
-        now = datetime.now(timezone.utc).isoformat()
+        now = datetime.now(UTC).isoformat()
 
         self._conn.execute(
             "UPDATE users SET id=?, name=?, private_key_hex=?, public_key_hex=?, "
@@ -298,7 +296,7 @@ class Wallet:
         "created_at, updated_at"
     )
 
-    def get_client(self, name: str) -> Optional[dict]:
+    def get_client(self, name: str) -> dict | None:
         """Get client by name, or None if not found."""
         row = self._conn.execute(
             f"SELECT {self._CLIENT_COLUMNS} FROM users WHERE name = ?",
@@ -400,7 +398,9 @@ class Wallet:
     def change_cidr(self, new_prefix: int) -> None:
         """Change the CIDR prefix length, re-creating the IP pool.
 
-        Base network address is preserved from current config.
+        The new subnet starts from the current base address and aligns to the
+        new prefix, so widening can lower the base: 192.168.77.0/24 becomes
+        192.168.0.0/16.
         Assigned clients are preserved and re-slotted into the new pool.
         Raises WalletError if the new prefix cannot hold existing clients.
         """
@@ -427,7 +427,7 @@ class Wallet:
 
         # Rebuild pool (intentional full clear before re-populate)
         # noinspection SqlWithoutWhere
-        self._conn.execute("DELETE FROM users")  # noqa: S608
+        self._conn.execute("DELETE FROM users")
         _populate_ip_pool(self._conn, new_v4, new_v6)
 
         # Restore clients into first free slots
@@ -517,7 +517,7 @@ class Wallet:
         """Close the database connection."""
         self._conn.close()
 
-    def __enter__(self) -> Wallet:
+    def __enter__(self) -> Self:
         return self
 
     def __exit__(self, *exc: object) -> None:
@@ -526,21 +526,31 @@ class Wallet:
 
 # ── Public entry point ───────────────────────────────────────────
 
-def open_wallet(db_dir: str, db_name: str = "wallet.db") -> Wallet:
-    """Open or create the wallet database.
-
-    If the database file exists → open.
-    If it does not exist → create with schema + defaults + IP pool.
-    """
+def _wallet_path(db_dir: str, db_name: str) -> Path:
     db_dir_path = Path(db_dir)
     if not db_dir_path.is_dir():
         raise WalletError(f"Database directory does not exist: {db_dir}")
+    return db_dir_path / db_name
 
-    db_path = db_dir_path / db_name
 
+def create_wallet(
+    db_dir: str,
+    db_name: str = "wallet.db",
+    ipv4_subnet: str = _DEFAULT_IPV4_SUBNET,
+) -> Wallet:
+    """Create the wallet database: schema, defaults and the IP pool of a subnet.
+
+    Setup calls this once. The pool of an existing wallet stays as it is.
+    """
+    db_path = _wallet_path(db_dir, db_name)
     if db_path.exists():
-        conn = _connect(db_path)
-    else:
-        conn = _create_wallet(db_path)
+        raise WalletError(f"Wallet already exists: {db_path}")
+    return Wallet(_create_wallet(db_path, ipv4_subnet), db_path)
 
-    return Wallet(conn, db_path)
+
+def open_wallet(db_dir: str, db_name: str = "wallet.db") -> Wallet:
+    """Open the wallet database. A missing wallet is an error: setup creates it."""
+    db_path = _wallet_path(db_dir, db_name)
+    if not db_path.exists():
+        raise WalletError(f"Wallet not found: {db_path}. Run setup first.")
+    return Wallet(_connect(db_path), db_path)

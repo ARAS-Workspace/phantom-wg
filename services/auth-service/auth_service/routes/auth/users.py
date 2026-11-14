@@ -15,14 +15,18 @@ User management endpoints — superadmin only (except self password change).
 
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, Request
+from fastapi import APIRouter, Request
 
-from auth_service.audit import audit_log
-from auth_service.crypto.jwt import TokenPayload
+from auth_service.audit import account, audit_log
 from auth_service.crypto.password import hash_password
 from auth_service.errors import ApiException, AuthDatabaseError
-from auth_service.middleware.auth import require_auth, require_superadmin
-from auth_service.models import ActionResult, ApiOk, ChangePasswordRequest, CreateUserRequest
+from auth_service.middleware.auth import AuthPayload, SuperadminPayload
+from auth_service.models import (
+    ActionResult,
+    ApiOk,
+    ChangePasswordRequest,
+    CreateUserRequest,
+)
 from auth_service.routes.auth._helpers import user_info
 
 router = APIRouter()
@@ -32,30 +36,32 @@ router = APIRouter()
 def create_user(
     body: CreateUserRequest,
     request: Request,
-    payload: TokenPayload = Depends(require_superadmin),
+    _payload: SuperadminPayload,
 ):
     """Create a new admin user. Superadmin only."""
     db = request.state.db
-    try:
-        user = db.create_user(
-            username=body.username,
-            password_hash=hash_password(body.password),
-            role="admin",
+    password_hash = hash_password(body.password)
+    with db.atomic():
+        try:
+            user = db.create_user(
+                username=body.username,
+                password_hash=password_hash,
+                role="admin",
+            )
+        except AuthDatabaseError:
+            raise ApiException(409, "USER_ALREADY_EXISTS")
+        audit_log(
+            db, request, "user_created",
+            actor=request.state.actor,
+            target=account(user.id, user.username),
         )
-    except AuthDatabaseError:
-        raise ApiException(409, "USER_ALREADY_EXISTS")
-    audit_log(
-        db, request, "user_created",
-        {"username": body.username, "by": payload.sub},
-        user_id=user.id,
-    )
     return ApiOk(data=user_info(user))
 
 
 @router.get("/users")
 def list_users(
     request: Request,
-    _payload: TokenPayload = Depends(require_superadmin),
+    _payload: SuperadminPayload,
 ):
     """List all users. Superadmin only."""
     db = request.state.db
@@ -66,7 +72,7 @@ def list_users(
 def delete_user(
     username: str,
     request: Request,
-    payload: TokenPayload = Depends(require_superadmin),
+    payload: SuperadminPayload,
 ):
     """Delete a user. Superadmin only. Cannot delete self."""
     if username == payload.sub:
@@ -75,13 +81,14 @@ def delete_user(
     user = db.get_user_by_username(username)
     if user is None:
         raise ApiException(404, "USER_NOT_FOUND")
-    db.revoke_user_sessions(user.id)
-    db.delete_user(username)
-    audit_log(
-        db, request, "user_deleted",
-        {"username": username, "by": payload.sub},
-        user_id=user.id,
-    )
+    with db.atomic():
+        db.revoke_user_sessions(user.id)
+        db.delete_user(username)
+        audit_log(
+            db, request, "user_deleted",
+            actor=request.state.actor,
+            target=account(user.id, user.username),
+        )
     return ApiOk(data=ActionResult(success_code="USER_DELETED"))
 
 
@@ -90,7 +97,7 @@ def change_password(
     username: str,
     body: ChangePasswordRequest,
     request: Request,
-    payload: TokenPayload = Depends(require_auth),
+    payload: AuthPayload,
 ):
     """Change password. Superadmin: any user. Admin: only self."""
     if payload.role != "superadmin" and username != payload.sub:
@@ -99,13 +106,15 @@ def change_password(
     user = db.get_user_by_username(username)
     if user is None:
         raise ApiException(404, "USER_NOT_FOUND")
-    db.update_password(username, hash_password(body.password))
-    # Same discipline as self-service change and delete_user: a reset
-    # password invalidates every existing session for the target.
-    db.revoke_user_sessions(user.id)
-    audit_log(
-        db, request, "password_changed",
-        {"username": username, "by": payload.sub},
-        user_id=user.id,
-    )
+    password_hash = hash_password(body.password)
+    with db.atomic():
+        db.update_password(username, password_hash)
+        # Same discipline as self-service change and delete_user: a reset
+        # password invalidates every existing session for the target.
+        db.revoke_user_sessions(user.id)
+        audit_log(
+            db, request, "password_changed",
+            actor=request.state.actor,
+            target=account(user.id, user.username),
+        )
     return ApiOk(data=ActionResult(success_code="PASSWORD_CHANGED"))

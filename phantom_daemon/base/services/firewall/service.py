@@ -21,16 +21,25 @@ import ipaddress
 import logging
 import re
 from pathlib import Path
-from typing import Optional, Type
+from types import TracebackType
+from typing import Self
 
 import yaml
 from firewall_bridge import FirewallBridge, FirewallRule, Group, RoutingRule
-from firewall_bridge.presets import apply_preset, disable_preset, enable_preset, remove_preset
+from firewall_bridge.presets import (
+    apply_preset,
+    disable_preset,
+    enable_preset,
+    remove_preset,
+)
 
 from phantom_daemon.base.env import DaemonEnv
-from phantom_daemon.base.logging import LOGGER_NAME
 from phantom_daemon.base.errors import FirewallError
-from phantom_daemon.base.services.wireguard import WG_INTERFACE_NAME, WG_INTERFACE_NAME_EXIT
+from phantom_daemon.base.logging import LOGGER_NAME
+from phantom_daemon.base.services.wireguard import (
+    WG_INTERFACE_NAME,
+    WG_INTERFACE_NAME_EXIT,
+)
 from phantom_daemon.base.wallet.wallet import Wallet
 
 log = logging.getLogger(LOGGER_NAME)
@@ -268,13 +277,13 @@ class FirewallService:
         return self._bridge.get_group(name)
 
     def list_firewall_rules(
-        self, group_name: Optional[str] = None,
+        self, group_name: str | None = None,
     ) -> list[FirewallRule]:
         """List firewall rules, optionally filtered by group."""
         return self._bridge.list_firewall_rules(group_name)
 
     def list_routing_rules(
-        self, group_name: Optional[str] = None,
+        self, group_name: str | None = None,
     ) -> list[RoutingRule]:
         """List routing rules, optionally filtered by group."""
         return self._bridge.list_routing_rules(group_name)
@@ -285,14 +294,14 @@ class FirewallService:
 
     # ── Context Manager ──────────────────────────────────────────
 
-    def __enter__(self) -> FirewallService:
+    def __enter__(self) -> Self:
         return self
 
     def __exit__(
         self,
-        exc_type: Optional[Type[BaseException]],
-        exc_val: Optional[BaseException],
-        exc_tb: Optional[object],
+        exc_type: type[BaseException] | None,
+        exc_val: BaseException | None,
+        exc_tb: TracebackType | None,
     ) -> None:
         self.close()
 

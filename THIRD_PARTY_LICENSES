@@ -49,9 +49,8 @@ The other four are listed in their own notices:
 - firewall-bridge:     https://github.com/ARAS-Workspace/phantom-wg/blob/dev/firewall-bridge/THIRD_PARTY_LICENSES
 
 Each notice also travels with its component: auth-service and react-spa in
-the directories named above, and the two bridges inside the vendor archive —
-which the image unpacks into /opt/phantom/vendor, and which the release
-package ships under vendor/linux-<arch>/.
+the directories named above, and the two bridges inside the vendor archive,
+which the image unpacks into /opt/phantom/vendor.
 
 ================================================================================
 DAEMON — PYTHON DEPENDENCIES
@@ -101,9 +100,9 @@ Fetched by the Dockerfile at image build time and unpacked into
 
 | Component            | Version | Language | License           | Source             |
 |----------------------|---------|----------|-------------------|--------------------|
-| wireguard-go-bridge  | 2.1.4   | Go       | AGPL-3.0-or-later | Internal (wraps    |
+| wireguard-go-bridge  | 2.2.0   | Go       | AGPL-3.0-or-later | Internal (wraps    |
 |                      |         |          |                   | wireguard-go)      |
-| firewall-bridge      | 2.1.8   | Rust     | AGPL-3.0-or-later | Internal           |
+| firewall-bridge      | 2.2.0   | Rust     | AGPL-3.0-or-later | Internal           |
 
 Upstream dependency:
 
@@ -115,13 +114,15 @@ Upstream dependency:
 DOCKER BASE IMAGES
 ================================================================================
 
-| Image                      | License          | URL                             |
-|----------------------------|------------------|---------------------------------|
-| python:3.12.13-slim-trixie | PSF-2.0 + Debian | https://hub.docker.com/_/python |
-| nginx:1-alpine             | BSD 2-Clause     | https://hub.docker.com/_/nginx  |
+| Image                       | License          | URL                             |
+|-----------------------------|------------------|---------------------------------|
+| debian:trixie-20261027-slim | Debian           | https://hub.docker.com/_/debian |
 
-CPython is PSF-2.0. The Debian packages underneath it carry their own
-licences, which Debian keeps inside the image as
+The daemon, auth-service and nginx images start from debian:trixie-slim.
+The daemon's and auth-service's CPython is Debian's python3.13 package,
+PSF-2.0, installed with ca-certificates, netbase and tzdata; nginx is
+Debian's nginx package, BSD 2-Clause. The Debian packages carry their own
+licences, which Debian keeps inside each image as
 /usr/share/doc/<package>/copyright.
 
 ================================================================================
@@ -136,14 +137,57 @@ Daemon container:
 | nftables           | GPL-2.0      | GPL-2.0-only    | Netfilter management     |
 | iproute2           | GPL-2.0      | GPL-2.0-only    | Network routing          |
 
-The auth-service and nginx containers install no system library of their own.
+Nginx container:
+
+| Library            | License      | SPDX Identifier | Purpose                  |
+|--------------------|--------------|-----------------|--------------------------|
+| nginx              | BSD 2-Clause | BSD-2-Clause    | TLS front, SPA, proxy    |
+| libnftables1       | GPL-2.0      | GPL-2.0-only    | nft runtime              |
+| nftables           | GPL-2.0      | GPL-2.0-only    | Netfilter management     |
+
+Beyond python3, the auth-service container installs no system library
+of its own.
 
 Usage Note:
 iproute2 and nftables are installed as separate programs; the daemon
-invokes ip as a subprocess. libnftables1 is the library firewall-bridge
-loads at runtime, and its use is stated in firewall-bridge's own notice.
-All three are installed from Debian's package repository when the user
-builds the image and are not bundled with this project.
+invokes ip as a subprocess, and firewall-bridge runs nft as one, as its
+own notice states. libnftables1 is the library nft is linked against.
+The nginx container installs nftables as well, as a separate program
+for its firewall rules. These and nginx are installed from Debian's
+package repository when the images are built, and the published images
+carry them. MANIFEST.json in tools/compose lists every Debian package in
+the images with its source files; ghcr.io/aras-workspace/phantom-sources
+holds those files under the image version.
+
+================================================================================
+SOURCE CODE OF THE IMAGES
+================================================================================
+
+ghcr.io/aras-workspace/phantom-sources holds the Debian source files of the
+published images, one tag per image version. tools/compose/MANIFEST.json
+lists every package in the images and names the matching sources_image.
+
+This image is an archive, not a program. It is built from scratch and holds
+files only, so docker run has nothing to start and no shell to open. It is
+not needed to run Phantom-WG, and the stack does not pull it.
+
+To read it, create a container without starting it and copy the files out.
+Replace <version> with the image version in tools/compose/registry.yml. The
+word none is a placeholder: docker create asks for a command, and this one
+never runs.
+
+    docker create --name phantom-src \
+      ghcr.io/aras-workspace/phantom-sources:<version> none
+    docker cp phantom-src:/sources ./sources
+    docker container rm phantom-src
+
+./sources holds the .dsc, .orig.tar and .debian.tar files of each source
+package, with SHA256SUMS next to them. To check the files, then unpack a
+package on Debian (dpkg-source comes with dpkg-dev):
+
+    cd sources
+    sha256sum -c SHA256SUMS
+    dpkg-source -x <package>_<version>.dsc
 
 ================================================================================
 TRADEMARK NOTICES
@@ -162,9 +206,9 @@ notice states the licences in its own dependency set and whether they are
 compatible with this project.
 
 GPL-2.0 system packages (libnftables1, nftables, iproute2) are installed
-from Debian when the user builds the image and are not bundled with this
-project. iproute2 and nftables run as separate programs; libnftables1 is
-covered in firewall-bridge's notice.
+from Debian when the images are built and ship in the published images,
+with their source in phantom-sources. iproute2 and nftables run as separate
+programs; libnftables1 is covered in firewall-bridge's notice.
 
 ================================================================================
 

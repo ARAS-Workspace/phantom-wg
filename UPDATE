@@ -4,36 +4,71 @@ Phantom-WG Modern — Update Guide
 Standard Update:
   ./tools/prod.sh update
 
-  This pulls the latest code from upstream and restarts all services.
-  Environment files (.env.daemon, .env.auth-service) are always preserved.
+  This pulls the latest release, syncs the images of the selected source and
+  recreates all services. Environment files (.env, .env.daemon,
+  .env.auth-service, .env.cf) and docker-compose.override.yml are always
+  preserved. If an update stops halfway, run it again. A stop before the
+  line "Recreating stack..." leaves the stack running as it was; once the
+  release is pulled, a restart starts its code on the images of the last
+  one. After that line the update recreates the services and waits for
+  them; a stop in the wait prints the services that did not settle.
 
-  Alternatively:
-    git pull
-    ./tools/prod.sh restart
+  update follows a git clone. A package installed from the release zip has no
+  git remote, and update stops there.
 
-Compose Lock:
-  If you have modified docker-compose.yml locally (custom ports,
-  resource limits, extra volumes), protect your changes with compose lock:
+Update Recipe:
+  The update as commands to run by hand, without the tool, from the clone.
+  The tool also checks the install before it recreates the stack. Nothing is
+  rolled back for you.
 
-    ./tools/prod.sh compose lock
+    # Host and clone
+    docker info --format '{{.ServerVersion}}'
+    docker compose version --short
+    git --version
+    df -h .                                       # 1 GiB free or more
+    git remote get-url origin
+    git status --porcelain --untracked-files=no   # prints nothing
+    git symbolic-ref --short HEAD                 # prints main
 
-  Once locked, every future update preserves your local docker-compose.yml.
-  The lock persists across sessions — set it once and forget it.
+    # The release
+    git fetch origin main
+    git merge-base --is-ancestor HEAD FETCH_HEAD  # exits 0
+    git merge --ff-only FETCH_HEAD
 
-    ./tools/prod.sh compose status    Check if locked
-    ./tools/prod.sh compose unlock    Release to pull upstream changes
+    # From here on, the code of the new release
+    # Images: PHANTOM_IMAGE_SOURCE in .env, one of
+    docker compose pull                           # registry
+    docker compose build                          # build
+    bash tools/stack/prod/flows/stack/update/helper/update_hook.sh
+    docker compose config -q
+    docker compose up -d --force-recreate
+    # All running, restart counts steady for 10 s:
+    docker compose ps -aq | xargs docker inspect \
+      --format '{{.Name}} {{.State.Status}} {{.RestartCount}}'
+    docker compose ps
 
-  How it works:
-    Compose lock uses git update-index --assume-unchanged to tell git
-    to ignore local changes to docker-compose.yml during pull.
+Local Changes:
+  Server-specific changes (ports, resource limits, extra volumes) belong in
+  docker-compose.override.yml. It is not tracked by git, so updates leave
+  it as it is.
+
+  docker-compose.yml comes with each release. An update stops if it has local
+  changes: move them to the override, then discard them:
+
+    git checkout -- docker-compose.yml
 
 Dependency Updates:
-  If requirements.txt or the Dockerfile changed after an update:
+  Every update syncs the images of the source selected in .env: the registry
+  source pulls the images pinned by the release, the build source builds the
+  Dockerfiles of the release, the archive source loads images/ of the package
+  after checking it. To run this step alone:
+
+    ./tools/prod.sh images sync
+
+  To rebuild from scratch on the build source:
 
     ./tools/prod.sh rebuild
-    ./tools/prod.sh restart
-
-  This rebuilds the Docker image from scratch with new dependencies.
+    ./tools/prod.sh up
 
 Version Check:
   ./tools/prod.sh show-versions
@@ -45,14 +80,13 @@ Rollback:
   To roll back to a previous version:
 
     git fetch --tags
-    git checkout v1.0.7
+    git checkout v2.0.0
+    ./tools/prod.sh images sync
+    ./tools/prod.sh up
     ./tools/prod.sh restart
 
-  If the Dockerfile may have changed between versions, rebuild first:
-
-    git checkout v1.0.7
-    ./tools/prod.sh rebuild
-    ./tools/prod.sh restart
+  up applies the images and docker-compose.yml of that version, restart loads
+  its code.
 
   This creates a detached HEAD state — you are pinned to that tag.
   To resume receiving updates, switch back to main:
@@ -63,25 +97,35 @@ Rollback:
   Environment files and runtime data are unaffected by rollback.
 
 Hard Reset:
+  ./tools/prod.sh down
   ./tools/prod.sh hard-reset
 
-  Destroys ALL data: secrets, auth database, client databases,
-  and Docker volumes. Requires typing 'yes' to confirm.
+  Destroys ALL data: secrets, auth database, the address pool, client
+  databases, Let's Encrypt state and Docker volumes. It stops while the stack
+  runs and requires typing 'yes' to confirm. Environment files,
+  docker-compose.override.yml and the Cloudflare mode stay. The daemon writes
+  its data as root; the tool removes those files from a throwaway container
+  without network (--cap-drop ALL --cap-add DAC_OVERRIDE), so a user of the
+  docker group runs it without sudo.
 
   After hard reset, run setup again:
     ./tools/prod.sh setup
 
 What Gets Preserved on Update:
-  .env.daemon                Always preserved (not tracked by git)
-  .env.auth-service          Always preserved (not tracked by git)
-  docker-compose.yml         Preserved only when compose lock is active
-  container-data/            Always preserved (runtime data, not in git)
+  docker-compose.override.yml   Always preserved (not tracked by git)
+  .env                          Always preserved (not tracked by git)
+  .env.daemon                   Always preserved (not tracked by git)
+  .env.auth-service             Always preserved (not tracked by git)
+  .env.cf                       Always preserved (not tracked by git)
+  container-data/               Always preserved (runtime data, not in git)
 
 What Gets Updated:
-  phantom_daemon/            Daemon source code
-  services/auth-service/     Auth service source
-  services/react-spa/dist/   Web dashboard build
-  services/nginx/            Reverse proxy config
-  tools/                     Production CLI and libraries
-  Dockerfile                 Image definition
-  requirements.txt           Python dependencies
+  phantom_daemon/                      Daemon source code
+  services/auth-service/               Auth service source
+  services/react-spa/dist/             Web dashboard build
+  services/nginx/                      Reverse proxy config
+  tools/                               Production CLI, libraries and image pins
+  docker-compose.yml                   Production stack
+  docker-compose.override.yml.example  Override template
+  Dockerfile, nginx.Dockerfile         Image definitions
+  requirements.txt                     Python dependencies

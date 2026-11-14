@@ -21,10 +21,10 @@ import logging
 import sqlite3
 import subprocess
 from pathlib import Path
-from typing import TYPE_CHECKING, Optional, Type
+from typing import TYPE_CHECKING, Self
 
-from phantom_daemon.base.logging import LOGGER_NAME
 from phantom_daemon.base.errors import WireGuardError
+from phantom_daemon.base.logging import LOGGER_NAME
 from phantom_daemon.base.services.wireguard import WG_INTERFACE_NAME
 from phantom_daemon.base.services.wireguard.ipc import (
     DeviceStatus,
@@ -36,6 +36,8 @@ from phantom_daemon.base.services.wireguard.ipc import (
 )
 
 if TYPE_CHECKING:
+    from types import TracebackType
+
     from wireguard_go_bridge import WireGuardBridge
 
     from phantom_daemon.base.env import DaemonEnv
@@ -290,14 +292,14 @@ class WireGuardService:
         """Close the bridge and release resources."""
         self._bridge.close()
 
-    def __enter__(self) -> WireGuardService:
+    def __enter__(self) -> Self:
         return self
 
     def __exit__(
         self,
-        exc_type: Optional[Type[BaseException]],
-        exc_val: Optional[BaseException],
-        exc_tb: Optional[object],
+        exc_type: type[BaseException] | None,
+        exc_val: BaseException | None,
+        exc_tb: TracebackType | None,
     ) -> None:
         self.close()
 

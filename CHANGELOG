@@ -1,0 +1,380 @@
+Phantom-WG Modern
+
+WireGuard VPN server as a container stack. phantom-daemon runs
+userspace WireGuard, the nftables firewall, multihop exits and the
+address pool, with its state in SQLite; auth-service is the
+authenticated gateway in front of it; nginx serves the dashboard over
+TLS. ./tools/prod.sh installs, runs and updates the stack.
+
+
+v2.0.0 - 2026-11-14
+-------------------
+
+  Container release. The stack runs images that CI publishes to the
+  registry and the release pins by digest; ./tools/prod.sh is a
+  Python toolchain; update follows a git clone and waits for the
+  services; the stack can be served through Cloudflare. An install of
+  1.1.5 moves over with MIGRATION. The databases of the daemon and of
+  auth-service keep their schemas.
+
+  Moving from 1.1.5:
+
+  * Install. 2.0.0 is installed next to 1.1.5, in a directory of its
+    own. The data and the environment files of 1.1.5 are copied into
+    it, and the directory of 1.1.5 stays as the way back. MIGRATION
+    holds the steps, the checks and the rollback.
+
+  * Host. Docker Engine 27.0.1, Docker Compose 2.27.2, kernel 5.15,
+    /dev/net/tun and python3 3.9, each or newer; 1.1.5 asked for
+    Docker Engine 20.10 and Compose v2. ./tools/prod.sh gates reports
+    what the host has. The versions of Docker and Compose are
+    reported, not compared.
+
+  * Environment. .env is new: the image source and the two subnets
+    of the stack, with the defaults 1.1.5 fixed in
+    docker-compose.yml. .env.daemon is unchanged. In
+    .env.auth-service AUTH_PROXY_MAX_BODY drops from 67108864 to
+    65536, AUTH_PROXY_BACKUP_MAX_BODY is new with 67108864, and
+    AUTH_TRUSTED_PROXIES adds to the subnets of the stack where it
+    replaced them.
+
+  * Compose. The published ports move to
+    docker-compose.override.yml, which belongs to the host and which
+    an update leaves as it is. compose lock and update --skip-compose
+    are removed.
+
+  * Installer. get.phantom.tc is retired. 2.0.0 is installed from a
+    git clone of main or from a release zip.
+
+  * History. The main branch starts at the release commit of v1.0.0.
+    An update of 1.1.5 does not cross it: git stops and the install
+    stays as it is.
+
+  Images:
+
+  * Base images. phantom-daemon-base, phantom-auth-base and
+    phantom-nginx-base, built by CI from the Dockerfiles of the
+    release on debian:trixie-slim, for amd64 and arm64. They hold
+    the platform, the Python dependencies and the two bridges; compose
+    mounts the code of the daemon and of auth-service and the
+    dashboard build read only. 1.1.5 built the daemon and
+    auth-service images on the host and ran nginx:1-alpine.
+
+  * Versions. The images carry a version of their own, 1.1.0 in this
+    release. tools/compose/registry.yml pins each image by version
+    and digest, and tools/compose/MANIFEST.json names the images and
+    the Debian source files of their packages.
+
+  * Sources. PHANTOM_IMAGE_SOURCE in .env selects where the images
+    come from: registry pulls the pinned images and is the default,
+    build builds the same Dockerfiles on the host, archive loads the
+    images a release zip carries.
+
+  * Release zip. One zip per architecture, amd64 and arm64, with the
+    images in images/ and their SHA256SUMS. It installs without the
+    registry. A zip install keeps its version: update follows a git
+    clone.
+
+  * Bridges. The daemon image takes firewall-bridge and
+    wireguard-go-bridge from their tagged releases, each archive
+    checked against the SHA-256 written in the Dockerfile. The
+    package carries no vendor tree.
+
+  * nginx. Debian's nginx with nftables, in an image of the stack.
+
+  Image Packages:
+
+    The four packages of 1.1.0, published by
+    .github/workflows/release-base-images.yml of the dev/daemon
+    branch:
+      https://github.com/ARAS-Workspace/phantom-wg/actions/runs/42940486458
+
+    phantom-daemon-base:1.1.0
+      https://github.com/ARAS-Workspace/phantom-wg/pkgs/container/phantom-daemon-base
+
+    phantom-auth-base:1.1.0
+      https://github.com/ARAS-Workspace/phantom-wg/pkgs/container/phantom-auth-base
+
+    phantom-nginx-base:1.1.0
+      https://github.com/ARAS-Workspace/phantom-wg/pkgs/container/phantom-nginx-base
+
+    phantom-sources:1.1.0
+      The Debian source files of what the three images install
+      (THIRD_PARTY_LICENSES, SOURCE CODE OF THE IMAGES).
+      https://github.com/ARAS-Workspace/phantom-wg/pkgs/container/phantom-sources
+
+  Tools:
+
+  * Toolchain. ./tools/prod.sh starts a Python toolchain: the
+    standard library only, python3 3.9 or newer on the host, no
+    virtual environment. Every command runs in the install directory,
+    whatever the working directory is, and a command that fails ends
+    with its exit code.
+
+  * gates. Reports Python, Docker, Compose, the kernel, /dev/net/tun,
+    git and the free disk. setup and up stop on a kernel under 5.15,
+    without /dev/net/tun, or when Docker or Compose does not answer.
+
+  * setup. Creates what is missing and refuses a complete install:
+    the environment files and the override from their examples, the
+    WireGuard keys, the auth-service keys with the first account and
+    its database, the TLS certificate, the address pool.
+    --admin-username names the first account, and
+    --terazi-ipv4-subnet is checked before the pool is written.
+
+  * Rotation. gen-keys -f, setup-auth -f and setup-tls -f run with
+    the stack down. setup-auth -f moves auth.db aside as
+    auth.db.<time>.bak.
+
+  * up. Stops on an incomplete setup, and waits until every service
+    has run ten seconds without a restart.
+
+  * images. images shows the source and its images, images use
+    <source> selects one, and images sync pulls, builds or loads
+    what the source needs; pull, build and rebuild each do one.
+
+  * update. Follows a git clone of main: it fetches, moves the clone
+    forward, and starts again as the code of the new release, which
+    syncs the images, runs its update hook, checks the install,
+    recreates the services and waits for them. On local changes, on
+    another branch and on a clone that left main it stops with the
+    commands that bring the clone back. Nothing is rolled back.
+
+  * certbot. certbot <domain> takes a Let's Encrypt certificate from
+    a container built on the host; the same command renews it.
+
+  * add-superadmin. Adds a superadmin through the running
+    auth-service; the password is asked on the terminal.
+
+  * hard-reset. Needs the stack down. The data the containers wrote
+    as root is removed from a throwaway container, so a user of the
+    docker group runs it without sudo. The environment files, the
+    override and the Cloudflare mode stay.
+
+  * Owner. The environment files, the keys, the auth database, the
+    self-signed certificate and the Cloudflare mode belong to the
+    owner of the install directory when root runs the tools, and
+    otherwise to the user who runs them. The address pool, the data
+    of the running stack and what certbot writes belong to root.
+
+  * help. help lists the commands; help <command> and <command>
+    --help print the usage.
+
+  Cloudflare mode:
+
+  * Commands. cloudflare on, refresh, off and status, set from
+    .env.cf: an API token of the zone, the zone, and the hostnames
+    of the certificate. The zone needs SSL/TLS Full (strict) and
+    Authenticated Origin Pulls (Global); on stops on any other
+    setting.
+
+  * on. Makes a key on the host, takes an Origin CA certificate for
+    it, and writes the mode into docker-compose.override.yml once
+    Compose accepts the new file; the last one stays as
+    docker-compose.override.yml.bak. A step that fails after the
+    certificate revokes it again, until the mode is recorded.
+
+  * nginx. Requires Cloudflare's origin pull certificate, drops on
+    port 443 what does not come from Cloudflare's addresses, and
+    reads the visitor's address from CF-Connecting-IP: the access
+    log and the audit log of auth-service hold the visitor.
+
+  * refresh and off. refresh takes Cloudflare's address list and
+    origin pull CA again. off revokes the certificate and puts the
+    override back; --keep-certificate takes the mode back without
+    the token and leaves the certificate in Cloudflare.
+
+  * Token. The tool holds .env.cf at 600 and hands the token to its
+    container on stdin: it is in no argument, no environment and no
+    output.
+
+  Stack:
+
+  * Override. docker-compose.override.yml holds the published ports,
+    51820/udp and 443. setup creates it from its example, and git
+    does not track it.
+
+  * .env. PHANTOM_IMAGE_SOURCE, PHANTOM_SUBNET_V4 and
+    PHANTOM_SUBNET_V6; the subnets default to 172.28.0.0/24 and
+    fd00:d0ce::/64.
+
+  * Logs. Compose rotates the log of every container: json-file,
+    three files of 10 MB.
+
+  * nginx. Listens on IPv4 and IPv6. A request body is 64 KiB at
+    most, 64 MiB on the two backup routes. nginx.conf includes mode
+    snippets at the http and the server level, present when an
+    override mounts them.
+
+  Daemon:
+
+  * Multihop exits. multihop/update replaces the configuration of an
+    exit that is not active, and multihop/config returns a stored
+    configuration as .conf text.
+
+  * Exit configuration. The parser takes one [Interface] and one
+    [Peer] and refuses anything else with INVALID_EXIT_CONFIG and
+    the line, the field or the section.
+
+  * Error codes. The exit store answers with its own codes:
+    EXIT_NOT_FOUND (404), EXIT_ALREADY_EXISTS (400) and
+    EXIT_IS_ACTIVE (400).
+
+  * Address pool. setup creates wallet.db and the daemon opens it;
+    up stops when it is missing.
+
+  Dashboard:
+
+  * Backup. A page and a menu entry for the superadmin: export and
+    import of the data set.
+
+  * Roles. An admin sees the controls its role holds: the changes of
+    the address pool, of DNS and of the multihop exits are for the
+    superadmin.
+
+  * Audit. The action filter lists the actions of auth-service
+    1.3.0 and the two refused login actions in the rows of 1.1.5,
+    the pages are read in the snapshot of the first page, and the
+    time column shows its order.
+
+  * WireGuard peers. A table ordered by name, with a filter by name,
+    sortable columns for the name, the latest handshake and the two
+    byte counts, and pages of 10 to 100.
+
+  * Dashboard. A table of the peers, the latest handshake first. Its
+    tiles and the table share one read of the daemon.
+
+  * Multihop. An exit that is not active is edited from its menu:
+    the modal opens with the stored configuration and validates it
+    with the rules of the daemon before it is sent.
+
+  * Users. A superadmin deletes another superadmin, the own account
+    aside.
+
+  * Removed. The dino game of the dashboard and of the not found
+    page.
+
+  auth-service 1.1.7 to 1.3.0:
+
+    Seven releases. The proxy forwards a fixed table of routes, the
+    roles admin and superadmin are apart, and the audit log names
+    who acted in every row. The schema is unchanged.
+
+  * Route table. The proxy forwards the 28 daemon routes of its
+    table, matched on method and path. A request outside the table
+    is answered 404 and audited without reaching the daemon.
+
+  * Roles. An admin holds 17 of the 28 routes: the reads, the
+    multihop status and the client tunnels. The address pool, DNS,
+    the multihop exits and backup are for the superadmin; a refusal
+    is 403 SUPERADMIN_REQUIRED, before the body is read.
+
+  * Body limits. 64 KiB for a request, 64 MiB on the two backup
+    routes: AUTH_PROXY_MAX_BODY and AUTH_PROXY_BACKUP_MAX_BODY.
+
+  * Trusted proxies. The subnets of the stack, read from
+    PHANTOM_SUBNET_V4 and PHANTOM_SUBNET_V6; AUTH_TRUSTED_PROXIES
+    adds to them.
+
+  * Audit. A row of an account names its actor as "<id>-<name>", a
+    row written from the host or by the bootstrap as
+    "system:<source>". A route that changes state or hands out a key
+    writes every outcome, and a read writes a refusal only. A
+    refused /auth request of a signed in account is written when it
+    changes state; a refused read is written when the answer is 403.
+    GET /auth/audit pages within the snapshot of its first page.
+
+  * Refused logins. A wrong name or password, or too many attempts,
+    is one line of the service log, with the client address and the
+    name sent, and no audit row.
+
+  * Host superadmin. tools/add_superadmin.py adds a superadmin from
+    the host; ./tools/prod.sh add-superadmin runs it.
+
+  * Bootstrap. The keys stay in their files: the output shows
+    [REDACTED] in their place.
+
+  * Platform. The image builds on debian:trixie-slim, and Python
+    moves from 3.12 to Debian trixie's 3.13.
+
+    Every release in full:
+      https://github.com/ARAS-Workspace/phantom-wg/blob/dev/auth-service/CHANGELOG
+
+  Bridges:
+
+    The daemon moves both bridges to v2.2.0.
+
+  * firewall-bridge 2.1.8 to 2.2.0. nft runs as a child process in
+    place of the libnftables link, and the bridge writes its table
+    to the kernel in one nft transaction.
+      https://github.com/ARAS-Workspace/phantom-wg/blob/dev/firewall-bridge/CHANGELOG
+
+  * wireguard-go-bridge 2.1.4 to 2.2.0. A failed call records its
+    code and its reason, which the exceptions carry; a device holds
+    a lock across a configuration change and the persist of its
+    state; the build moves to Go 1.27.3 and Debian trixie.
+      https://github.com/ARAS-Workspace/phantom-wg/blob/dev/wireguard-go-bridge/CHANGELOG
+
+  Documentation:
+
+  * SETUP. The prerequisites, the layout of the tools, the commands,
+    the logs, the Cloudflare mode, and Setup Recipe: the install as
+    commands to run by hand.
+
+  * UPDATE. The update and what an update halfway leaves, Update
+    Recipe, the rollback to a tag and the hard reset.
+
+  * MIGRATION. From 1.1.5 to 2.0.0.
+
+  * CHANGELOG. This file, in the package.
+
+  * THIRD_PARTY_LICENSES. The images of the trixie platform,
+    nftables in the nginx image, and the source code of the images.
+
+  * SEMVER.md, on the dev/daemon branch. The version of the images
+    next to the product version.
+
+  CI Verifications:
+
+    Workflows of the dev/daemon branch, each with the run this
+    release rests on.
+
+  * Test phantom-daemon. The daemon tests in the development stack
+    (407) and four end to end suites: multihop (14), chaos (37),
+    scenario (15) and the dashboard (70). 2026-11-12:
+      https://github.com/ARAS-Workspace/phantom-wg/actions/runs/43168248854
+
+  * Test Production Tools. The flows of ./tools/prod.sh on a real
+    stack (141 tests; 15 more ask for a Cloudflare token and run in
+    Verify Cloudflare), and the update chain: three releases on one
+    host, and what stops an update. 2026-11-12:
+      https://github.com/ARAS-Workspace/phantom-wg/actions/runs/43168248771
+
+  * Verify release packaging. The package tree and the two zips;
+    each zip installs on a runner of its architecture without the
+    registry. 2026-11-08:
+      https://github.com/ARAS-Workspace/phantom-wg/actions/runs/42435988087
+
+  * Verify install matrix. Two installs on each of eight
+    distributions: Ubuntu 22.04, 24.04 and 26.04, Debian 12 and 13,
+    Fedora 45, Arch and AlmaLinux 10.2. 2026-11-08:
+      https://github.com/ARAS-Workspace/phantom-wg/actions/runs/42452212400
+
+  * Verify certbot. A Let's Encrypt certificate on a host with a
+    public address: nginx serves it and the authorities of the
+    system verify it, the same command from a cron environment
+    leaves the same certificate, and hard-reset removes its state.
+    2026-11-11:
+      https://github.com/ARAS-Workspace/phantom-wg/actions/runs/43072128053
+
+  * Verify Cloudflare. The Cloudflare mode on a host with a public
+    address and a zone: the tool tests with a token, then the mode
+    on and off twice, the visitor's address in the logs, and a
+    request around Cloudflare dropped. 2026-11-11:
+      https://github.com/ARAS-Workspace/phantom-wg/actions/runs/43047595174
+
+  * Verify migration. MIGRATION on a host with 1.1.5, its
+    certificate and its clients: a client of 1.1.5 connects to 2.0.0
+    with the same configuration, and the rollback serves 1.1.5
+    again. 2026-11-12:
+      https://github.com/ARAS-Workspace/phantom-wg/actions/runs/43168361592

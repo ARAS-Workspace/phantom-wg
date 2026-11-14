@@ -17,13 +17,17 @@ from __future__ import annotations
 
 import uuid
 
-from fastapi import APIRouter, Depends, Request
+from fastapi import APIRouter, Request
 
 from auth_service.audit import audit_log
-from auth_service.crypto.jwt import TokenPayload, decode_token_claims, encode_token
+from auth_service.crypto.jwt import decode_token_claims, encode_token
 from auth_service.crypto.password import hash_password, verify_password
-from auth_service.errors import ApiException, AuthTokenExpiredError, AuthTokenInvalidError
-from auth_service.middleware.auth import require_auth
+from auth_service.errors import (
+    ApiException,
+    AuthTokenExpiredError,
+    AuthTokenInvalidError,
+)
+from auth_service.middleware.auth import AuthPayload
 from auth_service.models import (
     ActionResult,
     ApiOk,
@@ -39,7 +43,7 @@ router = APIRouter()
 def password_verify(
     body: PasswordVerifyRequest,
     request: Request,
-    payload: TokenPayload = Depends(require_auth),
+    payload: AuthPayload,
 ):
     """Step 1: Verify current password → issue short-lived change token."""
     db = request.state.db
@@ -60,7 +64,7 @@ def password_verify(
         typ="password_change",
     )
 
-    audit_log(db, request, "password_change_started", {"username": user.username}, user_id=user.id)
+    audit_log(db, request, "password_change_started", actor=request.state.actor)
     return ApiOk(data=PasswordVerifyResponse(
         change_token=change_token,
         expires_in=config.mfa_token_lifetime,
@@ -71,7 +75,7 @@ def password_verify(
 def password_change(
     body: PasswordChangeRequest,
     request: Request,
-    payload: TokenPayload = Depends(require_auth),
+    payload: AuthPayload,
 ):
     """Step 2: Change password using verified change token."""
     db = request.state.db
@@ -94,8 +98,8 @@ def password_change(
     if verify_password(body.password, user.password_hash):
         raise ApiException(400, "PASSWORD_MUST_DIFFER")
 
-    db.update_password(payload.sub, hash_password(body.password))
-    db.revoke_user_sessions(user.id)
-
-    audit_log(db, request, "password_changed", {"username": payload.sub, "by": payload.sub})
+    with db.atomic():
+        db.update_password(payload.sub, hash_password(body.password))
+        db.revoke_user_sessions(user.id)
+        audit_log(db, request, "password_changed", actor=request.state.actor)
     return ApiOk(data=ActionResult(success_code="PASSWORD_CHANGED"))

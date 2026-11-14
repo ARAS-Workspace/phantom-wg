@@ -1,0 +1,18 @@
+# ──────────────────────────────────────────────────────────────────
+# phantom-daemon  ·  Production Compose Override
+# ──────────────────────────────────────────────────────────────────
+# ./tools/prod.sh setup copies this file to docker-compose.override.yml.
+# The copy belongs to this machine: compose applies it over
+# docker-compose.yml and git does not track it.
+# ──────────────────────────────────────────────────────────────────
+
+services:
+  daemon:
+    # The container port is WIREGUARD_LISTEN_PORT in .env.daemon, and client
+    # configs carry that value as the endpoint port.
+    ports:
+      - "51820:51820/udp"
+
+  nginx:
+    ports:
+      - "443:443"
