@@ -8,82 +8,122 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 
 ---
 
-## English
+## 🇺🇸
 
-### Contributing to Phantom-WG
+### Development and Maintenance
 
-This project is managed under a **single-maintainer model**, a decision made during its design phase.
+Phantom-WG is developed and maintained by **Rıza Emre ARAS** and **ARTEK İnovasyon
+Ar-Ge Sanayi ve Ticaret Limited Şirketi**. Every component listed in
+[SECURITY.md](SECURITY.md) is designed, reviewed, developed and released under
+this structure. The macOS and iOS client applications are signed and distributed
+under the company's developer identity.
 
-### Why?
+### Contribution Policy
 
-Phantom-WG is a privacy-focused security tool. Every line of code directly impacts user privacy and system security. Even in production environments, it operates on a fully open-source architecture; nothing remains hidden.
+**This repository does not accept external contributions that modify the code
+structure.**
 
-> Phantom-WG must always be functional, reliable for a lifetime, and unwavering in stability.
+Phantom-WG is a privacy-oriented security tool: every line of code has a direct
+effect on user privacy and on the security of the system it runs on. The product
+is published under a model where the code running on your server is identical to
+the code published here. Keeping the review and release chain under a single
+accountable structure is what makes that guarantee possible.
 
-Adopting the single-maintainer model does not mean I am closed to collaboration. On the contrary, it reflects my deep commitment and sense of responsibility toward this project.
+The policy restricts contributions to this repository. It does not restrict your
+rights under the licence; see **Your Rights Under the Licence** below.
 
-### What I Commit To You
+### Support and Issue Reports
 
-**Continuous Oversight**
-I constantly monitor, meticulously review, and improve this codebase. Every change passes through my hands; every line carries my approval.
+Issue reports, questions and support requests are handled as part of our
+corporate process. Our commitment is the following:
 
-**Lasting Stability**
-Phantom-WG will work tomorrow exactly as it works today. I focus on lasting functionality, not passing trends or popular interfaces.
+- **Every request is evaluated.** Reports are reproduced where possible and
+  investigated on their technical merits.
+- **Every request receives a response.** You will be informed of the outcome
+  whether it is positive or negative — including when a request is declined or a
+  reported behaviour turns out to be intended.
+- **The response states what was found.** You receive the result of the
+  investigation, not only a decision.
 
-**Full Transparency**
-The code running on your server is identical to the code you see here. No compiled binaries, no hidden modules, no closed doors.
+| Channel      | Address                                |
+|--------------|----------------------------------------|
+| Email        | issue@phantom.tc, r.emrearas@proton.me |
+| GitHub Issue | For non-sensitive issues only          |
 
-**Personal Accountability**
-When you encounter an issue, you know exactly who to contact.
+### Your Rights Under the Licence
 
-### What You Can Do
+Phantom-WG is published under AGPL-3.0. The contribution policy above does not
+limit the rights the licence grants you:
 
-- **Report Bugs**: Open an issue on GitHub.
-- **Suggest Features**: I would be glad to hear your thoughts.
-- **Fork the Project**: Under the AGPL-3.0 license, you are free to create your own version.
-- **Study and Learn**: Audit the code, learn from it, use it as a reference.
+- **Fork the project.** You may create and publish your own version under the
+  terms of the licence.
+- **Study and audit the code.** The published source is the source that runs.
+- **Use it as a reference.** Review it, learn from it, build on it.
 
 ### Development
 
-Active development happens on the [`dev/daemon`](https://github.com/ARAS-Workspace/phantom-wg/tree/dev/daemon) branch.
+Active development of the server product takes place on the
+[`dev/daemon`](https://github.com/ARAS-Workspace/phantom-wg/tree/dev/daemon)
+branch. Each component is developed on its own branch; the full list is in
+[SECURITY.md](SECURITY.md).
 
 ---
 
-## Türkçe
+## 🇹🇷
 
-### Phantom-WG'ye Katkıda Bulunma
+### Geliştirme ve Bakım
 
-Bu proje, tasarım aşamasında tarafımdan alınan karar doğrultusunda **tek geliştirici modeli** ile yönetilmektedir.
+Phantom-WG, **Rıza Emre ARAS** ve **ARTEK İnovasyon Ar-Ge Sanayi ve Ticaret
+Limited Şirketi** tarafından geliştirilmekte ve sürdürülmektedir.
+[SECURITY.md](SECURITY.md) dosyasında listelenen her bileşen bu yapı altında
+tasarlanır, incelenir, geliştirilir ve yayına alınır. macOS ve iOS istemci
+uygulamaları şirketin geliştirici kimliğiyle imzalanarak dağıtılmaktadır.
 
-### Neden?
+### Katkı Politikası
 
-Phantom-WG gizlilik odaklı bir güvenlik aracıdır. Yazılan her satır kod, kullanıcı gizliliğini ve sistem güvenliğini doğrudan etkiler. Üretim ortamında dahi tamamen açık kaynak mimarisiyle çalışır; gizli kalan hiçbir şey yoktur.
+**Bu depoya, kod yapısını değiştirecek nitelikte dışarıdan katkı kabul
+edilmemektedir.**
 
-> Phantom-WG her zaman işlevsel, ömür boyu güvenilir ve kararlı bir araç olmalıdır.
+Phantom-WG gizlilik odaklı bir güvenlik aracıdır: yazılan her satır kod, kullanıcı gizliliğini ve üzerinde
+çalıştığı sistemin güvenliğini doğrudan etkiler. Ürün, sunucunuzda çalışan kodun
+burada yayımlanan kodun birebir aynısı olduğu bir modelle sunulmaktadır. Bu güvencenin verilebilmesi, inceleme
+ve yayın zincirinin tek bir sorumlu yapı altında tutulmasıyla mümkün olmaktadır.
 
-Tek geliştirici modelini benimsemem, işbirliğine kapalı olduğum anlamına gelmiyor. Aksine, bu projeye duyduğum derin bağlılığın ve sorumluluğumun bir yansımasıdır.
+Politika yalnızca bu depoya yapılacak katkıları kapsar; lisansın size tanıdığı
+hakları kısıtlamaz. Aşağıdaki **Lisansın Size Tanıdığı Haklar** bölümüne bakınız.
 
-### Size Taahhüt Ettiklerim
+### Destek ve Sorun Bildirimleri
 
-**Sürekli Denetim**
-Bu kod tabanını sürekli izliyor, titizlikle inceliyor ve geliştiriyorum.
+Sorun bildirimleri, sorular ve destek talepleri kurumsal sürecimizin bir parçası
+olarak ele alınır. Taahhüdümüz şudur:
 
-**Kalıcı Stabilite**
-Phantom-WG bugün nasıl çalışıyorsa yarın da aynı şekilde çalışacak.
+- **Her talep değerlendirilir.** Bildirimler mümkün olduğunda yeniden üretilir ve
+  teknik esasları üzerinden incelenir.
+- **Her talebe dönüş yapılır.** Sonuç olumlu da olsa olumsuz da olsa
+  bilgilendirilirsiniz — talebin karşılanmadığı veya bildirilen davranışın
+  tasarlandığı gibi çalıştığı durumlar dâhil.
+- **Dönüşte ne tespit edildiği belirtilir.** Size yalnızca bir karar değil,
+  incelemenin sonucu iletilir.
 
-**Tam Şeffaflık**
-Sunucunuzda çalışan kod, burada gördüğünüz kodun birebir aynısıdır.
+| Kanal        | Adres                                  |
+|--------------|----------------------------------------|
+| E-posta      | issue@phantom.tc, r.emrearas@proton.me |
+| GitHub Issue | Yalnızca hassas olmayan konular için   |
 
-**Kişisel Sorumluluk**
-Bir sorunla karşılaştığınızda kime ulaşacağınızı biliyorsunuz.
+### Lisansın Size Tanıdığı Haklar
 
-### Neler Yapabilirsiniz
+Phantom-WG, AGPL-3.0 lisansı ile yayımlanmaktadır. Yukarıdaki katkı politikası,
+lisansın size tanıdığı hakları sınırlamaz:
 
-- **Hata Bildirin**: GitHub üzerinden issue açabilirsiniz.
-- **Özellik Önerin**: Görüşlerinizi duymaktan memnuniyet duyarım.
-- **Fork Oluşturun**: AGPL-3.0 lisansı kapsamında kendi versiyonunuzu oluşturabilirsiniz.
-- **İnceleyin ve Öğrenin**: Kodu denetleyin, öğrenin, referans olarak kullanın.
+- **Fork oluşturabilirsiniz.** Lisans koşulları kapsamında kendi sürümünüzü
+  oluşturup yayımlayabilirsiniz.
+- **Kodu inceleyebilir ve denetleyebilirsiniz.** Yayımlanan kaynak, çalışan
+  kaynağın kendisidir.
+- **Referans olarak kullanabilirsiniz.** İnceleyin, öğrenin, üzerine geliştirin.
 
 ### Geliştirme
 
-Aktif geliştirme [`dev/daemon`](https://github.com/ARAS-Workspace/phantom-wg/tree/dev/daemon) branch'inde yapılmaktadır.
+Sunucu ürününün aktif geliştirmesi
+[`dev/daemon`](https://github.com/ARAS-Workspace/phantom-wg/tree/dev/daemon)
+dalında yürütülmektedir. Her bileşen kendi dalında geliştirilir; tam liste
+[SECURITY.md](SECURITY.md) dosyasındadır.
