@@ -35,6 +35,7 @@ enum TestCatalog {
             RecoverySwitchWorkflow(),
             UnreachableWorkflow(),
             ExtensionGateWorkflow(),
+            TunnelAddWorkflow(),
             TunnelEditWorkflow(),
             SplitControlPlaneWorkflow(),
         ]
