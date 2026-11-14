@@ -1,0 +1,21 @@
+# What an operator may change before the first run.
+region: eu-central-1
+stack_name: phantom-wg
+modern_instance_type: t3.small
+modern_volume_size: 20
+front_instance_type: t3.micro
+
+# The Docker packages, at the versions the install matrix of Phantom-WG Modern ran.
+docker:
+  engine: "5:29.9.3-1~debian.13~trixie"
+  containerd: "2.4.2-3~debian.13~trixie"
+  buildx: "0.38.1-1~debian.13~trixie"
+  compose: "5.7.0-1~debian.13~trixie"
+
+# The Phantom-Frontmatter release, and the SHA-256 of its archive.
+frontmatter:
+  version: "1.0.2"
+  sha256: c84b99eb665e3fa3645c73fb2f541f514197a537b5ad8fddc0a723b27f355d65
+
+# Where the run keeps what belongs to this setup: the SSH key, the host keys, the guide.
+private: "{{ playbook_dir }}/private/{{ stack_name }}"

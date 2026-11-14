@@ -1,0 +1,316 @@
+# ██████╗ ██╗  ██╗ █████╗ ███╗   ██╗████████╗ ██████╗ ███╗   ███╗
+# ██╔══██╗██║  ██║██╔══██╗████╗  ██║╚══██╔══╝██╔═══██╗████╗ ████║
+# ██████╔╝███████║███████║██╔██╗ ██║   ██║   ██║   ██║██╔████╔██║
+# ██╔═══╝ ██╔══██║██╔══██║██║╚██╗██║   ██║   ██║   ██║██║╚██╔╝██║
+# ██║     ██║  ██║██║  ██║██║ ╚████║   ██║   ╚██████╔╝██║ ╚═╝ ██║
+# ╚═╝     ╚═╝  ╚═╝╚═╝  ╚═╝╚═╝  ╚═══╝   ╚═╝    ╚═════╝ ╚═╝     ╚═╝
+# Copyright (c) 2025 Rıza Emre ARAS <r.emrearas@proton.me>
+# Licensed under AGPL-3.0 - see LICENSE file for details
+# WireGuard® is a registered trademark of Jason A. Donenfeld.
+#
+# Phantom-WG on AWS EC2
+#
+# The network of two nodes, their security groups and the nodes:
+#   Phantom-Frontmatter (front)  ->  Phantom-WG Modern (modern)
+#
+# One VPC with one subnet, IPv4 and IPv6. The two nodes share the subnet, so
+# the front node reaches the modern node over its private IPv4 address.
+#
+# playbook.yml in this directory sets this file up as one stack and gives it
+# the parameters below.
+
+AWSTemplateFormatVersion: "2010-09-09"
+Description: Phantom-WG on AWS EC2 - network, security groups and the two nodes
+
+Parameters:
+  ImageId:
+    Type: AWS::EC2::Image::Id
+    Description: The Debian 13 image of the nodes
+  RootDeviceName:
+    Type: String
+    Description: The name that image gives its root volume
+  ModernInstanceType:
+    Type: String
+    Description: The instance type of the modern node
+  ModernVolumeSize:
+    Type: Number
+    Description: The size of the root volume of the modern node in GiB
+  FrontInstanceType:
+    Type: String
+    Description: The instance type of the front node
+  PublicKey:
+    Type: String
+    Description: The public SSH key the nodes accept for the user admin
+
+Resources:
+
+  # ── Network ──────────────────────────────────────────────────────
+
+  Vpc:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: 10.250.0.0/24
+      EnableDnsSupport: true
+      Tags:
+        - Key: Name
+          Value: !Ref AWS::StackName
+
+  VpcIpv6Block:
+    Type: AWS::EC2::VPCCidrBlock
+    Properties:
+      VpcId: !Ref Vpc
+      AmazonProvidedIpv6CidrBlock: true
+
+  InternetGateway:
+    Type: AWS::EC2::InternetGateway
+    Properties:
+      Tags:
+        - Key: Name
+          Value: !Ref AWS::StackName
+
+  GatewayAttachment:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties:
+      VpcId: !Ref Vpc
+      InternetGatewayId: !Ref InternetGateway
+
+  # The subnet takes the whole IPv4 block of the VPC and the first /64 of its
+  # IPv6 block. A network interface in it takes an IPv6 address on creation.
+  Subnet:
+    Type: AWS::EC2::Subnet
+    DependsOn: VpcIpv6Block
+    Properties:
+      VpcId: !Ref Vpc
+      CidrBlock: 10.250.0.0/24
+      Ipv6CidrBlock: !Select [0, !Cidr [!Select [0, !GetAtt Vpc.Ipv6CidrBlocks], 1, 64]]
+      AssignIpv6AddressOnCreation: true
+      Tags:
+        - Key: Name
+          Value: !Ref AWS::StackName
+
+  RouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref Vpc
+      Tags:
+        - Key: Name
+          Value: !Ref AWS::StackName
+
+  RouteIpv4:
+    Type: AWS::EC2::Route
+    DependsOn: GatewayAttachment
+    Properties:
+      RouteTableId: !Ref RouteTable
+      DestinationCidrBlock: 0.0.0.0/0
+      GatewayId: !Ref InternetGateway
+
+  RouteIpv6:
+    Type: AWS::EC2::Route
+    DependsOn: GatewayAttachment
+    Properties:
+      RouteTableId: !Ref RouteTable
+      DestinationIpv6CidrBlock: "::/0"
+      GatewayId: !Ref InternetGateway
+
+  SubnetRouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref Subnet
+      RouteTableId: !Ref RouteTable
+
+  # ── Security groups ──────────────────────────────────────────────
+  # Every inbound rule is open to all of IPv4 and IPv6. The groups are the
+  # frame of the setup: narrowing a rule is the operator's choice.
+  # Neither group lists outbound rules: AWS then adds the two rules that allow
+  # all outbound IPv4 and IPv6 traffic.
+  # The front node reaches WireGuard on the modern node through the 51820/udp
+  # rule below, from its private address.
+
+  ModernSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Phantom-WG Modern node
+      VpcId: !Ref Vpc
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 443
+          ToPort: 443
+          CidrIp: 0.0.0.0/0
+          Description: Dashboard HTTPS
+        - IpProtocol: tcp
+          FromPort: 443
+          ToPort: 443
+          CidrIpv6: "::/0"
+          Description: Dashboard HTTPS
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          CidrIp: 0.0.0.0/0
+          Description: HTTP-01 for certbot
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          CidrIpv6: "::/0"
+          Description: HTTP-01 for certbot
+        - IpProtocol: udp
+          FromPort: 51820
+          ToPort: 51820
+          CidrIp: 0.0.0.0/0
+          Description: WireGuard
+        - IpProtocol: udp
+          FromPort: 51820
+          ToPort: 51820
+          CidrIpv6: "::/0"
+          Description: WireGuard
+        - IpProtocol: tcp
+          FromPort: 22
+          ToPort: 22
+          CidrIp: 0.0.0.0/0
+          Description: SSH
+        - IpProtocol: tcp
+          FromPort: 22
+          ToPort: 22
+          CidrIpv6: "::/0"
+          Description: SSH
+      Tags:
+        - Key: Name
+          Value: !Sub "${AWS::StackName}-modern"
+
+  FrontSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Phantom-Frontmatter node
+      VpcId: !Ref Vpc
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 443
+          ToPort: 443
+          CidrIp: 0.0.0.0/0
+          Description: wstunnel WSS
+        - IpProtocol: tcp
+          FromPort: 443
+          ToPort: 443
+          CidrIpv6: "::/0"
+          Description: wstunnel WSS
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          CidrIp: 0.0.0.0/0
+          Description: HTTP-01 for frontmatter-certbot
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          CidrIpv6: "::/0"
+          Description: HTTP-01 for frontmatter-certbot
+        - IpProtocol: tcp
+          FromPort: 22
+          ToPort: 22
+          CidrIp: 0.0.0.0/0
+          Description: SSH
+        - IpProtocol: tcp
+          FromPort: 22
+          ToPort: 22
+          CidrIpv6: "::/0"
+          Description: SSH
+      Tags:
+        - Key: Name
+          Value: !Sub "${AWS::StackName}-front"
+
+  # ── Nodes ────────────────────────────────────────────────────────
+  # The modern node sits at 10.250.0.10, the front node at 10.250.0.20. Each is
+  # reached at its Elastic IP.
+
+  KeyPair:
+    Type: AWS::EC2::KeyPair
+    Properties:
+      KeyName: !Ref AWS::StackName
+      PublicKeyMaterial: !Ref PublicKey
+
+  ModernAddress:
+    Type: AWS::EC2::EIP
+    DependsOn: GatewayAttachment
+    Properties:
+      Domain: vpc
+      Tags:
+        - Key: Name
+          Value: !Sub "${AWS::StackName}-modern"
+
+  ModernInstance:
+    Type: AWS::EC2::Instance
+    Properties:
+      ImageId: !Ref ImageId
+      InstanceType: !Ref ModernInstanceType
+      KeyName: !Ref KeyPair
+      SubnetId: !Ref Subnet
+      PrivateIpAddress: 10.250.0.10
+      SecurityGroupIds:
+        - !Ref ModernSecurityGroup
+      BlockDeviceMappings:
+        - DeviceName: !Ref RootDeviceName
+          Ebs:
+            VolumeSize: !Ref ModernVolumeSize
+            VolumeType: gp3
+      Tags:
+        - Key: Name
+          Value: !Sub "${AWS::StackName}-modern"
+
+  ModernAddressAssociation:
+    Type: AWS::EC2::EIPAssociation
+    Properties:
+      AllocationId: !GetAtt ModernAddress.AllocationId
+      InstanceId: !Ref ModernInstance
+
+  FrontAddress:
+    Type: AWS::EC2::EIP
+    DependsOn: GatewayAttachment
+    Properties:
+      Domain: vpc
+      Tags:
+        - Key: Name
+          Value: !Sub "${AWS::StackName}-front"
+
+  FrontInstance:
+    Type: AWS::EC2::Instance
+    Properties:
+      ImageId: !Ref ImageId
+      InstanceType: !Ref FrontInstanceType
+      KeyName: !Ref KeyPair
+      SubnetId: !Ref Subnet
+      PrivateIpAddress: 10.250.0.20
+      SecurityGroupIds:
+        - !Ref FrontSecurityGroup
+      Tags:
+        - Key: Name
+          Value: !Sub "${AWS::StackName}-front"
+
+  FrontAddressAssociation:
+    Type: AWS::EC2::EIPAssociation
+    Properties:
+      AllocationId: !GetAtt FrontAddress.AllocationId
+      InstanceId: !Ref FrontInstance
+
+Outputs:
+  VpcId:
+    Description: The VPC
+    Value: !Ref Vpc
+  VpcIpv6CidrBlock:
+    Description: The IPv6 block Amazon gave the VPC
+    Value: !Select [0, !GetAtt Vpc.Ipv6CidrBlocks]
+  SubnetId:
+    Description: The subnet of the two nodes
+    Value: !Ref Subnet
+  ModernSecurityGroupId:
+    Description: The security group of the modern node
+    Value: !Ref ModernSecurityGroup
+  FrontSecurityGroupId:
+    Description: The security group of the front node
+    Value: !Ref FrontSecurityGroup
+  ModernPublicIp:
+    Description: The Elastic IP of the modern node
+    Value: !GetAtt ModernAddress.PublicIp
+  ModernPrivateIp:
+    Description: The address the front node reaches the modern node at
+    Value: !GetAtt ModernInstance.PrivateIp
+  FrontPublicIp:
+    Description: The Elastic IP of the front node
+    Value: !GetAtt FrontAddress.PublicIp

@@ -1,0 +1,6 @@
+# Files of a setup: the SSH key, the host keys, the guide
+private/
+
+# OS
+.DS_Store
+Thumbs.db

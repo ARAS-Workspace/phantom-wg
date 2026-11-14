@@ -1,0 +1,53 @@
+Phantom-WG on AWS EC2
+
+    Stack                  {{ stack_name }}, in {{ region }}
+    Phantom-WG Modern      {{ modern_address }}
+    Phantom-Frontmatter    {{ front_address }}
+
+    The commands of this guide run in the directory of the playbook:
+    {{ playbook_dir }}
+    The guide is kept there, in {{ setup_dir }}/guide.txt.
+
+Dashboard
+
+    https://{{ modern_address }}
+
+    The certificate is self-signed. The username is admin. This command reads
+    the password from the node:
+
+    ssh -i {{ setup_dir }}/id_ed25519 admin@{{ modern_address }} cat /home/admin/phantom-wg/container-data/secrets/production/.admin_password
+
+Clients
+
+    A client is added in the dashboard, and its configuration is exported
+    there. The configuration reaches Phantom-WG Modern directly, at
+    {{ modern_address }}:51820 over UDP.
+
+    To carry the client through Phantom-Frontmatter, add this block to the
+    same configuration:
+
+    {{ client_block | trim | indent(4) }}
+
+Shell
+
+    Phantom-WG Modern is in /home/admin/phantom-wg on its node, and
+    ./tools/prod.sh help lists its commands:
+
+    ssh -i {{ setup_dir }}/id_ed25519 admin@{{ modern_address }}
+
+    On the node of Phantom-Frontmatter, sudo frontmatter-api ghost status
+    reports the data path:
+
+    ssh -i {{ setup_dir }}/id_ed25519 admin@{{ front_address }}
+
+From here on the setup is yours
+
+    Both security groups take their ports from every address, SSH among them.
+    The rules are yours to narrow.
+    The SSH key was made for this setup. Your own key goes on the nodes when
+    you choose.
+    Updates run on the nodes, with the commands of the two products.
+    AWS bills the nodes and their addresses for as long as the stack stands.
+    The playbook deletes nothing, and a second run leaves the stack as it is.
+    To remove the setup, delete the stack {{ stack_name }} in CloudFormation, then
+    the directory {{ setup_dir }}.

@@ -1,0 +1,106 @@
+# Phantom-WG Modern on its node, as the SETUP document of the release has it:
+# Docker, a clone of main, the first setup, the endpoints, the stack.
+---
+- name: Install what the Docker repository and the clone need
+  ansible.builtin.apt:
+    name:
+      - ca-certificates
+      - curl
+      - gnupg
+      - git
+    install_recommends: false
+    update_cache: true
+    lock_timeout: 600
+
+- name: Make the directory of the repository keys
+  ansible.builtin.file:
+    path: /etc/apt/keyrings
+    state: directory
+    mode: "0755"
+
+- name: Take the key of the Docker repository
+  ansible.builtin.get_url:
+    url: https://download.docker.com/linux/debian/gpg
+    dest: /etc/apt/keyrings/docker.asc
+    mode: "0644"
+
+- name: Hold the key against the fingerprint Docker publishes
+  ansible.builtin.command: gpg --show-keys --with-colons /etc/apt/keyrings/docker.asc
+  register: docker_key
+  changed_when: false
+  failed_when: "'fpr:::::::::9DC858229FC7DD38854AE2D88D81803C0EBFCD88:' not in docker_key.stdout"
+
+- name: Add the Docker repository
+  ansible.builtin.copy:
+    dest: /etc/apt/sources.list.d/docker.list
+    content: |
+      deb [arch=amd64 signed-by=/etc/apt/keyrings/docker.asc] https://download.docker.com/linux/debian trixie stable
+    mode: "0644"
+
+- name: Install Docker
+  ansible.builtin.apt:
+    name:
+      - "docker-ce={{ docker.engine }}"
+      - "docker-ce-cli={{ docker.engine }}"
+      - "containerd.io={{ docker.containerd }}"
+      - "docker-buildx-plugin={{ docker.buildx }}"
+      - "docker-compose-plugin={{ docker.compose }}"
+    update_cache: true
+    lock_timeout: 600
+
+- name: Put admin in the docker group
+  ansible.builtin.user:
+    name: admin
+    groups: docker
+    append: true
+
+# The session Ansible holds was opened before admin was in the docker group.
+- name: Open a new session for admin
+  ansible.builtin.meta: reset_connection
+
+- name: Clone Phantom-WG Modern
+  ansible.builtin.git:
+    repo: https://github.com/ARAS-Workspace/phantom-wg.git
+    dest: /home/admin/phantom-wg
+    version: main
+    depth: 1
+    single_branch: true
+    update: false
+  become: false
+
+- name: Run the first setup
+  ansible.builtin.command:
+    cmd: ./tools/prod.sh setup
+    chdir: /home/admin/phantom-wg
+    creates: /home/admin/phantom-wg/container-data/db/wallet.db
+  become: false
+
+- name: Write the endpoints the client configs carry
+  ansible.builtin.lineinfile:
+    path: /home/admin/phantom-wg/.env.daemon
+    regexp: "^{{ item.key }}="
+    line: "{{ item.key }}={{ item.value }}"
+  loop:
+    - key: WIREGUARD_ENDPOINT_V4
+      value: "{{ ansible_host }}"
+    - key: WIREGUARD_ENDPOINT_V6
+      value: "{{ ansible_facts.default_ipv6.address | default('') }}"
+  become: false
+
+- name: Start the stack
+  ansible.builtin.command:
+    cmd: ./tools/prod.sh up
+    chdir: /home/admin/phantom-wg
+  become: false
+  changed_when: true
+
+- name: Wait for the dashboard to answer
+  ansible.builtin.uri:
+    url: "https://{{ ansible_host }}/"
+    validate_certs: false
+  delegate_to: localhost
+  become: false
+  register: dashboard
+  until: dashboard.status == 200
+  retries: 12
+  delay: 5

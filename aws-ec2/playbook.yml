@@ -1,0 +1,167 @@
+# ██████╗ ██╗  ██╗ █████╗ ███╗   ██╗████████╗ ██████╗ ███╗   ███╗
+# ██╔══██╗██║  ██║██╔══██╗████╗  ██║╚══██╔══╝██╔═══██╗████╗ ████║
+# ██████╔╝███████║███████║██╔██╗ ██║   ██║   ██║   ██║██╔████╔██║
+# ██╔═══╝ ██╔══██║██╔══██║██║╚██╗██║   ██║   ██║   ██║██║╚██╔╝██║
+# ██║     ██║  ██║██║  ██║██║ ╚████║   ██║   ╚██████╔╝██║ ╚═╝ ██║
+# ╚═╝     ╚═╝  ╚═╝╚═╝  ╚═╝╚═╝  ╚═══╝   ╚═╝    ╚═════╝ ╚═╝     ╚═╝
+# Copyright (c) 2025 Rıza Emre ARAS <r.emrearas@proton.me>
+# Licensed under AGPL-3.0 - see LICENSE file for details
+# WireGuard® is a registered trademark of Jason A. Donenfeld.
+#
+# Phantom-WG on AWS EC2
+#
+# Sets stack.yaml up as one CloudFormation stack, in the Region of vars.yml,
+# then installs Phantom-WG Modern on one node and Phantom-Frontmatter on the
+# other:
+#
+#   ansible-playbook playbook.yml
+#
+# The run ends with the guide of the setup, from guide.j2. The guide is kept
+# with the SSH key of the setup, in private/<stack_name>/.
+#
+# A stack that is there is left as it is: a second run goes on with the nodes.
+# Nothing here deletes: the stack and all it holds belong to the operator.
+---
+- name: Phantom-WG on AWS EC2
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  vars_files:
+    - vars.yml
+  tasks:
+    - name: Make the directory of this setup
+      ansible.builtin.file:
+        path: "{{ private }}"
+        state: directory
+        mode: "0700"
+
+    - name: Make the SSH key of this setup
+      community.crypto.openssh_keypair:
+        path: "{{ private }}/id_ed25519"
+        type: ed25519
+        comment: "{{ stack_name }}"
+      register: key
+
+    - name: Look for the stack
+      amazon.aws.cloudformation_info:
+        stack_name: "{{ stack_name }}"
+        region: "{{ region }}"
+      register: found
+
+    - name: Find the latest Debian 13 image
+      amazon.aws.ec2_ami_info:
+        region: "{{ region }}"
+        owners:
+          - "136693071363"
+        filters:
+          name: debian-13-amd64-*
+      register: debian
+      when: stack_name not in found.cloudformation
+
+    - name: Set the stack up
+      amazon.aws.cloudformation:
+        stack_name: "{{ stack_name }}"
+        region: "{{ region }}"
+        template_body: "{{ lookup('ansible.builtin.file', 'stack.yaml') }}"
+        template_parameters:
+          ImageId: "{{ image.image_id }}"
+          RootDeviceName: "{{ image.root_device_name }}"
+          ModernInstanceType: "{{ modern_instance_type }}"
+          ModernVolumeSize: "{{ modern_volume_size }}"
+          FrontInstanceType: "{{ front_instance_type }}"
+          PublicKey: "{{ key.public_key }}"
+      vars:
+        image: "{{ debian.images | sort(attribute='creation_date') | last }}"
+      when: stack_name not in found.cloudformation
+
+    - name: Read the stack
+      amazon.aws.cloudformation_info:
+        stack_name: "{{ stack_name }}"
+        region: "{{ region }}"
+      register: stack
+
+    - name: Go on only with a complete stack
+      ansible.builtin.assert:
+        that: stack.cloudformation[stack_name].stack_description.stack_status == "CREATE_COMPLETE"
+        fail_msg: >-
+          The stack {{ stack_name }} is {{ stack.cloudformation[stack_name].stack_description.stack_status }}.
+          Removing it is the operator's; then run again.
+        quiet: true
+
+    - name: Add the two nodes to the inventory
+      ansible.builtin.add_host:
+        name: "{{ item.name }}"
+        ansible_host: "{{ item.address }}"
+        ansible_user: admin
+        ansible_python_interpreter: /usr/bin/python3
+        ansible_ssh_private_key_file: "{{ private }}/id_ed25519"
+        ansible_ssh_common_args: >-
+          -o StrictHostKeyChecking=accept-new -o UserKnownHostsFile={{ private }}/known_hosts
+        backend: "{{ outputs.ModernPrivateIp }}"
+      changed_when: false
+      loop:
+        - name: modern
+          address: "{{ outputs.ModernPublicIp }}"
+        - name: front
+          address: "{{ outputs.FrontPublicIp }}"
+      vars:
+        outputs: "{{ stack.cloudformation[stack_name].stack_outputs }}"
+
+- name: Phantom-WG Modern
+  hosts: modern
+  gather_facts: false
+  become: true
+  vars_files:
+    - vars.yml
+  tasks:
+    - name: Wait for the node
+      ansible.builtin.wait_for_connection:
+        timeout: 300
+
+    - name: Read the addresses of the node
+      ansible.builtin.setup:
+        gather_subset: network
+
+    - name: Install Phantom-WG Modern
+      ansible.builtin.import_tasks: tasks/modern.yml
+
+- name: Phantom-Frontmatter
+  hosts: front
+  gather_facts: false
+  become: true
+  vars_files:
+    - vars.yml
+  vars:
+    archive: "phantom-wg-frontmatter-v{{ frontmatter.version }}"
+    release: "https://github.com/ARAS-Workspace/phantom-wg/releases/download/frontmatter-v{{ frontmatter.version }}"
+  tasks:
+    - name: Wait for the node
+      ansible.builtin.wait_for_connection:
+        timeout: 300
+
+    - name: Install Phantom-Frontmatter
+      ansible.builtin.import_tasks: tasks/front.yml
+
+- name: The guide of the setup
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  vars_files:
+    - vars.yml
+  vars:
+    modern_address: "{{ hostvars.modern.ansible_host }}"
+    front_address: "{{ hostvars.front.ansible_host }}"
+    setup_dir: "{{ private | relpath(playbook_dir) }}"
+    client_block: >-
+      {{ (hostvars.front.front_client.stdout | from_json).data.wstunnel_block
+         | replace('<FRONTMATTER-PUBLIC-IP>', front_address) }}
+  tasks:
+    - name: Write the guide
+      ansible.builtin.template:
+        src: guide.j2
+        dest: "{{ private }}/guide.txt"
+        mode: "0600"
+
+    - name: Show the guide
+      ansible.builtin.debug:
+        msg: "{{ lookup('ansible.builtin.file', private ~ '/guide.txt').splitlines() }}"
