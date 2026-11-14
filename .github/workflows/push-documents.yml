@@ -37,6 +37,18 @@ jobs:
           persist-credentials: false
           token: ${{ secrets.RELEASE_TOKEN }}
 
+      - name: Read the version of main
+        id: version
+        working-directory: main
+        run: |
+          set -euo pipefail
+          NUMBER=$(sed -n 's/^__version__ = "\(.*\)"$/\1/p' phantom_daemon/__init__.py)
+          if ! echo "${NUMBER}" | grep -qE '^[0-9]+\.[0-9]+\.[0-9]+$'; then
+            echo "::error::Invalid version: ${NUMBER}"
+            exit 1
+          fi
+          echo "number=${NUMBER}" >> "${GITHUB_OUTPUT}"
+
       - name: Copy documents to main
         run: |
           cp press-kit/README.md main/README.md
@@ -47,6 +59,7 @@ jobs:
       - name: Push to main
         env:
           RELEASE_TOKEN: ${{ secrets.RELEASE_TOKEN }}
+          VERSION: ${{ steps.version.outputs.number }}
         working-directory: main
         run: |
           git config user.name "github-actions[bot]"
@@ -60,5 +73,5 @@ jobs:
             exit 0
           fi
 
-          git commit -m "Docs: Update README, CONTRIBUTING, SECURITY from press-kit"
+          git commit -m "Docs: Update README, CONTRIBUTING, SECURITY from press-kit - v${VERSION}"
           git push origin main
