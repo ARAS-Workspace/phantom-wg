@@ -23,6 +23,8 @@ class TunnelsManager {
 
     @ObservationIgnored private var creatingIds: Set<UUID> = []
 
+    @ObservationIgnored private var namesBeingListed: [UUID: String] = [:]
+
     @ObservationIgnored private var pendingRefresh: Task<Void, Never>?
 
     @ObservationIgnored private(set) var refreshSuspended = false
@@ -103,12 +105,14 @@ class TunnelsManager {
 
     /// @witness Unreachable
     /// @witness VaultIntegrity
+    /// @witness TunnelAdd
     func add(config: TunnelConfig) async throws -> TunnelContainer {
         let name = config.name.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !name.isEmpty else {
             throw TunnelManagementError.tunnelInvalidName
         }
-        if tunnels.contains(where: { $0.name.caseInsensitiveCompare(name) == .orderedSame }) {
+        if tunnels.contains(where: { $0.name.caseInsensitiveCompare(name) == .orderedSame })
+            || nameIsBeingListed(name, besides: config.id) {
             throw TunnelManagementError.tunnelAlreadyExistsWithThatName
         }
 
@@ -128,9 +132,11 @@ class TunnelsManager {
             // below rolls the stored payload back.
             if tunnels.contains(where: {
                 $0.id != config.id && $0.name.caseInsensitiveCompare(name) == .orderedSame
-            }) {
+            }) || nameIsBeingListed(name, besides: config.id) {
                 throw TunnelManagementError.tunnelAlreadyExistsWithThatName
             }
+            namesBeingListed[config.id] = name
+            defer { namesBeingListed[config.id] = nil }
             return try await createEntry(for: config)
         } catch {
             let rollback = await vault.delete(id: config.id, attempts: 3)
@@ -138,6 +144,12 @@ class TunnelsManager {
                 NSLog("[add] rollback of \(config.name) left its payload behind — \(residue.localizedDescription). A later reconcile may mint the entry this add reported as failed")
             }
             throw error
+        }
+    }
+
+    private func nameIsBeingListed(_ name: String, besides id: UUID) -> Bool {
+        namesBeingListed.contains {
+            $0.key != id && $0.value.caseInsensitiveCompare(name) == .orderedSame
         }
     }
 
