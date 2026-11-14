@@ -8,6 +8,7 @@ struct TunnelImportView: View {
     @State private var name: String = ""
     @State private var rawInput: String = ""
     @State private var errorMessages: [String] = []
+    @State private var saving = false
 
     var body: some View {
         VStack(spacing: 0) {
@@ -95,11 +96,13 @@ struct TunnelImportView: View {
     // MARK: - Logic
 
     private var canSubmit: Bool {
-        !name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        !saving
+            && !name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
             && !rawInput.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
     }
 
     private func submit() {
+        guard !saving else { return }
         errorMessages = []
 
         let trimmedName = name.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -132,11 +135,13 @@ struct TunnelImportView: View {
             return
         }
 
+        saving = true
         Task {
             do {
                 _ = try await tunnelsManager.add(config: config)
                 dismiss()
             } catch {
+                saving = false
                 errorMessages = [error.localizedDescription]
             }
         }
