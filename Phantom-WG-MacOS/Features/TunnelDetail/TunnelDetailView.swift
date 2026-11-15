@@ -224,7 +224,7 @@ struct TunnelDetailView: View {
         TunnelDetailView(tunnel: manager.tunnels[0])
     }
     .previewEnvironment(tunnels: manager, scheme: .light)
-    .frame(width: 560, height: 720)
+    .frame(width: WindowSizing.ideal.width, height: WindowSizing.ideal.height)
 }
 
 #Preview("Active ghost — Dark") {
@@ -239,7 +239,7 @@ struct TunnelDetailView: View {
         TunnelDetailView(tunnel: manager.tunnels[0])
     }
     .previewEnvironment(tunnels: manager, scheme: .dark)
-    .frame(width: 560, height: 720)
+    .frame(width: WindowSizing.ideal.width, height: WindowSizing.ideal.height)
 }
 
 #Preview("Inactive standalone") {
@@ -250,7 +250,7 @@ struct TunnelDetailView: View {
         TunnelDetailView(tunnel: manager.tunnels[0])
     }
     .previewEnvironment(tunnels: manager)
-    .frame(width: 560, height: 720)
+    .frame(width: WindowSizing.ideal.width, height: WindowSizing.ideal.height)
 }
 
 #Preview("Config unreachable — Light") {
@@ -262,7 +262,7 @@ struct TunnelDetailView: View {
         TunnelDetailView(tunnel: manager.tunnels[0])
     }
     .previewEnvironment(tunnels: manager, scheme: .light)
-    .frame(width: 560, height: 720)
+    .frame(width: WindowSizing.ideal.width, height: WindowSizing.ideal.height)
 }
 
 #Preview("Config unreachable — Dark") {
@@ -274,7 +274,7 @@ struct TunnelDetailView: View {
         TunnelDetailView(tunnel: manager.tunnels[0])
     }
     .previewEnvironment(tunnels: manager, scheme: .dark)
-    .frame(width: 560, height: 720)
+    .frame(width: WindowSizing.ideal.width, height: WindowSizing.ideal.height)
 }
 
 #Preview("Activation error") {
@@ -286,5 +286,5 @@ struct TunnelDetailView: View {
         TunnelDetailView(tunnel: manager.tunnels[0])
     }
     .previewEnvironment(tunnels: manager)
-    .frame(width: 560, height: 720)
+    .frame(width: WindowSizing.ideal.width, height: WindowSizing.ideal.height)
 }

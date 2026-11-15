@@ -114,7 +114,7 @@ struct StatusSection: View {
     }
     .formStyle(.grouped)
     .previewEnvironment(tunnels: manager)
-    .frame(width: 560)
+    .frame(width: WindowSizing.ideal.width)
 }
 
 #Preview("Failing activation — live") {
@@ -130,5 +130,5 @@ struct StatusSection: View {
     }
     .formStyle(.grouped)
     .previewEnvironment(tunnels: manager)
-    .frame(width: 560)
+    .frame(width: WindowSizing.ideal.width)
 }

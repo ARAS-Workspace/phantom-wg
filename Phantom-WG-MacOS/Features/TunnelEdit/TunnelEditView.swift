@@ -214,7 +214,7 @@ struct TunnelEditView: View {
         TunnelEditView(tunnel: manager.tunnels[0])
     }
     .previewEnvironment(tunnels: manager, scheme: .light)
-    .frame(width: 560, height: 720)
+    .frame(width: WindowSizing.ideal.width, height: WindowSizing.ideal.height)
 }
 
 #Preview("Dark") {
@@ -225,5 +225,5 @@ struct TunnelEditView: View {
         TunnelEditView(tunnel: manager.tunnels[0])
     }
     .previewEnvironment(tunnels: manager, scheme: .dark)
-    .frame(width: 560, height: 720)
+    .frame(width: WindowSizing.ideal.width, height: WindowSizing.ideal.height)
 }

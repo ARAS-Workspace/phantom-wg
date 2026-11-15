@@ -92,7 +92,7 @@ struct ActionsSection: View {
         .formStyle(.grouped)
     }
     .previewEnvironment(tunnels: manager)
-    .frame(width: 560)
+    .frame(width: WindowSizing.ideal.width)
 }
 
 #Preview("Inactive — delete enabled") {
@@ -113,5 +113,5 @@ struct ActionsSection: View {
         .formStyle(.grouped)
     }
     .previewEnvironment(tunnels: manager)
-    .frame(width: 560)
+    .frame(width: WindowSizing.ideal.width)
 }

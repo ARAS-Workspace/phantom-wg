@@ -163,13 +163,13 @@ struct TunnelListView: View {
 #Preview("Tunnels — Light") {
     TunnelListView()
         .previewEnvironment(scheme: .light)
-        .frame(width: 560, height: 720)
+        .frame(width: WindowSizing.ideal.width, height: WindowSizing.ideal.height)
 }
 
 #Preview("Tunnels — Dark") {
     TunnelListView()
         .previewEnvironment(scheme: .dark)
-        .frame(width: 560, height: 720)
+        .frame(width: WindowSizing.ideal.width, height: WindowSizing.ideal.height)
 }
 
 #Preview("Tunnels — WireGuard + Ghost") {
@@ -178,11 +178,11 @@ struct TunnelListView: View {
             PreviewFixtures.provider(config: PreviewFixtures.wireguardConfig()),
             PreviewFixtures.provider(config: PreviewFixtures.ghostConfig(name: "Home Lab"))
         ]))
-        .frame(width: 560, height: 720)
+        .frame(width: WindowSizing.ideal.width, height: WindowSizing.ideal.height)
 }
 
 #Preview("Empty") {
     TunnelListView()
         .previewEnvironment(tunnels: PreviewFixtures.tunnelsManager(providers: []))
-        .frame(width: 560, height: 720)
+        .frame(width: WindowSizing.ideal.width, height: WindowSizing.ideal.height)
 }

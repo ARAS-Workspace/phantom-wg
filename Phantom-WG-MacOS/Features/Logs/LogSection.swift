@@ -145,7 +145,7 @@ struct LogView: View {
         LogView(logStore: store)
     }
     .previewEnvironment()
-    .frame(width: 560, height: 720)
+    .frame(width: WindowSizing.ideal.width, height: WindowSizing.ideal.height)
 }
 
 #Preview("Empty") {
@@ -153,5 +153,5 @@ struct LogView: View {
         LogView(logStore: LogStore(tunnel: nil))
     }
     .previewEnvironment()
-    .frame(width: 560, height: 720)
+    .frame(width: WindowSizing.ideal.width, height: WindowSizing.ideal.height)
 }

@@ -28,5 +28,5 @@ struct StatRow: View {
         StatRow(icon: "arrow.up.circle", label: "Data Sent", value: "8.79 MB", valueColor: .blue)
     }
     .formStyle(.grouped)
-    .frame(width: 560)
+    .frame(width: WindowSizing.ideal.width)
 }

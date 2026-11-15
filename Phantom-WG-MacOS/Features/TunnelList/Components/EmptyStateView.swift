@@ -63,7 +63,7 @@ struct EmptyStateView: View {
         EmptyStateView(showingImport: showingImport)
     }
     .previewEnvironment(scheme: .light)
-    .frame(width: 560, height: 720)
+    .frame(width: WindowSizing.ideal.width, height: WindowSizing.ideal.height)
 }
 
 #Preview("Dark") {
@@ -71,5 +71,5 @@ struct EmptyStateView: View {
         EmptyStateView(showingImport: showingImport)
     }
     .previewEnvironment(scheme: .dark)
-    .frame(width: 560, height: 720)
+    .frame(width: WindowSizing.ideal.width, height: WindowSizing.ideal.height)
 }

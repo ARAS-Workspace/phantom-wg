@@ -44,7 +44,7 @@ struct TunnelContentView: View {
     loader.manager = manager
     return TunnelContentView(loader: loader)
         .previewEnvironment(tunnels: manager)
-        .frame(width: 560, height: 720)
+        .frame(width: WindowSizing.ideal.width, height: WindowSizing.ideal.height)
 }
 
 #Preview("Load error — Light") {
@@ -52,7 +52,7 @@ struct TunnelContentView: View {
     loader.loadError = "The VPN preferences could not be read."
     return TunnelContentView(loader: loader)
         .previewEnvironment(scheme: .light)
-        .frame(width: 560, height: 720)
+        .frame(width: WindowSizing.ideal.width, height: WindowSizing.ideal.height)
 }
 
 #Preview("Load error — Dark") {
@@ -60,5 +60,5 @@ struct TunnelContentView: View {
     loader.loadError = "The VPN preferences could not be read."
     return TunnelContentView(loader: loader)
         .previewEnvironment(scheme: .dark)
-        .frame(width: 560, height: 720)
+        .frame(width: WindowSizing.ideal.width, height: WindowSizing.ideal.height)
 }

@@ -66,35 +66,35 @@ struct TunnelVaultGateView: View {
 #Preview("Connecting — Light") {
     TunnelVaultGateView()
         .previewEnvironment(vaultSession: PreviewFixtures.vaultSession(state: .connecting), scheme: .light)
-        .frame(width: 560, height: 720)
+        .frame(width: WindowSizing.ideal.width, height: WindowSizing.ideal.height)
 }
 
 #Preview("Connecting — Dark") {
     TunnelVaultGateView()
         .previewEnvironment(vaultSession: PreviewFixtures.vaultSession(state: .connecting), scheme: .dark)
-        .frame(width: 560, height: 720)
+        .frame(width: WindowSizing.ideal.width, height: WindowSizing.ideal.height)
 }
 
 #Preview("Extension silent — Light") {
     TunnelVaultGateView()
         .previewEnvironment(vaultSession: PreviewFixtures.vaultSession(state: .silent), scheme: .light)
-        .frame(width: 560, height: 720)
+        .frame(width: WindowSizing.ideal.width, height: WindowSizing.ideal.height)
 }
 
 #Preview("Extension silent — Dark") {
     TunnelVaultGateView()
         .previewEnvironment(vaultSession: PreviewFixtures.vaultSession(state: .silent), scheme: .dark)
-        .frame(width: 560, height: 720)
+        .frame(width: WindowSizing.ideal.width, height: WindowSizing.ideal.height)
 }
 
 #Preview("Vault door failed — Light") {
     TunnelVaultGateView()
         .previewEnvironment(vaultSession: PreviewFixtures.vaultSession(state: .doorFailed), scheme: .light)
-        .frame(width: 560, height: 720)
+        .frame(width: WindowSizing.ideal.width, height: WindowSizing.ideal.height)
 }
 
 #Preview("Vault door failed — Dark") {
     TunnelVaultGateView()
         .previewEnvironment(vaultSession: PreviewFixtures.vaultSession(state: .doorFailed), scheme: .dark)
-        .frame(width: 560, height: 720)
+        .frame(width: WindowSizing.ideal.width, height: WindowSizing.ideal.height)
 }

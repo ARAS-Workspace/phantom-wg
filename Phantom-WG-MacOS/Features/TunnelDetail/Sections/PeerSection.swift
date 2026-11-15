@@ -49,7 +49,7 @@ struct PeerSection: View {
     }
     .formStyle(.grouped)
     .previewEnvironment()
-    .frame(width: 560)
+    .frame(width: WindowSizing.ideal.width)
 }
 
 #Preview("Without preshared key") {
@@ -60,7 +60,7 @@ struct PeerSection: View {
     }
     .formStyle(.grouped)
     .previewEnvironment()
-    .frame(width: 560)
+    .frame(width: WindowSizing.ideal.width)
 }
 
 #Preview("Standalone — endpoint row") {
@@ -69,5 +69,5 @@ struct PeerSection: View {
     }
     .formStyle(.grouped)
     .previewEnvironment()
-    .frame(width: 560)
+    .frame(width: WindowSizing.ideal.width)
 }

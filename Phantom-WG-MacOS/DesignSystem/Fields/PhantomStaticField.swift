@@ -29,7 +29,7 @@ struct PhantomStaticField: View {
         }
     }
     .formStyle(.grouped)
-    .frame(width: 560)
+    .frame(width: WindowSizing.ideal.width)
     .preferredColorScheme(.light)
 }
 
@@ -41,6 +41,6 @@ struct PhantomStaticField: View {
         }
     }
     .formStyle(.grouped)
-    .frame(width: 560)
+    .frame(width: WindowSizing.ideal.width)
     .preferredColorScheme(.dark)
 }

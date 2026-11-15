@@ -77,7 +77,7 @@ struct ConnectionGateView: View {
         ))
         .environment(LocalizationManager.shared)
         .preferredColorScheme(.light)
-        .frame(width: 560, height: 720)
+        .frame(width: WindowSizing.ideal.width, height: WindowSizing.ideal.height)
 }
 
 #Preview("Held — named holder — Dark") {
@@ -88,7 +88,7 @@ struct ConnectionGateView: View {
         ))
         .environment(LocalizationManager.shared)
         .preferredColorScheme(.dark)
-        .frame(width: 560, height: 720)
+        .frame(width: WindowSizing.ideal.width, height: WindowSizing.ideal.height)
 }
 
 #Preview("Held — unnamed holder") {
@@ -98,7 +98,7 @@ struct ConnectionGateView: View {
             initialState: .slotHeld(holderName: nil)
         ))
         .environment(LocalizationManager.shared)
-        .frame(width: 560, height: 720)
+        .frame(width: WindowSizing.ideal.width, height: WindowSizing.ideal.height)
 }
 
 #Preview("Checking") {
@@ -108,5 +108,5 @@ struct ConnectionGateView: View {
             initialState: .checking
         ))
         .environment(LocalizationManager.shared)
-        .frame(width: 560, height: 720)
+        .frame(width: WindowSizing.ideal.width, height: WindowSizing.ideal.height)
 }

@@ -146,7 +146,7 @@ extension View {
         ToastBanner(toast: Toast(kind: .error, message: "The extension refused the configuration."), onDismiss: {})
     }
     .padding(24)
-    .frame(width: 560)
+    .frame(width: WindowSizing.ideal.width)
     .preferredColorScheme(.light)
 }
 
@@ -158,14 +158,14 @@ extension View {
         ToastBanner(toast: Toast(kind: .error, message: "The extension refused the configuration."), onDismiss: {})
     }
     .padding(24)
-    .frame(width: 560)
+    .frame(width: WindowSizing.ideal.width)
     .preferredColorScheme(.dark)
 }
 
 #Preview("Live center") {
     ToastDemoHost()
         .previewEnvironment()
-        .frame(width: 560, height: 300)
+        .frame(width: WindowSizing.ideal.width, height: 300)
 }
 
 private struct ToastDemoHost: View {

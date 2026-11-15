@@ -59,5 +59,5 @@ struct TunnelRow: View {
     }
     .formStyle(.grouped)
     .previewEnvironment(tunnels: manager)
-    .frame(width: 560)
+    .frame(width: WindowSizing.ideal.width)
 }

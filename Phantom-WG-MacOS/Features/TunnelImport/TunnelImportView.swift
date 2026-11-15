@@ -156,7 +156,7 @@ struct TunnelImportView: View {
         TunnelImportView()
     }
     .previewEnvironment(tunnels: PreviewFixtures.tunnelsManager(providers: []), scheme: .light)
-    .frame(width: 560, height: 720)
+    .frame(width: WindowSizing.ideal.width, height: WindowSizing.ideal.height)
 }
 
 #Preview("Dark") {
@@ -164,5 +164,5 @@ struct TunnelImportView: View {
         TunnelImportView()
     }
     .previewEnvironment(tunnels: PreviewFixtures.tunnelsManager(providers: []), scheme: .dark)
-    .frame(width: 560, height: 720)
+    .frame(width: WindowSizing.ideal.width, height: WindowSizing.ideal.height)
 }

@@ -25,5 +25,5 @@ struct NameSection: View {
     }
     .formStyle(.grouped)
     .previewEnvironment()
-    .frame(width: 560)
+    .frame(width: WindowSizing.ideal.width)
 }

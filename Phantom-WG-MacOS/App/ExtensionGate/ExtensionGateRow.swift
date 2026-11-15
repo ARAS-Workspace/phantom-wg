@@ -137,7 +137,7 @@ private struct ExtensionGateRowGallery: View {
             }
         }
         .padding(24)
-        .frame(width: 560)
+        .frame(width: WindowSizing.ideal.width)
     }
 }
 
