@@ -12,8 +12,12 @@ enum TunnelConfFile {
         return "\(base).conf"
     }
 
+    static func data(_ contents: String) -> Data {
+        Data((contents + "\n").utf8)
+    }
+
     static func write(_ contents: String, to url: URL) throws {
-        try Data((contents + "\n").utf8).write(to: url, options: .atomic)
+        try data(contents).write(to: url, options: .atomic)
         try FileManager.default.setAttributes([.posixPermissions: 0o600], ofItemAtPath: url.path)
     }
 }

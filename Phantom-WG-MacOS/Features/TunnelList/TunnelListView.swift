@@ -12,9 +12,9 @@ struct TunnelListView: View {
     @State private var showingUninstallConfirm = false
     @State private var showingSplitTunneling = false
     @State private var uninstalling = false
-    @State private var importing = false
-    @State private var importReport: TunnelBulkImport.Report?
-    @State private var importToasts = ToastCenter()
+    @State private var transferring = false
+    @State private var transferNotice: TransferNotice?
+    @State private var transferToasts = ToastCenter()
     #if DEBUG
     @State private var showingTestEngine = false
     #endif
@@ -22,7 +22,7 @@ struct TunnelListView: View {
     var body: some View {
         NavigationStack {
             listContent
-                .toastOverlay(importToasts)
+                .toastOverlay(transferToasts)
                 .navigationTitle(loc.t("app_title"))
                 .toolbar { toolbarContent }
                 .navigationDestination(isPresented: $showingImport) {
@@ -46,16 +46,16 @@ struct TunnelListView: View {
                     onConfirm: runUninstall
                 ))
                 .alert(
-                    importReport.map { TunnelBulkImport.title($0, loc: loc) } ?? "",
+                    transferNotice?.title ?? "",
                     isPresented: Binding(
-                        get: { importReport != nil },
-                        set: { if !$0 { importReport = nil } }
+                        get: { transferNotice != nil },
+                        set: { if !$0 { transferNotice = nil } }
                     )
                 ) {
                     Button(loc.t("ok")) {}
                         .accessibilityIdentifier(AXID.TunnelList.importReportOK)
                 } message: {
-                    Text(importReport.map { TunnelBulkImport.message($0, loc: loc) } ?? "")
+                    Text(transferNotice?.message ?? "")
                 }
                 .disabled(uninstalling)
         }
@@ -90,8 +90,10 @@ struct TunnelListView: View {
                 showingUninstallConfirm: $showingUninstallConfirm,
                 showingSplitTunneling: $showingSplitTunneling,
                 isUninstalling: uninstalling,
-                isImporting: importing,
+                isTransferring: transferring,
+                canExport: !tunnelsManager.tunnels.isEmpty,
                 onImport: importFromFiles,
+                onExport: exportToZip,
                 showingTestEngine: $showingTestEngine
             )
             #else
@@ -99,8 +101,10 @@ struct TunnelListView: View {
                 showingUninstallConfirm: $showingUninstallConfirm,
                 showingSplitTunneling: $showingSplitTunneling,
                 isUninstalling: uninstalling,
-                isImporting: importing,
-                onImport: importFromFiles
+                isTransferring: transferring,
+                canExport: !tunnelsManager.tunnels.isEmpty,
+                onImport: importFromFiles,
+                onExport: exportToZip
             )
             #endif
         }
@@ -144,15 +148,74 @@ struct TunnelListView: View {
         guard panel.runModal() == .OK, !panel.urls.isEmpty else { return }
 
         let urls = panel.urls
-        importing = true
+        transferring = true
         Task {
             let report = await TunnelBulkImport.run(urls, into: tunnelsManager)
-            importing = false
+            transferring = false
             if report.skipped.isEmpty {
-                importToasts.success(loc.t("import_report_success", report.added.count))
+                transferToasts.success(loc.t("import_report_success", report.added.count))
             } else {
-                importReport = report
+                transferNotice = TransferNotice(
+                    title: TunnelBulkImport.title(report, loc: loc),
+                    message: TunnelBulkImport.message(report, loc: loc)
+                )
             }
+        }
+    }
+
+    // MARK: - Export
+
+    private func exportToZip() {
+        Task {
+            switch await PrivateDataAuthorization.request(reason: loc.t("export_private_data_reason")) {
+            case .granted:
+                break
+            case .declined:
+                return
+            case .failed(let message):
+                transferNotice = TransferNotice(title: loc.t("error"), message: message)
+                return
+            }
+            if !NSApp.isActive {
+                NSApp.activate()
+            }
+
+            let panel = NSSavePanel()
+            panel.allowedContentTypes = [.zip]
+            panel.nameFieldStringValue = TunnelExportBatch.defaultFileName
+            panel.canCreateDirectories = true
+            panel.title = loc.t("settings_export_tunnels")
+
+            guard panel.runModal() == .OK, let url = panel.url else { return }
+
+            transferring = true
+            let outcome = await TunnelBulkExport.run(tunnelsManager.tunnels, vault: tunnelsManager.vault, to: url)
+            transferring = false
+            present(outcome)
+        }
+    }
+
+    private func present(_ outcome: TunnelBulkExport.Outcome) {
+        switch outcome {
+        case .exported(let count, _, let unread) where unread.isEmpty:
+            transferToasts.success(loc.t("export_report_success", count))
+        case .exported(let count, let total, let unread):
+            transferNotice = TransferNotice(
+                title: loc.t("export_report_partial", count, total),
+                message: TunnelBulkExport.unreadLines(unread, loc: loc)
+            )
+        case .nothing(let unread):
+            transferNotice = TransferNotice(
+                title: loc.t("export_report_none"),
+                message: TunnelBulkExport.unreadLines(unread, loc: loc)
+            )
+        case .vaultUnavailable:
+            transferNotice = TransferNotice(
+                title: loc.t("error"),
+                message: TunnelManagementError.vaultUnavailable.localizedDescription
+            )
+        case .unwritable:
+            transferNotice = TransferNotice(title: loc.t("error"), message: loc.t("export_err_write"))
         }
     }
 
@@ -183,6 +246,11 @@ struct TunnelListView: View {
             }
         }
     }
+}
+
+private struct TransferNotice {
+    let title: String
+    let message: String
 }
 
 // MARK: - Previews
