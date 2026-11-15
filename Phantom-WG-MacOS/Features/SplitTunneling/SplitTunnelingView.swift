@@ -20,7 +20,7 @@ struct SplitTunnelingView: View {
 
     var body: some View {
         activatedContent
-            .frame(minWidth: 520, minHeight: 600)
+            .frame(minWidth: 520, minHeight: 240)
             .navigationTitle(loc.t("split_tunneling_title"))
             .toolbar {
                 ToolbarItem(placement: .confirmationAction) {

@@ -28,6 +28,7 @@ struct TunnelListView: View {
                     NavigationStack {
                         SplitTunnelingView()
                     }
+                    .presentationSizing(.page.fitted(horizontal: true, vertical: false))
                 }
                 #if DEBUG
                 .sheet(isPresented: $showingTestEngine) {
