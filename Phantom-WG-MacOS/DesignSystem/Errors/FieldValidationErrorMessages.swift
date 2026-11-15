@@ -16,10 +16,6 @@ extension FieldValidationError {
             let base = addressErrorMessage(err, loc: loc)
             return loc.t("field_err_list_entry", index + 1, base)
 
-        case .ipAddress(let err, let index):
-            let base = ipAddressErrorMessage(err, loc: loc)
-            return loc.t("field_err_list_entry", index + 1, base)
-
         case .endpoint(let err):
             return endpointErrorMessage(err, loc: loc)
 
@@ -45,16 +41,6 @@ extension FieldValidationError {
             return loc.t("field_err_key_not_base64")
         case .wrongByteCount(let bytes):
             return loc.t("field_err_key_wrong_length", bytes)
-        }
-    }
-
-    private func ipAddressErrorMessage(
-        _ err: IPAddressEntry.ParseError,
-        loc: LocalizationManager
-    ) -> String {
-        switch err {
-        case .invalid(let raw):
-            return loc.t("field_err_ip_invalid", raw)
         }
     }
 

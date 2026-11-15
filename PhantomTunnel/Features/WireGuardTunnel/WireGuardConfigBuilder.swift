@@ -39,6 +39,8 @@ enum WireGuardConfigBuilder {
         iface.dns = config.interface.dnsServers.compactMap {
             DNSServer(from: $0.textual)
         }
+        iface.dnsSearch = config.interface.dnsSearch
+        iface.listenPort = config.interface.listenPort
 
         if config.interface.mtu > 0 {
             iface.mtu = UInt16(clamping: config.interface.mtu)

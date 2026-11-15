@@ -151,7 +151,9 @@ enum AXID {
             static let privateKey = "tunnel-detail.interface.private-key"
             static let addresses  = "tunnel-detail.interface.addresses"
             static let dnsServers = "tunnel-detail.interface.dns-servers"
+            static let dnsSearch  = "tunnel-detail.interface.dns-search"
             static let mtu        = "tunnel-detail.interface.mtu"
+            static let listenPort = "tunnel-detail.interface.listen-port"
         }
 
         enum Peer {

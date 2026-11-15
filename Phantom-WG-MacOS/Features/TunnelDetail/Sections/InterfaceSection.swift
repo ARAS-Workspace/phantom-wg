@@ -21,11 +21,25 @@ struct InterfaceSection: View {
                 value: config.dnsServers.map(\.textual).joined(separator: ", "),
                 axIdentifier: AXID.TunnelDetail.Interface.dnsServers
             )
+            if !config.dnsSearch.isEmpty {
+                PhantomStaticField(
+                    label: loc.t("detail_dns_search"),
+                    value: config.dnsSearch.joined(separator: ", "),
+                    axIdentifier: AXID.TunnelDetail.Interface.dnsSearch
+                )
+            }
             PhantomStaticField(
                 label: loc.t("detail_mtu"),
                 value: config.mtu == InterfaceDraft.automaticMTU ? loc.t("detail_mtu_automatic") : String(config.mtu),
                 axIdentifier: AXID.TunnelDetail.Interface.mtu
             )
+            if let listenPort = config.listenPort {
+                PhantomStaticField(
+                    label: loc.t("detail_listen_port"),
+                    value: String(listenPort),
+                    axIdentifier: AXID.TunnelDetail.Interface.listenPort
+                )
+            }
         } header: {
             Label(loc.t("detail_interface"), systemImage: "rectangle.connected.to.line.below")
         }

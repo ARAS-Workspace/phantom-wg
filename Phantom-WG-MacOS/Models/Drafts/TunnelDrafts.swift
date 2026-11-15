@@ -6,7 +6,6 @@ enum FieldValidationError: Equatable {
     case empty
     case wireGuardKey(WireGuardKey.ParseError)
     case address(AddressWithPrefix.ParseError, atIndex: Int)
-    case ipAddress(IPAddressEntry.ParseError, atIndex: Int)
     case endpoint(IPEndpoint.ParseError)
     case wstunnelURL(WstunnelURL.ParseError)
     case intNotParsed(raw: String)
@@ -28,6 +27,7 @@ struct TunnelDraft: Equatable {
         case interfaceAddresses
         case interfaceDnsServers
         case interfaceMTU
+        case interfaceListenPort
         case peerPublicKey
         case peerPresharedKey
         case peerAllowedIPs
@@ -66,6 +66,7 @@ struct TunnelDraft: Equatable {
 
     /// @witness ConfigContract.blankWstunnelUrl
     /// @witness ConfigContract.commaOnlyLists
+    /// @witness ConfigContract.searchDomainsAndListenPort
     func validate() -> ValidationResult {
         var errors: [Field: FieldValidationError] = [:]
 
@@ -134,6 +135,7 @@ struct InterfaceDraft: Equatable {
     var addresses: String
     var dnsServers: String
     var mtu: String
+    var listenPort: String = ""
 
     func validate() -> (InterfaceConfig?, [TunnelDraft.Field: FieldValidationError]) {
         var errors: [TunnelDraft.Field: FieldValidationError] = [:]
@@ -155,14 +157,17 @@ struct InterfaceDraft: Equatable {
         }
 
         let parsedAddresses = parseAddresses(addresses, into: &errors, field: .interfaceAddresses)
-        let parsedDNS = parseIPList(dnsServers, into: &errors, field: .interfaceDnsServers)
+        let dns = splitDNS(dnsServers)
         let parsedMTU = parseInt(
             mtu, range: 0...65535, default: Self.automaticMTU,
             into: &errors, field: .interfaceMTU
         )
+        let trimmedPort = listenPort.trimmingCharacters(in: .whitespaces)
+        let parsedPort = trimmedPort.isEmpty
+            ? nil
+            : parseInt(trimmedPort, range: 0...65535, default: 0, into: &errors, field: .interfaceListenPort)
 
-        guard errors.isEmpty, let privKey, let addrs = parsedAddresses,
-              let dns = parsedDNS, let mtuValue = parsedMTU else {
+        guard errors.isEmpty, let privKey, let addrs = parsedAddresses, let mtuValue = parsedMTU else {
             return (nil, errors)
         }
 
@@ -170,8 +175,10 @@ struct InterfaceDraft: Equatable {
             InterfaceConfig(
                 privateKey: privKey,
                 addresses: addrs,
-                dnsServers: dns,
-                mtu: mtuValue
+                dnsServers: dns.servers,
+                mtu: mtuValue,
+                dnsSearch: dns.search,
+                listenPort: parsedPort.map { UInt16($0) }
             ),
             [:]
         )
@@ -376,25 +383,17 @@ private func parseAddresses(
     return result
 }
 
-private func parseIPList(
-    _ input: String,
-    into errors: inout [TunnelDraft.Field: FieldValidationError],
-    field: TunnelDraft.Field
-) -> [IPAddressEntry]? {
-    let entries = splitList(input.trimmingCharacters(in: .whitespacesAndNewlines))
-    var result: [IPAddressEntry] = []
-    for (index, entry) in entries.enumerated() {
-        do {
-            let addr = try IPAddressEntry(parsing: entry)
-            result.append(addr)
-        } catch {
-            if let err = error as? IPAddressEntry.ParseError {
-                errors[field] = .ipAddress(err, atIndex: index)
-            }
-            return nil
+private func splitDNS(_ input: String) -> (servers: [IPAddressEntry], search: [String]) {
+    var servers: [IPAddressEntry] = []
+    var search: [String] = []
+    for entry in splitList(input.trimmingCharacters(in: .whitespacesAndNewlines)) {
+        if let server = try? IPAddressEntry(parsing: entry) {
+            servers.append(server)
+        } else {
+            search.append(entry)
         }
     }
-    return result
+    return (servers, search)
 }
 
 private func parseInt(

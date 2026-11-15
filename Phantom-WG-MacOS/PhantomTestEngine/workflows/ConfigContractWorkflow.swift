@@ -38,6 +38,12 @@
 //       Address dies; a comma-only DNS reads as no DNS server, as
 //       WireGuard reads it.
 //
+//   E — Search Domains And ListenPort Survive The Payload
+//       DNS splits into servers and search domains as WireGuard splits it,
+//       and both new fields come through validate(), the vault payload's
+//       encode and decode, and the written .conf. A payload written before
+//       the two keys existed decodes with neither.
+//
 // A Stop inside the terminal wait of A never reaches the step's own
 // cleanup, and reaching it under cancellation buys nothing because
 // `vault.delete(id:attempts:)` refuses to send once the task is
@@ -55,6 +61,7 @@ final class ConfigContractWorkflow: TestWorkflow {
             WorkflowStep("Multi-Peer Conf Not Silently Collapsed", multiPeer),
             WorkflowStep("Comma-Only Lists In validate()", commaOnlyLists),
             WorkflowStep("Blank Wstunnel URL Dies In validate()", blankWstunnelUrl),
+            WorkflowStep("Search Domains And ListenPort Survive The Payload", searchDomainsAndListenPort),
         ]
     }
 
@@ -183,6 +190,54 @@ final class ConfigContractWorkflow: TestWorkflow {
         let result = draft.validate()
         check(result.config == nil && result.errors[.wstunnelUrl] != nil,
               "blank wstunnel URL died in validate() with its field named — config \(result.config == nil ? "refused" : "BUILT"), field error \(result.errors[.wstunnelUrl] != nil ? "present" : "MISSING")")
+    }
+
+    private func searchDomainsAndListenPort() async {
+        guard var draft = TestConfigFactory.throwawayDraft(name: "TE-Validate-\(UUID().uuidString.prefix(8))") else {
+            fail("factory produced no draft")
+            return
+        }
+        draft.wireguard.interface.dnsServers = "10.99.99.1, corp.example, lan"
+        draft.wireguard.interface.listenPort = "51900"
+        guard let config = draft.validate().config else {
+            fail("a draft with search domains and a listen port did not validate")
+            return
+        }
+        let interface = config.wireguard.interface
+        check(interface.dnsServers.map(\.textual) == ["10.99.99.1"]
+                && interface.dnsSearch == ["corp.example", "lan"]
+                && interface.listenPort == 51900,
+              "validate() splits DNS into servers and search domains and keeps the listen port — servers \(interface.dnsServers.map(\.textual)), search \(interface.dnsSearch), port \(String(describing: interface.listenPort))")
+
+        let encoded = try? JSONEncoder().encode(config)
+        let decoded = encoded.flatMap { try? JSONDecoder().decode(TunnelConfig.self, from: $0) }
+        check(decoded == config, "the vault payload carries both through an encode and decode")
+
+        let legacy = encoded.flatMap(legacyPayload).flatMap { try? JSONDecoder().decode(TunnelConfig.self, from: $0) }
+        check(legacy?.wireguard.interface.dnsSearch == []
+                && legacy?.wireguard.interface.listenPort == nil
+                && legacy?.wireguard.interface.dnsServers == interface.dnsServers,
+              "a payload written before the two keys existed decodes with no search domain and no listen port — \(legacy == nil ? "DID NOT DECODE" : "decoded")")
+
+        let text = config.asConfString()
+        var reread = try? ConfParser.parse(text)
+        reread?.name = config.name
+        let back = reread?.validate().config?.wireguard.interface
+        check(back?.dnsSearch == interface.dnsSearch
+                && back?.listenPort == interface.listenPort
+                && text.contains("ListenPort = 51900"),
+              "the written .conf carries both back through the parser")
+    }
+
+    private func legacyPayload(_ data: Data) -> Data? {
+        guard var root = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              var wireguard = root["wireguard"] as? [String: Any],
+              var interface = wireguard["interface"] as? [String: Any] else { return nil }
+        interface["dns_search"] = nil
+        interface["listen_port"] = nil
+        wireguard["interface"] = interface
+        root["wireguard"] = wireguard
+        return try? JSONSerialization.data(withJSONObject: root)
     }
 }
 #endif

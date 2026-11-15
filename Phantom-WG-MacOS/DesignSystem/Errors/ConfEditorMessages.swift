@@ -7,7 +7,7 @@ enum ConfEditorMessages {
         .wstunnelUrl, .wstunnelSecret,
         .wstunnelLocalHost, .wstunnelLocalPort,
         .wstunnelRemoteHost, .wstunnelRemotePort,
-        .interfacePrivateKey, .interfaceAddresses,
+        .interfacePrivateKey, .interfaceListenPort, .interfaceAddresses,
         .interfaceDnsServers, .interfaceMTU,
         .peerPublicKey, .peerPresharedKey,
         .peerAllowedIPs, .peerEndpoint, .peerPersistentKeepalive
@@ -35,8 +35,6 @@ enum ConfEditorMessages {
             return loc.t("parse_err_unknown_key", section, key)
         case .duplicateKey(let section, let key):
             return loc.t("parse_err_duplicate_key", section, key)
-        case .invalidValue(let section, let key):
-            return loc.t("parse_err_invalid_value", section, key)
         }
     }
 
@@ -56,6 +54,7 @@ enum ConfEditorMessages {
         switch field {
         case .name:                     return loc.t("detail_name")
         case .interfacePrivateKey:      return loc.t("detail_private_key")
+        case .interfaceListenPort:      return loc.t("detail_listen_port")
         case .interfaceAddresses:       return loc.t("detail_address")
         case .interfaceDnsServers:      return loc.t("detail_dns")
         case .interfaceMTU:             return loc.t("detail_mtu")
