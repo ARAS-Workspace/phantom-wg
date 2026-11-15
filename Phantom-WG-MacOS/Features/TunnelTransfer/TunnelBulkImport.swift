@@ -17,6 +17,7 @@ enum TunnelBulkImport {
 
     static let shownLines = 20
 
+    /// @witness TunnelTransfer
     static func run(_ urls: [URL], into manager: TunnelsManager) async -> Report {
         let candidates = await Task.detached { TunnelImportBatch.candidates(from: urls) }.value
         var report = Report()

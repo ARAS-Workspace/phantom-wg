@@ -10,6 +10,7 @@ enum TunnelBulkExport {
         case unwritable
     }
 
+    /// @witness TunnelTransfer
     static func run(_ tunnels: [TunnelContainer], vault: TunnelVaultClient, to url: URL) async -> Outcome {
         guard case .configs(let payloads) = await vault.readAll() else { return .vaultUnavailable }
         let plan = TunnelExportBatch.plan(
