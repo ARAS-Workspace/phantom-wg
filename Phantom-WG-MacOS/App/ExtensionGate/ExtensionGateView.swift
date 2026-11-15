@@ -6,36 +6,38 @@ struct ExtensionGateView: View {
     @Environment(LocalizationManager.self) private var loc
 
     var body: some View {
-        VStack(spacing: 24) {
-            header
+        ScrollView {
+            VStack(spacing: 24) {
+                header
 
-            VStack(spacing: 10) {
-                ForEach(coordinator.controllers, id: \.bundleID) { controller in
-                    ExtensionGateRow(
-                        controller: controller,
-                        onActivate: { controller.activate() },
-                        onOpenSettings: {
-                            if controller.status == .notInstalled
-                                || controller.status == .needsApproval {
-                                controller.activate()
-                            }
-                            openSystemSettings()
-                        },
-                        onRetry: { controller.activate() }
-                    )
+                VStack(spacing: 10) {
+                    ForEach(coordinator.controllers, id: \.bundleID) { controller in
+                        ExtensionGateRow(
+                            controller: controller,
+                            onActivate: { controller.activate() },
+                            onOpenSettings: {
+                                if controller.status == .notInstalled
+                                    || controller.status == .needsApproval {
+                                    controller.activate()
+                                }
+                                openSystemSettings()
+                            },
+                            onRetry: { controller.activate() }
+                        )
+                    }
                 }
-            }
-            .padding(.horizontal, 32)
+                .padding(.horizontal, 32)
 
-            Button(loc.t("gate_check_again")) {
-                coordinator.checkAll()
+                Button(loc.t("gate_check_again")) {
+                    coordinator.checkAll()
+                }
+                .buttonStyle(.bordered)
+                .accessibilityIdentifier(AXID.ExtensionGate.checkAgain)
             }
-            .buttonStyle(.bordered)
-            .accessibilityIdentifier(AXID.ExtensionGate.checkAgain)
-
-            Spacer()
+            .padding(.top, 40)
+            .padding(.bottom, 24)
+            .frame(maxWidth: .infinity)
         }
-        .padding(.top, 40)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
