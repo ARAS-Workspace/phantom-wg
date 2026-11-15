@@ -32,9 +32,11 @@
 //       `add()` never inspects routes.
 //
 //   B — Multi-Peer Conf Not Silently Collapsed
-//   C — Comma-Only Lists Die In validate()
+//   C — Comma-Only Lists In validate()
 //   D — Blank Wstunnel URL Dies In validate()
-//       Parser and validator refusals, no session raised.
+//       Parser and validator refusals, no session raised. A comma-only
+//       Address dies; a comma-only DNS reads as no DNS server, as
+//       WireGuard reads it.
 //
 // A Stop inside the terminal wait of A never reaches the step's own
 // cleanup, and reaching it under cancellation buys nothing because
@@ -51,7 +53,7 @@ final class ConfigContractWorkflow: TestWorkflow {
         [
             WorkflowStep("Empty AllowedIPs Refused (No-Route Leak Guard)", emptyAllowedIPs),
             WorkflowStep("Multi-Peer Conf Not Silently Collapsed", multiPeer),
-            WorkflowStep("Comma-Only Lists Die In validate()", commaOnlyLists),
+            WorkflowStep("Comma-Only Lists In validate()", commaOnlyLists),
             WorkflowStep("Blank Wstunnel URL Dies In validate()", blankWstunnelUrl),
         ]
     }
@@ -168,8 +170,8 @@ final class ConfigContractWorkflow: TestWorkflow {
         }
         dnsDraft.wireguard.interface.dnsServers = ", ,"
         let dnsResult = dnsDraft.validate()
-        check(dnsResult.config == nil && dnsResult.errors[.interfaceDnsServers] != nil,
-              "comma-only DNS died in validate() with its field named — config \(dnsResult.config == nil ? "refused" : "BUILT"), field error \(dnsResult.errors[.interfaceDnsServers] != nil ? "present" : "MISSING")")
+        check(dnsResult.config?.wireguard.interface.dnsServers.isEmpty == true && dnsResult.errors[.interfaceDnsServers] == nil,
+              "comma-only DNS reads as no DNS server, as WireGuard reads it — config \(dnsResult.config == nil ? "REFUSED" : "built"), DNS servers \(dnsResult.config?.wireguard.interface.dnsServers.count ?? -1)")
     }
 
     private func blankWstunnelUrl() async {

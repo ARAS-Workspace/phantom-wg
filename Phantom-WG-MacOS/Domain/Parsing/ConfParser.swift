@@ -9,6 +9,10 @@ enum ConfParser {
         case duplicateSection(String)
         case missingKey(section: String, key: String)
         case invalidTunnelFormat(section: String, key: String)
+        case invalidLine(String)
+        case unknownKey(section: String, key: String)
+        case duplicateKey(section: String, key: String)
+        case invalidValue(section: String, key: String)
 
         var errorDescription: String? {
             switch self {
@@ -24,9 +28,23 @@ enum ConfParser {
                 return "[\(section)] missing required key: \(key)"
             case .invalidTunnelFormat(let section, let key):
                 return "[\(section)] invalid \(key): expected udp://host:port:host:port"
+            case .invalidLine(let line):
+                return "Line not understood: \(line)"
+            case .unknownKey(let section, let key):
+                return "[\(section)] has an unknown key: \(key)"
+            case .duplicateKey(let section, let key):
+                return "[\(section)] lists \(key) more than once"
+            case .invalidValue(let section, let key):
+                return "[\(section)] has an invalid \(key)"
             }
         }
     }
+
+    private static let sectionKeys: [String: Set<String>] = [
+        "interface": ["privatekey", "listenport", "address", "dns", "mtu"],
+        "peer": ["publickey", "presharedkey", "allowedips", "endpoint", "persistentkeepalive"],
+        "wstunnel": ["url", "secret", "tunnel"],
+    ]
 
     // MARK: - Entry Point
 
@@ -69,12 +87,19 @@ enum ConfParser {
         let multiEntryKeys: Set<String> = ["address", "allowedips", "dns"]
 
         for line in lines {
-            let stripped = line.trimmingCharacters(in: .whitespaces)
+            let whole = line.trimmingCharacters(in: .whitespaces)
+            let uncommented = whole.split(separator: "#", maxSplits: 1, omittingEmptySubsequences: false)
+                .first.map { $0.trimmingCharacters(in: .whitespaces) } ?? ""
+            let isHeader = uncommented.hasPrefix("[") && uncommented.hasSuffix("]")
+            let stripped = isHeader || currentSection != "wstunnel" ? uncommented : whole
             if stripped.isEmpty || stripped.hasPrefix("#") { continue }
 
             if stripped.hasPrefix("["), stripped.hasSuffix("]") {
                 let name = String(stripped.dropFirst().dropLast())
                     .trimmingCharacters(in: .whitespaces).lowercased()
+                guard sectionKeys[name] != nil else {
+                    throw ParseError.invalidLine(stripped)
+                }
                 guard result[name] == nil else {
                     throw ParseError.duplicateSection(name.capitalized)
                 }
@@ -83,14 +108,23 @@ enum ConfParser {
                 continue
             }
 
-            guard let section = currentSection,
-                  let equalsIndex = stripped.firstIndex(of: "=") else { continue }
+            guard let equalsIndex = stripped.firstIndex(of: "=") else {
+                throw ParseError.invalidLine(stripped)
+            }
+            guard let section = currentSection else { continue }
 
-            let key = stripped[..<equalsIndex].trimmingCharacters(in: .whitespaces).lowercased()
+            let keyWithCase = stripped[..<equalsIndex].trimmingCharacters(in: .whitespaces)
+            let key = keyWithCase.lowercased()
             let value = stripped[stripped.index(equalsIndex, offsetBy: 1)...]
                 .trimmingCharacters(in: .whitespaces)
 
-            if multiEntryKeys.contains(key), let existing = result[section]?[key] {
+            guard sectionKeys[section]?.contains(key) == true else {
+                throw ParseError.unknownKey(section: section.capitalized, key: keyWithCase)
+            }
+            if let existing = result[section]?[key] {
+                guard multiEntryKeys.contains(key) else {
+                    throw ParseError.duplicateKey(section: section.capitalized, key: keyWithCase)
+                }
                 result[section]?[key] = existing + ", " + value
             } else {
                 result[section]?[key] = value
@@ -140,12 +174,15 @@ enum ConfParser {
         guard let address = attrs["address"], !address.isEmpty else {
             throw ParseError.missingKey(section: "Interface", key: "Address")
         }
+        if let listenPort = attrs["listenport"], UInt16(listenPort) == nil {
+            throw ParseError.invalidValue(section: "Interface", key: "ListenPort")
+        }
 
         return InterfaceDraft(
             privateKey: privateKey,
             addresses: address,
-            dnsServers: attrs["dns"] ?? "1.1.1.1, 9.9.9.9",
-            mtu: attrs["mtu"] ?? "1420"
+            dnsServers: attrs["dns"] ?? "",
+            mtu: attrs["mtu"] ?? ""
         )
     }
 
@@ -171,7 +208,7 @@ enum ConfParser {
             presharedKey: attrs["presharedkey"] ?? "",
             allowedIPs: attrs["allowedips"] ?? "0.0.0.0/0, ::/0",
             endpoint: endpoint,
-            persistentKeepalive: attrs["persistentkeepalive"] ?? "25"
+            persistentKeepalive: attrs["persistentkeepalive"] ?? ""
         )
     }
 }

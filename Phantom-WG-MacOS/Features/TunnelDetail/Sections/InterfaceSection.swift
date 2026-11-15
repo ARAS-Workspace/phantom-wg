@@ -23,7 +23,7 @@ struct InterfaceSection: View {
             )
             PhantomStaticField(
                 label: loc.t("detail_mtu"),
-                value: String(config.mtu),
+                value: config.mtu == InterfaceDraft.automaticMTU ? loc.t("detail_mtu_automatic") : String(config.mtu),
                 axIdentifier: AXID.TunnelDetail.Interface.mtu
             )
         } header: {

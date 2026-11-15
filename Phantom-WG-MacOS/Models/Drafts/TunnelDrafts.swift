@@ -128,6 +128,8 @@ struct WireguardDraft: Equatable {
 // MARK: - InterfaceDraft
 
 struct InterfaceDraft: Equatable {
+    static let automaticMTU = 0
+
     var privateKey: String
     var addresses: String
     var dnsServers: String
@@ -155,7 +157,7 @@ struct InterfaceDraft: Equatable {
         let parsedAddresses = parseAddresses(addresses, into: &errors, field: .interfaceAddresses)
         let parsedDNS = parseIPList(dnsServers, into: &errors, field: .interfaceDnsServers)
         let parsedMTU = parseInt(
-            mtu, range: 576...9200, default: 1420,
+            mtu, range: 0...65535, default: Self.automaticMTU,
             into: &errors, field: .interfaceMTU
         )
 
@@ -179,6 +181,8 @@ struct InterfaceDraft: Equatable {
 // MARK: - PeerDraft
 
 struct PeerDraft: Equatable {
+    static let keepaliveOff = 0
+
     var publicKey: String
     var presharedKey: String
     var allowedIPs: String
@@ -193,7 +197,7 @@ struct PeerDraft: Equatable {
         let parsedAllowed = parseAddresses(allowedIPs, into: &errors, field: .peerAllowedIPs)
         let parsedEndpoint = endpointRequired ? parseEndpoint(endpoint, into: &errors) : nil
         let parsedKeepalive = parseInt(
-            persistentKeepalive, range: 0...65535, default: 25,
+            persistentKeepalive, range: 0...65535, default: Self.keepaliveOff,
             into: &errors, field: .peerPersistentKeepalive
         )
 
@@ -377,16 +381,7 @@ private func parseIPList(
     into errors: inout [TunnelDraft.Field: FieldValidationError],
     field: TunnelDraft.Field
 ) -> [IPAddressEntry]? {
-    let trimmed = input.trimmingCharacters(in: .whitespacesAndNewlines)
-    if trimmed.isEmpty {
-        errors[field] = .empty
-        return nil
-    }
-    let entries = splitList(trimmed)
-    if entries.isEmpty {
-        errors[field] = .empty
-        return nil
-    }
+    let entries = splitList(input.trimmingCharacters(in: .whitespacesAndNewlines))
     var result: [IPAddressEntry] = []
     for (index, entry) in entries.enumerated() {
         do {

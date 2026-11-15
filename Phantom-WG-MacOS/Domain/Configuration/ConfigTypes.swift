@@ -52,36 +52,32 @@ struct AddressWithPrefix: Equatable, Hashable, Codable {
     let prefixLength: UInt8
 
     enum ParseError: Error, Equatable {
-        case missingSlash
         case invalidPrefix(String)
         case invalidAddress(String)
-        case prefixOutOfRange(family: String, prefix: UInt8, max: UInt8)
     }
 
     init(parsing text: String) throws {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard let slashIndex = trimmed.firstIndex(of: "/") else {
-            throw ParseError.missingSlash
-        }
-        let addrPart = String(trimmed[..<slashIndex])
-        let prefixPart = String(trimmed[trimmed.index(after: slashIndex)...])
+        let slashIndex = trimmed.firstIndex(of: "/")
+        let addrPart = String(trimmed[..<(slashIndex ?? trimmed.endIndex)])
 
-        guard let prefix = UInt8(prefixPart) else {
-            throw ParseError.invalidPrefix(prefixPart)
+        let explicitPrefix: UInt8?
+        if let slashIndex {
+            let prefixPart = String(trimmed[trimmed.index(after: slashIndex)...])
+            guard let prefix = UInt8(prefixPart) else {
+                throw ParseError.invalidPrefix(prefixPart)
+            }
+            explicitPrefix = prefix
+        } else {
+            explicitPrefix = nil
         }
 
         if let v4 = IPv4Address(addrPart) {
-            guard prefix <= 32 else {
-                throw ParseError.prefixOutOfRange(family: "IPv4", prefix: prefix, max: 32)
-            }
             self.family = .ipv4(v4)
-            self.prefixLength = prefix
+            self.prefixLength = min(explicitPrefix ?? 32, 32)
         } else if let v6 = IPv6Address(addrPart) {
-            guard prefix <= 128 else {
-                throw ParseError.prefixOutOfRange(family: "IPv6", prefix: prefix, max: 128)
-            }
             self.family = .ipv6(v6)
-            self.prefixLength = prefix
+            self.prefixLength = min(explicitPrefix ?? 128, 128)
         } else {
             throw ParseError.invalidAddress(addrPart)
         }

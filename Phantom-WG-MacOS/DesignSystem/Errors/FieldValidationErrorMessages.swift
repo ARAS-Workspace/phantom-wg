@@ -63,14 +63,10 @@ extension FieldValidationError {
         loc: LocalizationManager
     ) -> String {
         switch err {
-        case .missingSlash:
-            return loc.t("field_err_address_missing_slash")
         case .invalidPrefix(let raw):
             return loc.t("field_err_address_invalid_prefix", raw)
         case .invalidAddress(let raw):
             return loc.t("field_err_address_invalid_addr", raw)
-        case .prefixOutOfRange(let family, let prefix, let max):
-            return loc.t("field_err_address_prefix_range", family, prefix, max)
         }
     }
 
