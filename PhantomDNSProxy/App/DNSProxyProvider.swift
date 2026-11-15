@@ -128,12 +128,12 @@ final class DNSProxyProvider: NEDNSProxyProvider, ProxyConfigReceiver {
 
     private func rejectFlow(_ flow: NEAppProxyFlow, error: Error) {
         if let tcp = flow as? NEAppProxyTCPFlow {
-            tcp.open(withLocalEndpoint: nil) { _ in
+            tcp.open(withLocalFlowEndpoint: nil) { _ in
                 tcp.closeReadWithError(error)
                 tcp.closeWriteWithError(error)
             }
         } else if let udp = flow as? NEAppProxyUDPFlow {
-            udp.open(withLocalEndpoint: nil) { _ in
+            udp.open(withLocalFlowEndpoint: nil) { _ in
                 udp.closeReadWithError(error)
                 udp.closeWriteWithError(error)
             }

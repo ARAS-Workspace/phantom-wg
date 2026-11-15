@@ -57,7 +57,7 @@ final class DNSUDPFlowRelay {
 
     private let lock = NSLock()
     private var connection: NWConnection?
-    private var pendingSources: [NWHostEndpoint] = []
+    private var pendingSources: [Network.NWEndpoint] = []
     private var closed = false
 
     private var selfRef: DNSUDPFlowRelay?
@@ -93,7 +93,7 @@ final class DNSUDPFlowRelay {
     private func handle(state: NWConnection.State) {
         switch state {
         case .ready:
-            flow.open(withLocalEndpoint: nil) { [weak self] error in
+            flow.open(withLocalFlowEndpoint: nil) { [weak self] error in
                 if let error {
                     self?.close(error: error)
                     return
@@ -112,21 +112,20 @@ final class DNSUDPFlowRelay {
 
     private func readFlow() {
         guard !isClosed() else { return }
-        flow.readDatagrams { [weak self] datagrams, endpoints, error in
+        flow.readDatagrams { [weak self] (datagrams: [(Data, Network.NWEndpoint)]?, error: Error?) in
             guard let self else { return }
             if let error {
                 self.close(error: error)
                 return
             }
-            guard let datagrams, let endpoints, !datagrams.isEmpty else {
+            guard let datagrams, !datagrams.isEmpty else {
                 self.close(error: nil)
                 return
             }
 
-            for (data, endpoint) in zip(datagrams, endpoints) {
-                guard let host = endpoint as? NWHostEndpoint else { continue }
+            for (data, endpoint) in datagrams {
                 self.lock.lock()
-                self.pendingSources.append(host)
+                self.pendingSources.append(endpoint)
                 self.lock.unlock()
 
                 self.connection?.send(content: data, completion: .contentProcessed { _ in })
@@ -154,7 +153,7 @@ final class DNSUDPFlowRelay {
                 return
             }
 
-            self.flow.writeDatagrams([data], sentBy: [source]) { [weak self] writeError in
+            self.flow.writeDatagrams([(data, source)]) { [weak self] writeError in
                 if let writeError {
                     self?.close(error: writeError)
                     return
@@ -241,7 +240,7 @@ final class DNSTCPFlowRelay {
     private func handle(state: NWConnection.State) {
         switch state {
         case .ready:
-            flow.open(withLocalEndpoint: nil) { [weak self] error in
+            flow.open(withLocalFlowEndpoint: nil) { [weak self] error in
                 if let error {
                     self?.close(error: error)
                     return

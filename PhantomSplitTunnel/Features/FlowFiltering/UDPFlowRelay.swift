@@ -34,7 +34,7 @@ final class UDPFlowRelay {
         registry?.registerRelay(id: relayID) { [weak self] in
             self?.close(error: POSIXError(.EHOSTUNREACH))
         }
-        flow.open(withLocalEndpoint: nil) { [weak self] error in
+        flow.open(withLocalFlowEndpoint: nil) { [weak self] error in
             if let error {
                 self?.close(error: error)
                 return
@@ -47,23 +47,20 @@ final class UDPFlowRelay {
 
     private func readLoop() {
         guard !isClosed() else { return }
-        flow.readDatagrams { [weak self] datagrams, endpoints, error in
+        flow.readDatagrams { [weak self] (datagrams: [(Data, Network.NWEndpoint)]?, error: Error?) in
             guard let self else { return }
             if let error {
                 self.close(error: error)
                 return
             }
-            guard let datagrams, let endpoints, !datagrams.isEmpty else {
+            guard let datagrams, !datagrams.isEmpty else {
                 self.close(error: nil)
                 return
             }
 
-            for (data, endpoint) in zip(datagrams, endpoints) {
-                guard let host = endpoint as? NWHostEndpoint,
-                      let converted = Self.convert(host) else {
-                    continue
-                }
-                let conn = self.connection(for: converted)
+            for (data, endpoint) in datagrams {
+                guard case .hostPort = endpoint else { continue }
+                let conn = self.connection(for: endpoint)
                 conn.send(content: data, completion: .contentProcessed { _ in })
             }
             self.readLoop()
@@ -86,7 +83,7 @@ final class UDPFlowRelay {
         lock.unlock()
 
         RingBufferLogger.shared.log(
-            "\(appName) → \(interface.name)  UDP  \(Self.describe(endpoint))"
+            "\(appName) → \(interface.name)  UDP  \(endpoint.relayDescription)"
         )
 
         conn.stateUpdateHandler = { [weak self] state in
@@ -117,8 +114,7 @@ final class UDPFlowRelay {
             if error != nil { return }
             guard let data, !data.isEmpty else { return }
 
-            guard let neEndpoint = Self.convertBack(endpoint) else { return }
-            self.flow.writeDatagrams([data], sentBy: [neEndpoint]) { [weak self] writeError in
+            self.flow.writeDatagrams([(data, endpoint)]) { [weak self] writeError in
                 if writeError != nil {
                     self?.close(error: writeError)
                     return
@@ -126,40 +122,6 @@ final class UDPFlowRelay {
                 self?.receiveLoop(connection: connection, endpoint: endpoint)
             }
         }
-    }
-
-    // MARK: - Endpoint Bridging
-
-    private static func convert(_ host: NWHostEndpoint) -> Network.NWEndpoint? {
-        guard let port = NWEndpoint.Port(host.port) else { return nil }
-        return Network.NWEndpoint.hostPort(
-            host: NWEndpoint.Host(host.hostname),
-            port: port
-        )
-    }
-
-    private static func describe(_ endpoint: Network.NWEndpoint) -> String {
-        guard case let .hostPort(host, port) = endpoint else { return "?" }
-        let hostname: String
-        switch host {
-        case .name(let name, _): hostname = name
-        case .ipv4(let ipv4):    hostname = "\(ipv4)"
-        case .ipv6(let ipv6):    hostname = "\(ipv6)"
-        @unknown default:        hostname = "?"
-        }
-        return "\(hostname):\(port.rawValue)"
-    }
-
-    private static func convertBack(_ endpoint: Network.NWEndpoint) -> NWHostEndpoint? {
-        guard case let .hostPort(host, port) = endpoint else { return nil }
-        let hostname: String
-        switch host {
-        case .name(let name, _):      hostname = name
-        case .ipv4(let ipv4):         hostname = "\(ipv4)"
-        case .ipv6(let ipv6):         hostname = "\(ipv6)"
-        @unknown default:             return nil
-        }
-        return NWHostEndpoint(hostname: hostname, port: "\(port.rawValue)")
     }
 
     // MARK: - Shutdown
@@ -195,5 +157,22 @@ final class UDPFlowRelay {
             conn.cancel()
         }
         selfRef = nil
+    }
+}
+
+// MARK: - Endpoint Description
+
+extension Network.NWEndpoint {
+
+    var relayDescription: String {
+        guard case let .hostPort(host, port) = self else { return "?" }
+        let hostname: String
+        switch host {
+        case .name(let name, _): hostname = name
+        case .ipv4(let ipv4):    hostname = "\(ipv4)"
+        case .ipv6(let ipv6):    hostname = "\(ipv6)"
+        @unknown default:        hostname = "?"
+        }
+        return "\(hostname):\(port.rawValue)"
     }
 }

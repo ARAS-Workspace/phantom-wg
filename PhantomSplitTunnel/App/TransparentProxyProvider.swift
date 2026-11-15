@@ -41,9 +41,9 @@ final class TransparentProxyProvider: NETransparentProxyProvider, ActiveFlowRela
         let settings = NETransparentProxyNetworkSettings(tunnelRemoteAddress: "127.0.0.1")
         settings.includedNetworkRules = [
             NENetworkRule(
-                remoteNetwork: nil,
+                remoteNetworkEndpoint: nil,
                 remotePrefix: 0,
-                localNetwork: nil,
+                localNetworkEndpoint: nil,
                 localPrefix: 0,
                 protocol: .any,
                 direction: .outbound
@@ -60,21 +60,11 @@ final class TransparentProxyProvider: NETransparentProxyProvider, ActiveFlowRela
 
     // MARK: - Flow Dispatch
 
-    override func handleNewUDPFlow(
-        _ flow: NEAppProxyUDPFlow,
-        initialRemoteEndpoint remoteEndpoint: NSObject
-    ) -> Bool {
-        if let endpoint = remoteEndpoint as? NWHostEndpoint, endpoint.port == Self.dnsPort {
-            return leaveDNSToSystem(flow, target: "UDP  \(endpoint.hostname):\(endpoint.port)")
-        }
-        return handleNewFlow(flow)
-    }
-
     override func handleNewFlow(_ flow: NEAppProxyFlow) -> Bool {
         if let tcp = flow as? NEAppProxyTCPFlow,
-           let endpoint = tcp.remoteEndpoint as? NWHostEndpoint,
-           endpoint.port == Self.dnsPort {
-            return leaveDNSToSystem(flow, target: "TCP  \(endpoint.hostname):\(endpoint.port)")
+           case .hostPort(_, let port) = tcp.remoteFlowEndpoint,
+           port == Self.dnsPort {
+            return leaveDNSToSystem(flow, target: "TCP  \(tcp.remoteFlowEndpoint.relayDescription)")
         }
 
         let signingID: String = flow.metaData.sourceAppSigningIdentifier
@@ -104,7 +94,7 @@ final class TransparentProxyProvider: NETransparentProxyProvider, ActiveFlowRela
         )
     }
 
-    fileprivate static let dnsPort = "53"
+    fileprivate static let dnsPort: Network.NWEndpoint.Port = 53
 
     fileprivate func leaveDNSToSystem(_ flow: NEAppProxyFlow, target: String) -> Bool {
         if let matched = matchedExcludeApp(flow.metaData.sourceAppSigningIdentifier) {
@@ -115,12 +105,12 @@ final class TransparentProxyProvider: NETransparentProxyProvider, ActiveFlowRela
 
     private func rejectFlow(_ flow: NEAppProxyFlow, error: Error) {
         if let tcp = flow as? NEAppProxyTCPFlow {
-            tcp.open(withLocalEndpoint: nil) { _ in
+            tcp.open(withLocalFlowEndpoint: nil) { _ in
                 tcp.closeReadWithError(error)
                 tcp.closeWriteWithError(error)
             }
         } else if let udp = flow as? NEAppProxyUDPFlow {
-            udp.open(withLocalEndpoint: nil) { _ in
+            udp.open(withLocalFlowEndpoint: nil) { _ in
                 udp.closeReadWithError(error)
                 udp.closeWriteWithError(error)
             }
@@ -151,9 +141,8 @@ final class TransparentProxyProvider: NETransparentProxyProvider, ActiveFlowRela
     }
 
     private func describeFlow(_ flow: NEAppProxyFlow) -> String {
-        if let tcp = flow as? NEAppProxyTCPFlow,
-           let endpoint = tcp.remoteEndpoint as? NWHostEndpoint {
-            return "TCP  \(endpoint.hostname):\(endpoint.port)"
+        if let tcp = flow as? NEAppProxyTCPFlow {
+            return "TCP  \(tcp.remoteFlowEndpoint.relayDescription)"
         }
         if flow is NEAppProxyUDPFlow {
             return "UDP"
@@ -199,12 +188,11 @@ final class TransparentProxyProvider: NETransparentProxyProvider, ActiveFlowRela
     }
 }
 
-@available(macOS 15.0, *)
 extension TransparentProxyProvider: NEAppProxyUDPFlowHandling {
 
     func handleNewUDPFlow(_ flow: NEAppProxyUDPFlow, initialRemoteFlowEndpoint remoteEndpoint: Network.NWEndpoint) -> Bool {
-        if case .hostPort(let host, let port) = remoteEndpoint, "\(port.rawValue)" == Self.dnsPort {
-            return leaveDNSToSystem(flow, target: "UDP  \(host):\(port.rawValue)")
+        if case .hostPort(_, let port) = remoteEndpoint, port == Self.dnsPort {
+            return leaveDNSToSystem(flow, target: "UDP  \(remoteEndpoint.relayDescription)")
         }
         return handleNewFlow(flow)
     }

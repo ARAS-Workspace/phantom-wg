@@ -41,7 +41,7 @@ final class TCPFlowRelay {
         registry?.registerRelay(id: relayID) { [weak self] in
             self?.close(error: POSIXError(.EHOSTUNREACH))
         }
-        flow.open(withLocalEndpoint: nil) { [weak self] error in
+        flow.open(withLocalFlowEndpoint: nil) { [weak self] error in
             if let error {
                 self?.close(error: error)
                 return
@@ -51,20 +51,19 @@ final class TCPFlowRelay {
     }
 
     private func startConnection() {
-        guard let hostEndpoint = flow.remoteEndpoint as? NWHostEndpoint else {
-            os_log("Missing remoteEndpoint", log: log, type: .error)
+        let endpoint = flow.remoteFlowEndpoint
+        guard case .hostPort = endpoint else {
+            os_log("Remote flow endpoint is not host:port", log: log, type: .error)
             close(error: nil)
             return
         }
 
-        remoteDescription = "\(hostEndpoint.hostname):\(hostEndpoint.port)"
-        let host = NWEndpoint.Host(hostEndpoint.hostname)
-        let port = NWEndpoint.Port(hostEndpoint.port) ?? .any
+        remoteDescription = endpoint.relayDescription
 
         let params = NWParameters.tcp
         params.requiredInterface = interface
 
-        let conn = NWConnection(host: host, port: port, using: params)
+        let conn = NWConnection(to: endpoint, using: params)
         connection = conn
 
         conn.stateUpdateHandler = { [weak self] state in
