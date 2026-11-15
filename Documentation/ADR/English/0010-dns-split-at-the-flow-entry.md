@@ -2,7 +2,7 @@
 
 ## Status
 
-Proposed — 2026-11-15
+Accepted — 2026-11-15
 
 This is an **extension record**: it narrows an accepted record by the route [ADR-0001 Item 5](0001-architectural-decision-records.md#decision) describes. The record it narrows is ADR-0003. The text of ADR-0003 does not change. This record replaces only the mechanism of its item 2.
 

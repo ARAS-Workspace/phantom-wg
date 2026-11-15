@@ -2,7 +2,7 @@
 
 ## Durum
 
-Önerildi — 2026-11-15
+Kabul Edildi — 2026-11-15
 
 Bu bir **uzantı kaydıdır**: [ADR-0001 Madde 5](0001-architectural-decision-records.md#karar)'in tarif ettiği yolla, kabul edilmiş bir kaydı daraltır. Daralttığı kayıt ADR-0003'tür. ADR-0003'ün metni değişmez. Bu kayıt yalnız 2. maddesinin mekanizmasının yerini alır.
 
