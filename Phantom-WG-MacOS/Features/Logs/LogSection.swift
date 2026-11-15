@@ -8,6 +8,7 @@ struct LogView: View {
 
     @State private var savingError: String?
     @State private var showingSaveError = false
+    @State private var followsTail = true
 
     var body: some View {
         scrollContent
@@ -36,11 +37,14 @@ struct LogView: View {
                 .accessibilityIdentifier(AXID.LogView.list)
             }
             .background(Color(nsColor: .controlBackgroundColor))
+            .onScrollGeometryChange(for: LogFollow.Position.self) { geometry in
+                LogFollow.Position(geometry)
+            } action: { old, new in
+                followsTail = LogFollow.follows(after: old, new, current: followsTail)
+            }
             .onChange(of: logStore.entries.last?.id) { _, lastID in
-                guard let lastID else { return }
-                withAnimation(.easeOut(duration: 0.2)) {
-                    proxy.scrollTo(lastID, anchor: .bottom)
-                }
+                guard followsTail, let lastID else { return }
+                proxy.scrollTo(lastID, anchor: .bottom)
             }
         }
     }

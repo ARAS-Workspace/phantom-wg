@@ -13,6 +13,7 @@ struct LogTabsSection: View {
     @Environment(LocalizationManager.self) private var loc
 
     @State private var channel: LogChannel = .split
+    @State private var followsTail = true
     @State private var savingError: String?
     @State private var showingSaveError = false
 
@@ -135,14 +136,17 @@ struct LogTabsSection: View {
             .frame(height: 240)
             .background(Color(nsColor: .textBackgroundColor).opacity(0.5))
             .clipShape(RoundedRectangle(cornerRadius: 6))
+            .onScrollGeometryChange(for: LogFollow.Position.self) { geometry in
+                LogFollow.Position(geometry)
+            } action: { old, new in
+                followsTail = LogFollow.follows(after: old, new, current: followsTail)
+            }
             .onChange(of: entries.last?.id) { _, _ in
-                if let last = entries.last {
-                    withAnimation(.easeOut(duration: 0.15)) {
-                        proxy.scrollTo(last.id, anchor: .bottom)
-                    }
-                }
+                guard followsTail, let last = entries.last else { return }
+                proxy.scrollTo(last.id, anchor: .bottom)
             }
             .onChange(of: channel) { _, _ in
+                followsTail = true
                 if let last = entries.last {
                     proxy.scrollTo(last.id, anchor: .bottom)
                 }
