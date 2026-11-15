@@ -10,6 +10,42 @@ extension TunnelDetailView {
         NSPasteboard.general.setString(contents, forType: .string)
     }
 
+    func exportConf() {
+        guard let config else { return }
+        let contents = config.asConfString()
+        let fileName = TunnelConfFile.fileName(for: config.name)
+        Task {
+            switch await PrivateDataAuthorization.request(reason: loc.t("export_private_data_reason")) {
+            case .granted:
+                break
+            case .declined:
+                return
+            case .failed(let message):
+                errorMessage = message
+                showingError = true
+                return
+            }
+            if !NSApp.isActive {
+                NSApp.activate()
+            }
+
+            let panel = NSSavePanel()
+            panel.allowedContentTypes = [TunnelConfFile.contentType]
+            panel.nameFieldStringValue = fileName
+            panel.canCreateDirectories = true
+            panel.title = loc.t("detail_export_conf")
+
+            guard panel.runModal() == .OK, let url = panel.url else { return }
+
+            do {
+                try TunnelConfFile.write(contents, to: url)
+            } catch {
+                errorMessage = error.localizedDescription
+                showingError = true
+            }
+        }
+    }
+
     func resetConnection() {
         guard !resetting else { return }
         resetting = true

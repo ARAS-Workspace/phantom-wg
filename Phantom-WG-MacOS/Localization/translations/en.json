@@ -75,6 +75,8 @@
   "detail_keepalive": "Keepalive",
   "detail_logs": "Logs",
   "detail_copy_conf": "Copy Config (.conf)",
+  "detail_export_conf": "Export Configuration",
+  "export_private_data_reason": "Export Tunnel Private Keys",
   "detail_edit_conf": "Edit Config",
   "detail_reset_connection": "Reset Connection",
   "detail_copied": "Copied!",

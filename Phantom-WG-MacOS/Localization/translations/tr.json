@@ -75,6 +75,8 @@
   "detail_keepalive": "Keepalive",
   "detail_logs": "Günlükler",
   "detail_copy_conf": "Yapılandırmayı Kopyala (.conf)",
+  "detail_export_conf": "Yapılandırmayı Dışa Aktar",
+  "export_private_data_reason": "Tünel Özel Anahtarlarını Dışa Aktarma",
   "detail_edit_conf": "Yapılandırmayı Düzenle",
   "detail_reset_connection": "Bağlantıyı Sıfırla",
   "detail_copied": "Kopyalandı!",

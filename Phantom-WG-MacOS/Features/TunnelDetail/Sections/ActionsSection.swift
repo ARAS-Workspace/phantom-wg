@@ -4,6 +4,7 @@ struct ActionsSection: View {
     var tunnel: TunnelContainer
     let canCopy: Bool
     let copyAction: () -> Void
+    let exportAction: () -> Void
     let editAction: () -> Void
     let resetAction: () -> Void
     let resetting: Bool
@@ -19,6 +20,13 @@ struct ActionsSection: View {
                 .disabled(!canCopy)
                 .listRowSeparator(.hidden)
                 .accessibilityIdentifier(AXID.TunnelDetail.Actions.copyButton)
+
+            Button(action: exportAction) {
+                Label(loc.t("detail_export_conf"), systemImage: "square.and.arrow.up")
+            }
+            .disabled(!canCopy)
+            .listRowSeparator(.hidden)
+            .accessibilityIdentifier(AXID.TunnelDetail.Actions.exportButton)
 
             Button(action: editAction) {
                 Label(loc.t("detail_edit_conf"), systemImage: "square.and.pencil")
@@ -82,6 +90,7 @@ struct ActionsSection: View {
                 tunnel: manager.tunnels[0],
                 canCopy: true,
                 copyAction: {},
+                exportAction: {},
                 editAction: {},
                 resetAction: {},
                 resetting: false,
@@ -103,6 +112,7 @@ struct ActionsSection: View {
                 tunnel: manager.tunnels[1],
                 canCopy: true,
                 copyAction: {},
+                exportAction: {},
                 editAction: {},
                 resetAction: {},
                 resetting: false,
