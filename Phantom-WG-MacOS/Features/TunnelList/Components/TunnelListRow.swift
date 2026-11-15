@@ -11,13 +11,20 @@ struct TunnelListRow: View {
                     .font(.system(size: 12, weight: .semibold))
                     .foregroundStyle(.tertiary)
             }
+            .padding(.horizontal, 10)
+            .frame(maxWidth: .infinity)
+            .frame(height: TunnelListRules.rowHeight)
             .contentShape(Rectangle())
         }
-        .buttonStyle(.plain)
+        .buttonStyle(TunnelRowPressStyle())
         .controlSize(.mini)
-        .padding(.horizontal, 10)
-        .frame(maxWidth: .infinity)
-        .frame(height: TunnelListRules.rowHeight)
+    }
+}
+
+struct TunnelRowPressStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .background(configuration.isPressed ? AnyShapeStyle(.fill.tertiary) : AnyShapeStyle(.clear))
     }
 }
 
