@@ -11,6 +11,8 @@
   "active_tunnel_header": "Active Tunnel",
   "active_tunnel_empty": "No active tunnel",
   "active_tunnel_empty_hint": "Turn on a tunnel from the list below.",
+  "tunnel_list_page_previous": "Previous Page",
+  "tunnel_list_page_next": "Next Page",
   "website": "Website",
   "documentation": "Documentation",
   "settings_language": "Language",

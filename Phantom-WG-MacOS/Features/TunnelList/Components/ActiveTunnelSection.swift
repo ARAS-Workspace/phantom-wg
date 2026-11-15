@@ -12,23 +12,14 @@ struct ActiveTunnelSection: View {
 
             Group {
                 if let tunnel = TunnelListRules.slotHolder(in: tunnelsManager.tunnels, status: \.status) {
-                    NavigationLink(destination: TunnelDetailView(tunnel: tunnel)) {
-                        HStack(spacing: 6) {
-                            TunnelRow(tunnel: tunnel)
-                            Image(systemName: "chevron.forward")
-                                .font(.system(size: 12, weight: .semibold))
-                                .foregroundStyle(.tertiary)
-                        }
-                        .contentShape(Rectangle())
-                    }
-                    .buttonStyle(.plain)
-                    .controlSize(.mini)
+                    TunnelListRow(tunnel: tunnel)
                 } else {
                     emptyState
+                        .padding(.horizontal, 10)
+                        .frame(maxWidth: .infinity)
+                        .frame(height: TunnelListRules.rowHeight)
                 }
             }
-            .padding(.horizontal, 10)
-            .frame(maxWidth: .infinity, minHeight: TunnelListRules.rowHeight, maxHeight: TunnelListRules.rowHeight)
             .groupedCard()
         }
         .accessibilityIdentifier(AXID.TunnelList.activeSection)

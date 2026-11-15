@@ -11,6 +11,8 @@
   "active_tunnel_header": "Aktif Tünel",
   "active_tunnel_empty": "Aktif tünel yok",
   "active_tunnel_empty_hint": "Aşağıdaki listeden bir tüneli açın.",
+  "tunnel_list_page_previous": "Önceki Sayfa",
+  "tunnel_list_page_next": "Sonraki Sayfa",
   "website": "Web Sitesi",
   "documentation": "Dokümantasyon",
   "settings_language": "Dil",

@@ -51,36 +51,13 @@ struct TunnelListView: View {
             EmptyStateView(showingImport: $showingImport)
         } else {
             VStack(spacing: 0) {
-                ActiveTunnelSection()
-                    .padding(.horizontal, 20)
-                    .padding(.top, 16)
-
-                Form {
-                    Section {
-                        ForEach(tunnelsManager.tunnels) { tunnel in
-                            NavigationLink(destination: TunnelDetailView(tunnel: tunnel)) {
-                                TunnelRow(tunnel: tunnel)
-                            }
-                        }
-                    } header: {
-                        HStack {
-                            Label(loc.t("tunnel_list_section_header"), systemImage: "list.bullet")
-                            Spacer()
-                            Text("\(tunnelsManager.tunnels.count)")
-                                .font(.footnote)
-                                .foregroundStyle(.secondary)
-                                .padding(.horizontal, 8)
-                                .padding(.vertical, 2)
-                                .background(
-                                    Capsule()
-                                        .fill(Color.secondary.opacity(0.15))
-                                )
-                                .accessibilityIdentifier(AXID.TunnelList.listCount)
-                        }
-                        .padding(.bottom, 6)
-                    }
+                VStack(spacing: 16) {
+                    ActiveTunnelSection()
+                    TunnelListSection()
                 }
-                .formStyle(.grouped)
+                .padding(.horizontal, 20)
+                .padding(.top, 16)
+                .padding(.bottom, 12)
 
                 Divider()
 
