@@ -23,7 +23,7 @@ final class RingBufferLogger {
         let line = "[\(formatter.string(from: Date()))] \(message)"
         lock.lock()
         if buffer.count >= capacity {
-            buffer.removeFirst(buffer.count - capacity + 1)
+            buffer.removeAll(keepingCapacity: true)
         }
         buffer.append(line)
         lock.unlock()

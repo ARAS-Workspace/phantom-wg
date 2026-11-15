@@ -31,10 +31,10 @@ enum TunnelLogger {
             message: message
         )
         lock.lock()
-        buffer.append(entry)
-        if buffer.count > maxEntries {
-            buffer.removeFirst(buffer.count - maxEntries)
+        if buffer.count >= maxEntries {
+            buffer.removeAll(keepingCapacity: true)
         }
+        buffer.append(entry)
         lock.unlock()
     }
 
