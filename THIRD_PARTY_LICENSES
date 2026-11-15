@@ -22,22 +22,24 @@ WIREGUARD LAYER
 Carried as a git submodule at Libraries/WireGuardKit and pinned by the
 gitlink in this repository, so the exact revision in use is recorded by git
 itself. The submodule points at a fork whose master branch is upstream's own
-history, with one commit on top of it.
+history, with two commits on top of it.
 
 | Component    | Version              | Language | License | SPDX |
 |--------------|----------------------|----------|---------|------|
-| WireGuardKit | 1.0.16-27-1-g8ec2cfb | Swift    | MIT     | MIT  |
+| WireGuardKit | 1.0.16-27-2-g778148b | Swift    | MIT     | MIT  |
 | wireguard-go | 2023-02-09           | Go       | MIT     | MIT  |
 
 Provenance:
 - Submodule:     https://github.com/ARAS-Workspace/wireguard-apple
 - Branch:        ios/phantom-wg
-- Commit:        8ec2cfb2af0c82b94f575177bec589bf279b17f5
+- Commit:        778148ba136c30989f3e3c4532b7a67753cbe95a
 - Upstream base: 2fec12a6e1f6e3460b6ee483aa00ad29cddadab1
                  "App: version bump", Jason A. Donenfeld, 2023-02-15;
                  nearest tag 1.0.16-27
-- Local commits: one — 8ec2cfb, Xcode 16 and iOS Simulator build
-                 compatibility patches. Build compatibility only.
+- Local commits: two — 8ec2cfb, Xcode 16 and iOS Simulator build
+                 compatibility patches; 778148b, an empty
+                 Sources/WireGuardKitGo/out directory kept in the tree.
+                 Build only.
 - wireguard-go:  golang.zx2c4.com/wireguard
                  v0.0.0-20230209153558-1e2c3e5a3c14, pinned in the
                  submodule's Sources/WireGuardKitGo/go.mod
