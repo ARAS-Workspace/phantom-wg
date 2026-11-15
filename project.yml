@@ -367,7 +367,7 @@ targets:
           - "**/.DS_Store"
       # App↔extension shared interface — model + Mach service
       # contract. DNSProxy absorbs the port 53 flows SplitTunnel
-      # carves out via excludedNetworkRules.
+      # declines at their entry (ADR-0010).
       - path: Phantom-WG-MacOS/Domain/Configuration/SplitTunnelingConfiguration.swift
       - path: Phantom-WG-MacOS/Domain/IPC/ProxyConfigDaemonProtocol.swift
       - path: Phantom-WG-MacOS/Domain/IPC/ExtensionIdentity.swift
