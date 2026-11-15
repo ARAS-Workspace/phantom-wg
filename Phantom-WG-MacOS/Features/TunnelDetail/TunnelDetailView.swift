@@ -68,7 +68,7 @@ struct TunnelDetailView: View {
             }
         }
         .onAppear {
-            logStore.startPolling()
+            logStore.startCounting()
             if Self.statsSessionImplied(tunnel.status) {
                 startStatsPolling()
             } else {
@@ -79,7 +79,7 @@ struct TunnelDetailView: View {
             }
         }
         .onDisappear {
-            logStore.stopPolling()
+            logStore.stopCounting()
             stopStatsPolling()
             configLoadTask?.cancel()
             configLoadTask = nil

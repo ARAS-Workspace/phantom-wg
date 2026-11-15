@@ -18,41 +18,45 @@ protocol LogEntryProvider: AnyObject, Observable {
 @MainActor
 final class LogStore: LogEntryProvider {
     var entries: [LogEntry] = []
+    var count = 0
 
     @ObservationIgnored private weak var tunnel: TunnelContainer?
     @ObservationIgnored private var pollingTask: Task<Void, Never>?
     @ObservationIgnored private var pollingHolds = 0
+    @ObservationIgnored private var countingHolds = 0
+    @ObservationIgnored private var countUnanswered = false
     @ObservationIgnored private var idCounter = 0
 
     init(tunnel: TunnelContainer?) {
         self.tunnel = tunnel
     }
 
-    /// Every screen that shows log rows (the detail badge, the log screen)
-    /// holds the poller while visible. Holds are a plain count — not a
-    /// state machine — because on push/pop the incoming screen's start can
-    /// land before the outgoing screen's stop, in either order.
+    /// Every screen that shows log rows (the log screen) or their count
+    /// (the detail badge) holds the poller while visible. Holds are plain
+    /// counts — not a state machine — because on push/pop the incoming
+    /// screen's start can land before the outgoing screen's stop, in either
+    /// order.
     func startPolling() {
         pollingHolds += 1
-        guard pollingTask == nil else { return }
-        pollingTask = Task { [weak self] in
-            while !Task.isCancelled {
-                do {
-                    try await Task.sleep(for: .seconds(0.5))
-                } catch {
-                    break
-                }
-                guard let self else { break }
-                await self.fetchLogs()
-            }
+        if pollingHolds == 1 {
+            Task { await fetchLogs() }
         }
+        runPoller()
     }
 
     func stopPolling() {
         pollingHolds = max(0, pollingHolds - 1)
-        guard pollingHolds == 0 else { return }
-        pollingTask?.cancel()
-        pollingTask = nil
+        stopPollerWhenIdle()
+    }
+
+    func startCounting() {
+        countingHolds += 1
+        runPoller()
+    }
+
+    func stopCounting() {
+        countingHolds = max(0, countingHolds - 1)
+        stopPollerWhenIdle()
     }
 
     func clear() async {
@@ -60,6 +64,7 @@ final class LogStore: LogEntryProvider {
             _ = await sendMessage(Data([2]))
         }
         entries.removeAll()
+        count = 0
     }
 
     // MARK: - Private
@@ -76,13 +81,67 @@ final class LogStore: LogEntryProvider {
         status == .active || status == .activating || status == .reasserting
     }
 
+    private func runPoller() {
+        guard pollingTask == nil else { return }
+        pollingTask = Task { [weak self] in
+            while !Task.isCancelled {
+                do {
+                    try await Task.sleep(for: .seconds(0.5))
+                } catch {
+                    break
+                }
+                guard let self else { break }
+                await self.poll()
+            }
+        }
+    }
+
+    private func stopPollerWhenIdle() {
+        guard pollingHolds == 0, countingHolds == 0 else { return }
+        pollingTask?.cancel()
+        pollingTask = nil
+    }
+
+    private func poll() async {
+        if pollingHolds > 0 || countUnanswered {
+            await fetchLogs()
+        } else {
+            await fetchCount()
+        }
+    }
+
+    private func endSession() {
+        if !entries.isEmpty { entries.removeAll() }
+        count = 0
+        countUnanswered = false
+    }
+
+    private func fetchCount() async {
+        guard let tunnel else { return }
+
+        guard Self.sessionImplied(tunnel.status) else {
+            endSession()
+            return
+        }
+
+        let reply = await sendMessage(Data([TunnelLogCountReply.opcode]))
+        guard Self.sessionImplied(tunnel.status) else { return }
+
+        if let value = TunnelLogCountReply.read(reply) {
+            count = value
+        } else {
+            countUnanswered = true
+            await fetchLogs()
+        }
+    }
+
     private func fetchLogs() async {
         // A detached store (nil tunnel: previews, torn-down container) has
         // no source to ask; it stays inert rather than wiping seeded rows.
         guard let tunnel else { return }
 
         guard Self.sessionImplied(tunnel.status) else {
-            if !entries.isEmpty { entries.removeAll() }
+            endSession()
             return
         }
 
@@ -99,6 +158,7 @@ final class LogStore: LogEntryProvider {
 
             let decoded = try JSONDecoder().decode([RemoteEntry].self, from: data)
             entries = identify(decoded)
+            count = entries.count
         } catch {
         }
     }

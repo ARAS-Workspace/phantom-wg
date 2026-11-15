@@ -12,7 +12,7 @@ struct LogNavigationSection: View {
                 HStack {
                     Label(loc.t("detail_logs"), systemImage: "text.justify.left")
                     Spacer()
-                    Text("\(logStore.entries.count)")
+                    Text("\(logStore.count)")
                         .font(.footnote)
                         .foregroundStyle(.secondary)
                         .padding(.horizontal, 8)
@@ -34,6 +34,7 @@ struct LogNavigationSection: View {
 #Preview {
     let store = LogStore(tunnel: nil)
     store.entries = PreviewFixtures.logEntries
+    store.count = store.entries.count
     return NavigationStack {
         Form {
             LogNavigationSection(logStore: store)
