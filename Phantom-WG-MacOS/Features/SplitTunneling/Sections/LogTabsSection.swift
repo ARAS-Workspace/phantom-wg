@@ -135,7 +135,7 @@ struct LogTabsSection: View {
             .frame(height: 240)
             .background(Color(nsColor: .textBackgroundColor).opacity(0.5))
             .clipShape(RoundedRectangle(cornerRadius: 6))
-            .onChange(of: entries.count) { _, _ in
+            .onChange(of: entries.last?.id) { _, _ in
                 if let last = entries.last {
                     withAnimation(.easeOut(duration: 0.15)) {
                         proxy.scrollTo(last.id, anchor: .bottom)

@@ -108,20 +108,11 @@ final class LogStore: LogEntryProvider {
     /// snapshot — so `entries.last?.id` moves when the tail actually changed,
     /// which is what the log screen's scroll trigger reads.
     private func identify(_ decoded: [RemoteEntry]) -> [LogEntry] {
-        var result: [LogEntry] = []
-        result.reserveCapacity(decoded.count)
-        var reusing = decoded.count >= entries.count
-        for (index, remote) in decoded.enumerated() {
-            let text = "[\(remote.timestamp)][\(remote.tag)] \(remote.message)"
-            if reusing, index < entries.count, entries[index].text == text {
-                result.append(entries[index])
-            } else {
-                reusing = false
-                idCounter += 1
-                result.append(LogEntry(id: idCounter, tag: remote.tag, text: text))
-            }
-        }
-        return result
+        LogIdentity.identified(
+            previous: entries,
+            next: decoded.map { (tag: $0.tag, text: "[\($0.timestamp)][\($0.tag)] \($0.message)") },
+            counter: &idCounter
+        )
     }
 
     private func sendMessage(_ data: Data) async -> Data? {

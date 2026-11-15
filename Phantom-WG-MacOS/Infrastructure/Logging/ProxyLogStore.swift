@@ -10,6 +10,7 @@ final class ProxyLogStore: LogEntryProvider {
     @ObservationIgnored private weak var daemonClient: ProxyConfigDaemonClient?
     @ObservationIgnored private let tag: String
     @ObservationIgnored private var pollingTask: Task<Void, Never>?
+    @ObservationIgnored private var idCounter = 0
 
     init(daemonClient: ProxyConfigDaemonClient, tag: String) {
         self.daemonClient = daemonClient
@@ -51,15 +52,12 @@ final class ProxyLogStore: LogEntryProvider {
             return
         }
 
-        entries = dump
-            .split(separator: "\n", omittingEmptySubsequences: true)
-            .enumerated()
-            .map { index, line in
-                LogEntry(
-                    id: index,
-                    tag: tag,
-                    text: String(line)
-                )
-            }
+        entries = LogIdentity.identified(
+            previous: entries,
+            next: dump
+                .split(separator: "\n", omittingEmptySubsequences: true)
+                .map { (tag: tag, text: String($0)) },
+            counter: &idCounter
+        )
     }
 }
