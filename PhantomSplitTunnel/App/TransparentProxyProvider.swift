@@ -49,25 +49,7 @@ final class TransparentProxyProvider: NETransparentProxyProvider, ActiveFlowRela
                 direction: .outbound
             )
         ]
-        settings.excludedNetworkRules = Self.dnsCarveOutRules()
         return settings
-    }
-
-    private static func dnsCarveOutRules() -> [NENetworkRule] {
-        let hosts = ["0.0.0.0", "::"]
-        let protos: [NENetworkRule.`Protocol`] = [.UDP, .TCP]
-        return hosts.flatMap { host in
-            protos.map { proto in
-                NENetworkRule(
-                    remoteNetwork: NWHostEndpoint(hostname: host, port: "53"),
-                    remotePrefix: 0,
-                    localNetwork: nil,
-                    localPrefix: 0,
-                    protocol: proto,
-                    direction: .outbound
-                )
-            }
-        }
     }
 
     override func stopProxy(with reason: NEProviderStopReason) async {
@@ -78,7 +60,23 @@ final class TransparentProxyProvider: NETransparentProxyProvider, ActiveFlowRela
 
     // MARK: - Flow Dispatch
 
+    override func handleNewUDPFlow(
+        _ flow: NEAppProxyUDPFlow,
+        initialRemoteEndpoint remoteEndpoint: NSObject
+    ) -> Bool {
+        if let endpoint = remoteEndpoint as? NWHostEndpoint, endpoint.port == Self.dnsPort {
+            return leaveDNSToSystem(flow, target: "UDP  \(endpoint.hostname):\(endpoint.port)")
+        }
+        return handleNewFlow(flow)
+    }
+
     override func handleNewFlow(_ flow: NEAppProxyFlow) -> Bool {
+        if let tcp = flow as? NEAppProxyTCPFlow,
+           let endpoint = tcp.remoteEndpoint as? NWHostEndpoint,
+           endpoint.port == Self.dnsPort {
+            return leaveDNSToSystem(flow, target: "TCP  \(endpoint.hostname):\(endpoint.port)")
+        }
+
         let signingID: String = flow.metaData.sourceAppSigningIdentifier
 
         if FlowDecisionEngine.isOwnProcess(signingIdentifier: signingID) {
@@ -104,6 +102,15 @@ final class TransparentProxyProvider: NETransparentProxyProvider, ActiveFlowRela
             boundTo: targetInterface,
             registry: self
         )
+    }
+
+    fileprivate static let dnsPort = "53"
+
+    fileprivate func leaveDNSToSystem(_ flow: NEAppProxyFlow, target: String) -> Bool {
+        if let matched = matchedExcludeApp(flow.metaData.sourceAppSigningIdentifier) {
+            logger.log("\(matched.displayName) — DNS left to the system  \(target)")
+        }
+        return false
     }
 
     private func rejectFlow(_ flow: NEAppProxyFlow, error: Error) {
@@ -189,5 +196,16 @@ final class TransparentProxyProvider: NETransparentProxyProvider, ActiveFlowRela
         }
         logger.log("interface unavailable — closing active bypass flows (strict)")
         forceCloseActiveRelays()
+    }
+}
+
+@available(macOS 15.0, *)
+extension TransparentProxyProvider: NEAppProxyUDPFlowHandling {
+
+    func handleNewUDPFlow(_ flow: NEAppProxyUDPFlow, initialRemoteFlowEndpoint remoteEndpoint: Network.NWEndpoint) -> Bool {
+        if case .hostPort(let host, let port) = remoteEndpoint, "\(port.rawValue)" == Self.dnsPort {
+            return leaveDNSToSystem(flow, target: "UDP  \(host):\(port.rawValue)")
+        }
+        return handleNewFlow(flow)
     }
 }
