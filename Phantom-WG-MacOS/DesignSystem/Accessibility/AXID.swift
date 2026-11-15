@@ -60,6 +60,8 @@ enum AXID {
         static let pagePrevious  = "tunnel-list.page.previous"
         static let pageNext      = "tunnel-list.page.next"
         static let pageIndicator = "tunnel-list.page.indicator"
+        static let search        = "tunnel-list.search"
+        static let searchNoMatch = "tunnel-list.search.no-match"
 
         static func row(_ name: String) -> String { "tunnel-row.\(name)" }
         static func rowToggle(_ name: String) -> String { "tunnel-row.\(name).toggle" }

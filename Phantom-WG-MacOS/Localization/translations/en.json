@@ -13,6 +13,8 @@
   "active_tunnel_empty_hint": "Turn on a tunnel from the list below.",
   "tunnel_list_page_previous": "Previous Page",
   "tunnel_list_page_next": "Next Page",
+  "tunnel_list_search_placeholder": "Search tunnels",
+  "tunnel_list_search_no_match": "No tunnels match “%@”",
   "website": "Website",
   "documentation": "Documentation",
   "settings_language": "Language",

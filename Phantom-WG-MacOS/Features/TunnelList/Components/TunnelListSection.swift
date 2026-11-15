@@ -5,27 +5,56 @@ struct TunnelListSection: View {
     @Environment(LocalizationManager.self) private var loc
 
     @State private var page = 0
+    @State private var query = ""
+
+    private var filtered: [TunnelContainer] {
+        tunnelsManager.tunnels.filter { TunnelListRules.matches($0.name, query: query) }
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             header
+
+            TunnelSearchField(text: $query, placeholder: loc.t("tunnel_list_search_placeholder"))
+                .frame(height: 24)
 
             GeometryReader { geometry in
                 let cardHeight = max(
                     TunnelListRules.rowHeight,
                     geometry.size.height - TunnelListRules.pagerHeight - TunnelListRules.pagerGap
                 )
-                let tunnels = tunnelsManager.tunnels
+                let tunnels = filtered
                 let perPage = TunnelListRules.rowsPerPage(height: cardHeight)
                 let pages = TunnelListRules.pageCount(itemCount: tunnels.count, perPage: perPage)
                 let current = TunnelListRules.clampedPage(page, itemCount: tunnels.count, perPage: perPage)
 
                 VStack(spacing: TunnelListRules.pagerGap) {
-                    card(TunnelListRules.page(tunnels, index: current, perPage: perPage), height: cardHeight)
+                    if tunnels.isEmpty {
+                        noMatch(height: cardHeight)
+                    } else {
+                        card(TunnelListRules.page(tunnels, index: current, perPage: perPage), height: cardHeight)
+                    }
                     pager(current: current, pages: pages)
                 }
             }
         }
+        .onChange(of: query) { _, _ in page = 0 }
+    }
+
+    private var countText: String {
+        let total = tunnelsManager.tunnels.count
+        return query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? "\(total)" : "\(filtered.count) / \(total)"
+    }
+
+    private func noMatch(height: CGFloat) -> some View {
+        Text(loc.t("tunnel_list_search_no_match", query.trimmingCharacters(in: .whitespacesAndNewlines)))
+            .foregroundStyle(.secondary)
+            .multilineTextAlignment(.center)
+            .padding(.horizontal, 20)
+            .frame(maxWidth: .infinity)
+            .frame(height: height)
+            .groupedCard()
+            .accessibilityIdentifier(AXID.TunnelList.searchNoMatch)
     }
 
     private var header: some View {
@@ -33,7 +62,7 @@ struct TunnelListSection: View {
             Label(loc.t("tunnel_list_section_header"), systemImage: "list.bullet")
                 .font(.headline)
             Spacer()
-            Text(verbatim: "\(tunnelsManager.tunnels.count)")
+            Text(verbatim: countText)
                 .font(.footnote)
                 .foregroundStyle(.secondary)
                 .padding(.horizontal, 8)
@@ -52,7 +81,7 @@ struct TunnelListSection: View {
             ForEach(Array(tunnels.enumerated()), id: \.element.id) { index, tunnel in
                 if index > 0 {
                     Divider()
-                        .padding(.leading, TunnelListRules.dividerInset)
+                        .padding(.horizontal, TunnelListRules.dividerInset)
                 }
                 TunnelListRow(tunnel: tunnel)
             }

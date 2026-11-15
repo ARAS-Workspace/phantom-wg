@@ -1,10 +1,10 @@
-import CoreGraphics
+import Foundation
 
 enum TunnelListRules {
 
     static let rowHeight: CGFloat = 56
     static let dividerHeight: CGFloat = 1
-    static let dividerInset: CGFloat = 54
+    static let dividerInset: CGFloat = 10
     static let pagerHeight: CGFloat = 28
     static let pagerGap: CGFloat = 8
 
@@ -13,6 +13,17 @@ enum TunnelListRules {
             .compactMap { item in status(item).slotRank.map { (rank: $0, item: item) } }
             .min { $0.rank < $1.rank }?
             .item
+    }
+
+    // MARK: - Search
+
+    static func matches(_ name: String, query: String) -> Bool {
+        let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmed.isEmpty || folded(name).localizedStandardContains(folded(trimmed))
+    }
+
+    private static func folded(_ text: String) -> String {
+        text.replacingOccurrences(of: "ı", with: "i")
     }
 
     // MARK: - Paging

@@ -13,6 +13,8 @@
   "active_tunnel_empty_hint": "Aşağıdaki listeden bir tüneli açın.",
   "tunnel_list_page_previous": "Önceki Sayfa",
   "tunnel_list_page_next": "Sonraki Sayfa",
+  "tunnel_list_search_placeholder": "Tünel ara",
+  "tunnel_list_search_no_match": "“%@” ile eşleşen tünel yok",
   "website": "Web Sitesi",
   "documentation": "Dokümantasyon",
   "settings_language": "Dil",
