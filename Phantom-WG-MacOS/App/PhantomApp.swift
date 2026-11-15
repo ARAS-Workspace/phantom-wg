@@ -155,7 +155,14 @@ struct PhantomApp: App {
             .environment(vaultSession)
             .environment(connectionGate)
             .tint(Color.accentColor)
-            .frame(width: 560, height: 720)
+            .frame(
+                minWidth: WindowSizing.minimum.width,
+                idealWidth: WindowSizing.ideal.width,
+                maxWidth: .infinity,
+                minHeight: WindowSizing.minimum.height,
+                idealHeight: WindowSizing.ideal.height,
+                maxHeight: .infinity
+            )
             .onAppear {
                 interfaceResolver.start()
                 coordinator.start()
@@ -176,6 +183,10 @@ struct PhantomApp: App {
                 splitTunnelingStore.recordPush(realign)
             }
         }
-        .windowResizability(.contentSize)
+        .windowResizability(.contentMinSize)
+        .defaultWindowPlacement { _, context in
+            let frame = WindowSizing.defaultFrame(in: context.defaultDisplay.visibleRect)
+            return WindowPlacement(frame.origin, size: frame.size)
+        }
     }
 }
