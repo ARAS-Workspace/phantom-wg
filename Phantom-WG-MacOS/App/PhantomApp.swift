@@ -188,5 +188,8 @@ struct PhantomApp: App {
             let frame = WindowSizing.defaultFrame(in: context.defaultDisplay.visibleRect)
             return WindowPlacement(frame.origin, size: frame.size)
         }
+        .commands {
+            WindowSizeCommands(loc: loc)
+        }
     }
 }

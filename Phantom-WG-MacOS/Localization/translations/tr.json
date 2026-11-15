@@ -1,6 +1,7 @@
 {
   "app_title": "Phantom-WG Mac",
   "app_loading": "Tüneller yükleniyor...",
+  "window_default_size": "Varsayılan Boyut",
   "error": "Hata",
   "ok": "Tamam",
   "cancel": "İptal",

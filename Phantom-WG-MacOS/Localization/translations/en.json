@@ -1,6 +1,7 @@
 {
   "app_title": "Phantom-WG Mac",
   "app_loading": "Loading tunnels...",
+  "window_default_size": "Default Size",
   "error": "Error",
   "ok": "OK",
   "cancel": "Cancel",
