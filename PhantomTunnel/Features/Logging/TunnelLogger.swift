@@ -38,6 +38,12 @@ enum TunnelLogger {
         lock.unlock()
     }
 
+    static func entryCount() -> Int {
+        lock.lock()
+        defer { lock.unlock() }
+        return buffer.count
+    }
+
     static func allEntriesAsData() -> Data? {
         lock.lock()
         let snapshot = buffer

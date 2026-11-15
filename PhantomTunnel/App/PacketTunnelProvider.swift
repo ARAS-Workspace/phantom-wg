@@ -170,6 +170,8 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
                 let outcome = await self.serializedReset()
                 completionHandler(Data([3, outcome.rawValue]))
             }
+        case TunnelLogCountReply.opcode:
+            completionHandler(TunnelLogCountReply.encode(TunnelLogger.entryCount()))
         default:
             completionHandler(nil)
         }

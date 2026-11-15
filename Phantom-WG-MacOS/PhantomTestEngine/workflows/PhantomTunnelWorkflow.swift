@@ -34,12 +34,15 @@
 //   B — XPC 0: Handshake Proven
 //   C — XPC 0 × Vault: Running Config Matches Vault
 //   D — XPC 1: Log Buffer Streams
-//   E — XPC 2: Flush Round-Trip
-//   F — XPC 3: Layer Reset In Place
-//   G — XPC 3: The Reply Names The Outcome
-//   H — XPC 3 ×2: Concurrent Reset Converges
-//   I — Negative: Empty and Unknown Opcode Rejected
-//   J — Deactivate + Disarm Sweep
+//   E — XPC 4: Log Count Matches The Buffer
+//       The count reply read first, the buffer right after; lines that
+//       land between the two reads may only add rows.
+//   F — XPC 2: Flush Round-Trip
+//   G — XPC 3: Layer Reset In Place
+//   H — XPC 3: The Reply Names The Outcome
+//   I — XPC 3 ×2: Concurrent Reset Converges
+//   J — Negative: Empty and Unknown Opcode Rejected
+//   K — Deactivate + Disarm Sweep
 //
 // The tunnel driven here is the USER's own door config, so the teardown
 // grounds it and never removes it. Inactive is not the same as disarmed —
@@ -74,6 +77,7 @@ final class PhantomTunnelWorkflow: TestWorkflow {
             WorkflowStep("XPC 0: Handshake Proven", handshakeProven),
             WorkflowStep("XPC 0 x Vault: Running Config Matches Vault", runningKeyMatchesVault),
             WorkflowStep("XPC 1: Log Buffer Streams", logBufferStreams),
+            WorkflowStep("XPC 4: Log Count Matches The Buffer", logCountMatchesBuffer),
             WorkflowStep("XPC 2: Flush Round-Trip", flushRoundTrip),
             WorkflowStep("XPC 3: Layer Reset In Place", layerResetInPlace),
             WorkflowStep("XPC 3: The Reply Names The Outcome", resetReplyNamesOutcome),
@@ -215,6 +219,27 @@ final class PhantomTunnelWorkflow: TestWorkflow {
             fail("log request answered empty")
         case .unanswered:
             fail("log request unanswered (5s)")
+        }
+    }
+
+    private func logCountMatchesBuffer() async {
+        guard sessionUp, let t = target else {
+            skip("session not up")
+            return
+        }
+        let countReply = await providerMessage(t, [TunnelLogCountReply.opcode])
+        guard case .data(let d) = countReply, let count = TunnelLogCountReply.read(d) else {
+            fail("log count unreadable — reply=\(countReply.label)")
+            return
+        }
+        switch await providerMessage(t, [1]) {
+        case .data(let logs):
+            let rows = ((try? JSONSerialization.jsonObject(with: logs)) as? [Any])?.count ?? -1
+            check(rows >= count && rows - count <= 20, "log count \(count), buffer read right after: \(rows) rows")
+        case .empty:
+            check(count == 0, "log count \(count), buffer read right after: empty")
+        case .unanswered:
+            fail("buffer read after the count unanswered")
         }
     }
 
