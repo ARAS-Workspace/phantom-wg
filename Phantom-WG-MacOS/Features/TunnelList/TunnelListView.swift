@@ -12,6 +12,9 @@ struct TunnelListView: View {
     @State private var showingUninstallConfirm = false
     @State private var showingSplitTunneling = false
     @State private var uninstalling = false
+    @State private var importing = false
+    @State private var importReport: TunnelBulkImport.Report?
+    @State private var importToasts = ToastCenter()
     #if DEBUG
     @State private var showingTestEngine = false
     #endif
@@ -19,6 +22,7 @@ struct TunnelListView: View {
     var body: some View {
         NavigationStack {
             listContent
+                .toastOverlay(importToasts)
                 .navigationTitle(loc.t("app_title"))
                 .toolbar { toolbarContent }
                 .navigationDestination(isPresented: $showingImport) {
@@ -41,6 +45,18 @@ struct TunnelListView: View {
                     showingUninstallConfirm: $showingUninstallConfirm,
                     onConfirm: runUninstall
                 ))
+                .alert(
+                    importReport.map { TunnelBulkImport.title($0, loc: loc) } ?? "",
+                    isPresented: Binding(
+                        get: { importReport != nil },
+                        set: { if !$0 { importReport = nil } }
+                    )
+                ) {
+                    Button(loc.t("ok")) {}
+                        .accessibilityIdentifier(AXID.TunnelList.importReportOK)
+                } message: {
+                    Text(importReport.map { TunnelBulkImport.message($0, loc: loc) } ?? "")
+                }
                 .disabled(uninstalling)
         }
     }
@@ -74,13 +90,17 @@ struct TunnelListView: View {
                 showingUninstallConfirm: $showingUninstallConfirm,
                 showingSplitTunneling: $showingSplitTunneling,
                 isUninstalling: uninstalling,
+                isImporting: importing,
+                onImport: importFromFiles,
                 showingTestEngine: $showingTestEngine
             )
             #else
             SettingsMenu(
                 showingUninstallConfirm: $showingUninstallConfirm,
                 showingSplitTunneling: $showingSplitTunneling,
-                isUninstalling: uninstalling
+                isUninstalling: uninstalling,
+                isImporting: importing,
+                onImport: importFromFiles
             )
             #endif
         }
@@ -108,6 +128,32 @@ struct TunnelListView: View {
         .foregroundStyle(.secondary)
         .frame(maxWidth: .infinity)
         .padding(.vertical, 12)
+    }
+
+    // MARK: - Import
+
+    private func importFromFiles() {
+        let panel = NSOpenPanel()
+        panel.title = loc.t("settings_import_tunnels")
+        panel.prompt = loc.t("import_button")
+        panel.allowedContentTypes = [TunnelConfFile.contentType, .zip]
+        panel.allowsMultipleSelection = true
+        panel.canChooseDirectories = false
+        panel.canChooseFiles = true
+
+        guard panel.runModal() == .OK, !panel.urls.isEmpty else { return }
+
+        let urls = panel.urls
+        importing = true
+        Task {
+            let report = await TunnelBulkImport.run(urls, into: tunnelsManager)
+            importing = false
+            if report.skipped.isEmpty {
+                importToasts.success(loc.t("import_report_success", report.added.count))
+            } else {
+                importReport = report
+            }
+        }
     }
 
     // MARK: - Uninstall

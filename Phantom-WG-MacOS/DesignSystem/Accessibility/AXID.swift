@@ -50,6 +50,8 @@ enum AXID {
         static let settingsLangTR       = "tunnel-list.settings.language.tr"
         static let settingsSplitTunnel  = "tunnel-list.settings.split-tunneling"
         static let settingsUninstall    = "tunnel-list.settings.uninstall"
+        static let settingsImport       = "tunnel-list.settings.import"
+        static let importReportOK       = "tunnel-list.import-report.ok"
         static let uninstallConfirm     = "tunnel-list.uninstall-confirm.confirm"
         static let uninstallCancel      = "tunnel-list.uninstall-confirm.cancel"
         static let errorAlertOK         = "tunnel-list.error-alert.ok"

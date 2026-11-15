@@ -4,6 +4,8 @@ struct SettingsMenu: View {
     @Binding var showingUninstallConfirm: Bool
     @Binding var showingSplitTunneling: Bool
     let isUninstalling: Bool
+    let isImporting: Bool
+    let onImport: () -> Void
     #if DEBUG
     @Binding var showingTestEngine: Bool
     #endif
@@ -29,6 +31,14 @@ struct SettingsMenu: View {
                 Label(loc.t("settings_language"), systemImage: "globe.badge.chevron.backward")
             }
             .accessibilityIdentifier(AXID.TunnelList.settingsLanguage)
+
+            Divider()
+
+            Button(action: onImport) {
+                Label(loc.t("settings_import_tunnels"), systemImage: "square.and.arrow.down")
+            }
+            .disabled(isUninstalling || isImporting)
+            .accessibilityIdentifier(AXID.TunnelList.settingsImport)
 
             Divider()
 
@@ -85,6 +95,8 @@ struct SettingsMenu: View {
                     showingUninstallConfirm: uninstall,
                     showingSplitTunneling: split,
                     isUninstalling: false,
+                    isImporting: false,
+                    onImport: {},
                     showingTestEngine: testEngine
                 )
             }

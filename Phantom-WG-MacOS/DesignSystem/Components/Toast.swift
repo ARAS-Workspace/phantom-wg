@@ -110,7 +110,10 @@ struct ToastBanner: View {
 // MARK: - Overlay
 
 private struct ToastOverlayModifier: ViewModifier {
-    @Environment(ToastCenter.self) private var toasts
+    @Environment(ToastCenter.self) private var environmentToasts
+    let center: ToastCenter?
+
+    private var toasts: ToastCenter { center ?? environmentToasts }
 
     func body(content: Content) -> some View {
         content.overlay(alignment: .top) {
@@ -131,8 +134,8 @@ private struct ToastOverlayModifier: ViewModifier {
 }
 
 extension View {
-    func toastOverlay() -> some View {
-        modifier(ToastOverlayModifier())
+    func toastOverlay(_ center: ToastCenter? = nil) -> some View {
+        modifier(ToastOverlayModifier(center: center))
     }
 }
 
