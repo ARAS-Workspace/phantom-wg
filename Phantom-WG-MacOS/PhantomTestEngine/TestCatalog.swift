@@ -30,6 +30,7 @@ enum TestCatalog {
             IsolationWorkflow(),
             ActivationSeamWorkflow(),
             ConfigContractWorkflow(),
+            ArchiveNamesWorkflow(),
             PhantomTunnelWorkflow(.standalone),
             PhantomTunnelWorkflow(.ghost),
             RecoverySwitchWorkflow(),

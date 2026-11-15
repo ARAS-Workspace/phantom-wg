@@ -132,6 +132,35 @@ claim to enumerate it.
 Full text:   BSD 3-CLAUSE LICENSE (WSTUNNEL), reproduced below.
 
 ================================================================================
+ZIP ARCHIVES — MINIZIP
+================================================================================
+
+The application reads and writes ZIP archives with MiniZip, built from the copy
+the WireGuardKit submodule carries at
+Libraries/WireGuardKit/Sources/WireGuardApp/ZipArchive/3rdparty/minizip. Only
+ioapi.c, unzip.c and zip.c are compiled, into the application alone; the system
+extensions do not link them. Compression comes from the SDK's own zlib (-lz).
+
+| Component | Version | Language | License | SPDX |
+|-----------|---------|----------|---------|------|
+| MiniZip   | 1.1     | C        | zlib    | Zlib |
+
+Provenance:  the submodule revision the gitlink pins (see WIREGUARD LAYER).
+Upstream:    http://www.winimage.com/zLibDll/minizip.html
+
+Copyright:
+- Copyright (C) 1998-2010 Gilles Vollant (minizip)
+- Copyright (C) 2007-2008 Even Rouault (unzip.c, unzip.h)
+- Copyright (C) 2009-2010 Mathias Svensson (Zip64 support)
+
+Usage Note:
+unzip.c keeps the Info-ZIP notice of the decryption code it was cut from. This
+copy carries none of that code: it has no crypt.h and no decryption routine,
+and the application refuses encrypted entries.
+
+Full text:   ZLIB LICENSE, reproduced below.
+
+================================================================================
 APPLE PLATFORM FRAMEWORKS
 ================================================================================
 
@@ -154,15 +183,18 @@ https://www.wireguard.com/
 LICENSE COMPATIBILITY
 ================================================================================
 
-All listed licenses (MIT, BSD-3-Clause) are permissive, are compatible with
-AGPL-3.0, and allow use in this project.
+All listed licenses (MIT, BSD-3-Clause, zlib) are permissive, are compatible
+with AGPL-3.0, and allow use in this project.
 
 No component listed here is under a copyleft license, so none of them imposes
 terms on the rest of this project.
 
 MIT and BSD-3-Clause both require their notice to travel with a binary
 redistribution. That is why the full texts are reproduced below rather than
-only linked: this file is the document provided with the distribution.
+only linked: this file is the document provided with the distribution. The
+zlib license asks for its notice in source distributions; its text is
+reproduced below as the acknowledgment in the product documentation that it
+names.
 
 ================================================================================
 FULL LICENSE TEXTS
@@ -281,6 +313,31 @@ SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
 CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
 OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+
+--------------------------------------------------------------------------------
+ZLIB LICENSE
+--------------------------------------------------------------------------------
+
+Covers:  MiniZip.
+Source:  the header of Libraries/WireGuardKit/Sources/WireGuardApp/ZipArchive/
+         3rdparty/minizip/zip.h, which states that the conditions of use and
+         distribution are the same as zlib's.
+
+  This software is provided 'as-is', without any express or implied
+  warranty.  In no event will the authors be held liable for any damages
+  arising from the use of this software.
+
+  Permission is granted to anyone to use this software for any purpose,
+  including commercial applications, and to alter it and redistribute it
+  freely, subject to the following restrictions:
+
+  1. The origin of this software must not be misrepresented; you must not
+     claim that you wrote the original software. If you use this software
+     in a product, an acknowledgment in the product documentation would be
+     appreciated but is not required.
+  2. Altered source versions must be plainly marked as such, and must not be
+     misrepresented as being the original software.
+  3. This notice may not be removed or altered from any source distribution.
 
 ================================================================================
 

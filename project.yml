@@ -96,6 +96,9 @@ targets:
           copyFiles:
             destination: resources
             subpath: Licenses/WireGuardKit
+      - path: Libraries/WireGuardKit/Sources/WireGuardApp/ZipArchive/3rdparty/minizip/ioapi.c
+      - path: Libraries/WireGuardKit/Sources/WireGuardApp/ZipArchive/3rdparty/minizip/unzip.c
+      - path: Libraries/WireGuardKit/Sources/WireGuardApp/ZipArchive/3rdparty/minizip/zip.c
     dependencies:
       - target: PhantomTunnel
         embed: true
@@ -116,8 +119,12 @@ targets:
         CODE_SIGN_ENTITLEMENTS: Phantom-WG-MacOS/Phantom-WG-MacOS.entitlements
         CODE_SIGN_STYLE: Manual
         DEVELOPMENT_TEAM: GZUHTM7439
+        SWIFT_OBJC_BRIDGING_HEADER: Phantom-WG-MacOS/BridgingHeader.h
+        HEADER_SEARCH_PATHS:
+          - "$(PROJECT_DIR)/Libraries/WireGuardKit/Sources/WireGuardApp/ZipArchive/3rdparty/minizip"
         OTHER_LDFLAGS:
           - "-lresolv"
+          - "-lz"
           - "-Wl,-w"
         SWIFT_VERSION: "5.0"
         MARKETING_VERSION: "2.1.3"
