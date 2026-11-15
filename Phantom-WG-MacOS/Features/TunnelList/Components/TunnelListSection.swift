@@ -6,16 +6,23 @@ struct TunnelListSection: View {
 
     @State private var page = 0
     @State private var query = ""
+    @State private var savedOrder = TunnelListOrderStore.load()
+    @State private var reordering = false
+    @State private var draft: [UUID] = []
+
+    private var ordered: [TunnelContainer] {
+        TunnelListRules.ordered(tunnelsManager.tunnels, saved: savedOrder, id: \.id)
+    }
 
     private var filtered: [TunnelContainer] {
-        tunnelsManager.tunnels.filter { TunnelListRules.matches($0.name, query: query) }
+        ordered.filter { TunnelListRules.matches($0.name, query: query) }
     }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             header
 
-            TunnelSearchField(text: $query, placeholder: loc.t("tunnel_list_search_placeholder"))
+            TunnelSearchField(text: $query, placeholder: loc.t("tunnel_list_search_placeholder"), enabled: !reordering)
                 .frame(height: 24)
 
             GeometryReader { geometry in
@@ -29,12 +36,22 @@ struct TunnelListSection: View {
                 let current = TunnelListRules.clampedPage(page, itemCount: tunnels.count, perPage: perPage)
 
                 VStack(spacing: TunnelListRules.pagerGap) {
-                    if tunnels.isEmpty {
-                        noMatch(height: cardHeight)
+                    if reordering {
+                        TunnelReorderCard(tunnels: tunnelsManager.tunnels, draft: $draft)
+                            .frame(height: cardHeight)
+                        Text(loc.t("tunnel_list_reorder_hint"))
+                            .font(.footnote)
+                            .foregroundStyle(.secondary)
+                            .frame(maxWidth: .infinity)
+                            .frame(height: TunnelListRules.pagerHeight)
                     } else {
-                        card(TunnelListRules.page(tunnels, index: current, perPage: perPage), height: cardHeight)
+                        if tunnels.isEmpty {
+                            noMatch(height: cardHeight)
+                        } else {
+                            card(TunnelListRules.page(tunnels, index: current, perPage: perPage), height: cardHeight)
+                        }
+                        pager(current: current, pages: pages)
                     }
-                    pager(current: current, pages: pages)
                 }
             }
         }
@@ -72,8 +89,41 @@ struct TunnelListSection: View {
                         .fill(Color.secondary.opacity(0.15))
                 )
                 .accessibilityIdentifier(AXID.TunnelList.listCount)
+            reorderControls
         }
         .padding(.leading, 10)
+    }
+
+    @ViewBuilder
+    private var reorderControls: some View {
+        if reordering {
+            Button(loc.t("cancel")) {
+                draft = []
+                reordering = false
+            }
+            .keyboardShortcut(.cancelAction)
+            .accessibilityIdentifier(AXID.TunnelList.reorderCancel)
+
+            Button(loc.t("tunnel_list_reorder_done")) {
+                savedOrder = draft
+                TunnelListOrderStore.save(draft)
+                draft = []
+                reordering = false
+            }
+            .keyboardShortcut(.defaultAction)
+            .accessibilityIdentifier(AXID.TunnelList.reorderDone)
+        } else {
+            Button {
+                query = ""
+                page = 0
+                draft = ordered.map(\.id)
+                reordering = true
+            } label: {
+                Label(loc.t("tunnel_list_reorder"), systemImage: "arrow.up.arrow.down")
+            }
+            .disabled(tunnelsManager.tunnels.count < 2)
+            .accessibilityIdentifier(AXID.TunnelList.reorderButton)
+        }
     }
 
     private func card(_ tunnels: ArraySlice<TunnelContainer>, height: CGFloat) -> some View {

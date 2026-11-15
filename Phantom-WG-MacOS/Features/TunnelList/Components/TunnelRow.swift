@@ -2,6 +2,7 @@ import SwiftUI
 
 struct TunnelRow: View {
     var tunnel: TunnelContainer
+    var showsToggle = true
     @Environment(TunnelsManager.self) private var tunnelsManager
 
     var body: some View {
@@ -18,10 +19,12 @@ struct TunnelRow: View {
 
             Spacer()
 
-            Toggle("", isOn: tunnel.toggleBinding(manager: tunnelsManager))
-                .toggleStyle(.switch)
-                .labelsHidden()
-                .accessibilityIdentifier(AXID.TunnelList.rowToggle(tunnel.name))
+            if showsToggle {
+                Toggle("", isOn: tunnel.toggleBinding(manager: tunnelsManager))
+                    .toggleStyle(.switch)
+                    .labelsHidden()
+                    .accessibilityIdentifier(AXID.TunnelList.rowToggle(tunnel.name))
+            }
         }
         .padding(.vertical, 2)
         .accessibilityIdentifier(AXID.TunnelList.row(tunnel.name))

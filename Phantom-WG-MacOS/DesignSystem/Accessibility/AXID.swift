@@ -62,9 +62,13 @@ enum AXID {
         static let pageIndicator = "tunnel-list.page.indicator"
         static let search        = "tunnel-list.search"
         static let searchNoMatch = "tunnel-list.search.no-match"
+        static let reorderButton = "tunnel-list.reorder"
+        static let reorderDone   = "tunnel-list.reorder.done"
+        static let reorderCancel = "tunnel-list.reorder.cancel"
 
         static func row(_ name: String) -> String { "tunnel-row.\(name)" }
         static func rowToggle(_ name: String) -> String { "tunnel-row.\(name).toggle" }
+        static func reorderRow(_ name: String) -> String { "tunnel-list.reorder.row.\(name)" }
     }
 
     // MARK: Split Tunneling

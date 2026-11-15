@@ -26,6 +26,46 @@ enum TunnelListRules {
         text.replacingOccurrences(of: "ı", with: "i")
     }
 
+    // MARK: - Order
+
+    static func ordered<Item>(_ items: [Item], saved: [UUID], id: (Item) -> UUID) -> [Item] {
+        var byId: [UUID: Item] = [:]
+        for item in items where byId[id(item)] == nil {
+            byId[id(item)] = item
+        }
+        var placed = Set<UUID>()
+        let kept = saved.compactMap { key -> Item? in
+            guard placed.insert(key).inserted else { return nil }
+            return byId[key]
+        }
+        return items.filter { !placed.contains(id($0)) } + kept
+    }
+
+    static func moving(_ order: [UUID], _ item: UUID, onto target: UUID) -> [UUID] {
+        guard item != target, let from = order.firstIndex(of: item), let to = order.firstIndex(of: target) else {
+            return order
+        }
+        var result = order
+        result.remove(at: from)
+        result.insert(item, at: to)
+        return result
+    }
+
+    static func movedToEdge(_ order: [UUID], _ item: UUID, top: Bool) -> [UUID] {
+        guard order.contains(item) else { return order }
+        let rest = order.filter { $0 != item }
+        return top ? [item] + rest : rest + [item]
+    }
+
+    static func movedByOne(_ order: [UUID], _ item: UUID, up: Bool) -> [UUID] {
+        guard let index = order.firstIndex(of: item) else { return order }
+        let other = up ? index - 1 : index + 1
+        guard order.indices.contains(other) else { return order }
+        var result = order
+        result.swapAt(index, other)
+        return result
+    }
+
     // MARK: - Paging
 
     static func rowsPerPage(height: CGFloat) -> Int {

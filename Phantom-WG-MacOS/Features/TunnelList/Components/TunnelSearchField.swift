@@ -4,6 +4,7 @@ import SwiftUI
 struct TunnelSearchField: NSViewRepresentable {
     @Binding var text: String
     let placeholder: String
+    var enabled = true
 
     func makeCoordinator() -> Coordinator { Coordinator(text: $text) }
 
@@ -24,6 +25,7 @@ struct TunnelSearchField: NSViewRepresentable {
         context.coordinator.text = $text
         if field.stringValue != text { field.stringValue = text }
         field.placeholderString = placeholder
+        field.isEnabled = enabled
     }
 
     static func dismantleNSView(_ field: UserFocusSearchField, coordinator: Coordinator) {
