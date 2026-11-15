@@ -18,9 +18,11 @@ struct SplitTunnelingView: View {
     @State private var logStore: ProxyLogStore?
     @State private var dnsLogStore: ProxyLogStore?
 
+    static let sheetWidth: CGFloat = 520
+
     var body: some View {
         activatedContent
-            .frame(minWidth: 520, minHeight: 240)
+            .frame(minWidth: Self.sheetWidth, minHeight: 240)
             .navigationTitle(loc.t("split_tunneling_title"))
             .toolbar {
                 ToolbarItem(placement: .confirmationAction) {
@@ -298,7 +300,7 @@ private struct ResetAlert: ViewModifier {
         splitStore: PreviewFixtures.splitStore(enabled: true),
         sessionState: .running
     )
-    .frame(width: 560, height: 700)
+    .frame(width: SplitTunnelingView.sheetWidth, height: 700)
 }
 
 #Preview("Disabled") {
@@ -309,5 +311,5 @@ private struct ResetAlert: ViewModifier {
         splitStore: PreviewFixtures.splitStore(enabled: false),
         sessionState: .stopped
     )
-    .frame(width: 560, height: 700)
+    .frame(width: SplitTunnelingView.sheetWidth, height: 700)
 }

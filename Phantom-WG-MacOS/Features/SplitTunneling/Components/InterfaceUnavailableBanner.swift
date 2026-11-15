@@ -58,7 +58,7 @@ struct InterfaceUnavailableBanner: View {
     )
     .padding(24)
     .previewEnvironment(scheme: .light)
-    .frame(width: 560)
+    .frame(width: SplitTunnelingView.sheetWidth)
 }
 
 #Preview("Dark") {
@@ -69,5 +69,5 @@ struct InterfaceUnavailableBanner: View {
     )
     .padding(24)
     .previewEnvironment(scheme: .dark)
-    .frame(width: 560)
+    .frame(width: SplitTunnelingView.sheetWidth)
 }

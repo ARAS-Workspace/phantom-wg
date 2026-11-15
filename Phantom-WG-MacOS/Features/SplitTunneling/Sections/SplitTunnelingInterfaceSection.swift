@@ -53,7 +53,7 @@ struct SplitTunnelingInterfaceSection: View {
         .formStyle(.grouped)
     }
     .previewEnvironment()
-    .frame(width: 560)
+    .frame(width: SplitTunnelingView.sheetWidth)
 }
 
 #Preview("Explicit saved entry") {
@@ -64,7 +64,7 @@ struct SplitTunnelingInterfaceSection: View {
         .formStyle(.grouped)
     }
     .previewEnvironment()
-    .frame(width: 560)
+    .frame(width: SplitTunnelingView.sheetWidth)
 }
 
 #Preview("Disabled") {
@@ -75,5 +75,5 @@ struct SplitTunnelingInterfaceSection: View {
         .formStyle(.grouped)
     }
     .previewEnvironment()
-    .frame(width: 560)
+    .frame(width: SplitTunnelingView.sheetWidth)
 }

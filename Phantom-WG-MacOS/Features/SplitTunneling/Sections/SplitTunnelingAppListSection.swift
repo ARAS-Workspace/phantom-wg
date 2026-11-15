@@ -95,7 +95,7 @@ struct SplitTunnelingAppListSection: View {
     }
     .formStyle(.grouped)
     .previewEnvironment()
-    .frame(width: 560)
+    .frame(width: SplitTunnelingView.sheetWidth)
 }
 
 #Preview("Empty") {
@@ -110,7 +110,7 @@ struct SplitTunnelingAppListSection: View {
     }
     .formStyle(.grouped)
     .previewEnvironment()
-    .frame(width: 560)
+    .frame(width: SplitTunnelingView.sheetWidth)
 }
 
 #Preview("Disabled") {
@@ -125,5 +125,5 @@ struct SplitTunnelingAppListSection: View {
     }
     .formStyle(.grouped)
     .previewEnvironment()
-    .frame(width: 560)
+    .frame(width: SplitTunnelingView.sheetWidth)
 }

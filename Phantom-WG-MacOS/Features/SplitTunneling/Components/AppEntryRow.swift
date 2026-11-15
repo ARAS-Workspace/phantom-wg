@@ -98,5 +98,5 @@ private struct AppIconView: View {
     }
     .formStyle(.grouped)
     .previewEnvironment()
-    .frame(width: 560)
+    .frame(width: SplitTunnelingView.sheetWidth)
 }

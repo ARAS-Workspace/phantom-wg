@@ -222,11 +222,11 @@ private struct LogTabsPreviewHost: View {
 #Preview("Light") {
     LogTabsPreviewHost()
         .previewEnvironment(scheme: .light)
-        .frame(width: 560, height: 480)
+        .frame(width: SplitTunnelingView.sheetWidth, height: 480)
 }
 
 #Preview("Dark") {
     LogTabsPreviewHost()
         .previewEnvironment(scheme: .dark)
-        .frame(width: 560, height: 480)
+        .frame(width: SplitTunnelingView.sheetWidth, height: 480)
 }
