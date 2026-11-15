@@ -55,6 +55,8 @@ enum AXID {
         static let errorAlertOK         = "tunnel-list.error-alert.ok"
 
         static let listCount    = "tunnel-list.count"
+        static let activeSection = "tunnel-list.active"
+        static let activeEmpty   = "tunnel-list.active.empty"
 
         static func row(_ name: String) -> String { "tunnel-row.\(name)" }
         static func rowToggle(_ name: String) -> String { "tunnel-row.\(name).toggle" }

@@ -51,6 +51,10 @@ struct TunnelListView: View {
             EmptyStateView(showingImport: $showingImport)
         } else {
             VStack(spacing: 0) {
+                ActiveTunnelSection()
+                    .padding(.horizontal, 20)
+                    .padding(.top, 16)
+
                 Form {
                     Section {
                         ForEach(tunnelsManager.tunnels) { tunnel in
