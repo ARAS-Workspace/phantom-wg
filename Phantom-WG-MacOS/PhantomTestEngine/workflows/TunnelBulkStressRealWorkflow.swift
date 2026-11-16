@@ -30,6 +30,10 @@
 //
 // Durations, the paint the system gives a fresh entry and the number of
 // configuration change notifications are logged; they carry no verdict.
+// A batch's duration covers the batch alone. Its notifications are counted
+// from its start to 500 ms after it returns. The store readings begin the
+// moment it returns, and the log names the read on which they agreed and
+// how long after the batch that read finished.
 //
 // Scenarios:
 //
@@ -73,8 +77,8 @@ final class TunnelBulkStressRealWorkflow: TestWorkflow {
     }
 
     @MainActor
-    private final class Counter {
-        var count = 0
+    private final class Arrivals {
+        var instants: [ContinuousClock.Instant] = []
     }
 
     private struct Named {
@@ -82,16 +86,29 @@ final class TunnelBulkStressRealWorkflow: TestWorkflow {
         let names: [UUID: String]
     }
 
+    private struct Settled {
+        let reading: TunnelStoreReading?
+        let after: Double?
+        let reads: Int
+    }
+
+    private struct Watched<Result> {
+        let result: Result
+        let took: Duration
+        let changes: Int
+        let settled: Settled
+    }
+
     private struct Imported {
         let each: Double
         let changes: Int
-        let agreedAfter: Double?
+        let agreed: Settled
     }
 
     private struct Deleted {
         let each: Double
         let changes: Int
-        let emptiedAfter: Double?
+        let emptied: Settled
     }
 
     private static let prefix = "TE-Stress-R-"
@@ -99,6 +116,7 @@ final class TunnelBulkStressRealWorkflow: TestWorkflow {
     private let largeBatch = 50
     private var measured: [Int: (imported: Imported, deleted: Deleted)] = [:]
     private let convergence = 5.0
+    private let changeWindow = Duration.milliseconds(500)
     private let runTag = String(UUID().uuidString.prefix(8))
     private var directory: URL?
 
@@ -127,30 +145,47 @@ final class TunnelBulkStressRealWorkflow: TestWorkflow {
     private func settled(
         _ match: (String) -> Bool,
         until condition: (TunnelStoreReading) -> Bool
-    ) async -> (reading: TunnelStoreReading?, after: Double?) {
+    ) async -> Settled {
         let started = ContinuousClock.now
+        var reads = 1
         var last = await read(match)
         while true {
             if let last, condition(last.reading) {
-                return (last.reading, Self.milliseconds(ContinuousClock.now - started))
+                return Settled(reading: last.reading, after: Self.milliseconds(ContinuousClock.now - started), reads: reads)
             }
             if ContinuousClock.now - started > .seconds(convergence) || Task.isCancelled {
-                return (last?.reading, nil)
+                return Settled(reading: last?.reading, after: nil, reads: reads)
             }
             try? await Task.sleep(for: .milliseconds(250))
             last = await read(match)
+            reads += 1
         }
     }
 
-    private func countingConfigurationChanges<T>(_ body: () async -> T) async -> (T, Int) {
-        let counter = Counter()
+    private func watching<Result>(
+        _ batch: () async -> Result,
+        settling match: (String) -> Bool,
+        until condition: (TunnelStoreReading) -> Bool
+    ) async -> Watched<Result> {
+        let arrivals = Arrivals()
         let token = NotificationCenter.default.addObserver(forName: .NEVPNConfigurationChange, object: nil, queue: .main) { _ in
-            MainActor.assumeIsolated { counter.count += 1 }
+            MainActor.assumeIsolated { arrivals.instants.append(.now) }
         }
-        let result = await body()
-        try? await Task.sleep(for: .milliseconds(500))
+        let started = ContinuousClock.now
+        let result = await batch()
+        let returned = ContinuousClock.now
+        let landed = await settled(match, until: condition)
+        let windowEnd = returned + changeWindow
+        if ContinuousClock.now < windowEnd {
+            try? await Task.sleep(until: windowEnd)
+        }
         NotificationCenter.default.removeObserver(token)
-        return (result, counter.count)
+        return Watched(
+            result: result,
+            took: returned - started,
+            changes: arrivals.instants.filter { $0 <= windowEnd }.count,
+            settled: landed
+        )
     }
 
     private static func milliseconds(_ duration: Duration) -> Double {
@@ -164,8 +199,13 @@ final class TunnelBulkStressRealWorkflow: TestWorkflow {
         return "\(label): \(String(format: "%.0f", total)) ms in all, \(String(format: "%.1f", each)) ms per tunnel (\(count))"
     }
 
-    private static func after(_ milliseconds: Double?) -> String {
-        milliseconds.map { "agreed \(String(format: "%.0f", $0)) ms after the batch returned" } ?? "not within the wait"
+    private static func after(_ settled: Settled, _ verb: String) -> String {
+        guard let after = settled.after else { return "not \(verb) within the wait, \(settled.reads) reads" }
+        return "\(verb) on read \(settled.reads), \(String(format: "%.0f", after)) ms after the batch returned"
+    }
+
+    private func notifications(_ batch: String, _ changes: Int) -> String {
+        "configuration change notifications from the \(batch)'s start to \(String(format: "%.0f", Self.milliseconds(changeWindow))) ms after it returned: \(changes)"
     }
 
     // MARK: - Step A
@@ -180,7 +220,7 @@ final class TunnelBulkStressRealWorkflow: TestWorkflow {
         for id in ids {
             await sweepPlantedTunnel(id: id, name: found.names[id] ?? "\(Self.prefix)\(id)")
         }
-        let (left, _) = await settled({ $0.hasPrefix(Self.prefix) }, until: \.isEmpty)
+        let left = await settled({ $0.hasPrefix(Self.prefix) }, until: \.isEmpty).reading
         check(left?.isEmpty == true,
               "none of the three stores holds a row, an entry or a payload carrying \(Self.prefix) (swept \(ids.count), now \(left?.line ?? "unreadable"))")
     }
@@ -281,20 +321,21 @@ final class TunnelBulkStressRealWorkflow: TestWorkflow {
 
     private func importsWhole(_ names: [String], sources: [String: TunnelConfig], archive: URL) async -> Imported? {
         let isRun = { (name: String) in names.contains(name) }
-        let started = ContinuousClock.now
-        let (report, changes) = await countingConfigurationChanges {
-            await TunnelBulkImport.run([archive], into: tunnels)
-        }
-        let took = ContinuousClock.now - started
-        log(Self.timing("import", took, count: report.added.count))
-        log("configuration change notifications during the import: \(changes)")
+        let watched = await watching(
+            { await TunnelBulkImport.run([archive], into: tunnels) },
+            settling: isRun,
+            until: { $0.agree && $0.rows.count == names.count }
+        )
+        let report = watched.result
+        log(Self.timing("import", watched.took, count: report.added.count))
+        log(notifications("import", watched.changes))
 
         check(report.added == names && report.skipped.isEmpty,
               "every entry of the \(names.count)-entry archive was added, in label order, and nothing was reported (added=\(report.added.count), skipped=\(report.skipped.map { "\($0.label): \($0.skip)" }))")
 
-        let (held, after) = await settled(isRun) { $0.agree && $0.rows.count == names.count }
+        let held = watched.settled.reading
         check(held.map { $0.agree && $0.rows.count == names.count } == true,
-              "the live list, the system's entries and the vault hold the same \(names.count) ids, each once (\(held?.line ?? "unreadable"), \(Self.after(after)))")
+              "the live list, the system's entries and the vault hold the same \(names.count) ids, each once (\(held?.line ?? "unreadable"), \(Self.after(watched.settled, "agreed")))")
 
         if case .configs(let configs) = await vault.readAll() {
             let mismatched = names.filter { tunnelName in
@@ -311,7 +352,11 @@ final class TunnelBulkStressRealWorkflow: TestWorkflow {
         let painted = tunnels.tunnels.filter { isRun($0.name) }.map { "\($0.status)" }
         log("rows painted after the import: \(Dictionary(grouping: painted) { $0 }.mapValues(\.count).sorted { $0.key < $1.key }.map { "\($0.key)=\($0.value)" }.joined(separator: ", "))")
         guard !report.added.isEmpty else { return nil }
-        return Imported(each: Self.milliseconds(took) / Double(report.added.count), changes: changes, agreedAfter: after)
+        return Imported(
+            each: Self.milliseconds(watched.took) / Double(report.added.count),
+            changes: watched.changes,
+            agreed: watched.settled
+        )
     }
 
     private func deletesWhole(_ names: [String], baseline: TunnelStoreReading) async -> Deleted {
@@ -319,13 +364,14 @@ final class TunnelBulkStressRealWorkflow: TestWorkflow {
         let rows = TunnelListRules.ordered(tunnels.tunnels.filter { isRun($0.name) }, saved: [], id: \.id)
         let targets = TunnelBulkDelete.targets(rows, marked: Set(rows.map(\.id)))
         var progress: [Int] = []
-        let started = ContinuousClock.now
-        let (report, changes) = await countingConfigurationChanges {
-            await TunnelBulkDelete.run(targets, in: tunnels) { progress.append($0) }
-        }
-        let took = ContinuousClock.now - started
-        log(Self.timing("delete", took, count: targets.count))
-        log("configuration change notifications during the delete: \(changes)")
+        let watched = await watching(
+            { await TunnelBulkDelete.run(targets, in: tunnels) { progress.append($0) } },
+            settling: isRun,
+            until: \.isEmpty
+        )
+        let report = watched.result
+        log(Self.timing("delete", watched.took, count: targets.count))
+        log(notifications("delete", watched.changes))
 
         check(!targets.isEmpty
                 && report.deleted == targets.map(\.name)
@@ -333,20 +379,24 @@ final class TunnelBulkStressRealWorkflow: TestWorkflow {
                 && progress == Array(1...targets.count),
               "the bulk delete took every planted row in list order, skipped none and counted each once (targets=\(targets.count), deleted=\(report.deleted.count), skipped=\(report.skipped.map { "\($0.name): \($0.skip)" }), progress last=\(progress.last ?? 0))")
 
-        let (left, after) = await settled(isRun, until: \.isEmpty)
+        let left = watched.settled.reading
         check(left?.isEmpty == true,
-              "none of the three real stores holds a planted tunnel (\(left?.line ?? "unreadable"), \(Self.after(after).replacingOccurrences(of: "agreed", with: "emptied")))")
+              "none of the three real stores holds a planted tunnel (\(left?.line ?? "unreadable"), \(Self.after(watched.settled, "emptied")))")
 
-        let (everything, _) = await settled({ _ in true }, until: {
+        let everything = await settled({ _ in true }, until: {
             Set($0.rows) == Set(baseline.rows) && Set($0.entries) == Set(baseline.entries) && Set($0.payloads) == Set(baseline.payloads)
-        })
+        }).reading
         check(everything.map {
                   Set($0.rows) == Set(baseline.rows)
                       && Set($0.entries) == Set(baseline.entries)
                       && Set($0.payloads) == Set(baseline.payloads)
               } == true,
               "the user's own tunnels are where they were: the three stores read the same ids as before the import (before \(baseline.line), now \(everything?.line ?? "unreadable"))")
-        return Deleted(each: Self.milliseconds(took) / Double(max(targets.count, 1)), changes: changes, emptiedAfter: after)
+        return Deleted(
+            each: Self.milliseconds(watched.took) / Double(max(targets.count, 1)),
+            changes: watched.changes,
+            emptied: watched.settled
+        )
     }
 
     private func compare(_ count: Int, with base: Int) {
@@ -356,10 +406,12 @@ final class TunnelBulkStressRealWorkflow: TestWorkflow {
         }
         let each = { (value: Double) in String(format: "%.1f", value) }
         let perTunnel = { (changes: Int, tunnels: Int) in String(format: "%.2f", Double(changes) / Double(tunnels)) }
-        let after = { (value: Double?) in value.map { String(format: "%.0f ms", $0) } ?? "not within the wait" }
+        let after = { (settled: Settled) in
+            settled.after.map { "\(String(format: "%.0f", $0)) ms on read \(settled.reads)" } ?? "not within the wait"
+        }
         log("per tunnel, \(base) → \(count): import \(each(small.imported.each)) → \(each(large.imported.each)) ms, delete \(each(small.deleted.each)) → \(each(large.deleted.each)) ms")
         log("notifications per tunnel, \(base) → \(count): import \(perTunnel(small.imported.changes, base)) → \(perTunnel(large.imported.changes, count)), delete \(perTunnel(small.deleted.changes, base)) → \(perTunnel(large.deleted.changes, count))")
-        log("after the batch returned, \(base) → \(count): stores agreed \(after(small.imported.agreedAfter)) → \(after(large.imported.agreedAfter)), emptied \(after(small.deleted.emptiedAfter)) → \(after(large.deleted.emptiedAfter))")
+        log("after the batch returned, \(base) → \(count): stores agreed \(after(small.imported.agreed)) → \(after(large.imported.agreed)), emptied \(after(small.deleted.emptied)) → \(after(large.deleted.emptied))")
     }
 
     private func sweep(_ names: [String], sources: [String: TunnelConfig]) async {
