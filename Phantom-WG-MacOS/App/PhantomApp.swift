@@ -125,7 +125,7 @@ struct PhantomApp: App {
     }
 
     var body: some Scene {
-        WindowGroup {
+        Window(loc.t("app_title"), id: SceneID.mainWindow) {
             Group {
                 if coordinator.allReady {
                     if vaultSession.state == .ready {
