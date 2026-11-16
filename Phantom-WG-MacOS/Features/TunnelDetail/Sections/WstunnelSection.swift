@@ -6,7 +6,7 @@ struct WstunnelSection: View {
     @Environment(LocalizationManager.self) private var loc
 
     var body: some View {
-        Section {
+        CardSection {
             PhantomStaticField(
                 label: loc.t("detail_server_url"),
                 value: config.url.textual,
@@ -46,13 +46,13 @@ struct WstunnelSection: View {
 // MARK: - Previews
 
 #Preview {
-    Form {
+    VStack(alignment: .leading, spacing: 16) {
         WstunnelSection(
             config: PreviewFixtures.ghostConfig().wstunnel!,
             fingerprintKey: PreviewFixtures.ghostConfig().wireguard.interface.privateKey
         )
     }
-    .formStyle(.grouped)
+    .padding(20)
     .previewEnvironment()
     .frame(width: WindowSizing.ideal.width)
 }

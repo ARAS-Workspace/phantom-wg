@@ -86,7 +86,7 @@ struct StatusSection: View {
     @Environment(LocalizationManager.self) private var loc
 
     var body: some View {
-        Section {
+        CardSection {
             TunnelStatusRow(
                 tunnel: tunnel,
                 isGhost: isGhost,
@@ -108,11 +108,11 @@ struct StatusSection: View {
 #Preview {
     let manager = PreviewFixtures.tunnelsManager()
     manager.tunnels[1].lastActivationError = PreviewFixtures.activationError
-    return Form {
+    return VStack(alignment: .leading, spacing: 16) {
         StatusSection(tunnel: manager.tunnels[0], isGhost: true)
         StatusSection(tunnel: manager.tunnels[1], isGhost: false)
     }
-    .formStyle(.grouped)
+    .padding(20)
     .previewEnvironment(tunnels: manager)
     .frame(width: WindowSizing.ideal.width)
 }
@@ -125,10 +125,10 @@ struct StatusSection: View {
         userInfo: [NSLocalizedDescriptionKey: "The wstunnel proxy could not be started."]
     )
     let manager = PreviewFixtures.tunnelsManager(providers: [provider])
-    return Form {
+    return VStack(alignment: .leading, spacing: 16) {
         StatusSection(tunnel: manager.tunnels[0], isGhost: true)
     }
-    .formStyle(.grouped)
+    .padding(20)
     .previewEnvironment(tunnels: manager)
     .frame(width: WindowSizing.ideal.width)
 }

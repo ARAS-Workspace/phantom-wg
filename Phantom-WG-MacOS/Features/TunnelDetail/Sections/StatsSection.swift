@@ -7,7 +7,7 @@ struct StatsSection: View {
     @Environment(LocalizationManager.self) private var loc
 
     var body: some View {
-        Section {
+        CardSection {
             StatRow(icon: "hand.wave", label: loc.t("detail_handshake"), value: handshake)
                 .accessibilityIdentifier(AXID.TunnelDetail.Stats.handshake)
             StatRow(icon: "arrow.down.circle", label: loc.t("detail_received"), value: rxBytes, valueColor: .green)
@@ -23,19 +23,19 @@ struct StatsSection: View {
 // MARK: - Previews
 
 #Preview("Live values") {
-    Form {
+    VStack(alignment: .leading, spacing: 16) {
         StatsSection(handshake: "12 seconds ago", rxBytes: "45.12 MB", txBytes: "8.79 MB")
     }
-    .formStyle(.grouped)
+    .padding(20)
     .previewEnvironment()
     .frame(width: WindowSizing.ideal.width)
 }
 
 #Preview("Idle") {
-    Form {
+    VStack(alignment: .leading, spacing: 16) {
         StatsSection(handshake: "—", rxBytes: "—", txBytes: "—")
     }
-    .formStyle(.grouped)
+    .padding(20)
     .previewEnvironment()
     .frame(width: WindowSizing.ideal.width)
 }

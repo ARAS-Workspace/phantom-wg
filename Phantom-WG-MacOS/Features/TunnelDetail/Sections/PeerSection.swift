@@ -5,7 +5,7 @@ struct PeerSection: View {
     @Environment(LocalizationManager.self) private var loc
 
     var body: some View {
-        Section {
+        CardSection {
             PhantomStaticField(
                 label: loc.t("detail_public_key"),
                 value: config.publicKey.textual,
@@ -46,10 +46,10 @@ struct PeerSection: View {
 // MARK: - Previews
 
 #Preview("With preshared key") {
-    Form {
+    VStack(alignment: .leading, spacing: 16) {
         PeerSection(config: PreviewFixtures.ghostConfig().wireguard.peer)
     }
-    .formStyle(.grouped)
+    .padding(20)
     .previewEnvironment()
     .frame(width: WindowSizing.ideal.width)
 }
@@ -57,19 +57,19 @@ struct PeerSection: View {
 #Preview("Without preshared key") {
     var peer = PreviewFixtures.ghostConfig().wireguard.peer
     peer.presharedKey = nil
-    return Form {
+    return VStack(alignment: .leading, spacing: 16) {
         PeerSection(config: peer)
     }
-    .formStyle(.grouped)
+    .padding(20)
     .previewEnvironment()
     .frame(width: WindowSizing.ideal.width)
 }
 
 #Preview("Standalone — endpoint row") {
-    Form {
+    VStack(alignment: .leading, spacing: 16) {
         PeerSection(config: PreviewFixtures.wireguardConfig().wireguard.peer)
     }
-    .formStyle(.grouped)
+    .padding(20)
     .previewEnvironment()
     .frame(width: WindowSizing.ideal.width)
 }

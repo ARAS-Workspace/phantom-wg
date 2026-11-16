@@ -5,7 +5,7 @@ struct LogNavigationSection: View {
     @Environment(LocalizationManager.self) private var loc
 
     var body: some View {
-        Section {
+        CardSection {
             NavigationLink {
                 LogView(logStore: logStore)
             } label: {
@@ -21,9 +21,13 @@ struct LogNavigationSection: View {
                             Capsule()
                                 .fill(Color.secondary.opacity(0.15))
                         )
+                    Image(systemName: "chevron.forward")
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundStyle(.tertiary)
                 }
+                .contentShape(Rectangle())
             }
-            .listRowSeparator(.hidden)
+            .buttonStyle(TunnelRowPressStyle())
             .accessibilityIdentifier(AXID.TunnelDetail.logsLink)
         }
     }
@@ -36,10 +40,10 @@ struct LogNavigationSection: View {
     store.entries = PreviewFixtures.logEntries
     store.count = store.entries.count
     return NavigationStack {
-        Form {
+        VStack(alignment: .leading, spacing: 16) {
             LogNavigationSection(logStore: store)
         }
-        .formStyle(.grouped)
+        .padding(20)
     }
     .previewEnvironment()
     .frame(width: WindowSizing.ideal.width)

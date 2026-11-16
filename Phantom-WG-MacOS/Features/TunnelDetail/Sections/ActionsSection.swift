@@ -15,31 +15,27 @@ struct ActionsSection: View {
     @Environment(LocalizationManager.self) private var loc
 
     var body: some View {
-        Section {
+        CardSection {
             copyButton(loc.t("detail_copy_conf"), icon: "doc.text", id: "conf", action: copyAction)
                 .disabled(!canCopy)
-                .listRowSeparator(.hidden)
                 .accessibilityIdentifier(AXID.TunnelDetail.Actions.copyButton)
 
             Button(action: exportAction) {
                 Label(loc.t("detail_export_conf"), systemImage: "square.and.arrow.up")
             }
             .disabled(!canCopy)
-            .listRowSeparator(.hidden)
             .accessibilityIdentifier(AXID.TunnelDetail.Actions.exportButton)
 
             Button(action: editAction) {
                 Label(loc.t("detail_edit_conf"), systemImage: "square.and.pencil")
             }
             .disabled(!canEdit)
-            .listRowSeparator(.hidden)
             .accessibilityIdentifier(AXID.TunnelDetail.Actions.editButton)
 
             Button(action: resetAction) {
                 Label(loc.t("detail_reset_connection"), systemImage: "arrow.clockwise")
             }
             .disabled(!canReset || resetting)
-            .listRowSeparator(.hidden)
             .accessibilityIdentifier(AXID.TunnelDetail.Actions.resetButton)
 
             Button(role: .destructive) {
@@ -48,7 +44,6 @@ struct ActionsSection: View {
                 Label(loc.t("detail_delete_tunnel"), systemImage: "trash")
             }
             .disabled(!tunnel.isSettledInactive || deleting)
-            .listRowSeparator(.hidden)
             .accessibilityIdentifier(AXID.TunnelDetail.Actions.deleteButton)
         } header: {
             Label(loc.t("detail_actions"), systemImage: "ellipsis.circle")
@@ -87,7 +82,7 @@ struct ActionsSection: View {
 #Preview("Active — reset enabled") {
     let manager = PreviewFixtures.tunnelsManager()
     return PreviewBindingHost(false) { showingDelete in
-        Form {
+        VStack(alignment: .leading, spacing: 16) {
             ActionsSection(
                 tunnel: manager.tunnels[0],
                 canCopy: true,
@@ -100,7 +95,7 @@ struct ActionsSection: View {
                 showingDeleteConfirmation: showingDelete
             )
         }
-        .formStyle(.grouped)
+        .padding(20)
     }
     .previewEnvironment(tunnels: manager)
     .frame(width: WindowSizing.ideal.width)
@@ -109,7 +104,7 @@ struct ActionsSection: View {
 #Preview("Inactive — delete enabled") {
     let manager = PreviewFixtures.tunnelsManager()
     return PreviewBindingHost(false) { showingDelete in
-        Form {
+        VStack(alignment: .leading, spacing: 16) {
             ActionsSection(
                 tunnel: manager.tunnels[1],
                 canCopy: true,
@@ -122,7 +117,7 @@ struct ActionsSection: View {
                 showingDeleteConfirmation: showingDelete
             )
         }
-        .formStyle(.grouped)
+        .padding(20)
     }
     .previewEnvironment(tunnels: manager)
     .frame(width: WindowSizing.ideal.width)

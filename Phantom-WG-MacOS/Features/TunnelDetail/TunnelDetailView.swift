@@ -36,28 +36,32 @@ struct TunnelDetailView: View {
     }
 
     var body: some View {
-        Form {
-            StatusSection(tunnel: tunnel, isGhost: tunnel.isGhost)
+        ScrollView {
+            VStack(alignment: .leading, spacing: 16) {
+                StatusSection(tunnel: tunnel, isGhost: tunnel.isGhost)
 
-            StatsSection(handshake: lastHandshake, rxBytes: rxBytes, txBytes: txBytes)
+                StatsSection(handshake: lastHandshake, rxBytes: rxBytes, txBytes: txBytes)
 
-            configSections
+                configSections
 
-            LogNavigationSection(logStore: logStore)
+                LogNavigationSection(logStore: logStore)
 
-            ActionsSection(
-                tunnel: tunnel,
-                canCopy: config != nil,
-                copyAction: copyConf,
-                exportAction: exportConf,
-                editAction: openEdit,
-                resetAction: resetConnection,
-                resetting: resetting,
-                deleting: deleting,
-                showingDeleteConfirmation: $showingDeleteConfirmation
-            )
+                ActionsSection(
+                    tunnel: tunnel,
+                    canCopy: config != nil,
+                    copyAction: copyConf,
+                    exportAction: exportConf,
+                    editAction: openEdit,
+                    resetAction: resetConnection,
+                    resetting: resetting,
+                    deleting: deleting,
+                    showingDeleteConfirmation: $showingDeleteConfirmation
+                )
+            }
+            .padding(.horizontal, 20)
+            .padding(.top, 16)
+            .padding(.bottom, 12)
         }
-        .formStyle(.grouped)
         .navigationTitle(tunnel.name.isEmpty ? loc.t("detail_tunnel") : tunnel.name)
         .navigationDestination(isPresented: $showingEdit) {
             TunnelEditView(tunnel: tunnel)
@@ -131,7 +135,7 @@ struct TunnelDetailView: View {
 
             PeerSection(config: config.wireguard.peer)
         } else if configLoaded {
-            Section {
+            CardSection {
                 VStack(alignment: .leading, spacing: 8) {
                     switch loadFailure {
                     case .unreachable:
@@ -160,7 +164,7 @@ struct TunnelDetailView: View {
                 .padding(.vertical, 2)
             }
         } else {
-            Section {
+            CardSection {
                 HStack(spacing: 8) {
                     ProgressView().controlSize(.small)
                     Text(readAttempt > 1

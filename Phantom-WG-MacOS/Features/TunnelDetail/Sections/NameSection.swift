@@ -5,7 +5,7 @@ struct NameSection: View {
     @Environment(LocalizationManager.self) private var loc
 
     var body: some View {
-        Section {
+        CardSection {
             PhantomStaticField(
                 label: loc.t("detail_name"),
                 value: name,
@@ -20,10 +20,10 @@ struct NameSection: View {
 // MARK: - Previews
 
 #Preview {
-    Form {
+    VStack(alignment: .leading, spacing: 16) {
         NameSection(name: "Istanbul Edge")
     }
-    .formStyle(.grouped)
+    .padding(20)
     .previewEnvironment()
     .frame(width: WindowSizing.ideal.width)
 }

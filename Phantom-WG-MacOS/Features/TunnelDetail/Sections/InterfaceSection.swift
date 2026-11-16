@@ -5,7 +5,7 @@ struct InterfaceSection: View {
     @Environment(LocalizationManager.self) private var loc
 
     var body: some View {
-        Section {
+        CardSection {
             PhantomStaticField(
                 label: loc.t("detail_public_key"),
                 value: config.privateKey.derivedPublicKey?.textual ?? "—",
@@ -49,10 +49,10 @@ struct InterfaceSection: View {
 // MARK: - Previews
 
 #Preview {
-    Form {
+    VStack(alignment: .leading, spacing: 16) {
         InterfaceSection(config: PreviewFixtures.ghostConfig().wireguard.interface)
     }
-    .formStyle(.grouped)
+    .padding(20)
     .previewEnvironment()
     .frame(width: WindowSizing.ideal.width)
 }
