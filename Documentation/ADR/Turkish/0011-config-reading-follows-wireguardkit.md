@@ -2,7 +2,7 @@
 
 ## Durum
 
-Önerildi — 2026-11-16
+Kabul Edildi — 2026-11-16
 
 Bu kayıt yeni bir karar kaydeder. Kabul edilmiş bir kaydı daraltmaz.
 

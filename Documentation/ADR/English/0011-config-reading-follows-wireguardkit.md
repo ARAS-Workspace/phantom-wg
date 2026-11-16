@@ -2,7 +2,7 @@
 
 ## Status
 
-Proposed — 2026-11-16
+Accepted — 2026-11-16
 
 This record captures a new decision. It does not narrow an accepted record.
 
