@@ -68,10 +68,17 @@ enum AXID {
         static let reorderButton = "tunnel-list.reorder"
         static let reorderDone   = "tunnel-list.reorder.done"
         static let reorderCancel = "tunnel-list.reorder.cancel"
+        static let deleteButton  = "tunnel-list.delete"
+        static let deleteMarked  = "tunnel-list.delete.marked"
+        static let deleteCancel  = "tunnel-list.delete.cancel"
+        static let deleteSelectAll     = "tunnel-list.delete.select-all"
+        static let deleteConfirm       = "tunnel-list.delete-confirm.confirm"
+        static let deleteConfirmCancel = "tunnel-list.delete-confirm.cancel"
 
         static func row(_ name: String) -> String { "tunnel-row.\(name)" }
         static func rowToggle(_ name: String) -> String { "tunnel-row.\(name).toggle" }
         static func reorderRow(_ name: String) -> String { "tunnel-list.reorder.row.\(name)" }
+        static func deleteRow(_ name: String) -> String { "tunnel-list.delete.row.\(name)" }
     }
 
     // MARK: Split Tunneling

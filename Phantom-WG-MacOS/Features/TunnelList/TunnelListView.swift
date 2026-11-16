@@ -69,7 +69,10 @@ struct TunnelListView: View {
             VStack(spacing: 0) {
                 VStack(spacing: 16) {
                     ActiveTunnelSection()
-                    TunnelListSection()
+                    TunnelListSection(
+                        onDeleteReport: present(deleteReport:),
+                        onDeleteError: { transferNotice = TransferNotice(title: loc.t("error"), message: $0) }
+                    )
                 }
                 .padding(.horizontal, 20)
                 .padding(.top, 16)
@@ -208,6 +211,19 @@ struct TunnelListView: View {
             )
         case .unwritable:
             transferNotice = TransferNotice(title: loc.t("error"), message: loc.t("export_err_write"))
+        }
+    }
+
+    // MARK: - Delete
+
+    private func present(deleteReport report: TunnelBulkDelete.Report) {
+        if report.skipped.isEmpty {
+            transferToasts.success(loc.t("delete_report_success", report.deleted.count))
+        } else {
+            transferNotice = TransferNotice(
+                title: TunnelBulkDelete.title(report, loc: loc),
+                message: TunnelBulkDelete.message(report, loc: loc)
+            )
         }
     }
 

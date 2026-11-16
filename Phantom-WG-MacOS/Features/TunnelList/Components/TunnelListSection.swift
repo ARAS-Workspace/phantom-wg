@@ -1,14 +1,24 @@
 import SwiftUI
 
 struct TunnelListSection: View {
+    var onDeleteReport: (TunnelBulkDelete.Report) -> Void = { _ in }
+    var onDeleteError: (String) -> Void = { _ in }
+
     @Environment(TunnelsManager.self) private var tunnelsManager
     @Environment(LocalizationManager.self) private var loc
+
+    private enum Mode {
+        case browsing, reordering, deleting
+    }
 
     @State private var page = 0
     @State private var query = ""
     @State private var savedOrder = TunnelListOrderStore.load()
-    @State private var reordering = false
+    @State private var mode = Mode.browsing
     @State private var draft: [UUID] = []
+    @State private var marked: Set<UUID> = []
+    @State private var confirmingDelete = false
+    @State private var deleting = false
 
     private var ordered: [TunnelContainer] {
         TunnelListRules.ordered(tunnelsManager.tunnels, saved: savedOrder, id: \.id)
@@ -18,11 +28,15 @@ struct TunnelListSection: View {
         ordered.filter { TunnelListRules.matches($0.name, query: query) }
     }
 
+    private var targets: [TunnelContainer] {
+        TunnelBulkDelete.targets(ordered, marked: marked)
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             header
 
-            TunnelSearchField(text: $query, placeholder: loc.t("tunnel_list_search_placeholder"), enabled: !reordering)
+            TunnelSearchField(text: $query, placeholder: loc.t("tunnel_list_search_placeholder"), enabled: mode != .reordering)
                 .frame(height: 24)
 
             GeometryReader { geometry in
@@ -36,15 +50,20 @@ struct TunnelListSection: View {
                 let current = TunnelListRules.clampedPage(page, itemCount: tunnels.count, perPage: perPage)
 
                 VStack(spacing: TunnelListRules.pagerGap) {
-                    if reordering {
+                    switch mode {
+                    case .reordering:
                         TunnelReorderCard(tunnels: tunnelsManager.tunnels, draft: $draft)
                             .frame(height: cardHeight)
-                        Text(loc.t("tunnel_list_reorder_hint"))
-                            .font(.footnote)
-                            .foregroundStyle(.secondary)
-                            .frame(maxWidth: .infinity)
-                            .frame(height: TunnelListRules.pagerHeight)
-                    } else {
+                        hint(loc.t("tunnel_list_reorder_hint"))
+                    case .deleting:
+                        if tunnels.isEmpty {
+                            noMatch(height: cardHeight)
+                        } else {
+                            TunnelDeleteCard(tunnels: tunnels, marked: $marked, enabled: !deleting)
+                                .frame(height: cardHeight)
+                        }
+                        deleteFooter
+                    case .browsing:
                         if tunnels.isEmpty {
                             noMatch(height: cardHeight)
                         } else {
@@ -56,11 +75,54 @@ struct TunnelListSection: View {
             }
         }
         .onChange(of: query) { _, _ in page = 0 }
+        .confirmationDialog(
+            loc.t("tunnel_list_delete_confirm_title", targets.count),
+            isPresented: $confirmingDelete,
+            titleVisibility: .visible
+        ) {
+            Button(loc.t("delete"), role: .destructive) { runDelete() }
+                .accessibilityIdentifier(AXID.TunnelList.deleteConfirm)
+            Button(loc.t("cancel"), role: .cancel) {}
+                .accessibilityIdentifier(AXID.TunnelList.deleteConfirmCancel)
+        } message: {
+            Text(TunnelBulkDelete.confirmMessage(targets.map(\.name), loc: loc))
+        }
     }
 
     private var countText: String {
         let total = tunnelsManager.tunnels.count
         return query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? "\(total)" : "\(filtered.count) / \(total)"
+    }
+
+    private func hint(_ text: String) -> some View {
+        Text(text)
+            .font(.footnote)
+            .foregroundStyle(.secondary)
+            .frame(maxWidth: .infinity)
+            .frame(height: TunnelListRules.pagerHeight)
+    }
+
+    private var deleteFooter: some View {
+        let eligible = Set(filtered.filter(\.isSettledInactive).map(\.id))
+        let allMarked = !eligible.isEmpty && eligible.isSubset(of: marked)
+        return HStack {
+            Button(loc.t(allMarked ? "tunnel_list_delete_select_none" : "tunnel_list_delete_select_all")) {
+                if allMarked {
+                    marked.subtract(eligible)
+                } else {
+                    marked.formUnion(eligible)
+                }
+            }
+            .buttonStyle(.borderless)
+            .disabled(eligible.isEmpty || deleting)
+            .accessibilityIdentifier(AXID.TunnelList.deleteSelectAll)
+            Spacer()
+            Text(loc.t("tunnel_list_delete_hint"))
+                .font(.footnote)
+                .foregroundStyle(.secondary)
+        }
+        .padding(.horizontal, 10)
+        .frame(height: TunnelListRules.pagerHeight)
     }
 
     private func noMatch(height: CGFloat) -> some View {
@@ -89,17 +151,18 @@ struct TunnelListSection: View {
                         .fill(Color.secondary.opacity(0.15))
                 )
                 .accessibilityIdentifier(AXID.TunnelList.listCount)
-            reorderControls
+            modeControls
         }
         .padding(.leading, 10)
     }
 
     @ViewBuilder
-    private var reorderControls: some View {
-        if reordering {
+    private var modeControls: some View {
+        switch mode {
+        case .reordering:
             Button(loc.t("cancel")) {
                 draft = []
-                reordering = false
+                mode = .browsing
             }
             .keyboardShortcut(.cancelAction)
             .accessibilityIdentifier(AXID.TunnelList.reorderCancel)
@@ -108,21 +171,69 @@ struct TunnelListSection: View {
                 savedOrder = draft
                 TunnelListOrderStore.save(draft)
                 draft = []
-                reordering = false
+                mode = .browsing
             }
             .keyboardShortcut(.defaultAction)
             .accessibilityIdentifier(AXID.TunnelList.reorderDone)
-        } else {
+        case .deleting:
+            Button(loc.t("cancel")) {
+                marked = []
+                query = ""
+                mode = .browsing
+            }
+            .keyboardShortcut(.cancelAction)
+            .disabled(deleting)
+            .accessibilityIdentifier(AXID.TunnelList.deleteCancel)
+
+            Button(loc.t("tunnel_list_delete_marked", targets.count), role: .destructive) {
+                confirmingDelete = true
+            }
+            .tint(.red)
+            .disabled(targets.isEmpty || deleting)
+            .accessibilityIdentifier(AXID.TunnelList.deleteMarked)
+        case .browsing:
             Button {
                 query = ""
                 page = 0
                 draft = ordered.map(\.id)
-                reordering = true
+                mode = .reordering
             } label: {
                 Label(loc.t("tunnel_list_reorder"), systemImage: "arrow.up.arrow.down")
             }
             .disabled(tunnelsManager.tunnels.count < 2)
             .accessibilityIdentifier(AXID.TunnelList.reorderButton)
+
+            Button {
+                query = ""
+                page = 0
+                marked = []
+                mode = .deleting
+            } label: {
+                Label(loc.t("tunnel_list_delete"), systemImage: "trash")
+            }
+            .disabled(tunnelsManager.tunnels.isEmpty)
+            .accessibilityIdentifier(AXID.TunnelList.deleteButton)
+        }
+    }
+
+    private func runDelete() {
+        guard !targets.isEmpty, !deleting else { return }
+        deleting = true
+        Task {
+            let granted = await PrivateDataGuard.grants(
+                reason: loc.t("delete_tunnels_private_data_reason"),
+                onFailure: onDeleteError
+            )
+            guard granted else {
+                deleting = false
+                return
+            }
+            let report = await TunnelBulkDelete.run(targets, in: tunnelsManager)
+            deleting = false
+            marked = []
+            query = ""
+            mode = .browsing
+            onDeleteReport(report)
         }
     }
 
