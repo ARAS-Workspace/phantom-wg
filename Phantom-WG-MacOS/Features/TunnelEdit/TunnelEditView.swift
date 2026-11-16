@@ -26,12 +26,14 @@ struct TunnelEditView: View {
                 errorBanner
             }
 
-            Form {
+            VStack(alignment: .leading, spacing: 16) {
                 nameSection
                 rawInputSection
             }
-            .formStyle(.grouped)
-            .padding(.horizontal, 8)
+            .padding(.horizontal, 20)
+            .padding(.top, 16)
+            .padding(.bottom, 12)
+            .frame(maxHeight: .infinity, alignment: .top)
         }
         .navigationTitle(loc.t("edit_title"))
         .toolbar {
@@ -77,29 +79,26 @@ struct TunnelEditView: View {
     // MARK: - Sections
 
     private var nameSection: some View {
-        Section {
+        CardSection {
             TextField(loc.t("import_name_placeholder"), text: $name)
                 .textFieldStyle(.roundedBorder)
                 .accessibilityIdentifier(AXID.TunnelEdit.nameField)
         } header: {
             Label(loc.t("detail_name"), systemImage: "gearshape")
-                .padding(.leading, 4)
         }
     }
 
     private var rawInputSection: some View {
-        Section {
+        CardSection {
             TextEditor(text: $rawInput)
                 .font(.system(.caption, design: .monospaced))
-                .frame(minHeight: 220)
+                .frame(minHeight: 160, maxHeight: .infinity)
                 .autocorrectionDisabled()
                 .accessibilityIdentifier(AXID.TunnelEdit.confEditor)
         } header: {
             Label(loc.t("import_configuration"), systemImage: "doc.text")
-                .padding(.leading, 4)
         } footer: {
             Text(loc.t("edit_footer"))
-                .padding(.leading, 4)
         }
     }
 
