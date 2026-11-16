@@ -8,6 +8,7 @@ enum TunnelBulkDelete {
     enum Skip: Equatable {
         case connected
         case failed(String)
+        case notAttempted
     }
 
     struct Skipped: Equatable {
@@ -34,8 +35,13 @@ enum TunnelBulkDelete {
     ) async -> Report {
         var deleted: [String] = []
         var skipped: [Skipped] = []
+        var reach = BulkVaultReach()
         for (index, tunnel) in targets.enumerated() {
             defer { onProgress(index + 1) }
+            guard !reach.gaveUp else {
+                skipped.append(Skipped(name: tunnel.name, skip: .notAttempted))
+                continue
+            }
             guard tunnel.isSettledInactive else {
                 skipped.append(Skipped(name: tunnel.name, skip: .connected))
                 continue
@@ -44,7 +50,9 @@ enum TunnelBulkDelete {
             do {
                 try await manager.remove(tunnel: tunnel)
                 deleted.append(tunnel.name)
+                reach.landed()
             } catch {
+                reach.failed(with: error)
                 skipped.append(Skipped(name: tunnel.name, skip: .failed(error.localizedDescription)))
             }
         }
@@ -80,6 +88,8 @@ enum TunnelBulkDelete {
             return loc.t("delete_skip_connected")
         case .failed(let message):
             return message
+        case .notAttempted:
+            return loc.t("delete_skip_not_attempted", BulkVaultReach.limit)
         }
     }
 }

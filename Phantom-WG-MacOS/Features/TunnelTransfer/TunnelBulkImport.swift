@@ -21,7 +21,12 @@ enum TunnelBulkImport {
     static func run(_ urls: [URL], into manager: TunnelsManager) async -> Report {
         let candidates = await Task.detached { TunnelImportBatch.candidates(from: urls) }.value
         var report = Report()
+        var reach = BulkVaultReach()
         for candidate in candidates {
+            guard !reach.gaveUp else {
+                report.skipped.append(Skipped(label: candidate.label, skip: .notAttempted))
+                continue
+            }
             switch TunnelImportBatch.config(for: candidate) {
             case .failure(let skip):
                 report.skipped.append(Skipped(label: candidate.label, skip: skip))
@@ -29,7 +34,9 @@ enum TunnelBulkImport {
                 do {
                     _ = try await manager.add(config: config)
                     report.added.append(config.name)
+                    reach.landed()
                 } catch {
+                    reach.failed(with: error)
                     report.skipped.append(Skipped(label: candidate.label, skip: .addFailed(error.localizedDescription)))
                 }
             }
@@ -73,6 +80,8 @@ enum TunnelBulkImport {
             return loc.t("import_skip_archive_empty")
         case .addFailed(let message):
             return message
+        case .notAttempted:
+            return loc.t("import_skip_not_attempted", BulkVaultReach.limit)
         }
     }
 }

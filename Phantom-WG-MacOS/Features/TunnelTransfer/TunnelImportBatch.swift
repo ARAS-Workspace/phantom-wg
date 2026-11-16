@@ -15,6 +15,7 @@ enum TunnelImportBatch {
         case archiveTooManyEntries
         case archiveEmpty
         case addFailed(String)
+        case notAttempted
     }
 
     struct Candidate: Equatable {
