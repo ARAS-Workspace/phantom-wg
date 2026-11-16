@@ -105,9 +105,15 @@ final class SplitControlPlaneWorkflow: TestWorkflow {
         if session != .disconnected { speaking.append("the session (status=\(session))") }
 
         guard speaking.isEmpty else {
-            skip("environment: split-tunneling is in use — "
-                 + speaking.joined(separator: " and ")
-                 + " would have to be taken over to measure it")
+            if !intent && state == .stopped && session == .invalid {
+                skip("environment: the split-tunneling session reads invalid rather than disconnected, "
+                     + "while the persisted intent and the coordinator are at rest — "
+                     + "this door drives only a session that reads disconnected")
+            } else {
+                skip("environment: split-tunneling is in use — "
+                     + speaking.joined(separator: " and ")
+                     + " would have to be taken over to measure it")
+            }
             return
         }
         guard gate.allReady else {
