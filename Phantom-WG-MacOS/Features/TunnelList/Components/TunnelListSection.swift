@@ -19,6 +19,7 @@ struct TunnelListSection: View {
     @State private var marked: Set<UUID> = []
     @State private var confirmingDelete = false
     @State private var deleting = false
+    @State private var progress: (done: Int, total: Int)?
 
     private var ordered: [TunnelContainer] {
         TunnelListRules.ordered(tunnelsManager.tunnels, saved: savedOrder, id: \.id)
@@ -117,9 +118,22 @@ struct TunnelListSection: View {
             .disabled(eligible.isEmpty || deleting)
             .accessibilityIdentifier(AXID.TunnelList.deleteSelectAll)
             Spacer()
-            Text(loc.t("tunnel_list_delete_hint"))
-                .font(.footnote)
-                .foregroundStyle(.secondary)
+            if let progress {
+                HStack(spacing: 6) {
+                    ProgressView()
+                        .controlSize(.small)
+                    Text(loc.t("tunnel_list_deleting", progress.done, progress.total))
+                        .font(.footnote)
+                        .monospacedDigit()
+                        .foregroundStyle(.secondary)
+                }
+                .accessibilityElement(children: .combine)
+                .accessibilityIdentifier(AXID.TunnelList.deleteProgress)
+            } else {
+                Text(loc.t("tunnel_list_delete_hint"))
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+            }
         }
         .padding(.horizontal, 10)
         .frame(height: TunnelListRules.pagerHeight)
@@ -228,7 +242,12 @@ struct TunnelListSection: View {
                 deleting = false
                 return
             }
-            let report = await TunnelBulkDelete.run(targets, in: tunnelsManager)
+            let chosen = targets
+            progress = (0, chosen.count)
+            let report = await TunnelBulkDelete.run(chosen, in: tunnelsManager) { done in
+                progress = (done, chosen.count)
+            }
+            progress = nil
             deleting = false
             marked = []
             query = ""

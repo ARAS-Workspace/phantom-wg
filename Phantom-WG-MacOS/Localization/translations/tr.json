@@ -25,6 +25,7 @@
   "tunnel_list_move_bottom": "En Alta Taşı",
   "tunnel_list_delete": "Sil",
   "tunnel_list_delete_hint": "Silinecek tünelleri seçin.",
+  "tunnel_list_deleting": "%d / %d tünel siliniyor…",
   "tunnel_list_delete_select_all": "Tümünü Seç",
   "tunnel_list_delete_select_none": "Seçimi Kaldır",
   "tunnel_list_delete_marked": "Sil (%d)",

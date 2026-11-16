@@ -27,10 +27,15 @@ enum TunnelBulkDelete {
     }
 
     /// @witness TunnelBulkDelete
-    static func run(_ targets: [TunnelContainer], in manager: TunnelsManager) async -> Report {
+    static func run(
+        _ targets: [TunnelContainer],
+        in manager: TunnelsManager,
+        onProgress: (Int) -> Void = { _ in }
+    ) async -> Report {
         var deleted: [String] = []
         var skipped: [Skipped] = []
-        for tunnel in targets {
+        for (index, tunnel) in targets.enumerated() {
+            defer { onProgress(index + 1) }
             guard tunnel.isSettledInactive else {
                 skipped.append(Skipped(name: tunnel.name, skip: .connected))
                 continue

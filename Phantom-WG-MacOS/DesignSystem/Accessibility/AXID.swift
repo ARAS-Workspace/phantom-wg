@@ -72,6 +72,7 @@ enum AXID {
         static let deleteMarked  = "tunnel-list.delete.marked"
         static let deleteCancel  = "tunnel-list.delete.cancel"
         static let deleteSelectAll     = "tunnel-list.delete.select-all"
+        static let deleteProgress      = "tunnel-list.delete.progress"
         static let deleteConfirm       = "tunnel-list.delete-confirm.confirm"
         static let deleteConfirmCancel = "tunnel-list.delete-confirm.cancel"
 

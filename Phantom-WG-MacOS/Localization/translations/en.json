@@ -25,6 +25,7 @@
   "tunnel_list_move_bottom": "Move to Bottom",
   "tunnel_list_delete": "Delete",
   "tunnel_list_delete_hint": "Select the tunnels to delete.",
+  "tunnel_list_deleting": "Deleting %d of %d…",
   "tunnel_list_delete_select_all": "Select All",
   "tunnel_list_delete_select_none": "Deselect All",
   "tunnel_list_delete_marked": "Delete (%d)",

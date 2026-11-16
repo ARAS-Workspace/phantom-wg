@@ -28,12 +28,13 @@
 //       marked, and one refuses its removal. The two settled rows go, in list
 //       order; the connected rows are reported as connected and left alone;
 //       the refusal is reported with its error and its row stays; the
-//       unmarked row is untouched.
+//       unmarked row is untouched. The progress counts every target.
 //
 //   B — A Settled Selection Deletes Whole And Skips Nothing
 //       Twenty-three settled rows, all marked. Every row goes and nothing is
 //       reported, the report the list answers with a toast. The confirmation
-//       text lists the first twenty names and counts the rest.
+//       text lists the first twenty names and counts the rest, and the
+//       progress climbs one by one to the last row.
 
 #if DEBUG
 import Foundation
@@ -123,7 +124,8 @@ final class TunnelBulkDeleteWorkflow: TestWorkflow {
             userInfo: [NSLocalizedDescriptionKey: "the fake entry refused its removal"]
         ))
 
-        let report = await TunnelBulkDelete.run(targets, in: rig.manager)
+        var progress: [Int] = []
+        let report = await TunnelBulkDelete.run(targets, in: rig.manager) { progress.append($0) }
         log("deleted \(report.deleted); skipped \(report.skipped.map { "\($0.name): \($0.skip)" })")
         let listed = Set(rig.manager.tunnels.map(\.name))
         let deletedIds = Set(rig.vault.deletedIds)
@@ -161,6 +163,9 @@ final class TunnelBulkDeleteWorkflow: TestWorkflow {
                 && TunnelBulkDelete.title(report, loc: loc) == loc.t("delete_report_partial", gone.count, targets.count)
                 && lines == expectedLines,
               "the report counts every target and names each skipped row with its reason, in list order (total=\(report.total), lines=\(lines.count))")
+
+        check(progress == Array(1...targets.count),
+              "the progress counted each target once, the skipped and the refused ones included (progress=\(progress))")
     }
 
     private func aSettledSelectionDeletesWhole() async {
@@ -184,9 +189,12 @@ final class TunnelBulkDeleteWorkflow: TestWorkflow {
                 && confirm.last == loc.t("import_report_more", targets.count - TunnelBulkDelete.shownLines),
               "the confirmation lists the first \(TunnelBulkDelete.shownLines) names in list order and counts the rest (lines=\(confirm.count))")
 
-        let report = await TunnelBulkDelete.run(targets, in: rig.manager)
+        var progress: [Int] = []
+        let report = await TunnelBulkDelete.run(targets, in: rig.manager) { progress.append($0) }
         check(report.skipped.isEmpty && report.deleted == targets.map(\.name) && rig.manager.tunnels.isEmpty,
               "every row went and nothing was reported (deleted=\(report.deleted.count), skipped=\(report.skipped.count), left=\(rig.manager.tunnels.count))")
+        check(progress == Array(1...targets.count),
+              "the progress climbed one by one to \(targets.count) (last=\(progress.last ?? 0), calls=\(progress.count))")
     }
 }
 #endif
