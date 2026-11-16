@@ -7,6 +7,7 @@ struct MenuBarContent: View {
 
     var body: some View {
         Button(loc.t("menubar_open")) {
+            NSApp.setActivationPolicy(.regular)
             openWindow(id: SceneID.mainWindow)
             NSApp.activate()
         }

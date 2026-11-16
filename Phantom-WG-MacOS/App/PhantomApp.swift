@@ -71,6 +71,7 @@ import SwiftUI
 @MainActor
 struct PhantomApp: App {
 
+    @NSApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
     @State private var coordinator: ExtensionGateCoordinator
     @State private var sessionCoordinator: SplitTunnelingSessionCoordinator
     @State private var tunnelsManager: TunnelsManagerLoader
