@@ -59,6 +59,20 @@
 //       C at fifty tunnels, with the same checks. A log line then sets its
 //       per-tunnel durations, notifications per tunnel and the time the
 //       stores took to agree and to empty beside C's.
+//
+//   E — A Delete And An Import That Overlap Keep Their Own Rows
+//       Fifty tunnels (set A) are imported into the live list. A bulk
+//       delete of all fifty starts and, without waiting for it, a bulk
+//       import of a ten-entry archive (set B). The two batches share the
+//       main actor and the live manager, which hears the system's changes
+//       from both. The step first shows that they did overlap: set B rows
+//       were arriving on the live list while the delete was still
+//       counting. The delete's progress callback cannot await the vault,
+//       so this reading comes from the list under test. Then the delete
+//       took all of A, the import added all of B, and the three stores
+//       hold exactly B's ten ids, each payload the configuration its entry
+//       carried. A bulk delete of B then leaves the stores as they were
+//       before A was imported.
 
 #if DEBUG
 import Foundation
@@ -73,12 +87,33 @@ final class TunnelBulkStressRealWorkflow: TestWorkflow {
             WorkflowStep("The Store Readers See A Payload Without Its Entry", theReadersSeeAPayloadWithoutItsEntry),
             WorkflowStep("Five Tunnels Import Whole And Delete Whole", fiveTunnelsImportWholeAndDeleteWhole),
             WorkflowStep("Fifty Tunnels Import Whole And Delete Whole", fiftyTunnelsImportWholeAndDeleteWhole),
+            WorkflowStep("A Delete And An Import That Overlap Keep Their Own Rows", aDeleteAndAnImportThatOverlapKeepTheirOwnRows),
         ]
     }
 
     @MainActor
     private final class Arrivals {
         var instants: [ContinuousClock.Instant] = []
+    }
+
+    @MainActor
+    private final class Samples {
+        var progress: [Int] = []
+        var listedOfB: [Int] = []
+    }
+
+    private struct Batch {
+        let label: String
+        let names: [String]
+        let sources: [String: TunnelConfig]
+        let archive: URL
+    }
+
+    private struct Overlap {
+        let deleted: TunnelBulkDelete.Report
+        let deleteTook: Duration
+        let imported: TunnelBulkImport.Report
+        let importTook: Duration
     }
 
     private struct Named {
@@ -114,6 +149,8 @@ final class TunnelBulkStressRealWorkflow: TestWorkflow {
     private static let prefix = "TE-Stress-R-"
     private let smallBatch = 5
     private let largeBatch = 50
+    private let overlapDeleted = 50
+    private let overlapImported = 10
     private var measured: [Int: (imported: Imported, deleted: Deleted)] = [:]
     private let convergence = 5.0
     private let changeWindow = Duration.milliseconds(500)
@@ -283,46 +320,63 @@ final class TunnelBulkStressRealWorkflow: TestWorkflow {
         compare(largeBatch, with: smallBatch)
     }
 
-    private func importsWholeAndDeletesWhole(count: Int) async {
-        let names = (1...count).map { "\(Self.prefix)N\(count)-\(String(format: "%03d", $0))-\(runTag)" }
+    private func plant(_ set: String, count: Int) -> Batch? {
+        let label = "\(Self.prefix)\(set)\(count)"
+        let names = (1...count).map { "\(label)-\(String(format: "%03d", $0))-\(runTag)" }
         var sources: [String: TunnelConfig] = [:]
         var entries: [(String, Data)] = []
         for (index, tunnelName) in names.enumerated() {
             guard let config = TestConfigFactory.throwaway(name: tunnelName, ghost: index % 2 == 1) else {
                 fail("the config factory did not produce \(tunnelName)")
-                return
+                return nil
             }
             sources[tunnelName] = config
             entries.append(("batch/\(tunnelName).conf", TunnelConfFile.data(config.asConfString())))
         }
         guard let folder = workDirectory() else {
             fail("the temporary folder could not be made")
-            return
+            return nil
         }
-        let archive = folder.appendingPathComponent("stress-real-\(count).zip")
+        let archive = folder.appendingPathComponent("stress-real-\(set)\(count).zip")
         do {
             try ZipArchive.write(entries, to: archive)
         } catch {
             fail("the archive could not be written: \(error.localizedDescription)")
-            return
+            return nil
         }
-        onTeardown("planted \(count)-tunnel batch") { [weak self] in
-            await self?.sweep(names, sources: sources)
+        let batch = Batch(label: label, names: names, sources: sources, archive: archive)
+        onTeardown("planted \(label) batch") { [weak self] in
+            await self?.sweep(batch)
         }
+        return batch
+    }
+
+    private func importsWholeAndDeletesWhole(count: Int) async {
+        guard let batch = plant("N", count: count) else { return }
         guard let baseline = await read({ _ in true }) else {
             skip("the vault or the system list did not answer before the import")
             return
         }
         log("before the import: \(baseline.reading.line)")
-        guard let imported = await importsWhole(names, sources: sources, archive: archive) else { return }
-        let deleted = await deletesWhole(names, baseline: baseline.reading)
+        guard let imported = await importsWhole(batch) else { return }
+        let deleted = await deletesWhole(batch.names, baseline: baseline.reading)
         measured[count] = (imported, deleted)
     }
 
-    private func importsWhole(_ names: [String], sources: [String: TunnelConfig], archive: URL) async -> Imported? {
+    private func mismatched(_ batch: Batch) async -> [String]? {
+        guard case .configs(let configs) = await vault.readAll() else { return nil }
+        return batch.names.filter { tunnelName in
+            guard let source = batch.sources[tunnelName],
+                  let payload = configs.first(where: { $0.name == tunnelName }) else { return true }
+            return payload.wireguard != source.wireguard || payload.wstunnel != source.wstunnel
+        }
+    }
+
+    private func importsWhole(_ batch: Batch) async -> Imported? {
+        let names = batch.names
         let isRun = { (name: String) in names.contains(name) }
         let watched = await watching(
-            { await TunnelBulkImport.run([archive], into: tunnels) },
+            { await TunnelBulkImport.run([batch.archive], into: tunnels) },
             settling: isRun,
             until: { $0.agree && $0.rows.count == names.count }
         )
@@ -337,12 +391,7 @@ final class TunnelBulkStressRealWorkflow: TestWorkflow {
         check(held.map { $0.agree && $0.rows.count == names.count } == true,
               "the live list, the system's entries and the vault hold the same \(names.count) ids, each once (\(held?.line ?? "unreadable"), \(Self.after(watched.settled, "agreed")))")
 
-        if case .configs(let configs) = await vault.readAll() {
-            let mismatched = names.filter { tunnelName in
-                guard let source = sources[tunnelName],
-                      let payload = configs.first(where: { $0.name == tunnelName }) else { return true }
-                return payload.wireguard != source.wireguard || payload.wstunnel != source.wstunnel
-            }
+        if let mismatched = await mismatched(batch) {
             check(mismatched.isEmpty,
                   "every payload in the vault is the configuration its entry carried, the Ghost ones with their Wstunnel part (mismatched=\(mismatched.count))")
         } else {
@@ -414,18 +463,106 @@ final class TunnelBulkStressRealWorkflow: TestWorkflow {
         log("after the batch returned, \(base) → \(count): stores agreed \(after(small.imported.agreed)) → \(after(large.imported.agreed)), emptied \(after(small.deleted.emptied)) → \(after(large.deleted.emptied))")
     }
 
-    private func sweep(_ names: [String], sources: [String: TunnelConfig]) async {
-        let planted = Set(names)
+    // MARK: - Step E
+
+    private func aDeleteAndAnImportThatOverlapKeepTheirOwnRows() async {
+        guard let setA = plant("A", count: overlapDeleted), let setB = plant("B", count: overlapImported) else { return }
+        guard let baseline = await read({ _ in true }) else {
+            skip("the vault or the system list did not answer before the import")
+            return
+        }
+        log("before the import: \(baseline.reading.line)")
+        guard let targets = await listed(setA) else { return }
+        await overlaps(targets, with: setB)
+        _ = await deletesWhole(setB.names, baseline: baseline.reading)
+    }
+
+    private func listed(_ setA: Batch) async -> [TunnelContainer]? {
+        let namesA = Set(setA.names)
+        let report = await TunnelBulkImport.run([setA.archive], into: tunnels)
+        let ready = await settled({ namesA.contains($0) }, until: { $0.agree && $0.rows.count == namesA.count })
+        let rows = TunnelListRules.ordered(tunnels.tunnels.filter { namesA.contains($0.name) }, saved: [], id: \.id)
+        let targets = TunnelBulkDelete.targets(rows, marked: Set(rows.map(\.id)))
+        guard report.added == setA.names, report.skipped.isEmpty, ready.after != nil, targets.count == namesA.count else {
+            fail("set A could not be listed whole before the overlap (added=\(report.added.count), skipped=\(report.skipped.count), targets=\(targets.count), \(ready.reading?.line ?? "unreadable"))")
+            return nil
+        }
+        log("set A listed: \(ready.reading?.line ?? "unreadable")")
+        return targets
+    }
+
+    private func overlaps(_ targets: [TunnelContainer], with setB: Batch) async {
+        let namesA = Set(targets.map(\.name))
+        let namesB = Set(setB.names)
+        let isPlanted = { (name: String) in namesA.contains(name) || namesB.contains(name) }
+        let manager = tunnels
+        let archiveB = setB.archive
+        let seen = Samples()
+        let watched = await watching(
+            {
+                let started = ContinuousClock.now
+                let deleting = Task { @MainActor in
+                    let report = await TunnelBulkDelete.run(targets, in: manager) { done in
+                        seen.progress.append(done)
+                        seen.listedOfB.append(manager.tunnels.filter { namesB.contains($0.name) }.count)
+                    }
+                    return (report, ContinuousClock.now - started)
+                }
+                let importing = Task { @MainActor in
+                    let report = await TunnelBulkImport.run([archiveB], into: manager)
+                    return (report, ContinuousClock.now - started)
+                }
+                let (deleted, deleteTook) = await deleting.value
+                let (imported, importTook) = await importing.value
+                return Overlap(deleted: deleted, deleteTook: deleteTook, imported: imported, importTook: importTook)
+            },
+            settling: isPlanted,
+            until: { $0.agree && $0.rows.count == namesB.count }
+        )
+        let overlap = watched.result
+        log(Self.timing("delete of set A, from the common start", overlap.deleteTook, count: targets.count))
+        log(Self.timing("import of set B, from the common start", overlap.importTook, count: overlap.imported.added.count))
+        log(notifications("overlap", watched.changes))
+
+        let midway = seen.listedOfB.filter { $0 > 0 && $0 < namesB.count }
+        check(!midway.isEmpty,
+              "the two batches overlapped: set B rows were arriving on the live list while the delete was counting (B rows listed at the delete's progress: first \(seen.listedOfB.first ?? -1), last \(seen.listedOfB.last ?? -1), midway samples \(midway.count) of \(seen.listedOfB.count))")
+
+        check(overlap.deleted.deleted == targets.map(\.name)
+                && overlap.deleted.skipped.isEmpty
+                && seen.progress == Array(1...targets.count),
+              "the delete took every row of set A in list order, skipped none and counted each once (targets=\(targets.count), deleted=\(overlap.deleted.deleted.count), skipped=\(overlap.deleted.skipped.map { "\($0.name): \($0.skip)" }), progress last=\(seen.progress.last ?? 0))")
+
+        check(overlap.imported.added == setB.names && overlap.imported.skipped.isEmpty,
+              "the import added every entry of set B in label order and reported nothing (added=\(overlap.imported.added.count), skipped=\(overlap.imported.skipped.map { "\($0.label): \($0.skip)" }))")
+
+        let held = watched.settled.reading
+        let listed = tunnels.tunnels.map(\.name).filter(isPlanted)
+        check(held.map { $0.agree && $0.rows.count == namesB.count } == true && Set(listed) == namesB,
+              "the live list, the system's entries and the vault hold exactly set B's \(namesB.count) ids, each once, and nothing of set A (\(held?.line ?? "unreadable"), set A rows left \(listed.filter { namesA.contains($0) }.count), \(Self.after(watched.settled, "agreed")))")
+
+        if let mismatched = await mismatched(setB) {
+            check(mismatched.isEmpty,
+                  "every set B payload in the vault is the configuration its entry carried, the Ghost ones with their Wstunnel part (mismatched=\(mismatched.count))")
+        } else {
+            fail("the vault did not answer the payload comparison")
+        }
+    }
+
+    // MARK: - Teardown
+
+    private func sweep(_ batch: Batch) async {
+        let planted = Set(batch.names)
         guard let left = await read({ planted.contains($0) }) else {
-            for tunnelName in names {
-                guard let config = sources[tunnelName] else { continue }
+            for tunnelName in batch.names {
+                guard let config = batch.sources[tunnelName] else { continue }
                 await sweepPlantedTunnel(id: config.id, name: tunnelName)
             }
             return
         }
         let ids = Set(left.reading.rows + left.reading.entries + left.reading.payloads)
         guard !ids.isEmpty else {
-            log("teardown: the \(names.count) planted tunnels — all three stores already clean")
+            log("teardown: the \(batch.names.count) planted tunnels of \(batch.label) — all three stores already clean")
             return
         }
         for id in ids {
