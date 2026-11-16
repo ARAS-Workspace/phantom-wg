@@ -167,18 +167,10 @@ struct TunnelListView: View {
 
     private func exportToZip() {
         Task {
-            switch await PrivateDataAuthorization.request(reason: loc.t("export_private_data_reason")) {
-            case .granted:
-                break
-            case .declined:
-                return
-            case .failed(let message):
+            let granted = await PrivateDataGuard.grants(reason: loc.t("export_private_data_reason")) { message in
                 transferNotice = TransferNotice(title: loc.t("error"), message: message)
-                return
             }
-            if !NSApp.isActive {
-                NSApp.activate()
-            }
+            guard granted else { return }
 
             let panel = NSSavePanel()
             panel.allowedContentTypes = [.zip]

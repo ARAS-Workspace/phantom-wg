@@ -15,19 +15,11 @@ extension TunnelDetailView {
         let contents = config.asConfString()
         let fileName = TunnelConfFile.fileName(for: config.name)
         Task {
-            switch await PrivateDataAuthorization.request(reason: loc.t("export_private_data_reason")) {
-            case .granted:
-                break
-            case .declined:
-                return
-            case .failed(let message):
+            let granted = await PrivateDataGuard.grants(reason: loc.t("export_private_data_reason")) { message in
                 errorMessage = message
                 showingError = true
-                return
             }
-            if !NSApp.isActive {
-                NSApp.activate()
-            }
+            guard granted else { return }
 
             let panel = NSSavePanel()
             panel.allowedContentTypes = [TunnelConfFile.contentType]
