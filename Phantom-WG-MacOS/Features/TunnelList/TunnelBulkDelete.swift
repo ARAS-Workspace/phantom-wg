@@ -26,10 +26,15 @@ enum TunnelBulkDelete {
         ordered.filter { marked.contains($0.id) }
     }
 
+    /// @witness TunnelBulkDelete
     static func run(_ targets: [TunnelContainer], in manager: TunnelsManager) async -> Report {
         var deleted: [String] = []
-        var skipped = targets.filter { !$0.isSettledInactive }.map { Skipped(name: $0.name, skip: .connected) }
-        for tunnel in targets where tunnel.isSettledInactive {
+        var skipped: [Skipped] = []
+        for tunnel in targets {
+            guard tunnel.isSettledInactive else {
+                skipped.append(Skipped(name: tunnel.name, skip: .connected))
+                continue
+            }
             manager.startDeactivation(of: tunnel)
             do {
                 try await manager.remove(tunnel: tunnel)

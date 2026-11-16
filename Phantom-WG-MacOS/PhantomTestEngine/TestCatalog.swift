@@ -32,6 +32,7 @@ enum TestCatalog {
             ConfigContractWorkflow(),
             ArchiveNamesWorkflow(),
             TunnelTransferWorkflow(),
+            TunnelBulkDeleteWorkflow(),
             PhantomTunnelWorkflow(.standalone),
             PhantomTunnelWorkflow(.ghost),
             RecoverySwitchWorkflow(),
