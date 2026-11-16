@@ -3,7 +3,7 @@ import SwiftUI
 struct ActionsSection: View {
     var tunnel: TunnelContainer
     let canCopy: Bool
-    let copyAction: () -> Void
+    let copyAction: () async -> Bool
     let exportAction: () -> Void
     let editAction: () -> Void
     let resetAction: () -> Void
@@ -16,7 +16,7 @@ struct ActionsSection: View {
 
     var body: some View {
         Section {
-            copyButton(loc.t("detail_copy_conf"), icon: "doc.text", id: "conf") { copyAction() }
+            copyButton(loc.t("detail_copy_conf"), icon: "doc.text", id: "conf", action: copyAction)
                 .disabled(!canCopy)
                 .listRowSeparator(.hidden)
                 .accessibilityIdentifier(AXID.TunnelDetail.Actions.copyButton)
@@ -63,14 +63,16 @@ struct ActionsSection: View {
         tunnel.isSettledInactive
     }
 
-    private func copyButton(_ title: String, icon: String, id: String, action: @escaping () -> Void) -> some View {
+    private func copyButton(_ title: String, icon: String, id: String, action: @escaping () async -> Bool) -> some View {
         Button {
-            action()
-            copiedItem = id
-            copyFeedbackTask?.cancel()
-            copyFeedbackTask = Task {
-                guard (try? await Task.sleep(for: .seconds(2))) != nil else { return }
-                copiedItem = nil
+            Task {
+                guard await action() else { return }
+                copiedItem = id
+                copyFeedbackTask?.cancel()
+                copyFeedbackTask = Task {
+                    guard (try? await Task.sleep(for: .seconds(2))) != nil else { return }
+                    copiedItem = nil
+                }
             }
         } label: {
             Label(copiedItem == id ? loc.t("detail_copied") : title,
@@ -89,7 +91,7 @@ struct ActionsSection: View {
             ActionsSection(
                 tunnel: manager.tunnels[0],
                 canCopy: true,
-                copyAction: {},
+                copyAction: { true },
                 exportAction: {},
                 editAction: {},
                 resetAction: {},
@@ -111,7 +113,7 @@ struct ActionsSection: View {
             ActionsSection(
                 tunnel: manager.tunnels[1],
                 canCopy: true,
-                copyAction: {},
+                copyAction: { true },
                 exportAction: {},
                 editAction: {},
                 resetAction: {},

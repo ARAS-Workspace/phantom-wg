@@ -4,10 +4,28 @@ import SwiftUI
 
 extension TunnelDetailView {
 
-    func copyConf() {
-        guard let contents = config?.asConfString() else { return }
+    func copyConf() async -> Bool {
+        guard let contents = config?.asConfString() else { return false }
+        let granted = await PrivateDataGuard.grants(reason: loc.t("copy_private_data_reason")) { message in
+            errorMessage = message
+            showingError = true
+        }
+        guard granted else { return false }
+
         NSPasteboard.general.clearContents()
         NSPasteboard.general.setString(contents, forType: .string)
+        return true
+    }
+
+    func openEdit() {
+        Task {
+            let granted = await PrivateDataGuard.grants(reason: loc.t("edit_private_data_reason")) { message in
+                errorMessage = message
+                showingError = true
+            }
+            guard granted, tunnel.isSettledInactive else { return }
+            showingEdit = true
+        }
     }
 
     func exportConf() {
@@ -55,12 +73,21 @@ extension TunnelDetailView {
     func deleteTunnel() {
         guard !deleting else { return }
         deleting = true
-        // Decision: a confirmed delete carries its own stop unconditionally.
-        // No pre-filter here — startDeactivation's entry gate reads both
-        // surfaces itself and returns silently in every sessionless
-        // combination.
-        tunnelsManager.startDeactivation(of: tunnel)
         Task {
+            let granted = await PrivateDataGuard.grants(reason: loc.t("delete_private_data_reason")) { message in
+                errorMessage = message
+                showingError = true
+            }
+            guard granted else {
+                deleting = false
+                return
+            }
+
+            // Decision: a confirmed delete carries its own stop unconditionally.
+            // No pre-filter here — startDeactivation's entry gate reads both
+            // surfaces itself and returns silently in every sessionless
+            // combination.
+            tunnelsManager.startDeactivation(of: tunnel)
             do {
                 try await tunnelsManager.remove(tunnel: tunnel)
                 dismiss()
