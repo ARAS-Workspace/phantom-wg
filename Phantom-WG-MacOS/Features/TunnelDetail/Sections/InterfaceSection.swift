@@ -7,9 +7,9 @@ struct InterfaceSection: View {
     var body: some View {
         Section {
             PhantomStaticField(
-                label: loc.t("detail_private_key"),
-                value: config.privateKey.textual,
-                axIdentifier: AXID.TunnelDetail.Interface.privateKey
+                label: loc.t("detail_public_key"),
+                value: config.privateKey.derivedPublicKey?.textual ?? "—",
+                axIdentifier: AXID.TunnelDetail.Interface.publicKey
             )
             PhantomStaticField(
                 label: loc.t("detail_address"),

@@ -11,10 +11,10 @@ struct PeerSection: View {
                 value: config.publicKey.textual,
                 axIdentifier: AXID.TunnelDetail.Peer.publicKey
             )
-            if let preshared = config.presharedKey {
+            if config.presharedKey != nil {
                 PhantomStaticField(
                     label: loc.t("detail_preshared_key"),
-                    value: preshared.textual,
+                    value: loc.t("detail_preshared_key_enabled"),
                     axIdentifier: AXID.TunnelDetail.Peer.presharedKey
                 )
             }

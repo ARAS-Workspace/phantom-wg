@@ -2,6 +2,7 @@ import SwiftUI
 
 struct WstunnelSection: View {
     let config: WstunnelConfig
+    let fingerprintKey: WireGuardKey
     @Environment(LocalizationManager.self) private var loc
 
     var body: some View {
@@ -12,9 +13,9 @@ struct WstunnelSection: View {
                 axIdentifier: AXID.TunnelDetail.Wstunnel.url
             )
             PhantomStaticField(
-                label: loc.t("detail_secret"),
-                value: config.secret,
-                axIdentifier: AXID.TunnelDetail.Wstunnel.secret
+                label: loc.t("detail_secret_fingerprint"),
+                value: config.secretFingerprint(keyedBy: fingerprintKey) ?? "—",
+                axIdentifier: AXID.TunnelDetail.Wstunnel.secretFingerprint
             )
             PhantomStaticField(
                 label: loc.t("detail_local_host"),
@@ -46,7 +47,10 @@ struct WstunnelSection: View {
 
 #Preview {
     Form {
-        WstunnelSection(config: PreviewFixtures.ghostConfig().wstunnel!)
+        WstunnelSection(
+            config: PreviewFixtures.ghostConfig().wstunnel!,
+            fingerprintKey: PreviewFixtures.ghostConfig().wireguard.interface.privateKey
+        )
     }
     .formStyle(.grouped)
     .previewEnvironment()
