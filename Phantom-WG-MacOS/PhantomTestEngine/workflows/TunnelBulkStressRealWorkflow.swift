@@ -72,11 +72,96 @@
 //       took all of A, the import added all of B, and the three stores
 //       hold exactly B's ten ids, each payload the configuration its entry
 //       carried. A bulk delete of B then leaves the stores as they were
-//       before A was imported.
+//       before A was imported. The configuration change notifications from
+//       A's import to the reading of the stores are logged by when they
+//       arrived, and by set where a notification names its configuration;
+//       an A notification inside the overlap's window that arrived before
+//       its own tunnel's delete began is counted on its own.
 
 #if DEBUG
 import Foundation
 import NetworkExtension
+
+@MainActor
+private final class ChangeRecorder {
+    struct Arrival {
+        let at: ContinuousClock.Instant
+        let name: String?
+        let object: String
+    }
+
+    private(set) var arrivals: [Arrival] = []
+    private var token: NSObjectProtocol?
+
+    func start() {
+        let center = NotificationCenter.default
+        token = center.addObserver(forName: .NEVPNConfigurationChange, object: nil, queue: .main) { [weak self] notification in
+            MainActor.assumeIsolated {
+                self?.arrivals.append(Arrival(
+                    at: .now,
+                    name: (notification.object as? NEVPNManager)?.localizedDescription,
+                    object: notification.object.map { "\(type(of: $0))" } ?? "no object"
+                ))
+            }
+        }
+    }
+
+    func stop() {
+        if let token {
+            NotificationCenter.default.removeObserver(token)
+        }
+        token = nil
+    }
+}
+
+private struct OverlapTiming {
+    let started: ContinuousClock.Instant
+    let windowEnd: ContinuousClock.Instant
+    let beganAt: [String: ContinuousClock.Instant]
+}
+
+private enum OverlapArrivals {
+    static func lines(
+        _ arrivals: [ChangeRecorder.Arrival],
+        listedAt: ContinuousClock.Instant,
+        timing: OverlapTiming,
+        setA: Set<String>,
+        setB: Set<String>
+    ) -> [String] {
+        func set(of arrival: ChangeRecorder.Arrival) -> String {
+            guard let name = arrival.name else { return "unnamed \(arrival.object)" }
+            if setA.contains(name) { return "A" }
+            if setB.contains(name) { return "B" }
+            return "other"
+        }
+        func tally(_ group: [ChangeRecorder.Arrival]) -> String {
+            let counts = Dictionary(grouping: group, by: set(of:)).mapValues(\.count)
+            guard !counts.isEmpty else { return "none" }
+            return counts.sorted { $0.key < $1.key }.map { "\($0.key) \($0.value)" }.joined(separator: ", ")
+        }
+        func milliseconds(_ duration: Duration) -> String {
+            let parts = duration.components
+            return String(format: "%.0f", Double(parts.seconds) * 1000 + Double(parts.attoseconds) / 1e15)
+        }
+        let importing = arrivals.filter { $0.at <= listedAt }
+        let gap = arrivals.filter { $0.at > listedAt && $0.at < timing.started }
+        let inside = arrivals.filter { $0.at >= timing.started && $0.at <= timing.windowEnd }
+        let later = arrivals.filter { $0.at > timing.windowEnd }
+        let early = inside.filter { arrival in
+            guard let name = arrival.name, let began = timing.beganAt[name] else { return false }
+            return arrival.at < began
+        }
+        let earlyAt = early.map { milliseconds($0.at - listedAt) }.joined(separator: ", ")
+        return [
+            "notifications while set A was imported: \(tally(importing))",
+            "set A's import returned \(milliseconds(timing.started - listedAt)) ms before the overlap's window opened, notifications in that gap: \(tally(gap))",
+            "notifications inside the overlap's window: \(tally(inside))",
+            "set A notifications inside the window that arrived before their own tunnel's delete began: \(early.count)"
+                + (early.isEmpty ? "" : ", at \(earlyAt) ms after set A's import returned"),
+            "notifications after the window, until the stores were read: \(tally(later))",
+        ]
+    }
+}
 
 final class TunnelBulkStressRealWorkflow: TestWorkflow {
     override var displayName: String { "Tunnel Bulk Stress (Real Stores)" }
@@ -99,6 +184,7 @@ final class TunnelBulkStressRealWorkflow: TestWorkflow {
     @MainActor
     private final class Samples {
         var progress: [Int] = []
+        var progressAt: [ContinuousClock.Instant] = []
         var listedOfB: [Int] = []
     }
 
@@ -129,9 +215,12 @@ final class TunnelBulkStressRealWorkflow: TestWorkflow {
 
     private struct Watched<Result> {
         let result: Result
-        let took: Duration
+        let started: ContinuousClock.Instant
+        let returned: ContinuousClock.Instant
         let changes: Int
         let settled: Settled
+
+        var took: Duration { returned - started }
     }
 
     private struct Imported {
@@ -219,7 +308,8 @@ final class TunnelBulkStressRealWorkflow: TestWorkflow {
         NotificationCenter.default.removeObserver(token)
         return Watched(
             result: result,
-            took: returned - started,
+            started: started,
+            returned: returned,
             changes: arrivals.instants.filter { $0 <= windowEnd }.count,
             settled: landed
         )
@@ -472,14 +562,23 @@ final class TunnelBulkStressRealWorkflow: TestWorkflow {
             return
         }
         log("before the import: \(baseline.reading.line)")
-        guard let targets = await listed(setA) else { return }
-        await overlaps(targets, with: setB)
+        let recorder = ChangeRecorder()
+        recorder.start()
+        defer { recorder.stop() }
+        guard let listedA = await listed(setA) else { return }
+        let timing = await overlaps(listedA.targets, with: setB)
+        recorder.stop()
+        for line in OverlapArrivals.lines(recorder.arrivals, listedAt: listedA.returned, timing: timing,
+                                          setA: Set(setA.names), setB: Set(setB.names)) {
+            log(line)
+        }
         _ = await deletesWhole(setB.names, baseline: baseline.reading)
     }
 
-    private func listed(_ setA: Batch) async -> [TunnelContainer]? {
+    private func listed(_ setA: Batch) async -> (targets: [TunnelContainer], returned: ContinuousClock.Instant)? {
         let namesA = Set(setA.names)
         let report = await TunnelBulkImport.run([setA.archive], into: tunnels)
+        let returned = ContinuousClock.now
         let ready = await settled({ namesA.contains($0) }, until: { $0.agree && $0.rows.count == namesA.count })
         let rows = TunnelListRules.ordered(tunnels.tunnels.filter { namesA.contains($0.name) }, saved: [], id: \.id)
         let targets = TunnelBulkDelete.targets(rows, marked: Set(rows.map(\.id)))
@@ -488,10 +587,10 @@ final class TunnelBulkStressRealWorkflow: TestWorkflow {
             return nil
         }
         log("set A listed: \(ready.reading?.line ?? "unreadable")")
-        return targets
+        return (targets, returned)
     }
 
-    private func overlaps(_ targets: [TunnelContainer], with setB: Batch) async {
+    private func overlaps(_ targets: [TunnelContainer], with setB: Batch) async -> OverlapTiming {
         let namesA = Set(targets.map(\.name))
         let namesB = Set(setB.names)
         let isPlanted = { (name: String) in namesA.contains(name) || namesB.contains(name) }
@@ -504,6 +603,7 @@ final class TunnelBulkStressRealWorkflow: TestWorkflow {
                 let deleting = Task { @MainActor in
                     let report = await TunnelBulkDelete.run(targets, in: manager) { done in
                         seen.progress.append(done)
+                        seen.progressAt.append(.now)
                         seen.listedOfB.append(manager.tunnels.filter { namesB.contains($0.name) }.count)
                     }
                     return (report, ContinuousClock.now - started)
@@ -547,6 +647,16 @@ final class TunnelBulkStressRealWorkflow: TestWorkflow {
         } else {
             fail("the vault did not answer the payload comparison")
         }
+
+        var beganAt: [String: ContinuousClock.Instant] = [:]
+        for (index, target) in targets.enumerated() {
+            if index == 0 {
+                beganAt[target.name] = watched.started
+            } else if index - 1 < seen.progressAt.count {
+                beganAt[target.name] = seen.progressAt[index - 1]
+            }
+        }
+        return OverlapTiming(started: watched.started, windowEnd: watched.returned + changeWindow, beganAt: beganAt)
     }
 
     // MARK: - Teardown
