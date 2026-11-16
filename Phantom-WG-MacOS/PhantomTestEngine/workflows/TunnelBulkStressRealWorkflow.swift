@@ -50,6 +50,11 @@
 //       them all, the three stores hold none of them, and the user's own
 //       tunnels are where they were: the stores read the same ids as before
 //       the import.
+//
+//   D — Fifty Tunnels Import Whole And Delete Whole
+//       C at fifty tunnels, with the same checks. A log line then sets its
+//       per-tunnel durations, notifications per tunnel and the time the
+//       stores took to agree and to empty beside C's.
 
 #if DEBUG
 import Foundation
@@ -63,6 +68,7 @@ final class TunnelBulkStressRealWorkflow: TestWorkflow {
             WorkflowStep("No Leftover From An Earlier Run", noLeftoverFromAnEarlierRun),
             WorkflowStep("The Store Readers See A Payload Without Its Entry", theReadersSeeAPayloadWithoutItsEntry),
             WorkflowStep("Five Tunnels Import Whole And Delete Whole", fiveTunnelsImportWholeAndDeleteWhole),
+            WorkflowStep("Fifty Tunnels Import Whole And Delete Whole", fiftyTunnelsImportWholeAndDeleteWhole),
         ]
     }
 
@@ -76,8 +82,22 @@ final class TunnelBulkStressRealWorkflow: TestWorkflow {
         let names: [UUID: String]
     }
 
+    private struct Imported {
+        let each: Double
+        let changes: Int
+        let agreedAfter: Double?
+    }
+
+    private struct Deleted {
+        let each: Double
+        let changes: Int
+        let emptiedAfter: Double?
+    }
+
     private static let prefix = "TE-Stress-R-"
-    private let size = 5
+    private let smallBatch = 5
+    private let largeBatch = 50
+    private var measured: [Int: (imported: Imported, deleted: Deleted)] = [:]
     private let convergence = 5.0
     private let runTag = String(UUID().uuidString.prefix(8))
     private var directory: URL?
@@ -215,7 +235,16 @@ final class TunnelBulkStressRealWorkflow: TestWorkflow {
     }
 
     private func fiveTunnelsImportWholeAndDeleteWhole() async {
-        let names = (1...size).map { "\(Self.prefix)\(String(format: "%02d", $0))-\(runTag)" }
+        await importsWholeAndDeletesWhole(count: smallBatch)
+    }
+
+    private func fiftyTunnelsImportWholeAndDeleteWhole() async {
+        await importsWholeAndDeletesWhole(count: largeBatch)
+        compare(largeBatch, with: smallBatch)
+    }
+
+    private func importsWholeAndDeletesWhole(count: Int) async {
+        let names = (1...count).map { "\(Self.prefix)N\(count)-\(String(format: "%03d", $0))-\(runTag)" }
         var sources: [String: TunnelConfig] = [:]
         var entries: [(String, Data)] = []
         for (index, tunnelName) in names.enumerated() {
@@ -230,44 +259,42 @@ final class TunnelBulkStressRealWorkflow: TestWorkflow {
             fail("the temporary folder could not be made")
             return
         }
-        let archive = folder.appendingPathComponent("stress-real-\(size).zip")
+        let archive = folder.appendingPathComponent("stress-real-\(count).zip")
         do {
             try ZipArchive.write(entries, to: archive)
         } catch {
             fail("the archive could not be written: \(error.localizedDescription)")
             return
         }
-        onTeardown("planted stress tunnels") { [weak self] in
-            guard let self else { return }
-            for tunnelName in names {
-                guard let config = sources[tunnelName] else { continue }
-                await self.sweepPlantedTunnel(id: config.id, name: tunnelName)
-            }
+        onTeardown("planted \(count)-tunnel batch") { [weak self] in
+            await self?.sweep(names, sources: sources)
         }
         guard let baseline = await read({ _ in true }) else {
             skip("the vault or the system list did not answer before the import")
             return
         }
         log("before the import: \(baseline.reading.line)")
-        guard await importsWhole(names, sources: sources, archive: archive) else { return }
-        await deletesWhole(names, baseline: baseline.reading)
+        guard let imported = await importsWhole(names, sources: sources, archive: archive) else { return }
+        let deleted = await deletesWhole(names, baseline: baseline.reading)
+        measured[count] = (imported, deleted)
     }
 
-    private func importsWhole(_ names: [String], sources: [String: TunnelConfig], archive: URL) async -> Bool {
+    private func importsWhole(_ names: [String], sources: [String: TunnelConfig], archive: URL) async -> Imported? {
         let isRun = { (name: String) in names.contains(name) }
         let started = ContinuousClock.now
         let (report, changes) = await countingConfigurationChanges {
             await TunnelBulkImport.run([archive], into: tunnels)
         }
-        log(Self.timing("import", ContinuousClock.now - started, count: report.added.count))
+        let took = ContinuousClock.now - started
+        log(Self.timing("import", took, count: report.added.count))
         log("configuration change notifications during the import: \(changes)")
 
         check(report.added == names && report.skipped.isEmpty,
-              "every entry of the \(size)-entry archive was added, in label order, and nothing was reported (added=\(report.added.count), skipped=\(report.skipped.map { "\($0.label): \($0.skip)" }))")
+              "every entry of the \(names.count)-entry archive was added, in label order, and nothing was reported (added=\(report.added.count), skipped=\(report.skipped.map { "\($0.label): \($0.skip)" }))")
 
-        let (held, after) = await settled(isRun) { $0.agree && $0.rows.count == self.size }
-        check(held.map { $0.agree && $0.rows.count == size } == true,
-              "the live list, the system's entries and the vault hold the same \(size) ids, each once (\(held?.line ?? "unreadable"), \(Self.after(after)))")
+        let (held, after) = await settled(isRun) { $0.agree && $0.rows.count == names.count }
+        check(held.map { $0.agree && $0.rows.count == names.count } == true,
+              "the live list, the system's entries and the vault hold the same \(names.count) ids, each once (\(held?.line ?? "unreadable"), \(Self.after(after)))")
 
         if case .configs(let configs) = await vault.readAll() {
             let mismatched = names.filter { tunnelName in
@@ -283,10 +310,11 @@ final class TunnelBulkStressRealWorkflow: TestWorkflow {
 
         let painted = tunnels.tunnels.filter { isRun($0.name) }.map { "\($0.status)" }
         log("rows painted after the import: \(Dictionary(grouping: painted) { $0 }.mapValues(\.count).sorted { $0.key < $1.key }.map { "\($0.key)=\($0.value)" }.joined(separator: ", "))")
-        return !report.added.isEmpty
+        guard !report.added.isEmpty else { return nil }
+        return Imported(each: Self.milliseconds(took) / Double(report.added.count), changes: changes, agreedAfter: after)
     }
 
-    private func deletesWhole(_ names: [String], baseline: TunnelStoreReading) async {
+    private func deletesWhole(_ names: [String], baseline: TunnelStoreReading) async -> Deleted {
         let isRun = { (name: String) in names.contains(name) }
         let rows = TunnelListRules.ordered(tunnels.tunnels.filter { isRun($0.name) }, saved: [], id: \.id)
         let targets = TunnelBulkDelete.targets(rows, marked: Set(rows.map(\.id)))
@@ -295,7 +323,8 @@ final class TunnelBulkStressRealWorkflow: TestWorkflow {
         let (report, changes) = await countingConfigurationChanges {
             await TunnelBulkDelete.run(targets, in: tunnels) { progress.append($0) }
         }
-        log(Self.timing("delete", ContinuousClock.now - started, count: targets.count))
+        let took = ContinuousClock.now - started
+        log(Self.timing("delete", took, count: targets.count))
         log("configuration change notifications during the delete: \(changes)")
 
         check(!targets.isEmpty
@@ -317,6 +346,39 @@ final class TunnelBulkStressRealWorkflow: TestWorkflow {
                       && Set($0.payloads) == Set(baseline.payloads)
               } == true,
               "the user's own tunnels are where they were: the three stores read the same ids as before the import (before \(baseline.line), now \(everything?.line ?? "unreadable"))")
+        return Deleted(each: Self.milliseconds(took) / Double(max(targets.count, 1)), changes: changes, emptiedAfter: after)
+    }
+
+    private func compare(_ count: Int, with base: Int) {
+        guard let large = measured[count], let small = measured[base] else {
+            log("no comparison with the \(base)-tunnel batch: one of the two batches did not finish")
+            return
+        }
+        let each = { (value: Double) in String(format: "%.1f", value) }
+        let perTunnel = { (changes: Int, tunnels: Int) in String(format: "%.2f", Double(changes) / Double(tunnels)) }
+        let after = { (value: Double?) in value.map { String(format: "%.0f ms", $0) } ?? "not within the wait" }
+        log("per tunnel, \(base) → \(count): import \(each(small.imported.each)) → \(each(large.imported.each)) ms, delete \(each(small.deleted.each)) → \(each(large.deleted.each)) ms")
+        log("notifications per tunnel, \(base) → \(count): import \(perTunnel(small.imported.changes, base)) → \(perTunnel(large.imported.changes, count)), delete \(perTunnel(small.deleted.changes, base)) → \(perTunnel(large.deleted.changes, count))")
+        log("after the batch returned, \(base) → \(count): stores agreed \(after(small.imported.agreedAfter)) → \(after(large.imported.agreedAfter)), emptied \(after(small.deleted.emptiedAfter)) → \(after(large.deleted.emptiedAfter))")
+    }
+
+    private func sweep(_ names: [String], sources: [String: TunnelConfig]) async {
+        let planted = Set(names)
+        guard let left = await read({ planted.contains($0) }) else {
+            for tunnelName in names {
+                guard let config = sources[tunnelName] else { continue }
+                await sweepPlantedTunnel(id: config.id, name: tunnelName)
+            }
+            return
+        }
+        let ids = Set(left.reading.rows + left.reading.entries + left.reading.payloads)
+        guard !ids.isEmpty else {
+            log("teardown: the \(names.count) planted tunnels — all three stores already clean")
+            return
+        }
+        for id in ids {
+            await sweepPlantedTunnel(id: id, name: left.names[id] ?? "\(Self.prefix)\(id)")
+        }
     }
 }
 #endif
