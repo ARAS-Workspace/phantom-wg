@@ -1,5 +1,8 @@
 name: Phantom-WG Mac - Release
 
+# The text of the GitHub Release is .github/docs/release.md, with
+# {{VERSION}} set to the version.
+
 on:
   push:
     tags: [ "mac-v*" ]
@@ -48,6 +51,16 @@ jobs:
       contents: write
 
     steps:
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+
+      - name: Write the release text
+        env:
+          VERSION: ${{ needs.extract-version.outputs.version }}
+        run: sed "s/{{VERSION}}/${VERSION}/g" .github/docs/release.md > "${RUNNER_TEMP}/release.md"
+
       - name: Download arm64 DMG
         uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
@@ -65,83 +78,7 @@ jobs:
         with:
           tag_name: "mac-v${{ needs.extract-version.outputs.version }}"
           name: "Phantom-WG Mac ${{ needs.extract-version.outputs.version }}"
-          body: |
-            ## Phantom-WG Mac ${{ needs.extract-version.outputs.version }}
-
-            ---
-
-            ### 🇺🇸
-
-            #### Downloads
-
-            | Architecture | File |
-            |---|---|
-            | Apple Silicon (M1/M2/M3/M4) | `Phantom-WG-MacOS-${{ needs.extract-version.outputs.version }}-arm64.dmg` |
-            | Intel | `Phantom-WG-MacOS-${{ needs.extract-version.outputs.version }}-x86_64.dmg` |
-
-            #### Homebrew
-
-            Install:
-
-            ```bash
-            brew install --cask ARAS-Workspace/tap/phantom-wg-mac
-            ```
-
-            Update:
-
-            ```bash
-            brew upgrade --cask ARAS-Workspace/tap/phantom-wg-mac
-            ```
-
-            #### Manual Installation
-
-            1. Download the DMG for your architecture
-            2. Drag **Phantom-WG Mac** to the **Applications** folder
-            3. On first launch, approve the system extension:
-               - System Settings → General → Login Items & Extensions → Network Extensions
-            4. Import your tunnel configuration (.conf) and connect
-
-            #### Requirements
-
-            - macOS 15.1 (Sequoia) or later
-
-            ---
-
-            ### 🇹🇷
-
-            #### İndirmeler
-
-            | Mimari | Dosya |
-            |---|---|
-            | Apple Silicon (M1/M2/M3/M4) | `Phantom-WG-MacOS-${{ needs.extract-version.outputs.version }}-arm64.dmg` |
-            | Intel | `Phantom-WG-MacOS-${{ needs.extract-version.outputs.version }}-x86_64.dmg` |
-
-            #### Homebrew
-
-            Kurulum:
-
-            ```bash
-            brew install --cask ARAS-Workspace/tap/phantom-wg-mac
-            ```
-
-            Güncelleme:
-
-            ```bash
-            brew upgrade --cask ARAS-Workspace/tap/phantom-wg-mac
-            ```
-
-            #### Manuel Kurulum
-
-            1. Mimarinize uygun DMG dosyasını indirin
-            2. **Phantom-WG Mac** uygulamasını **Applications** klasörüne sürükleyin
-            3. İlk çalıştırmada sistem uzantısını onaylayın:
-               - Sistem Ayarları → Genel → Oturum Açma Öğeleri ve Uzantılar → Ağ Uzantıları
-            4. Tünel yapılandırmanızı (.conf) içe aktarın ve bağlanın
-
-            #### Gereksinimler
-
-            - macOS 15.1 (Sequoia) veya üzeri
-
+          body_path: ${{ runner.temp }}/release.md
           files: |
             ${{ runner.temp }}/release/Phantom-WG-MacOS-${{ needs.extract-version.outputs.version }}-arm64.dmg
             ${{ runner.temp }}/release/Phantom-WG-MacOS-${{ needs.extract-version.outputs.version }}-x86_64.dmg
