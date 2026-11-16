@@ -158,6 +158,7 @@ targets:
         CFBundleShortVersionString: "$(MARKETING_VERSION)"
         CFBundleVersion: "$(CURRENT_PROJECT_VERSION)"
         CFBundleDisplayName: Phantom-WG Mac
+        NSHumanReadableCopyright: "Copyright © 2025 ARTEK İnovasyon Ar-Ge San. ve Tic. Ltd. Şti.\nCopyright © 2025 Rıza Emre ARAS"
         NSSystemExtensionUsageDescription: "Phantom-WG Mac needs to install a system extension to provide VPN tunnel functionality."
     entitlements:
       path: Phantom-WG-MacOS/Phantom-WG-MacOS.entitlements

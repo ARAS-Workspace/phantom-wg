@@ -20,6 +20,9 @@
 	<string>$(MARKETING_VERSION)</string>
 	<key>CFBundleVersion</key>
 	<string>$(CURRENT_PROJECT_VERSION)</string>
+	<key>NSHumanReadableCopyright</key>
+	<string>Copyright © 2025 ARTEK İnovasyon Ar-Ge San. ve Tic. Ltd. Şti.
+Copyright © 2025 Rıza Emre ARAS</string>
 	<key>NSSystemExtensionUsageDescription</key>
 	<string>Phantom-WG Mac needs to install a system extension to provide VPN tunnel functionality.</string>
 </dict>
