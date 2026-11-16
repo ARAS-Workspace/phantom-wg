@@ -127,6 +127,7 @@
   "status_reasserting": "Reasserting",
   "status_waiting": "Waiting",
   "status_unknown": "Unknown",
+  "menubar_open": "Open Phantom-WG",
   "import_title": "Import Tunnel",
   "import_configuration": "Configuration",
   "import_name_placeholder": "Tunnel name",

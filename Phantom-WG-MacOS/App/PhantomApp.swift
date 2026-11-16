@@ -191,5 +191,14 @@ struct PhantomApp: App {
         .commands {
             WindowSizeCommands(loc: loc)
         }
+
+        MenuBarExtra {
+            MenuBarContent()
+                .environment(loc)
+        } label: {
+            Image("MenuBarIcon")
+                .accessibilityLabel(Text(loc.t("app_title")))
+        }
+        .menuBarExtraStyle(.menu)
     }
 }

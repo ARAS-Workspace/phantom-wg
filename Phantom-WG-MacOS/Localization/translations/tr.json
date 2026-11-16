@@ -127,6 +127,7 @@
   "status_reasserting": "Yeniden Bağlanıyor",
   "status_waiting": "Bekliyor",
   "status_unknown": "Bilinmiyor",
+  "menubar_open": "Phantom-WG'yi Aç",
   "import_title": "Tünel İçe Aktar",
   "import_configuration": "Yapılandırma",
   "import_name_placeholder": "Tünel adı",
