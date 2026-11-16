@@ -51,7 +51,9 @@
 // `MintedProviderLedger` at the bottom records the providers a factory
 // minted during a run, so a step can assert on rows the app created rather
 // than on rows the step handed it. It also holds the status a minted
-// provider starts with: `.invalid` unless a step names another.
+// provider starts with: `.invalid` unless a step names another. Its
+// `saveAnswers` names the save answer of one provider by the order the
+// factory mints it, counting from 1; the others take `saveAnswer`.
 
 #if DEBUG
 import Foundation
@@ -276,6 +278,7 @@ final class FakeSlotProvider: TunnelProviding {
 final class MintedProviderLedger {
 
     var saveAnswer: FakeSlotProvider.SaveAnswer = .succeeds
+    var saveAnswers: [Int: FakeSlotProvider.SaveAnswer] = [:]
     var loadAnswer: FakeSlotProvider.SaveAnswer = .succeeds
     var status: NEVPNStatus = .invalid
 
@@ -294,7 +297,7 @@ struct FakeSlotFactory: TunnelProviderFactory {
 
     func makeProvider() -> TunnelProviding {
         let provider = FakeSlotProvider(name: nil, identity: nil, status: minted.status, entryExists: false)
-        provider.saveAnswer = minted.saveAnswer
+        provider.saveAnswer = minted.saveAnswers[minted.providers.count + 1] ?? minted.saveAnswer
         provider.loadAnswer = minted.loadAnswer
         minted.record(provider)
         return provider
