@@ -45,6 +45,7 @@ enum ConfParser {
 
     // MARK: - Entry Point
 
+    /// @adr 0011
     static func parse(_ input: String) throws -> TunnelDraft {
         let trimmed = input.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { throw ParseError.emptyInput }
