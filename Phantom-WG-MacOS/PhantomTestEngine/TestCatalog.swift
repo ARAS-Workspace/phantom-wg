@@ -34,6 +34,7 @@ enum TestCatalog {
             TunnelTransferWorkflow(),
             TunnelBulkDeleteWorkflow(),
             TunnelBulkStressWorkflow(),
+            TunnelBulkStressRealWorkflow(),
             PhantomTunnelWorkflow(.standalone),
             PhantomTunnelWorkflow(.ghost),
             RecoverySwitchWorkflow(),

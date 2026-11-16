@@ -50,6 +50,26 @@
 import Foundation
 import NetworkExtension
 
+struct TunnelStoreReading {
+    let rows: [UUID]
+    let entries: [UUID]
+    let payloads: [UUID]
+
+    var agree: Bool {
+        Set(rows).count == rows.count
+            && Set(entries).count == entries.count
+            && Set(payloads).count == payloads.count
+            && Set(rows) == Set(entries)
+            && Set(rows) == Set(payloads)
+    }
+
+    var isEmpty: Bool { rows.isEmpty && entries.isEmpty && payloads.isEmpty }
+
+    var line: String {
+        "rows=\(rows.count), entries=\(entries.count), payloads=\(payloads.count), distinct ids=\(Set(rows + entries + payloads).count)"
+    }
+}
+
 final class TunnelBulkStressWorkflow: TestWorkflow {
     override var displayName: String { "Tunnel Bulk Stress (Import And Remove)" }
 
@@ -64,26 +84,6 @@ final class TunnelBulkStressWorkflow: TestWorkflow {
         let manager: TunnelsManager
         let vault: FaultVaultClient
         let entries: MintedProviderLedger
-    }
-
-    private struct Stores {
-        let rows: [UUID]
-        let entries: [UUID]
-        let payloads: [UUID]
-
-        var agree: Bool {
-            Set(rows).count == rows.count
-                && Set(entries).count == entries.count
-                && Set(payloads).count == payloads.count
-                && Set(rows) == Set(entries)
-                && Set(rows) == Set(payloads)
-        }
-
-        var isEmpty: Bool { rows.isEmpty && entries.isEmpty && payloads.isEmpty }
-
-        var line: String {
-            "rows=\(rows.count), entries=\(entries.count), payloads=\(payloads.count), distinct ids=\(Set(rows + entries + payloads).count)"
-        }
     }
 
     private struct Batch {
@@ -137,9 +137,9 @@ final class TunnelBulkStressWorkflow: TestWorkflow {
         }
     }
 
-    private func stores(_ rig: Rig) -> Stores {
+    private func stores(_ rig: Rig) -> TunnelStoreReading {
         let deleted = Set(rig.vault.deletedIds)
-        return Stores(
+        return TunnelStoreReading(
             rows: rig.manager.tunnels.map(\.id),
             entries: rig.entries.providers.filter(\.entryExists).compactMap { $0.storedIdentity?.id },
             payloads: rig.vault.storedIds.filter { !deleted.contains($0) }
