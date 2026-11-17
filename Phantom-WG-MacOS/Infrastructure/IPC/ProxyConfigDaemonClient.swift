@@ -17,6 +17,10 @@ class ProxyConfigDaemonClient {
                          category: "proxy-daemon-client")
     }
 
+    deinit {
+        connection?.invalidate()
+    }
+
     // MARK: - Connection lifecycle
 
     func connect() {
