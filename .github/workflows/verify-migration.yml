@@ -1,13 +1,14 @@
 name: Verify migration
 
 # MIGRATION, from 1.1.5 to 2.0.0, on a host with a public address: the EC2
-# instance whose self-hosted runner carries the label cf-probe-ec2. DOMAIN is
+# instance whose self-hosted runner carries the label deploy-ec2. DOMAIN is
 # a DNS-only record of phantom-wg.dev that points to ORIGIN_IP, the Elastic IP
-# of the instance. The first job installs 1.1.5 from a git clone of main, as
-# its quick start does, up to a Let's Encrypt certificate. The release tree of
-# this commit, built as package-release builds it, stands for the clone of
-# main that 2.0.0 will be. A WireGuard client on a GitHub runner connects with
-# the config of 1.1.5 before and after the migration.
+# of the instance. The first job installs 1.1.5 from a git clone, as its quick
+# start does, up to a Let's Encrypt certificate: the clone takes the tag
+# v1.1.5, main is 2.0.0. The release tree of this commit, built as
+# package-release builds it, stands for the clone of main. A WireGuard client
+# on a GitHub runner connects with the config of 1.1.5 before and after the
+# migration.
 #
 # Every step is one thing a person would do or check. The "1.1.5:" and
 # "Step N:" steps run the commands of the 1.1.5 quick start and of MIGRATION,
@@ -15,7 +16,6 @@ name: Verify migration
 # .github/scripts/probes/migration/migration-probe.py on the host. The config
 # of the client travels as an artifact kept for a day: it holds the private key
 # of a client of this run, and the last job wipes the server it belongs to.
-# One run: main is 1.1.5 until 2.0.0 is out.
 # .github/scripts/probes/migration/verify-migration.sh moves the tag and starts
 # the run.
 
@@ -31,8 +31,8 @@ concurrency:
   group: migration-v1.1.5-v2.0.0
 
 env:
-  DOMAIN: migration-probe-ec2-2.phantom-wg.dev
-  ORIGIN_IP: 34.227.212.117
+  DOMAIN: migration-probe.phantom-wg.dev
+  ORIGIN_IP: 63.184.100.183
   OLD: /opt/phantom-wg
   NEW: /opt/phantom-wg-modern
   WORK: /opt/verify-migration
@@ -41,7 +41,7 @@ env:
 jobs:
   v115:
     name: 1.1.5 with its clients
-    runs-on: [self-hosted, Linux, X64, cf-probe-ec2]
+    runs-on: [self-hosted, Linux, X64, deploy-ec2]
     timeout-minutes: 40
     defaults:
       run:
@@ -56,8 +56,8 @@ jobs:
       - name: Prove the host
         run: python3 -B "$PROBE" host
 
-      - name: "1.1.5: clone main"
-        run: git clone https://github.com/ARAS-Workspace/phantom-wg.git /opt/phantom-wg
+      - name: "1.1.5: clone the tag v1.1.5"
+        run: git clone --branch v1.1.5 https://github.com/ARAS-Workspace/phantom-wg.git /opt/phantom-wg
 
       - name: Prove the clone is 1.1.5
         run: python3 -B "$PROBE" version /opt/phantom-wg 1.1.5
@@ -68,7 +68,7 @@ jobs:
 
       - name: "1.1.5: set the WireGuard endpoint"
         working-directory: /opt/phantom-wg
-        run: sed -i "s/WIREGUARD_ENDPOINT_V4=.*/WIREGUARD_ENDPOINT_V4=34.227.212.117/" .env.daemon
+        run: sed -i "s/WIREGUARD_ENDPOINT_V4=.*/WIREGUARD_ENDPOINT_V4=$ORIGIN_IP/" .env.daemon
 
       - name: "1.1.5: up"
         working-directory: /opt/phantom-wg
@@ -79,7 +79,7 @@ jobs:
       - name: "1.1.5: Let's Encrypt certificate"
         working-directory: /opt/phantom-wg
         run: |
-          ./tools/prod.sh certbot migration-probe-ec2-2.phantom-wg.dev
+          ./tools/prod.sh certbot "$DOMAIN"
           ./tools/prod.sh restart nginx
 
       - name: Prove 1.1.5 serves
@@ -143,7 +143,7 @@ jobs:
 
       # Traffic to 10.8.0.1, the address of the server in the tunnel, starts a
       # handshake; wg show prints it with the bytes of each way.
-      - name: Prove the client shook hands with 34.227.212.117
+      - name: Prove the client shook hands with ${{ env.ORIGIN_IP }}
         run: |
           docker exec phantom-migration-client ping -c 3 -W 2 10.8.0.1 || true
           for try in $(seq 15); do
@@ -152,10 +152,10 @@ jobs:
             sleep 1
           done
           docker exec phantom-migration-client wg show wg0
-          [ "${handshake:-0}" -gt 0 ] || { echo "FAIL no handshake: 34.227.212.117:51820/udp did not answer"; exit 1; }
-          echo "ok   the client shook hands with 34.227.212.117"
+          [ "${handshake:-0}" -gt 0 ] || { echo "FAIL no handshake: $ORIGIN_IP:51820/udp did not answer"; exit 1; }
+          echo "ok   the client shook hands with $ORIGIN_IP"
 
-      - name: Prove the traffic of the client leaves through 34.227.212.117
+      - name: Prove the traffic of the client leaves through ${{ env.ORIGIN_IP }}
         run: |
           docker exec phantom-migration-client cat /etc/resolv.conf
           for try in $(seq 10); do
@@ -163,8 +163,8 @@ jobs:
             sleep 1
           done
           grep '^ip=' trace.txt || true
-          grep -qx 'ip=34.227.212.117' trace.txt || { echo "FAIL the traffic of the client does not leave through 34.227.212.117"; exit 1; }
-          echo "ok   the traffic of the client leaves through 34.227.212.117"
+          grep -qx "ip=$ORIGIN_IP" trace.txt || { echo "FAIL the traffic of the client does not leave through $ORIGIN_IP"; exit 1; }
+          echo "ok   the traffic of the client leaves through $ORIGIN_IP"
 
       - name: The client disconnects
         if: always()
@@ -173,7 +173,7 @@ jobs:
   migrate:
     name: MIGRATION, steps 1 to 7, and its checks
     needs: client-v115
-    runs-on: [self-hosted, Linux, X64, cf-probe-ec2]
+    runs-on: [self-hosted, Linux, X64, deploy-ec2]
     timeout-minutes: 40
     defaults:
       run:
@@ -320,7 +320,7 @@ jobs:
 
       # Traffic to 10.8.0.1, the address of the server in the tunnel, starts a
       # handshake; wg show prints it with the bytes of each way.
-      - name: Prove the client shook hands with 34.227.212.117
+      - name: Prove the client shook hands with ${{ env.ORIGIN_IP }}
         run: |
           docker exec phantom-migration-client ping -c 3 -W 2 10.8.0.1 || true
           for try in $(seq 15); do
@@ -329,10 +329,10 @@ jobs:
             sleep 1
           done
           docker exec phantom-migration-client wg show wg0
-          [ "${handshake:-0}" -gt 0 ] || { echo "FAIL no handshake: 34.227.212.117:51820/udp did not answer"; exit 1; }
-          echo "ok   the client shook hands with 34.227.212.117"
+          [ "${handshake:-0}" -gt 0 ] || { echo "FAIL no handshake: $ORIGIN_IP:51820/udp did not answer"; exit 1; }
+          echo "ok   the client shook hands with $ORIGIN_IP"
 
-      - name: Prove the traffic of the client leaves through 34.227.212.117
+      - name: Prove the traffic of the client leaves through ${{ env.ORIGIN_IP }}
         run: |
           docker exec phantom-migration-client cat /etc/resolv.conf
           for try in $(seq 10); do
@@ -340,8 +340,8 @@ jobs:
             sleep 1
           done
           grep '^ip=' trace.txt || true
-          grep -qx 'ip=34.227.212.117' trace.txt || { echo "FAIL the traffic of the client does not leave through 34.227.212.117"; exit 1; }
-          echo "ok   the traffic of the client leaves through 34.227.212.117"
+          grep -qx "ip=$ORIGIN_IP" trace.txt || { echo "FAIL the traffic of the client does not leave through $ORIGIN_IP"; exit 1; }
+          echo "ok   the traffic of the client leaves through $ORIGIN_IP"
 
       - name: The client disconnects
         if: always()
@@ -350,7 +350,7 @@ jobs:
   after:
     name: After the migration, and the way back
     needs: client-v200
-    runs-on: [self-hosted, Linux, X64, cf-probe-ec2]
+    runs-on: [self-hosted, Linux, X64, deploy-ec2]
     timeout-minutes: 30
     defaults:
       run:
@@ -367,7 +367,7 @@ jobs:
       - name: "After Migration: Let's Encrypt with 2.0.0"
         working-directory: /opt/phantom-wg-modern
         run: |
-          ./tools/prod.sh certbot migration-probe-ec2-2.phantom-wg.dev
+          ./tools/prod.sh certbot "$DOMAIN"
           ./tools/prod.sh restart nginx
 
       - name: Prove certbot of 2.0.0 kept the certificate of 1.1.5
@@ -406,7 +406,7 @@ jobs:
     name: Leave the host
     needs: [v115, client-v115, migrate, client-v200, after]
     if: always()
-    runs-on: [self-hosted, Linux, X64, cf-probe-ec2]
+    runs-on: [self-hosted, Linux, X64, deploy-ec2]
     timeout-minutes: 15
     defaults:
       run:
