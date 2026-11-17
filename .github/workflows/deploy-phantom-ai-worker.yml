@@ -24,7 +24,7 @@ concurrency:
 jobs:
   deploy:
     name: Deploy to Cloudflare Workers
-    runs-on: self-hosted
+    runs-on: [self-hosted, Linux, X64, deploy-ec2]
     defaults:
       run:
         working-directory: workers/ai-worker

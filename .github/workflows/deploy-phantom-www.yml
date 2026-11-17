@@ -16,7 +16,7 @@ permissions:
 jobs:
   deploy:
     name: Build and Deploy
-    runs-on: [self-hosted, Linux, X64, hetzner-runner]
+    runs-on: [self-hosted, Linux, X64, deploy-ec2]
     steps:
       - name: Harden runner
         uses: step-security/harden-runner@58077d3c7e43986b6b15fba718e8ea69e387dfcc # v2.15.1
@@ -81,7 +81,7 @@ jobs:
         working-directory: www
 
       - name: Install Playwright Chromium
-        run: npx playwright install chromium
+        run: npx playwright install --with-deps chromium
         working-directory: www
 
       - name: Build and prerender
