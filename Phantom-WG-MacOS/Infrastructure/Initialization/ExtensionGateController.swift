@@ -34,6 +34,10 @@ final class ExtensionGateController: NSObject, OSSystemExtensionRequestDelegate 
 
     private(set) var isSettling = false
 
+    var isIdle: Bool {
+        !isSettling && deactivationRequest == nil
+    }
+
     @ObservationIgnored private var deactivationContinuation: CheckedContinuation<Void, Error>?
     @ObservationIgnored private var deactivationRequest: OSSystemExtensionRequest?
     @ObservationIgnored private var deactivationDeadline: Task<Void, Never>?

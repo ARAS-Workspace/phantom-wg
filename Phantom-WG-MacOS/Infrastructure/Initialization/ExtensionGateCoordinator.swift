@@ -77,6 +77,10 @@ final class ExtensionGateCoordinator {
         [tunnel, split, dns]
     }
 
+    var isIdle: Bool {
+        controllers.allSatisfy(\.isIdle)
+    }
+
     // MARK: - Lifecycle
 
     func start() {

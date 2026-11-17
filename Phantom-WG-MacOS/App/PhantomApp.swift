@@ -72,117 +72,21 @@ import SwiftUI
 struct PhantomApp: App {
 
     @NSApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
-    @State private var coordinator: ExtensionGateCoordinator
-    @State private var sessionCoordinator: SplitTunnelingSessionCoordinator
-    @State private var tunnelsManager: TunnelsManagerLoader
-    @State private var loc: LocalizationManager
-    @State private var splitTunnelingStore: SplitTunnelingStore
-    @State private var splitProviderManager: SplitTunnelProviderManager
-    @State private var dnsProviderManager: DNSProxyProviderManager
-    @State private var dnsDaemonClient: DNSProxyDaemonClient
-    @State private var splitDaemonClient: SplitTunnelDaemonClient
-    @State private var interfaceResolver: PhysicalInterfaceResolver
-    @State private var toastCenter: ToastCenter
-    @State private var vaultClient: TunnelVaultClient
-    @State private var vaultSession: TunnelVaultSession
-    @State private var connectionGate: ConnectionGateCoordinator
-
-    init() {
-        let loc = LocalizationManager.shared
-        let tunnelsManager = TunnelsManagerLoader()
-        let splitTunnelingStore = SplitTunnelingStore()
-        let splitProviderManager = SplitTunnelProviderManager()
-        let dnsProviderManager = DNSProxyProviderManager()
-        let dnsDaemonClient = DNSProxyDaemonClient()
-        let splitDaemonClient = SplitTunnelDaemonClient()
-        let vaultClient = TunnelVaultClient()
-        let coordinator = ExtensionGateCoordinator(
-            vault: vaultClient,
-            splitDaemon: splitDaemonClient,
-            dnsDaemon: dnsDaemonClient
-        )
-        let sessionCoordinator = SplitTunnelingSessionCoordinator(
-            split: splitProviderManager,
-            dns: dnsProviderManager,
-            dnsDaemonClient: dnsDaemonClient,
-            splitDaemonClient: splitDaemonClient
-        )
-        splitTunnelingStore.sessionCoordinator = sessionCoordinator
-
-        _loc = State(initialValue: loc)
-        _coordinator = State(initialValue: coordinator)
-        _sessionCoordinator = State(initialValue: sessionCoordinator)
-        _tunnelsManager = State(initialValue: tunnelsManager)
-        _splitTunnelingStore = State(initialValue: splitTunnelingStore)
-        _splitProviderManager = State(initialValue: splitProviderManager)
-        _dnsProviderManager = State(initialValue: dnsProviderManager)
-        _interfaceResolver = State(initialValue: PhysicalInterfaceResolver())
-        _toastCenter = State(initialValue: ToastCenter())
-        _vaultClient = State(initialValue: vaultClient)
-        _vaultSession = State(initialValue: TunnelVaultSession(vault: vaultClient))
-        _connectionGate = State(initialValue: ConnectionGateCoordinator(vault: vaultClient))
-        _dnsDaemonClient = State(initialValue: dnsDaemonClient)
-        _splitDaemonClient = State(initialValue: splitDaemonClient)
-    }
+    @State private var loc = LocalizationManager.shared
 
     var body: some Scene {
         Window(loc.t("app_title"), id: SceneID.mainWindow) {
-            Group {
-                if coordinator.allReady {
-                    if vaultSession.state == .ready {
-                        if connectionGate.state == .slotFree {
-                            TunnelContentView(loader: tunnelsManager)
-                        } else {
-                            ConnectionGateView()
-                        }
-                    } else {
-                        TunnelVaultGateView()
-                    }
-                } else {
-                    ExtensionGateView()
-                }
-            }
-            .environment(loc)
-            .environment(coordinator)
-            .environment(sessionCoordinator)
-            .environment(splitTunnelingStore)
-            .environment(splitProviderManager)
-            .environment(dnsProviderManager)
-            .environment(dnsDaemonClient)
-            .environment(splitDaemonClient)
-            .environment(interfaceResolver)
-            .environment(toastCenter)
-            .environment(vaultClient)
-            .environment(vaultSession)
-            .environment(connectionGate)
-            .tint(Color.accentColor)
-            .frame(
-                minWidth: WindowSizing.minimum.width,
-                idealWidth: WindowSizing.ideal.width,
-                maxWidth: .infinity,
-                minHeight: WindowSizing.minimum.height,
-                idealHeight: WindowSizing.ideal.height,
-                maxHeight: .infinity
-            )
-            .onAppear {
-                interfaceResolver.start()
-                coordinator.start()
-                connectionGate.currentTunnelsManager = { [tunnelsManager] in tunnelsManager.manager }
-            }
-            .onChange(of: coordinator.allReady) { _, ready in
-                if !ready { vaultSession.invalidate() }
-                if ready { tunnelsManager.manager?.releaseAbandonedStoreLatch() }
-            }
-            .task(id: vaultSession.state) {
-                guard vaultSession.state == .ready else { return }
-                connectionGate.start()
-                connectionGate.checkAgain()
-            }
-            .task(id: coordinator.allReady) {
-                guard coordinator.allReady else { return }
-                let realign = await sessionCoordinator.boot { splitTunnelingStore.configuration }
-                splitTunnelingStore.recordPush(realign)
-            }
+            MainWindowRoot(host: appDelegate.runtimeHost)
+                .environment(loc)
+                .tint(Color.accentColor)
+                .frame(
+                    minWidth: WindowSizing.minimum.width,
+                    idealWidth: WindowSizing.ideal.width,
+                    maxWidth: .infinity,
+                    minHeight: WindowSizing.minimum.height,
+                    idealHeight: WindowSizing.ideal.height,
+                    maxHeight: .infinity
+                )
         }
         .windowResizability(.contentMinSize)
         .defaultWindowPlacement { _, context in
@@ -196,6 +100,7 @@ struct PhantomApp: App {
         MenuBarExtra {
             MenuBarContent()
                 .environment(loc)
+                .environment(appDelegate.runtimeHost)
         } label: {
             Image("MenuBarIcon")
                 .accessibilityLabel(Text(loc.t("app_title")))

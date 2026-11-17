@@ -48,6 +48,11 @@ class TunnelsManager {
 
     @ObservationIgnored private(set) var removingIds: Set<UUID> = []
 
+    var isIdle: Bool {
+        !isReconciling && !refreshSuspended && creatingIds.isEmpty && removingIds.isEmpty && waitingTunnel == nil
+            && tunnels.allSatisfy { !$0.isAttemptingActivation && $0.pendingDisarmCount == 0 }
+    }
+
     // MARK: - Factory
 
     static func create(vault: TunnelVaultClient) async throws -> TunnelsManager {

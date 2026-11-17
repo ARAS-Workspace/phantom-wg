@@ -30,6 +30,10 @@ final class SplitTunnelingSessionCoordinator {
 
     private(set) var maxChainDepth = 0
 
+    var isIdle: Bool {
+        inFlight == nil
+    }
+
     @ObservationIgnored private var chainedStartError: Error?
 
     @ObservationIgnored private let chainCeiling: Duration
