@@ -106,6 +106,17 @@ class TunnelsManager {
         }
     }
 
+    func shutDown() {
+        pendingRefresh?.cancel()
+        pendingRefresh = nil
+        for token in [statusObservationToken, configObservationToken, foregroundObservationToken].compactMap({ $0 }) {
+            NotificationCenter.default.removeObserver(token)
+        }
+        statusObservationToken = nil
+        configObservationToken = nil
+        foregroundObservationToken = nil
+    }
+
     // MARK: - CRUD
 
     /// @witness Unreachable

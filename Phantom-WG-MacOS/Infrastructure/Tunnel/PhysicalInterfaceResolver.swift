@@ -32,6 +32,11 @@ final class PhysicalInterfaceResolver {
         monitor?.cancel()
     }
 
+    func shutDown() {
+        monitor?.cancel()
+        monitor = nil
+    }
+
     // MARK: - Private
 
     private func apply(interfaces: [NWInterface]) {

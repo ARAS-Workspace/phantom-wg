@@ -20,6 +20,7 @@ final class ExtensionGateCoordinator {
     @ObservationIgnored private var pendingEchoRecheck: Task<Void, Never>?
 
     @ObservationIgnored private var hasRunBootMeasurement = false
+    @ObservationIgnored private var isShutDown = false
 
     init(tunnel: ExtensionGateController, split: ExtensionGateController, dns: ExtensionGateController) {
         self.tunnel = tunnel
@@ -69,6 +70,20 @@ final class ExtensionGateCoordinator {
         pendingEchoRecheck?.cancel()
     }
 
+    func shutDown() {
+        isShutDown = true
+        if let foregroundObserver {
+            NotificationCenter.default.removeObserver(foregroundObserver)
+        }
+        foregroundObserver = nil
+        if let workspaceEcho {
+            OSSystemExtensionsWorkspace.shared.removeObserver(workspaceEcho)
+        }
+        workspaceEcho = nil
+        pendingEchoRecheck?.cancel()
+        pendingEchoRecheck = nil
+    }
+
     var allReady: Bool {
         controllers.allSatisfy { $0.status == .activated }
     }
@@ -84,6 +99,7 @@ final class ExtensionGateCoordinator {
     // MARK: - Lifecycle
 
     func start() {
+        guard !isShutDown else { return }
         if foregroundObserver == nil {
             foregroundObserver = NotificationCenter.default.addObserver(
                 forName: NSApplication.didBecomeActiveNotification,

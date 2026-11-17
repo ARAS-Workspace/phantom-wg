@@ -144,6 +144,13 @@ class SplitTunnelProviderManager {
         }
     }
 
+    func shutDown() {
+        if let observer = statusObserver {
+            NotificationCenter.default.removeObserver(observer)
+        }
+        statusObserver = nil
+    }
+
     // MARK: - Errors
 
     enum ManagerError: LocalizedError {

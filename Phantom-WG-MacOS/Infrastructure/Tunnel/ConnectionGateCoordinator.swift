@@ -26,6 +26,7 @@ final class ConnectionGateCoordinator {
     @ObservationIgnored private var ownedIDs: Set<UUID> = []
     @ObservationIgnored private var reloadPending = false
     @ObservationIgnored private var reloadsInFlight = 0
+    @ObservationIgnored private var isShutDown = false
 
     init(
         vault: TunnelVaultClient,
@@ -45,7 +46,7 @@ final class ConnectionGateCoordinator {
 
     /// @witness ConnectionGate
     func start() {
-        guard !started else { return }
+        guard !started, !isShutDown else { return }
         started = true
         observeReloadTrigger(.NEVPNConfigurationChange)
         observeReloadTrigger(NSApplication.didBecomeActiveNotification)
@@ -55,6 +56,16 @@ final class ConnectionGateCoordinator {
 
     func checkAgain() {
         scheduleCheck(reload: true, immediate: true)
+    }
+
+    func shutDown() {
+        isShutDown = true
+        observationTokens.forEach { NotificationCenter.default.removeObserver($0) }
+        observationTokens.removeAll()
+        pendingCheck?.cancel()
+        pendingCheck = nil
+        pollTask?.cancel()
+        pollTask = nil
     }
 
 #if DEBUG
@@ -90,6 +101,7 @@ final class ConnectionGateCoordinator {
     }
 
     private func scheduleCheck(reload: Bool, immediate: Bool = false) {
+        guard !isShutDown else { return }
         if reload { reloadPending = true }
         pendingCheck?.cancel()
         pendingCheck = Task { [weak self] in
@@ -186,7 +198,7 @@ final class ConnectionGateCoordinator {
             pollTask?.cancel()
             pollTask = nil
         }
-        guard case .slotHeld = new, pollTask == nil else { return }
+        guard case .slotHeld = new, pollTask == nil, !isShutDown else { return }
         pollTask = Task { [weak self] in
             try? await Task.sleep(for: .seconds(3))
             guard !Task.isCancelled, let self else { return }

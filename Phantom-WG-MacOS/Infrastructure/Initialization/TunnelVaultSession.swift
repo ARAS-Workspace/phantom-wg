@@ -37,6 +37,13 @@ final class TunnelVaultSession {
         }
     }
 
+    func shutDown() {
+        if let token = foregroundToken {
+            NotificationCenter.default.removeObserver(token)
+        }
+        foregroundToken = nil
+    }
+
     func establish() async {
         guard !isProbing else { return }
         isProbing = true

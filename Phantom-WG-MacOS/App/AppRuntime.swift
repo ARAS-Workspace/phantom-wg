@@ -56,6 +56,15 @@ final class AppRuntime {
     var isIdle: Bool {
         (tunnelsManager.manager?.isIdle ?? true) && coordinator.isIdle && sessionCoordinator.isIdle
     }
+
+    func shutDown() {
+        connectionGate.shutDown()
+        tunnelsManager.shutDown()
+        coordinator.shutDown()
+        splitProviderManager.shutDown()
+        vaultSession.shutDown()
+        interfaceResolver.shutDown()
+    }
 }
 
 @Observable
@@ -82,6 +91,7 @@ final class AppRuntimeHost {
                 guard !Task.isCancelled else { return }
             }
             guard !Task.isCancelled, let self else { return }
+            self.runtime?.shutDown()
             self.runtime = nil
             self.drain = nil
         }
