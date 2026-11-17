@@ -89,10 +89,7 @@ struct PhantomApp: App {
                 )
         }
         .windowResizability(.contentMinSize)
-        .defaultWindowPlacement { _, context in
-            let frame = WindowSizing.defaultFrame(in: context.defaultDisplay.visibleRect)
-            return WindowPlacement(frame.origin, size: frame.size)
-        }
+        .defaultSize(WindowSizing.ideal)
         .commands {
             WindowSizeCommands(loc: loc)
         }
