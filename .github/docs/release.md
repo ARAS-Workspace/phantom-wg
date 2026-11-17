@@ -4,6 +4,15 @@
 
 ### 🇺🇸
 
+#### Fixed in this version
+
+- When the app stayed open in the menu bar for hours, it kept re-reading the VPN
+  configurations in the background. The work that built up could stall the
+  window for seconds when it was opened. This loop is fixed.
+- When the window is closed, the app now does no background work. Opening the
+  window from the menu bar sets it up again. Tunnels and Split-Tunneling keep
+  running in the system extensions.
+
 #### ⚠️ Upgrading from 2.1.2 or earlier
 
 Since 2.1.3, builds are signed by **ARTEK İnovasyon Ar-Ge Sanayi ve Ticaret
@@ -55,6 +64,16 @@ connection.
 ---
 
 ### 🇹🇷
+
+#### Bu sürümdeki düzeltmeler
+
+- Uygulama menü çubuğunda saatlerce açık kaldığında arka planda VPN
+  yapılandırmalarını sürekli yeniden okuyordu. Biriken bu iş, pencere
+  açıldığında arayüzün saniyelerce takılmasına yol açabiliyordu. Bu döngü
+  giderildi.
+- Pencere kapatıldığında uygulama artık arka planda iş yapmıyor. Pencere menü
+  çubuğundan yeniden açıldığında baştan kuruluyor. Tüneller ve Split-Tunneling
+  sistem uzantılarında çalışmaya devam ediyor.
 
 #### ⚠️ 2.1.2 ve öncesinden yükseltme
 
