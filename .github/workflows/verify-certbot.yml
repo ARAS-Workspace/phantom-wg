@@ -2,7 +2,7 @@ name: Verify certbot
 
 # Takes a real certificate with ./tools/prod.sh certbot on a host with a
 # public address: the EC2 instance whose self-hosted runner carries the label
-# cf-probe-ec2. DOMAIN is a DNS-only record of phantom-wg.dev that points to
+# deploy-ec2. DOMAIN is a DNS-only record of phantom-wg.dev that points to
 # ORIGIN_IP, the Elastic IP of the instance: Let's Encrypt reaches port 80 of
 # the host for it. The release tree is built as package-release builds it,
 # with a placeholder for the dashboard, and the host takes it as a release zip
@@ -28,14 +28,14 @@ concurrency:
   group: verify-certbot
 
 env:
-  DOMAIN: certbot-probe-ec2.phantom-wg.dev
-  ORIGIN_IP: 34.227.212.117
+  DOMAIN: certbot-probe.phantom-wg.dev
+  ORIGIN_IP: 63.184.100.183
   PROBE: .github/scripts/probes/certbot/certbot-probe.py
 
 jobs:
   certbot:
     name: Certificate on an EC2 host
-    runs-on: [self-hosted, Linux, X64, cf-probe-ec2]
+    runs-on: [self-hosted, Linux, X64, deploy-ec2]
     timeout-minutes: 30
     defaults:
       run:
