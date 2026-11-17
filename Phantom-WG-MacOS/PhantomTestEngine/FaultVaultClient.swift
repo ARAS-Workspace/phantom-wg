@@ -35,8 +35,9 @@
 // dark once that many writes have answered done: from then on read,
 // readAll, store and delete all answer unreachable at once.
 //
-// It also RECORDS: which ids were read, stored and deleted, and the
-// configurations handed to `store`. Several steps assert on what was asked
+// It also RECORDS: which ids were read, stored and deleted, how many
+// whole-vault reads were asked for, and the configurations handed to
+// `store`. Several steps assert on what was asked
 // for rather than on what came back. `held` is the other reading: the
 // payloads a vault answering this way would hold, a store or a delete
 // counted only where it answered done.
@@ -68,6 +69,7 @@ final class FaultVaultClient: TunnelVaultClient {
     // MARK: - Observed state
 
     private(set) var readIds: [UUID] = []
+    private(set) var readAllCount = 0
     private(set) var deletedIds: [UUID] = []
     private(set) var storedIds: [UUID] = []
 
@@ -90,6 +92,7 @@ final class FaultVaultClient: TunnelVaultClient {
     }
 
     override func readAll() async -> ReadAll {
+        readAllCount += 1
         if isDark { return .unreachable }
         switch readAllAnswer {
         case .real: return await super.readAll()

@@ -28,6 +28,7 @@ enum TestCatalog {
             SanityWorkflow(),
             VaultIntegrityWorkflow(),
             IsolationWorkflow(),
+            ConnectionGateWorkflow(),
             ActivationSeamWorkflow(),
             ConfigContractWorkflow(),
             ArchiveNamesWorkflow(),
