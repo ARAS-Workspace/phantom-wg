@@ -58,6 +58,7 @@ final class ConnectionGateCoordinator {
         scheduleCheck(reload: true, immediate: true)
     }
 
+    /// @witness RuntimeShutdown
     func shutDown() {
         isShutDown = true
         observationTokens.forEach { NotificationCenter.default.removeObserver($0) }

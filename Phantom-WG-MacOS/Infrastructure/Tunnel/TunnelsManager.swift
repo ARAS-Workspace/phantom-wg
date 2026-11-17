@@ -106,6 +106,7 @@ class TunnelsManager {
         }
     }
 
+    /// @witness RuntimeShutdown
     func shutDown() {
         pendingRefresh?.cancel()
         pendingRefresh = nil

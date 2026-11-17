@@ -34,6 +34,9 @@
 // for a session in another account whose transitions may never reach this
 // process: only the next load sees it.
 //
+// `loadDelay` holds every load that long before it mints, for a caller
+// whose load has to be still out when something else happens.
+//
 // It counts its loads and keeps every provider it minted, on the main
 // actor.
 
@@ -49,12 +52,14 @@ final class FreshSlotFactory: TunnelProviderFactory {
         var status: NEVPNStatus
     }
 
+    nonisolated let loadDelay: Duration
     private var blueprints: [Blueprint]
     private(set) var loadCount = 0
     private(set) var minted: [FakeSlotProvider] = []
 
-    init(_ blueprints: [Blueprint]) {
+    init(_ blueprints: [Blueprint], loadDelay: Duration = .zero) {
         self.blueprints = blueprints
+        self.loadDelay = loadDelay
     }
 
     nonisolated func makeProvider() -> TunnelProviding {
@@ -62,7 +67,8 @@ final class FreshSlotFactory: TunnelProviderFactory {
     }
 
     nonisolated func loadAllFromPreferences() async throws -> [TunnelProviding] {
-        await mint()
+        if loadDelay > .zero { try? await Task.sleep(for: loadDelay) }
+        return await mint()
     }
 
     func announce(_ status: NEVPNStatus, for id: UUID) {

@@ -37,6 +37,7 @@ final class TunnelVaultSession {
         }
     }
 
+    /// @witness RuntimeShutdown
     func shutDown() {
         if let token = foregroundToken {
             NotificationCenter.default.removeObserver(token)
