@@ -1,7 +1,7 @@
 name: Verify Cloudflare
 
 # The Cloudflare mode of ./tools/prod.sh on a host with a public address: an
-# EC2 instance whose self-hosted runner carries the label cf-probe-ec2. DOMAIN
+# EC2 instance whose self-hosted runner carries the label deploy-ec2. DOMAIN
 # is a proxied record of ZONE that points to ORIGIN_IP, the Elastic IP of the
 # instance; ZONE has SSL/TLS Full (strict) and Authenticated Origin Pulls
 # (Global) on, and the secret PHANTOM_TEST_CF_TOKEN is a token of ZONE. The
@@ -35,14 +35,14 @@ concurrency:
 
 env:
   ZONE: phantom-wg.dev
-  DOMAIN: cf-probe-ec2.phantom-wg.dev
-  ORIGIN_IP: 34.227.212.117
+  DOMAIN: cf-probe.phantom-wg.dev
+  ORIGIN_IP: 63.184.100.183
   PROBE: .github/scripts/probes/cloudflare/cloudflare-probe.py
 
 jobs:
   tools:
     name: Tool tests with a Cloudflare token
-    runs-on: [self-hosted, Linux, X64, cf-probe-ec2]
+    runs-on: [self-hosted, Linux, X64, deploy-ec2]
     timeout-minutes: 30
     defaults:
       run:
@@ -111,7 +111,7 @@ jobs:
   cloudflare:
     name: Cloudflare mode on an EC2 host
     needs: tools
-    runs-on: [self-hosted, Linux, X64, cf-probe-ec2]
+    runs-on: [self-hosted, Linux, X64, deploy-ec2]
     timeout-minutes: 45
     defaults:
       run:
