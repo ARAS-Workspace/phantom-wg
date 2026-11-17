@@ -100,7 +100,10 @@ final class ConnectionGateWorkflow: TestWorkflow {
 
         rig.factory.announce(.connected, for: stranger.identity.id)
         let engaged = await settle(within: 2) { rig.gate.state == .slotHeld(holderName: stranger.identity.name) }
-        check(engaged, "the held foreign session announcing connected engaged the gate on it — state=\(String(describing: rig.gate.state))")
+        guard check(engaged,
+                    "the held foreign session announcing connected engaged the gate on it — state=\(String(describing: rig.gate.state))") else {
+            return
+        }
         check(rig.factory.loadCount == loads,
               "with no load of the preferences — loads \(loads) → \(rig.factory.loadCount)")
 
