@@ -22,6 +22,10 @@ final class ConnectionGateCoordinator {
     @ObservationIgnored private var pollTask: Task<Void, Never>?
     @ObservationIgnored private var started = false
     @ObservationIgnored private var evaluationEpoch = 0
+    @ObservationIgnored private var heldProviders: [TunnelProviding] = []
+    @ObservationIgnored private var ownedIDs: Set<UUID> = []
+    @ObservationIgnored private var reloadPending = false
+    @ObservationIgnored private var reloadsInFlight = 0
 
     init(
         vault: TunnelVaultClient,
@@ -39,59 +43,100 @@ final class ConnectionGateCoordinator {
         pollTask?.cancel()
     }
 
+    /// @witness ConnectionGate
     func start() {
         guard !started else { return }
         started = true
-        observe(.NEVPNConfigurationChange)
-        observe(.NEVPNStatusDidChange)
-        observe(NSApplication.didBecomeActiveNotification)
-        scheduleCheck(immediate: true)
+        observeReloadTrigger(.NEVPNConfigurationChange)
+        observeReloadTrigger(NSApplication.didBecomeActiveNotification)
+        observeHeldSessions()
+        scheduleCheck(reload: true, immediate: true)
     }
 
     func checkAgain() {
-        scheduleCheck(immediate: true)
+        scheduleCheck(reload: true, immediate: true)
     }
 
 #if DEBUG
     /// @witness Isolation
     func evaluateNow() async {
-        await evaluate()
+        await reload()
     }
 #endif
 
     // MARK: - Private
 
-    private func observe(_ name: Notification.Name) {
+    private func observeReloadTrigger(_ name: Notification.Name) {
         observationTokens.append(NotificationCenter.default.addObserver(
             forName: name,
             object: nil,
             queue: .main
         ) { [weak self] _ in
-            Task { @MainActor in self?.scheduleCheck() }
+            Task { @MainActor in self?.scheduleCheck(reload: true) }
         })
     }
 
-    private func scheduleCheck(immediate: Bool = false) {
+    private func observeHeldSessions() {
+        observationTokens.append(NotificationCenter.default.addObserver(
+            forName: .NEVPNStatusDidChange,
+            object: nil,
+            queue: .main
+        ) { [weak self] notification in
+            Task { @MainActor in
+                guard let self, self.heldProviders.contains(where: { $0.matchesNotification(notification) }) else { return }
+                self.scheduleCheck(reload: false)
+            }
+        })
+    }
+
+    private func scheduleCheck(reload: Bool, immediate: Bool = false) {
+        if reload { reloadPending = true }
         pendingCheck?.cancel()
         pendingCheck = Task { [weak self] in
             if !immediate { try? await Task.sleep(for: .milliseconds(400)) }
-            guard !Task.isCancelled else { return }
-            await self?.evaluate()
+            guard !Task.isCancelled, let self else { return }
+            if self.reloadPending {
+                self.reloadPending = false
+                await self.reload()
+            } else {
+                await self.reclassify()
+            }
         }
     }
 
-    private func evaluate() async {
+    private func reload() async {
         evaluationEpoch += 1
         let epoch = evaluationEpoch
+        reloadsInFlight += 1
+        defer { reloadsInFlight -= 1 }
 
-        guard let providers = try? await providerFactory.loadAllFromPreferences(),
-              case .configs(let mine) = await vault.readAll() else {
+        guard let providers = try? await providerFactory.loadAllFromPreferences() else {
             guard epoch == evaluationEpoch else { return }
             settle(.slotFree)
             return
         }
-        let ownedIDs = Set(mine.map(\.id))
-        let verdict = await SlotClassifier.classify(providers: providers, ownedIDs: ownedIDs) { id in
+        guard epoch == evaluationEpoch else { return }
+        heldProviders = providers
+        guard case .configs(let mine) = await vault.readAll() else {
+            guard epoch == evaluationEpoch else { return }
+            settle(.slotFree)
+            return
+        }
+        guard epoch == evaluationEpoch else { return }
+        ownedIDs = Set(mine.map(\.id))
+        await classify(epoch: epoch)
+    }
+
+    private func reclassify() async {
+        guard reloadsInFlight == 0 else { return }
+        evaluationEpoch += 1
+        await classify(epoch: evaluationEpoch)
+    }
+
+    private func classify(epoch: Int) async {
+        let providers = heldProviders
+        let owned = ownedIDs
+        let verdict = await SlotClassifier.classify(providers: providers, ownedIDs: owned) { id in
             await self.vault.read(id: id)
         }
         guard epoch == evaluationEpoch else { return }
@@ -99,7 +144,7 @@ final class ConnectionGateCoordinator {
         case .free:
             settle(.slotFree)
         case .heldByForeign(let name):
-            await disarmOwnArmedRules(providers: providers, ownedIDs: ownedIDs)
+            await disarmOwnArmedRules(providers: providers, ownedIDs: owned)
             guard epoch == evaluationEpoch else { return }
             settle(.slotHeld(holderName: name))
         }
@@ -133,19 +178,20 @@ final class ConnectionGateCoordinator {
         }
     }
 
+    /// @witness ConnectionGate.heldReloadsAtBeltPace
     private func settle(_ new: State) {
         if state != new {
             NSLog("[slot] \(String(describing: state)) -> \(String(describing: new))")
+            state = new
+            pollTask?.cancel()
+            pollTask = nil
         }
-        state = new
-        pollTask?.cancel()
-        pollTask = nil
-        if case .slotHeld = new {
-            pollTask = Task { [weak self] in
-                try? await Task.sleep(for: .seconds(3))
-                guard !Task.isCancelled else { return }
-                await self?.evaluate()
-            }
+        guard case .slotHeld = new, pollTask == nil else { return }
+        pollTask = Task { [weak self] in
+            try? await Task.sleep(for: .seconds(3))
+            guard !Task.isCancelled, let self else { return }
+            self.pollTask = nil
+            await self.reload()
         }
     }
 }
