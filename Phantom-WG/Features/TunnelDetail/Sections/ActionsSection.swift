@@ -3,7 +3,11 @@ import SwiftUI
 /// Footer actions — copy-to-clipboard, edit, reset connection, and
 /// delete.
 ///
-/// - Copy owns its own "Copied!" feedback timer locally.
+/// - Copy, edit, and delete reach the tunnel's private data, so each
+///   asks the device owner first (`PrivateDataGuard`, in the parent's
+///   actions).
+/// - Copy owns its own "Copied!" feedback timer locally and shows it
+///   only when something was copied.
 /// - Edit opens `TunnelEditView` (raw-text editing, the WireGuard app
 ///   pattern) and is enabled only while the tunnel is inactive.
 /// - Reset is enabled only while the tunnel is active/reasserting;
@@ -15,21 +19,23 @@ import SwiftUI
 ///   first one's outcome, so a second tap could only ever repeat an
 ///   answer the user is still waiting for.
 /// - Delete is routed back to the parent's confirmation dialog via a
-///   binding so the destructive action lives at the view root.
+///   binding so the destructive action lives at the view root. It
+///   stays down while a removal is in flight.
 struct ActionsSection: View {
     var tunnel: TunnelContainer
     let canCopy: Bool
-    let copyAction: () -> Void
+    let copyAction: () async -> Bool
     let editAction: () -> Void
     let resetAction: () -> Void
     let resetting: Bool
+    let deleting: Bool
     @Binding var showingDeleteConfirmation: Bool
     @State private var copiedItem: String?
     @Environment(LocalizationManager.self) private var loc
 
     var body: some View {
         Section {
-            copyButton(loc.t("detail_copy_conf"), icon: "doc.text", id: "conf") { copyAction() }
+            copyButton(loc.t("detail_copy_conf"), icon: "doc.text", id: "conf", action: copyAction)
                 .disabled(!canCopy)
                 .accessibilityIdentifier(AXID.TunnelDetail.Actions.copyButton)
 
@@ -50,7 +56,7 @@ struct ActionsSection: View {
             } label: {
                 Label(loc.t("detail_delete_tunnel"), systemImage: "trash")
             }
-            .disabled(tunnel.status != .inactive)
+            .disabled(tunnel.status != .inactive || deleting)
             .accessibilityIdentifier(AXID.TunnelDetail.Actions.deleteButton)
         } header: {
             Label(loc.t("detail_actions"), systemImage: "ellipsis.circle")
@@ -70,11 +76,11 @@ struct ActionsSection: View {
         tunnel.status == .inactive
     }
 
-    private func copyButton(_ title: String, icon: String, id: String, action: @escaping () -> Void) -> some View {
+    private func copyButton(_ title: String, icon: String, id: String, action: @escaping () async -> Bool) -> some View {
         Button {
-            action()
-            copiedItem = id
             Task {
+                guard await action() else { return }
+                copiedItem = id
                 try? await Task.sleep(for: .seconds(2))
                 if copiedItem == id { copiedItem = nil }
             }
@@ -95,10 +101,11 @@ struct ActionsSection: View {
             ActionsSection(
                 tunnel: manager.tunnels[0],
                 canCopy: true,
-                copyAction: {},
+                copyAction: { true },
                 editAction: {},
                 resetAction: {},
                 resetting: false,
+                deleting: false,
                 showingDeleteConfirmation: showingDelete
             )
         }
@@ -114,10 +121,11 @@ struct ActionsSection: View {
             ActionsSection(
                 tunnel: manager.tunnels[0],
                 canCopy: true,
-                copyAction: {},
+                copyAction: { true },
                 editAction: {},
                 resetAction: {},
                 resetting: false,
+                deleting: false,
                 showingDeleteConfirmation: showingDelete
             )
         }
@@ -133,10 +141,11 @@ struct ActionsSection: View {
             ActionsSection(
                 tunnel: manager.tunnels[1],
                 canCopy: true,
-                copyAction: {},
+                copyAction: { true },
                 editAction: {},
                 resetAction: {},
                 resetting: false,
+                deleting: false,
                 showingDeleteConfirmation: showingDelete
             )
         }

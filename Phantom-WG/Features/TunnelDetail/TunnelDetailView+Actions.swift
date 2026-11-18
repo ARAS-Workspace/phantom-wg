@@ -1,4 +1,5 @@
 import SwiftUI
+import UniformTypeIdentifiers
 
 // MARK: - Actions & Stats Polling
 
@@ -6,9 +7,39 @@ extension TunnelDetailView {
 
     // MARK: - Copy
 
-    func copyConf() {
-        guard let contents = tunnel.tunnelConfig?.asConfString() else { return }
-        UIPasteboard.general.string = contents
+    /// Puts the `.conf` text, private key included, on the pasteboard
+    /// once the owner grants it. The item is local-only, so Universal
+    /// Clipboard does not carry it to the user's other devices. Returns
+    /// whether anything was copied, for the button's "Copied!" feedback.
+    func copyConf() async -> Bool {
+        guard let contents = tunnel.tunnelConfig?.asConfString() else { return false }
+        let granted = await PrivateDataGuard.grants(reason: loc.t("copy_private_data_reason")) { message in
+            errorMessage = message
+            showingError = true
+        }
+        guard granted else { return false }
+
+        UIPasteboard.general.setItems(
+            [[UTType.utf8PlainText.identifier: contents]],
+            options: [.localOnly: true]
+        )
+        return true
+    }
+
+    // MARK: - Edit
+
+    /// The editor shows the raw `.conf`, private key included, so it
+    /// opens only after the owner grants it — and only if the tunnel is
+    /// still inactive once the question is answered.
+    func openEdit() {
+        Task {
+            let granted = await PrivateDataGuard.grants(reason: loc.t("edit_private_data_reason")) { message in
+                errorMessage = message
+                showingError = true
+            }
+            guard granted, tunnel.status == .inactive else { return }
+            showingEdit = true
+        }
     }
 
     // MARK: - Reset
@@ -35,15 +66,30 @@ extension TunnelDetailView {
 
     // MARK: - Delete
 
+    /// Runs after the confirmation dialog. `deleting` holds the button
+    /// down from the first press until the removal ends, across the
+    /// owner question too; a decline or a failed removal lets it go.
     func deleteTunnel() {
-        if tunnel.status != .inactive {
-            tunnelsManager.startDeactivation(of: tunnel)
-        }
+        guard !deleting else { return }
+        deleting = true
         Task {
+            let granted = await PrivateDataGuard.grants(reason: loc.t("delete_private_data_reason")) { message in
+                errorMessage = message
+                showingError = true
+            }
+            guard granted else {
+                deleting = false
+                return
+            }
+
+            if tunnel.status != .inactive {
+                tunnelsManager.startDeactivation(of: tunnel)
+            }
             do {
                 try await tunnelsManager.remove(tunnel: tunnel)
                 dismiss()
             } catch {
+                deleting = false
                 errorMessage = error.localizedDescription
                 showingError = true
             }

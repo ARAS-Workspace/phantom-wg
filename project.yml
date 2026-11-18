@@ -116,6 +116,7 @@ targets:
         UILaunchScreen:
           UIImageName: PhantomLogo
         NSCameraUsageDescription: "Camera access is needed to scan QR codes for tunnel configuration import."
+        NSFaceIDUsageDescription: "Face ID confirms the device owner before a tunnel configuration is copied, edited, or deleted."
         UISupportedInterfaceOrientations:
           - UIInterfaceOrientationPortrait
           - UIInterfaceOrientationLandscapeLeft

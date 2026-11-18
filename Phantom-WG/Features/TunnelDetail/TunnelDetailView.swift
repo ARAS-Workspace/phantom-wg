@@ -23,6 +23,7 @@ struct TunnelDetailView: View {
     @State var errorMessage: String?
     @State var showingError = false
     @State var isResetting = false
+    @State var deleting = false
 
     // Stats
     @State var lastHandshake: String = "—"
@@ -51,9 +52,10 @@ struct TunnelDetailView: View {
                 tunnel: tunnel,
                 canCopy: config != nil,
                 copyAction: copyConf,
-                editAction: { showingEdit = true },
+                editAction: openEdit,
                 resetAction: resetConnection,
                 resetting: isResetting,
+                deleting: deleting,
                 showingDeleteConfirmation: $showingDeleteConfirmation
             )
         }
