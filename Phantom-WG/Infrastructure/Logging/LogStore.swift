@@ -33,6 +33,7 @@ final class LogStore: LogEntryProvider {
     @ObservationIgnored private weak var tunnel: TunnelContainer?
     @ObservationIgnored private var pollingTask: Task<Void, Never>?
     @ObservationIgnored private var pollingHolds = 0
+    @ObservationIgnored private var idCounter = 0
 
     init(tunnel: TunnelContainer?) {
         self.tunnel = tunnel
@@ -94,19 +95,25 @@ final class LogStore: LogEntryProvider {
 
         do {
             let decoded = try JSONDecoder().decode([RemoteEntry].self, from: data)
-
-            entries = decoded.enumerated().map { index, entry in
-                LogEntry(
-                    id: index,
-                    tag: entry.tag,
-                    text: "[\(entry.timestamp)][\(entry.tag)] \(entry.message)"
-                )
-            }
+            entries = identify(decoded)
         } catch {
             // Decode failed — ignore silently; the next poll brings a
             // fresh buffer. An unreachable extension never gets here:
             // `sendMessage` reads it as nothing new to show.
         }
+    }
+
+    /// App-side identity for snapshot rows: ids come from a flowing
+    /// counter, and a row keeps its id while it still lines up with the
+    /// previous snapshot — so `entries.last?.id` moves when the tail
+    /// actually changed, which is what the log screen's scroll trigger
+    /// reads.
+    private func identify(_ decoded: [RemoteEntry]) -> [LogEntry] {
+        LogIdentity.identified(
+            previous: entries,
+            next: decoded.map { (tag: $0.tag, text: "[\($0.timestamp)][\($0.tag)] \($0.message)") },
+            counter: &idCounter
+        )
     }
 
     /// An extension that has died answers nothing at all, and the poll
