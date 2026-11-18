@@ -26,7 +26,7 @@ class TunnelsManager {
     @ObservationIgnored private let providerFactory: TunnelProviderFactory
     @ObservationIgnored private var statusObservationToken: AnyObject?
     @ObservationIgnored private var configObservationToken: AnyObject?
-    @ObservationIgnored private var waitingTunnel: TunnelContainer?
+    @ObservationIgnored private(set) var waitingTunnel: TunnelContainer?
     /// Names an `add` holds from its uniqueness check until the new
     /// container is listed, keyed by the configuration id. The check
     /// reads these too, so two adds of one name across the save's
@@ -249,6 +249,8 @@ class TunnelsManager {
 
     // MARK: - Activation
 
+    /// @witness ActivationSeam.aPressOnABusySlotQueuesAndStopsTheOccupant
+    /// @witness ActivationSeam.aSecondQueuedPressTakesTheSlot
     func startActivation(of tunnel: TunnelContainer) {
         guard tunnel.status == .inactive else { return }
 
@@ -267,6 +269,7 @@ class TunnelsManager {
         startActivation(of: tunnel, at: 0)
     }
 
+    /// @witness ActivationSeam.aQueuedRowToggledOffGivesUpItsTurn
     func startDeactivation(of tunnel: TunnelContainer) {
         guard tunnel.status != .inactive && tunnel.status != .deactivating else { return }
 
@@ -327,6 +330,7 @@ class TunnelsManager {
     /// keeps one enabled configuration: saving that flag would enable it
     /// again and disable the tunnel starting now, whichever save lands
     /// last.
+    /// @witness ActivationSeam.aListRefreshCannotTakeAQueuedTunnelsTurn
     private func disarmOtherRecoveryRules(except tunnel: TunnelContainer) {
         tunnels.filter { $0.id != tunnel.id && $0.carriesRecoveryRule }.forEach { other in
             other.tunnelProvider.isOnDemandEnabled = false
@@ -490,6 +494,8 @@ class TunnelsManager {
     /// Hands the slot to the queued tunnel once it is free. The slot is
     /// dropped when the queued row is no longer listed; it is kept while
     /// another tunnel still holds a session.
+    /// @witness ActivationSeam.aRemovalHandsTheQueueOnOnlyWhenTheSlotIsFree
+    /// @witness ActivationSeam.aQueueSlotWhoseTunnelLeftTheListIsDiscarded
     private func activateWaitingTunnelIfNeeded() {
         guard let waitingTunnel else { return }
         guard tunnels.contains(where: { $0 === waitingTunnel }) else {
@@ -524,6 +530,7 @@ class TunnelsManager {
         }
     }
 
+    /// @witness ActivationSeam.aListRefreshCannotTakeAQueuedTunnelsTurn
     private func handleStatusChange(for tunnel: TunnelContainer) {
         let systemStatus = tunnel.tunnelProvider.connectionStatus
 

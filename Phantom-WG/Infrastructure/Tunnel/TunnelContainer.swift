@@ -69,6 +69,8 @@ class TunnelContainer: Identifiable {
         }
     }
 
+    /// @witness ActivationSeam.aListRefreshCannotCancelAnActivation
+    /// @witness ActivationSeam.aListRefreshCannotTakeAQueuedTunnelsTurn
     func refreshStatus() {
         let derived = TunnelStatus(from: tunnelProvider.connectionStatus)
         if isManagerDriven, derived == .inactive || derived == .deactivating { return }

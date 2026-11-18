@@ -18,6 +18,7 @@ enum TestCatalog {
             TunnelAddWorkflow(),
             TunnelEditWorkflow(),
             TunnelRemoveWorkflow(),
+            ActivationSeamWorkflow(),
             TunnelLoadWorkflow()
         ]
     }
