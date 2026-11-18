@@ -116,16 +116,6 @@ final class ActivationSeamWorkflow: TestWorkflow {
         return Rig(manager: manager, fakes: fakes, rows: rows)
     }
 
-    /// True when `condition` holds for the whole window.
-    func holds(for seconds: Double, _ condition: () -> Bool) async -> Bool {
-        let watch = Date()
-        while Date().timeIntervalSince(watch) < seconds {
-            if !condition() { return false }
-            try? await Task.sleep(for: .milliseconds(25))
-        }
-        return condition()
-    }
-
     // MARK: - Steps
 
     func aPressOnABusySlotQueuesAndStopsTheOccupant() async {

@@ -20,6 +20,7 @@ enum TestCatalog {
             TunnelRemoveWorkflow(),
             ActivationSeamWorkflow(),
             PrivateDataWorkflow(),
+            LogsWorkflow(),
             TunnelLoadWorkflow(),
             RecoverySwitchWorkflow()
         ]

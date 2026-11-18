@@ -17,7 +17,8 @@
 // The waiting helpers exist because reading a system value once is the
 // most common way a step measures its own sampling rate rather than the
 // product: `awaitStatus`, `settle(within:until:)` and `race` all bound the
-// wait and report whether it landed.
+// wait and report whether it landed; `holds(for:_:)` is the opposite
+// reading, a condition that stays true for a whole window.
 //
 // `onTeardown(_:_:)` registers cleanup that runs whether the step passed,
 // failed or was never reached — a workflow that plants something owes its
@@ -138,6 +139,16 @@ class TestWorkflow {
             if condition() { return true }
             if Task.isCancelled { break }
             try? await Task.sleep(for: .milliseconds(100))
+        }
+        return condition()
+    }
+
+    /// True when `condition` holds for the whole window.
+    func holds(for seconds: Double, _ condition: () -> Bool) async -> Bool {
+        let watch = Date()
+        while Date().timeIntervalSince(watch) < seconds {
+            if !condition() { return false }
+            try? await Task.sleep(for: .milliseconds(25))
         }
         return condition()
     }

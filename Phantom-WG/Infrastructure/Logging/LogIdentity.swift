@@ -20,6 +20,8 @@ enum LogIdentity {
         return nil
     }
 
+    /// @witness Logs.rowsKeepTheirIdsWhileTheBufferSlides
+    /// @witness Logs.aClearEmptiesTheBufferAndTheRows
     static func identified(
         previous: [LogEntry],
         next: [(tag: String, text: String)],

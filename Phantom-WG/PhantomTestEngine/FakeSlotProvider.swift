@@ -17,6 +17,12 @@
 //   disconnectAnswer                         what the last-error probe says
 //   messageFailure                           a provider message the session
 //                                            refuses to send (it throws)
+//   logLines / logReply / countReply         the extension's log buffer and
+//                                            how opcodes 1 (the lines as
+//                                            JSON) and 4 (their count) are
+//                                            answered; opcode 2 empties the
+//                                            buffer. `messageOpcodes` lists
+//                                            the first byte of every message
 //
 // A held completion is released on demand by `releaseHeldCompletions()`,
 // which is how a step measures a caller that is waiting on a save the
@@ -92,6 +98,25 @@ final class FakeSlotProvider: TunnelProviding {
         case keychain
     }
 
+    enum LogReply {
+        case lines
+        case nothing
+        case silent
+        case garbage
+    }
+
+    enum CountReply {
+        case count
+        case nothing
+        case silent
+    }
+
+    struct LogLine {
+        let timestamp: String
+        let tag: String
+        let message: String
+    }
+
     var saveAnswer: SaveAnswer = .succeeds
     var removeAnswer: SaveAnswer = .succeeds
     var loadAnswer: SaveAnswer = .succeeds
@@ -99,6 +124,9 @@ final class FakeSlotProvider: TunnelProviding {
     var resetAnswer: ResetAnswer = .status(.rebuilt)
     var disconnectAnswer: DisconnectAnswer = .none
     var messageFailure: NSError?
+    var logLines: [LogLine] = []
+    var logReply: LogReply = .lines
+    var countReply: CountReply = .count
 
     private var heldCompletions: [@Sendable (Error?) -> Void] = []
 
@@ -156,6 +184,7 @@ final class FakeSlotProvider: TunnelProviding {
     private(set) var stopCount = 0
     private(set) var removeCount = 0
     private(set) var providerMessageCount = 0
+    private(set) var messageOpcodes: [UInt8] = []
     private(set) var keychainRefs: [Data] = []
 
     init(storage: Storage = .memory, config: TunnelConfig? = nil,
@@ -218,10 +247,31 @@ final class FakeSlotProvider: TunnelProviding {
     func sendProviderMessage(_ data: Data, responseHandler: @escaping @Sendable (Data?) -> Void) throws {
         providerMessageCount += 1
         if let messageFailure { throw messageFailure }
-        guard data.first == 3 else {
+        messageOpcodes.append(data.first ?? 0)
+        switch data.first {
+        case 1:
+            answerLogs(responseHandler)
+        case 2:
+            logLines.removeAll()
             responseHandler(nil)
-            return
+        case 3:
+            answerReset(responseHandler)
+        case TunnelLogCountReply.opcode:
+            answerCount(responseHandler)
+        default:
+            responseHandler(nil)
         }
+    }
+
+    private func answerCount(_ responseHandler: @escaping @Sendable (Data?) -> Void) {
+        switch countReply {
+        case .count: responseHandler(TunnelLogCountReply.encode(logLines.count))
+        case .nothing: responseHandler(nil)
+        case .silent: break
+        }
+    }
+
+    private func answerReset(_ responseHandler: @escaping @Sendable (Data?) -> Void) {
         switch resetAnswer {
         case .status(let reply):
             responseHandler(Data([3, reply.rawValue]))
@@ -289,6 +339,20 @@ final class FakeSlotProvider: TunnelProviding {
             }
         case .hangs:
             heldCompletions.append(completion)
+        }
+    }
+
+    private func answerLogs(_ responseHandler: @escaping @Sendable (Data?) -> Void) {
+        switch logReply {
+        case .lines:
+            let rows = logLines.map { ["timestamp": $0.timestamp, "tag": $0.tag, "message": $0.message] }
+            responseHandler(try? JSONSerialization.data(withJSONObject: rows))
+        case .nothing:
+            responseHandler(nil)
+        case .silent:
+            break
+        case .garbage:
+            responseHandler(Data("not json".utf8))
         }
     }
 
