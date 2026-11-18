@@ -219,11 +219,17 @@ struct TunnelImportView: View {
     }
 
     /// Whether the banner offers the route into the VPN settings after
-    /// `add` threw `error`.
+    /// `add` threw `error`: a system refusal does, and the app's own name
+    /// refusals (a name clash, a blank name) do not. `add` reports a
+    /// refused configure, save and load as one case, so a load refused
+    /// after an accepted save is offered the route as well.
     ///
     /// @witness TunnelAdd.onlyASystemRefusalOffersTheVPNSettings
     static func offersVPNSettingsRoute(after error: Error) -> Bool {
-        true
+        if case TunnelManagementError.vpnSystemErrorOnAddTunnel = error {
+            return true
+        }
+        return false
     }
 
     private func openSettings() {
