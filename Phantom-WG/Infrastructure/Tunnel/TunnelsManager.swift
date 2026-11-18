@@ -249,9 +249,16 @@ class TunnelsManager {
     /// flag false with the rule still standing, and a flag-shaped filter
     /// walks past exactly that tunnel. A refusal is that tunnel's own
     /// sentence on its own row — it is not the one the user just started.
+    ///
+    /// The same save writes the other tunnel disabled. Its object still
+    /// holds the enabled flag from its own activation, and the system
+    /// keeps one enabled configuration: saving that flag would enable it
+    /// again and disable the tunnel starting now, whichever save lands
+    /// last.
     private func disarmOtherRecoveryRules(except tunnel: TunnelContainer) {
         tunnels.filter { $0.id != tunnel.id && $0.carriesRecoveryRule }.forEach { other in
             other.tunnelProvider.isOnDemandEnabled = false
+            other.tunnelProvider.isEnabled = false
             Task {
                 do {
                     try await other.tunnelProvider.savePreferences()
