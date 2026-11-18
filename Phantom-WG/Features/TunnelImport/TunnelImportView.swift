@@ -15,6 +15,10 @@ struct TunnelImportView: View {
     @State private var inputText = ""
     @State private var errorMessages: [String] = []
     @State private var showingQRScanner = false
+    /// Set from the moment `add` starts until it fails; a second press
+    /// (or a QR scan) while it is set finds the button down and
+    /// `submit` refusing.
+    @State private var saving = false
 
     /// Raised only by a failed `add`, never by a parse or validation
     /// error. Saving is the step the system's VPN permission gates, so
@@ -22,7 +26,8 @@ struct TunnelImportView: View {
     @State private var offersVPNSettings = false
 
     private var canSubmit: Bool {
-        !tunnelName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        !saving
+        && !tunnelName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
         && !inputText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
     }
 
@@ -163,6 +168,7 @@ struct TunnelImportView: View {
     // MARK: - Submit
 
     private func submit() {
+        guard !saving else { return }
         errorMessages = []
         offersVPNSettings = false
 
@@ -199,11 +205,13 @@ struct TunnelImportView: View {
             return
         }
 
+        saving = true
         Task {
             do {
                 _ = try await tunnelsManager.add(config: config)
                 dismiss()
             } catch {
+                saving = false
                 errorMessages = [error.localizedDescription]
                 offersVPNSettings = true
             }

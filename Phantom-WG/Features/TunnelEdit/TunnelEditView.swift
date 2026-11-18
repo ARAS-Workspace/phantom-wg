@@ -19,6 +19,10 @@ struct TunnelEditView: View {
     @State private var name: String
     @State private var rawInput: String
     @State private var errorMessages: [String] = []
+    /// Set from the moment `modify` starts until it fails; a second
+    /// press while it is set finds the button down and `submit`
+    /// refusing.
+    @State private var saving = false
 
     /// The Keychain copy this edit started from — the identity
     /// anchor. Read synchronously at init; `nil` means the entry is
@@ -115,12 +119,14 @@ struct TunnelEditView: View {
 
     private var canSubmit: Bool {
         original != nil
+            && !saving
             && tunnel.status == .inactive
             && !name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
             && !rawInput.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
     }
 
     private func submit() {
+        guard !saving else { return }
         errorMessages = []
 
         // Identity anchor: the Keychain copy this edit started from.
@@ -170,11 +176,13 @@ struct TunnelEditView: View {
             return
         }
 
+        saving = true
         Task {
             do {
                 try await tunnelsManager.modify(tunnel: tunnel, with: config)
                 dismiss()
             } catch {
+                saving = false
                 errorMessages = [error.localizedDescription]
             }
         }
