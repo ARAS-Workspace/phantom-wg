@@ -38,7 +38,9 @@ struct PeerSection: View {
             }
             PhantomStaticField(
                 label: loc.t("detail_keepalive"),
-                value: String(config.persistentKeepalive),
+                value: config.persistentKeepalive == PeerDraft.keepaliveOff
+                    ? loc.t("detail_keepalive_off")
+                    : String(config.persistentKeepalive),
                 axIdentifier: AXID.TunnelDetail.Peer.keepalive
             )
         } header: {

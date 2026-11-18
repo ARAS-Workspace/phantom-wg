@@ -3,11 +3,12 @@ import Foundation
 /// Structural parser for WireGuard `.conf` text.
 ///
 /// Produces a `TunnelDraft` populated from `[Wstunnel]` (optional),
-/// `[Interface]`, and `[Peer]` sections. Field-level value validation
-/// (keys, addresses, endpoint, integers) is deferred to
-/// `TunnelDraft.validate()` — the parser only rejects input it cannot
-/// structurally decompose (missing sections, missing required keys,
-/// malformed `Tunnel = udp://h:p:h:p`).
+/// `[Interface]`, and `[Peer]` sections. The line rules are
+/// WireGuardKit's: an inline `#` comment is dropped (kept inside
+/// `[Wstunnel]`, whose values may carry `#`), and an unknown section, an
+/// unknown key, a line without `=`, and a repeated single-value key are
+/// errors. Field-level value validation (keys, addresses, endpoint,
+/// integers) is deferred to `TunnelDraft.validate()`.
 ///
 /// Ghost rule: when a `[Wstunnel]` section is present, the peer
 /// `Endpoint` is system-defined (the wstunnel listener), so the key
@@ -24,6 +25,10 @@ enum ConfParser {
         case duplicateSection(String)
         case missingKey(section: String, key: String)
         case invalidTunnelFormat(section: String, key: String)
+        case invalidLine(String)
+        case unknownKey(section: String, key: String)
+        case duplicateKey(section: String, key: String)
+        case invalidValue(section: String, key: String)
 
         var errorDescription: String? {
             switch self {
@@ -39,9 +44,23 @@ enum ConfParser {
                 return "[\(section)] missing required key: \(key)"
             case .invalidTunnelFormat(let section, let key):
                 return "[\(section)] invalid \(key): expected udp://host:port:host:port"
+            case .invalidLine(let line):
+                return "Line not understood: \(line)"
+            case .unknownKey(let section, let key):
+                return "[\(section)] has an unknown key: \(key)"
+            case .duplicateKey(let section, let key):
+                return "[\(section)] lists \(key) more than once"
+            case .invalidValue(let section, let key):
+                return "[\(section)] has an invalid \(key)"
             }
         }
     }
+
+    private static let sectionKeys: [String: Set<String>] = [
+        "interface": ["privatekey", "listenport", "address", "dns", "mtu"],
+        "peer": ["publickey", "presharedkey", "allowedips", "endpoint", "persistentkeepalive"],
+        "wstunnel": ["url", "secret", "tunnel"]
+    ]
 
     // MARK: - Entry Point
 
@@ -86,7 +105,11 @@ enum ConfParser {
         let multiEntryKeys: Set<String> = ["address", "allowedips", "dns"]
 
         for line in lines {
-            let stripped = line.trimmingCharacters(in: .whitespaces)
+            let whole = line.trimmingCharacters(in: .whitespaces)
+            let uncommented = whole.split(separator: "#", maxSplits: 1, omittingEmptySubsequences: false)
+                .first.map { $0.trimmingCharacters(in: .whitespaces) } ?? ""
+            let isHeader = uncommented.hasPrefix("[") && uncommented.hasSuffix("]")
+            let stripped = isHeader || currentSection != "wstunnel" ? uncommented : whole
             if stripped.isEmpty || stripped.hasPrefix("#") { continue }
 
             // Section header
@@ -99,6 +122,9 @@ enum ConfParser {
                 // peer the variant carried.
                 let name = String(stripped.dropFirst().dropLast())
                     .trimmingCharacters(in: .whitespaces).lowercased()
+                guard sectionKeys[name] != nil else {
+                    throw ParseError.invalidLine(stripped)
+                }
                 // Each section is a singleton here. A repeated header —
                 // most often a second [Peer] — used to merge into the
                 // first (last value wins per key), silently collapsing
@@ -114,22 +140,25 @@ enum ConfParser {
             }
 
             // Key = Value
-            guard let section = currentSection,
-                  let equalsIndex = stripped.firstIndex(of: "=") else { continue }
+            guard let equalsIndex = stripped.firstIndex(of: "=") else {
+                throw ParseError.invalidLine(stripped)
+            }
+            guard let section = currentSection else { continue }
 
-            let key = stripped[..<equalsIndex].trimmingCharacters(in: .whitespaces).lowercased()
+            let keyWithCase = stripped[..<equalsIndex].trimmingCharacters(in: .whitespaces)
+            let key = keyWithCase.lowercased()
             let value = stripped[stripped.index(equalsIndex, offsetBy: 1)...]
                 .trimmingCharacters(in: .whitespaces)
 
-            if multiEntryKeys.contains(key), let existing = result[section]?[key] {
+            guard sectionKeys[section]?.contains(key) == true else {
+                throw ParseError.unknownKey(section: section.capitalized, key: keyWithCase)
+            }
+            if let existing = result[section]?[key] {
+                guard multiEntryKeys.contains(key) else {
+                    throw ParseError.duplicateKey(section: section.capitalized, key: keyWithCase)
+                }
                 result[section]?[key] = existing + ", " + value
             } else {
-                // Scalar keys are deliberately last-wins within a
-                // section (a repeated Endpoint/PrivateKey line simply
-                // overwrites) — the duplicate guard above rejects
-                // section-level ambiguity only. Escalating repeated
-                // scalar keys to a ParseError is a cross-repo decision
-                // (iOS parser parity plus new error copy).
                 result[section]?[key] = value
             }
         }
@@ -178,12 +207,15 @@ enum ConfParser {
         guard let address = attrs["address"], !address.isEmpty else {
             throw ParseError.missingKey(section: "Interface", key: "Address")
         }
+        if let listenPort = attrs["listenport"], UInt16(listenPort) == nil {
+            throw ParseError.invalidValue(section: "Interface", key: "ListenPort")
+        }
 
         return InterfaceDraft(
             privateKey: privateKey,
             addresses: address,
-            dnsServers: attrs["dns"] ?? "1.1.1.1, 9.9.9.9",
-            mtu: attrs["mtu"] ?? "1420"
+            dnsServers: attrs["dns"] ?? "",
+            mtu: attrs["mtu"] ?? ""
         )
     }
 
@@ -211,7 +243,7 @@ enum ConfParser {
             presharedKey: attrs["presharedkey"] ?? "",
             allowedIPs: attrs["allowedips"] ?? "0.0.0.0/0, ::/0",
             endpoint: endpoint,
-            persistentKeepalive: attrs["persistentkeepalive"] ?? "25"
+            persistentKeepalive: attrs["persistentkeepalive"] ?? ""
         )
     }
 }

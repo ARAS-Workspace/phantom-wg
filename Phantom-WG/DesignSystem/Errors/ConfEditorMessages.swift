@@ -36,6 +36,14 @@ enum ConfEditorMessages {
             return loc.t("parse_err_missing_key", section, key)
         case .invalidTunnelFormat(let section, let key):
             return loc.t("parse_err_invalid_tunnel", section, key)
+        case .invalidLine(let line):
+            return loc.t("parse_err_invalid_line", line)
+        case .unknownKey(let section, let key):
+            return loc.t("parse_err_unknown_key", section, key)
+        case .duplicateKey(let section, let key):
+            return loc.t("parse_err_duplicate_key", section, key)
+        case .invalidValue(let section, let key):
+            return loc.t("parse_err_invalid_value", section, key)
         }
     }
 
