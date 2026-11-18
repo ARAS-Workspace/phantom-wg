@@ -302,14 +302,19 @@ class TunnelsManager {
         // happens: the user asked for this tunnel to go down, and a rule
         // left standing is a sentence, not a veto. A refusal leaves the
         // store holding whatever it left — nothing here writes the flag
-        // back on its behalf, the next load re-reads it.
+        // back on its behalf, the next load re-reads it. A save that has
+        // not answered within `disarmPatience` is said too, and the stop
+        // goes out without its answer.
         if tunnel.carriesRecoveryRule {
             tunnel.tunnelProvider.isOnDemandEnabled = false
             Task {
-                do {
-                    try await tunnel.tunnelProvider.savePreferences()
-                } catch {
+                switch await Self.standDownRecovery(on: tunnel.tunnelProvider) {
+                case .done:
+                    break
+                case .refused(let error):
                     tunnel.lastActivationError = .stopDisarmRefused(systemError: error)
+                case .unanswered:
+                    tunnel.lastActivationError = .stopRuleStandDownUnconfirmed
                 }
                 performDeactivation(of: tunnel)
             }
@@ -319,18 +324,6 @@ class TunnelsManager {
     }
 
     // MARK: - Private Activation
-
-    /// The recovery rule: one connect-on-any-network on-demand rule,
-    /// armed on every activation. There is no user-facing switch —
-    /// starting a tunnel is the recovery intent, stopping it withdraws
-    /// it (`startDeactivation` disarms before it stops).
-    /// @witness ActivationSeam.theArmedRuleIsOneConnectRuleForAnyInterface
-    private static func armRecovery(on provider: TunnelProviding) {
-        let rule = NEOnDemandRuleConnect()
-        rule.interfaceTypeMatch = .any
-        provider.onDemandRules = [rule]
-        provider.isOnDemandEnabled = true
-    }
 
     /// Recovery belongs to the tunnel being activated now, so every other
     /// tunnel's rule comes down first. The gate reads `carriesRecoveryRule`
@@ -358,31 +351,6 @@ class TunnelsManager {
                     other.lastActivationError = .stopDisarmRefused(systemError: error)
                 }
             }
-        }
-    }
-
-    /// Stands the recovery rule down and persists it. Used only on the
-    /// give-up paths that failed *locally* — a config that cannot load,
-    /// or whose `startTunnel` throws, would fail the same way on every
-    /// system-initiated on-demand retry, so leaving it armed is a loop
-    /// trap. A timeout or a dropped session is the opposite case: that
-    /// is the transient condition the recovery rule exists to ride out,
-    /// so those paths leave it armed on purpose.
-    ///
-    /// Returns the error when the save was refused, `nil` when it landed.
-    /// The give-up paths that call this already carry the user's answer —
-    /// why the activation failed — so none of them replaces that sentence
-    /// with the rule's fate. The refusal is handed back rather than
-    /// swallowed so that choice is written down at the call site instead
-    /// of hiding inside a `try?`.
-    @discardableResult
-    private static func disarmRecovery(on provider: TunnelProviding) async -> Error? {
-        provider.isOnDemandEnabled = false
-        do {
-            try await provider.savePreferences()
-            return nil
-        } catch {
-            return error
         }
     }
 
@@ -443,6 +411,7 @@ class TunnelsManager {
 
     /// @witness ActivationSeam.aConfigThatWillNotLoadLosesItsRule
     /// @witness ActivationSeam.aStartTheSystemRefusesLosesItsRule
+    /// @witness ActivationSeam.aGiveUpWhoseDisarmSaveHangsStillHandsTheQueueOn
     private func doStartVPNTunnel(tunnel: TunnelContainer, attemptId: String, retryIndex: Int) async {
         do {
             try await tunnel.tunnelProvider.loadPreferences()

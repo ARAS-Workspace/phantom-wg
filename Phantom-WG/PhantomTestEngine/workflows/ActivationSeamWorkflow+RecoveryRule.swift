@@ -58,7 +58,15 @@
 //       A stop on an armed row whose stand-down save the system holds and
 //       does not answer: the save goes out first and the stop waits on it,
 //       and the stop still goes out within a few seconds (Mac 2.2.1 waits
-//       three). The held save is released on the way out.
+//       three). The row says the rule's stand-down was not confirmed, and
+//       when the held save answers late (here a refusal) no second stop
+//       goes out and nothing is written over that sentence.
+//
+//   S — A Give-Up Whose Disarm Save Hangs Still Hands The Queue On
+//       A's activation waits on a held load; a press on B queues B and
+//       stops A. The held load is answered with an error, and the
+//       give-up's stand-down save is held unanswered: A rests with
+//       `loadingFailed`, and B still takes its turn within a few seconds.
 
 #if DEBUG
 import Foundation
@@ -311,8 +319,60 @@ extension ActivationSeamWorkflow {
                     "the stand-down save goes out first and the stop waits on it (saves=\(fake.saveCount), stops=\(fake.stopCount))")
         else { return }
         let stopped = await settle(within: 5) { fake.stopCount >= 1 }
-        check(stopped,
-              "a stand-down save the system does not answer holds the stop no longer than a few seconds (stops=\(fake.stopCount))")
+        guard check(stopped,
+                    "a stand-down save the system does not answer holds the stop no longer than a few seconds (stops=\(fake.stopCount))")
+        else { return }
+        var said = false
+        if case .stopRuleStandDownUnconfirmed = row.lastActivationError { said = true }
+        check(said, "the row says the rule's stand-down was not confirmed (error=\(describe(row.lastActivationError)))")
+
+        let released = fake.releaseHeldCompletions()
+        let oneStop = await holds(for: 0.5) { fake.stopCount == 1 }
+        var stillSaid = false
+        if case .stopRuleStandDownUnconfirmed = row.lastActivationError { stillSaid = true }
+        check(released == 1 && oneStop && stillSaid,
+              "the held save answering late sends no second stop and writes nothing over that sentence"
+              + " (released=\(released), stops=\(fake.stopCount), error=\(describe(row.lastActivationError)))")
+    }
+
+    func aGiveUpWhoseDisarmSaveHangsStillHandsTheQueueOn() async {
+        guard let rig = rig("GiveUp", [.disconnected, .disconnected]) else {
+            fail("the rig did not materialize its two rows")
+            return
+        }
+        let (manager, fakeA, fakeB, rowA, rowB) = (rig.manager, rig.fakes[0], rig.fakes[1], rig.rows[0], rig.rows[1])
+        onTeardown("release the give-up rig's held requests") { [weak self] in
+            let released = fakeA.releaseHeldCompletions()
+            self?.log("teardown: released \(released) held request(s) of the give-up rig")
+        }
+        fakeA.loadAnswer = .hangs
+
+        manager.startActivation(of: rowA)
+        guard await settle(within: 2, until: { fakeA.loadCount >= 1 }) else {
+            fail("A's activation never reached its load (loads=\(fakeA.loadCount))")
+            return
+        }
+        manager.startActivation(of: rowB)
+        guard check(rowB.status == .waiting, "B queues behind A's activation (status=\(rowB.status))") else { return }
+        guard await settle(within: 2, until: { fakeA.stopCount >= 1 }) else {
+            fail("A's stop never went out (stops=\(fakeA.stopCount))")
+            return
+        }
+
+        fakeA.saveAnswer = .hangs
+        let released = fakeA.releaseHeldCompletions()
+        guard check(released == 1, "A's held load is answered with an error (released=\(released))") else { return }
+        guard await settle(within: 2, until: { rowA.lastActivationError != nil }) else {
+            fail("A's give-up filed no error (status=\(rowA.status))")
+            return
+        }
+        var named = false
+        if case .loadingFailed = rowA.lastActivationError { named = true }
+        check(named && rowA.status == .inactive,
+              "A gives up with loadingFailed (error=\(describe(rowA.lastActivationError)), status=\(rowA.status))")
+        let tookItsTurn = await settle(within: 5) { fakeB.startCount >= 1 }
+        check(tookItsTurn,
+              "with A's stand-down save held unanswered, B still takes its turn within a few seconds (starts=\(fakeB.startCount))")
     }
 }
 #endif

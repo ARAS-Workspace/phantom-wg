@@ -116,6 +116,7 @@
   "error_starting_failed": "Tünel etkinleştirilemedi. %@",
   "error_saving_failed": "Tünel yapılandırması kaydedilemedi. %@",
   "error_stop_disarm_refused": "Tünel durduruldu ancak yeniden bağlanma kuralı indirilemedi, bu yüzden sistem tüneli kendiliğinden geri getirebilir. %@",
+  "error_stop_rule_unconfirmed": "Durduruldu. Otomatik yeniden bağlanma kuralının kaldırıldığı sistem tarafından doğrulanmadı.",
   "error_loading_failed": "Tünel yapılandırması yüklenemedi. %@",
   "error_retry_limit": "Etkinleştirme deneme sınırı aşıldı. %@",
   "error_activation_failed": "Etkinleştirme başarısız oldu. %@",

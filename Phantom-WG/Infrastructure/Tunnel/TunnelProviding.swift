@@ -64,9 +64,16 @@ protocol TunnelProviding: AnyObject {
 /// system has not given yet. `fetchLastDisconnectError` sits on the
 /// same side of that line: it reads the system's record, not ours.
 ///
-/// The one place a bound belongs is a message to our own extension —
+/// The one place a bound on the call itself belongs is a message to our own extension —
 /// a process that can die holding the reply — and those carry it at
 /// their call sites (`TunnelsManager+Reset`, `LogStore`).
+///
+/// One caller stops waiting on a system call's answer at a user's
+/// patience: the recovery rule's stand-down
+/// (`TunnelsManager.standDownRecovery`, `disarmPatience`). The save it
+/// issues runs on, unbounded and never cancelled; what goes ahead
+/// without its answer is the stop or the queue hand-off behind it, as
+/// in Mac 2.2.1.
 extension TunnelProviding {
 
     func savePreferences() async throws {

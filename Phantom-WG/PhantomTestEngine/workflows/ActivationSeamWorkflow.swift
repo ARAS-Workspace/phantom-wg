@@ -48,7 +48,7 @@
 //       a reload drops its row. The slot is discarded, and when A's session
 //       ends no session is raised for B.
 //
-// The recovery rule's steps (H to R) are in
+// The recovery rule's steps (H to S) are in
 // `ActivationSeamWorkflow+RecoveryRule.swift`.
 
 #if DEBUG
@@ -77,7 +77,8 @@ final class ActivationSeamWorkflow: TestWorkflow {
             WorkflowStep("The Ladder Running Out Leaves The Rule Armed", theLadderRunningOutLeavesTheRuleArmed),
             WorkflowStep("A Drop Mid-Activation Files The System's Record", aDropMidActivationFilesTheSystemsRecord),
             WorkflowStep("A Mute Drop Files A Stand-In Error", aMuteDropFilesAStandInError),
-            WorkflowStep("A Stop The Rule Save Cannot Answer Still Goes Out", aStopTheRuleSaveCannotAnswerStillGoesOut)
+            WorkflowStep("A Stop The Rule Save Cannot Answer Still Goes Out", aStopTheRuleSaveCannotAnswerStillGoesOut),
+            WorkflowStep("A Give-Up Whose Disarm Save Hangs Still Hands The Queue On", aGiveUpWhoseDisarmSaveHangsStillHandsTheQueueOn)
         ]
     }
 

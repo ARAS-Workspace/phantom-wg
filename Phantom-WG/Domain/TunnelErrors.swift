@@ -7,6 +7,7 @@ enum TunnelActivationError: Error {
     case retryLimitReached(lastSystemError: Error)
     case failedWhileActivating(systemError: Error)
     case stopDisarmRefused(systemError: Error)
+    case stopRuleStandDownUnconfirmed
 
     var alertText: String {
         let loc = LocalizationManager.shared
@@ -17,6 +18,8 @@ enum TunnelActivationError: Error {
             return loc.t("error_saving_failed", error.localizedDescription)
         case .stopDisarmRefused(let error):
             return loc.t("error_stop_disarm_refused", error.localizedDescription)
+        case .stopRuleStandDownUnconfirmed:
+            return loc.t("error_stop_rule_unconfirmed")
         case .loadingFailed(let error):
             return loc.t("error_loading_failed", error.localizedDescription)
         case .retryLimitReached(let error):
