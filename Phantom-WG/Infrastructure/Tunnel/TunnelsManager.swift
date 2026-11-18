@@ -212,6 +212,7 @@ class TunnelsManager {
         (provider.protocolConfiguration as? NETunnelProviderProtocol)?.keychainReference
     }
 
+    /// @witness TunnelRemove.aRefusedRemovalLeavesTheSavedTunnelReadable
     func remove(tunnel: TunnelContainer) async throws {
         // Destroy config from Keychain (if underlying provider supports it)
         if let proto = tunnel.tunnelProvider.protocolConfiguration as? NETunnelProviderProtocol {

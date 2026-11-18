@@ -1,0 +1,77 @@
+// Tunnel Remove
+//
+// The REMOVE path: the order in which `remove()` lets go of the system
+// entry and of the Keychain item that entry references.
+//
+// Everything here runs over a `TunnelsManager` of the step's own, whose
+// listed row is a `FakeSlotProvider` handed both as the opening row and as
+// the factory's canned answer. Nothing reaches the user's list or the
+// system.
+//
+// Scenarios:
+//
+//   A — A Refused Removal Leaves The Saved Tunnel Readable
+//       The row's configuration is sealed into the app group Keychain by
+//       the production `configure(with:)` path (`.keychain` storage), and
+//       the system refuses the removal. The removal is refused as a system
+//       error, the row is still listed and the system store still holds
+//       the entry. Then the provider is read back from what the system
+//       stored — what the next reload or the next launch reads — and the
+//       claim is that it still opens the configuration that was saved.
+//       Every Keychain item the step created is deleted on the way out.
+
+#if DEBUG
+import Foundation
+
+final class TunnelRemoveWorkflow: TestWorkflow {
+    override var displayName: String { "Tunnel Remove (What A Refused Removal Leaves)" }
+
+    override var steps: [WorkflowStep] {
+        [
+            WorkflowStep("A Refused Removal Leaves The Saved Tunnel Readable", aRefusedRemovalLeavesTheSavedTunnelReadable)
+        ]
+    }
+
+    private let runTag = String(UUID().uuidString.prefix(8))
+    private let refusal = NSError(domain: "TE.Fake", code: 7,
+                                  userInfo: [NSLocalizedDescriptionKey: "test rig refused the removal"])
+
+    // MARK: - Steps
+
+    func aRefusedRemovalLeavesTheSavedTunnelReadable() async {
+        guard let original = TestConfigFactory.throwaway(name: "TE-Remove-Keychain-\(runTag)") else {
+            fail("the config factory produced no throwaway")
+            return
+        }
+        let provider = FakeSlotProvider(storage: .keychain, config: original)
+        onTeardown("delete the step's Keychain items") { provider.sweepKeychain() }
+        guard check(provider.tunnelConfig == original,
+                    "the planted row reads its configuration back from the app group Keychain") else { return }
+        let manager = TunnelsManager(tunnelProviders: [provider], providerFactory: FakeSlotFactory(canned: [provider]))
+        guard let row = manager.tunnels.first else {
+            fail("the planted row is not in the step's list")
+            return
+        }
+
+        provider.removeAnswer = .fails(refusal)
+        var refused: Error?
+        do {
+            try await manager.remove(tunnel: row)
+        } catch {
+            refused = error
+        }
+        var asSystemError = false
+        if let refused, case TunnelManagementError.vpnSystemErrorOnRemoveTunnel = refused { asSystemError = true }
+        check(asSystemError, "the removal the system refused is refused as a system error (\(String(describing: refused)))")
+        check(manager.tunnels.contains { $0.id == original.id } && provider.entryExists,
+              "the row is still listed and the system store still holds the entry"
+              + " (rows=\(manager.tunnels.count), entry=\(provider.entryExists))")
+
+        try? await provider.loadPreferences()
+        let stored = provider.tunnelConfig
+        check(stored == original,
+              "read back from what the system stored, the tunnel still opens the configuration that was saved"
+              + " (reads \(stored.map { "\"\($0.name)\"" } ?? "nothing"))")
+    }
+}
+#endif
