@@ -370,7 +370,7 @@ sudo ./frontmatter-update.sh
 | Platform | Download                                                                                                                                                                                                            |
 |----------|---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
 | iOS      | [![iOS: App Store](https://raw.githubusercontent.com/ARAS-Workspace/phantom-wg/press-kit/assets/badges/ios-app-store.svg)](https://apps.apple.com/app/phantom-wg/id6812090582)                                      |
-| macOS    | [![macOS: Download](https://raw.githubusercontent.com/ARAS-Workspace/phantom-wg/press-kit/assets/badges/macos-download.svg)](https://github.com/ARAS-Workspace/phantom-wg/releases/tag/mac-v2.2.0)                  |
+| macOS    | [![macOS: Download](https://raw.githubusercontent.com/ARAS-Workspace/phantom-wg/press-kit/assets/badges/macos-download.svg)](https://github.com/ARAS-Workspace/phantom-wg/releases/tag/mac-v2.2.1)                  |
 
 ---
 
