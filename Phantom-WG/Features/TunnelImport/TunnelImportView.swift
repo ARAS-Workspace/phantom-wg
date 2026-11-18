@@ -213,9 +213,17 @@ struct TunnelImportView: View {
             } catch {
                 saving = false
                 errorMessages = [error.localizedDescription]
-                offersVPNSettings = true
+                offersVPNSettings = Self.offersVPNSettingsRoute(after: error)
             }
         }
+    }
+
+    /// Whether the banner offers the route into the VPN settings after
+    /// `add` threw `error`.
+    ///
+    /// @witness TunnelAdd.onlyASystemRefusalOffersTheVPNSettings
+    static func offersVPNSettingsRoute(after error: Error) -> Bool {
+        true
     }
 
     private func openSettings() {

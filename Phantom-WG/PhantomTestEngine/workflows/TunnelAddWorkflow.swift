@@ -46,6 +46,12 @@
 //       back from what the system stored, the tunnel opens the
 //       configuration the add sealed — the item the entry references is
 //       still there.
+//
+//   F — Only A System Refusal Offers The VPN Settings
+//       The import screen's banner asks `offersVPNSettingsRoute(after:)`
+//       with the error `add()` threw. A name clash and a blank name are
+//       the app's own refusals and are not offered the route; an add whose
+//       save the system refused is.
 
 #if DEBUG
 import Foundation
@@ -59,7 +65,8 @@ final class TunnelAddWorkflow: TestWorkflow {
             WorkflowStep("A Refused Save Leaves No Row And Frees The Name", aRefusedSaveLeavesNoRowAndFreesTheName),
             WorkflowStep("A Blank Name Is Refused Before A Provider Is Minted", aBlankNameIsRefusedBeforeAProviderIsMinted),
             WorkflowStep("A Refused Save Leaves No Keychain Item", aRefusedSaveLeavesNoKeychainItem),
-            WorkflowStep("A Refused Load After An Accepted Save Keeps The Item", aRefusedLoadAfterAnAcceptedSaveKeepsTheItem)
+            WorkflowStep("A Refused Load After An Accepted Save Keeps The Item", aRefusedLoadAfterAnAcceptedSaveKeepsTheItem),
+            WorkflowStep("Only A System Refusal Offers The VPN Settings", onlyASystemRefusalOffersTheVPNSettings)
         ]
     }
 
@@ -101,6 +108,13 @@ final class TunnelAddWorkflow: TestWorkflow {
         guard case .refused(let error) = outcome,
               case TunnelManagementError.tunnelAlreadyExistsWithThatName = error else { return false }
         return true
+    }
+
+    /// One refused add of step F and whether its banner offers the route.
+    private struct RouteCase {
+        let label: String
+        let config: TunnelConfig
+        let offered: Bool
     }
 
     private func rows(named name: String, in manager: TunnelsManager) -> Int {
@@ -266,6 +280,44 @@ final class TunnelAddWorkflow: TestWorkflow {
         check(stored == config,
               "read back from what the system stored, the tunnel opens the configuration the add sealed"
               + " (reads \(stored.map { "\"\($0.name)\"" } ?? "nothing"))")
+    }
+
+    func onlyASystemRefusalOffersTheVPNSettings() async {
+        let name = "TE-Add-Route-\(runTag)"
+        guard let listed = TestConfigFactory.throwaway(name: name),
+              let clashing = TestConfigFactory.throwaway(name: name),
+              var blank = TestConfigFactory.throwaway(name: "TE-Add-Route-Blank-\(runTag)"),
+              let refused = TestConfigFactory.throwaway(name: "TE-Add-Route-Refused-\(runTag)") else {
+            fail("the config factory did not produce the four throwaways this step needs")
+            return
+        }
+        blank.name = "   "
+        let factory = FakeSlotFactory(canned: [])
+        let manager = TunnelsManager(tunnelProviders: [], providerFactory: factory)
+
+        let first = await attempt("listed", manager, listed)
+        guard check(landed(first), "the first add of the name lands (\(first.label))") else { return }
+
+        // The name clash and the blank name are refused before a provider
+        // is minted, so only the third add reaches the refused save.
+        factory.minted.saveAnswer = .fails(NSError(domain: "TE.Fake", code: 5,
+                                                   userInfo: [NSLocalizedDescriptionKey: "test rig refused the save"]))
+        let cases = [
+            RouteCase(label: "a name clash", config: clashing, offered: false),
+            RouteCase(label: "a blank name", config: blank, offered: false),
+            RouteCase(label: "a save the system refused", config: refused, offered: true)
+        ]
+        for entry in cases {
+            let outcome = await attempt(entry.label, manager, entry.config)
+            guard case .refused(let error) = outcome else {
+                fail("\(entry.label) was not refused (\(outcome.label))")
+                continue
+            }
+            let offered = TunnelImportView.offersVPNSettingsRoute(after: error)
+            check(offered == entry.offered,
+                  "after \(entry.label) the banner \(entry.offered ? "offers" : "does not offer") the VPN settings"
+                  + " (offered=\(offered), \(outcome.label))")
+        }
     }
 }
 #endif
