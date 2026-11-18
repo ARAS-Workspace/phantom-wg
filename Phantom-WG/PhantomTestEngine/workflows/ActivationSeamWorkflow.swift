@@ -47,13 +47,16 @@
 //       With B queued behind A going down, B's entry leaves the system and
 //       a reload drops its row. The slot is discarded, and when A's session
 //       ends no session is raised for B.
+//
+// The recovery rule's steps (H to Q) are in
+// `ActivationSeamWorkflow+RecoveryRule.swift`.
 
 #if DEBUG
 import Foundation
 import NetworkExtension
 
 final class ActivationSeamWorkflow: TestWorkflow {
-    override var displayName: String { "Activation Seam (The Queue And Its Hand-Off)" }
+    override var displayName: String { "Activation Seam (The Queue, Its Hand-Off And The Recovery Rule)" }
 
     override var steps: [WorkflowStep] {
         [
@@ -63,15 +66,25 @@ final class ActivationSeamWorkflow: TestWorkflow {
             WorkflowStep("A List Refresh Cannot Cancel An Activation", aListRefreshCannotCancelAnActivation),
             WorkflowStep("A List Refresh Cannot Take A Queued Tunnel's Turn", aListRefreshCannotTakeAQueuedTunnelsTurn),
             WorkflowStep("A Removal Hands The Queue On Only When The Slot Is Free", aRemovalHandsTheQueueOnOnlyWhenTheSlotIsFree),
-            WorkflowStep("A Queue Slot Whose Tunnel Left The List Is Discarded", aQueueSlotWhoseTunnelLeftTheListIsDiscarded)
+            WorkflowStep("A Queue Slot Whose Tunnel Left The List Is Discarded", aQueueSlotWhoseTunnelLeftTheListIsDiscarded),
+            WorkflowStep("The Armed Rule Is One Connect Rule For Any Interface", theArmedRuleIsOneConnectRuleForAnyInterface),
+            WorkflowStep("A Stop Stands The Rule Down Before It Goes Out", aStopStandsTheRuleDownBeforeItGoesOut),
+            WorkflowStep("A Refused Disarm Surfaces And The Stop Still Goes Out", aRefusedDisarmSurfacesAndTheStopStillGoesOut),
+            WorkflowStep("The Sweep Reaches A Rule The Flag Denies", theSweepReachesARuleTheFlagDenies),
+            WorkflowStep("A Stop Reaches A Rule The Flag Denies", aStopReachesARuleTheFlagDenies),
+            WorkflowStep("A Config That Will Not Load Loses Its Rule", aConfigThatWillNotLoadLosesItsRule),
+            WorkflowStep("A Start The System Refuses Loses Its Rule", aStartTheSystemRefusesLosesItsRule),
+            WorkflowStep("The Ladder Running Out Leaves The Rule Armed", theLadderRunningOutLeavesTheRuleArmed),
+            WorkflowStep("A Drop Mid-Activation Files The System's Record", aDropMidActivationFilesTheSystemsRecord),
+            WorkflowStep("A Mute Drop Files A Stand-In Error", aMuteDropFilesAStandInError)
         ]
     }
 
-    private let runTag = String(UUID().uuidString.prefix(8))
+    let runTag = String(UUID().uuidString.prefix(8))
 
     // MARK: - Rig
 
-    private struct Rig {
+    struct Rig {
         let manager: TunnelsManager
         let fakes: [FakeSlotProvider]
         let rows: [TunnelContainer]
@@ -79,7 +92,9 @@ final class ActivationSeamWorkflow: TestWorkflow {
 
     /// One fake per status, named `TE-Seam-<label>-<n>`; the first fake is
     /// enabled when it opens connected, as the system's one enabled entry.
-    private func rig(_ label: String, _ statuses: [NEVPNStatus]) -> Rig? {
+    /// `pacing` sets the manager's retry interval and rung count.
+    func rig(_ label: String, _ statuses: [NEVPNStatus],
+             pacing: (interval: TimeInterval, rungs: Int) = (5.0, 8)) -> Rig? {
         var configs: [TunnelConfig] = []
         for index in statuses.indices {
             guard let config = TestConfigFactory.throwaway(name: "TE-Seam-\(label)\(index + 1)-\(runTag)") else { return nil }
@@ -87,14 +102,15 @@ final class ActivationSeamWorkflow: TestWorkflow {
         }
         let fakes = zip(configs, statuses).map { FakeSlotProvider(config: $0, status: $1) }
         if let first = fakes.first, first.connectionStatus == .connected { first.isEnabled = true }
-        let manager = TunnelsManager(tunnelProviders: fakes, providerFactory: FakeSlotFactory(canned: fakes))
+        let manager = TunnelsManager(tunnelProviders: fakes, providerFactory: FakeSlotFactory(canned: fakes),
+                                     retryInterval: pacing.interval, maxRetries: pacing.rungs)
         let rows = configs.compactMap { config in manager.tunnels.first { $0.id == config.id } }
         guard rows.count == configs.count else { return nil }
         return Rig(manager: manager, fakes: fakes, rows: rows)
     }
 
     /// True when `condition` holds for the whole window.
-    private func holds(for seconds: Double, _ condition: () -> Bool) async -> Bool {
+    func holds(for seconds: Double, _ condition: () -> Bool) async -> Bool {
         let watch = Date()
         while Date().timeIntervalSince(watch) < seconds {
             if !condition() { return false }

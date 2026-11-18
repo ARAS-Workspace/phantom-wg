@@ -39,6 +39,8 @@ class TunnelContainer: Identifiable {
     /// false for the flag while the system still carries the rule it acts
     /// on. Anything deciding whether a rule needs taking down reads this,
     /// not the flag.
+    /// @witness ActivationSeam.theSweepReachesARuleTheFlagDenies
+    /// @witness ActivationSeam.aStopReachesARuleTheFlagDenies
     var carriesRecoveryRule: Bool {
         tunnelProvider.isOnDemandEnabled || !(tunnelProvider.onDemandRules ?? []).isEmpty
     }

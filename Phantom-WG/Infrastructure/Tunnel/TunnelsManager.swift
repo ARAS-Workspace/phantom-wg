@@ -34,8 +34,8 @@ class TunnelsManager {
     @ObservationIgnored private var namesBeingListed: [UUID: String] = [:]
 
     // Activation pacing
-    let retryInterval: TimeInterval = 5.0
-    let maxRetries: Int = 8
+    let retryInterval: TimeInterval
+    let maxRetries: Int
 
     // MARK: - Factory
 
@@ -55,8 +55,13 @@ class TunnelsManager {
         return TunnelsManager(tunnelProviders: providers, providerFactory: factory)
     }
 
-    init(tunnelProviders: [TunnelProviding], providerFactory: TunnelProviderFactory = RealTunnelProviderFactory()) {
+    init(tunnelProviders: [TunnelProviding],
+         providerFactory: TunnelProviderFactory = RealTunnelProviderFactory(),
+         retryInterval: TimeInterval = 5.0,
+         maxRetries: Int = 8) {
         self.providerFactory = providerFactory
+        self.retryInterval = retryInterval
+        self.maxRetries = maxRetries
         tunnels = Self.sortedByCreatedAt(tunnelProviders.map { TunnelContainer(tunnel: $0) })
         startObservingTunnelStatuses()
         startObservingTunnelConfigurations()
@@ -270,6 +275,9 @@ class TunnelsManager {
     }
 
     /// @witness ActivationSeam.aQueuedRowToggledOffGivesUpItsTurn
+    /// @witness ActivationSeam.aStopStandsTheRuleDownBeforeItGoesOut
+    /// @witness ActivationSeam.aRefusedDisarmSurfacesAndTheStopStillGoesOut
+    /// @witness ActivationSeam.aStopReachesARuleTheFlagDenies
     func startDeactivation(of tunnel: TunnelContainer) {
         guard tunnel.status != .inactive && tunnel.status != .deactivating else { return }
 
@@ -311,6 +319,7 @@ class TunnelsManager {
     /// armed on every activation. There is no user-facing switch —
     /// starting a tunnel is the recovery intent, stopping it withdraws
     /// it (`startDeactivation` disarms before it stops).
+    /// @witness ActivationSeam.theArmedRuleIsOneConnectRuleForAnyInterface
     private static func armRecovery(on provider: TunnelProviding) {
         let rule = NEOnDemandRuleConnect()
         rule.interfaceTypeMatch = .any
@@ -331,6 +340,7 @@ class TunnelsManager {
     /// again and disable the tunnel starting now, whichever save lands
     /// last.
     /// @witness ActivationSeam.aListRefreshCannotTakeAQueuedTunnelsTurn
+    /// @witness ActivationSeam.theSweepReachesARuleTheFlagDenies
     private func disarmOtherRecoveryRules(except tunnel: TunnelContainer) {
         tunnels.filter { $0.id != tunnel.id && $0.carriesRecoveryRule }.forEach { other in
             other.tunnelProvider.isOnDemandEnabled = false
@@ -370,6 +380,7 @@ class TunnelsManager {
         }
     }
 
+    /// @witness ActivationSeam.theLadderRunningOutLeavesTheRuleArmed
     private func startActivation(of tunnel: TunnelContainer, at retryIndex: Int) {
         guard retryIndex < maxRetries else {
             tunnel.isAttemptingActivation = false
@@ -424,6 +435,8 @@ class TunnelsManager {
         }
     }
 
+    /// @witness ActivationSeam.aConfigThatWillNotLoadLosesItsRule
+    /// @witness ActivationSeam.aStartTheSystemRefusesLosesItsRule
     private func doStartVPNTunnel(tunnel: TunnelContainer, attemptId: String, retryIndex: Int) async {
         do {
             try await tunnel.tunnelProvider.loadPreferences()
@@ -531,6 +544,8 @@ class TunnelsManager {
     }
 
     /// @witness ActivationSeam.aListRefreshCannotTakeAQueuedTunnelsTurn
+    /// @witness ActivationSeam.aDropMidActivationFilesTheSystemsRecord
+    /// @witness ActivationSeam.aMuteDropFilesAStandInError
     private func handleStatusChange(for tunnel: TunnelContainer) {
         let systemStatus = tunnel.tunnelProvider.connectionStatus
 
