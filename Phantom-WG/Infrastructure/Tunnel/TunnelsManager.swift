@@ -27,6 +27,11 @@ class TunnelsManager {
     @ObservationIgnored private var statusObservationToken: AnyObject?
     @ObservationIgnored private var configObservationToken: AnyObject?
     @ObservationIgnored private var waitingTunnel: TunnelContainer?
+    /// Names an `add` holds from its uniqueness check until the new
+    /// container is listed, keyed by the configuration id. The check
+    /// reads these too, so two adds of one name across the save's
+    /// awaits cannot both pass it.
+    @ObservationIgnored private var namesBeingListed: [UUID: String] = [:]
 
     // Activation pacing
     let retryInterval: TimeInterval = 5.0
@@ -77,9 +82,12 @@ class TunnelsManager {
         guard !name.isEmpty else {
             throw TunnelManagementError.tunnelInvalidName
         }
-        if tunnels.contains(where: { $0.name.caseInsensitiveCompare(name) == .orderedSame }) {
+        if tunnels.contains(where: { $0.name.caseInsensitiveCompare(name) == .orderedSame })
+            || nameIsBeingListed(name, besides: config.id) {
             throw TunnelManagementError.tunnelAlreadyExistsWithThatName
         }
+        namesBeingListed[config.id] = name
+        defer { namesBeingListed[config.id] = nil }
 
         let provider = providerFactory.makeProvider()
         provider.localizedDescription = name
@@ -114,6 +122,12 @@ class TunnelsManager {
         tunnels.append(tunnel)
         tunnels = Self.sortedByCreatedAt(tunnels)
         return tunnel
+    }
+
+    private func nameIsBeingListed(_ name: String, besides id: UUID) -> Bool {
+        namesBeingListed.contains {
+            $0.key != id && $0.value.caseInsensitiveCompare(name) == .orderedSame
+        }
     }
 
     func modify(tunnel: TunnelContainer, with config: TunnelConfig) async throws {
