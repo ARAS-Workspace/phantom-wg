@@ -1,6 +1,8 @@
 import Foundation
 
-/// In-memory ring buffer logger for the tunnel extension.
+/// In-memory paged logger for the tunnel extension. A full buffer is
+/// cleared and the next line starts a new page, so the lines the app
+/// reads never shift under it.
 /// Logs are session-scoped: the buffer is flushed at `startTunnel`
 /// entry so each tunnel session begins clean, even if iOS reuses the
 /// extension process across start/stop cycles. The main app reads
@@ -36,10 +38,10 @@ enum TunnelLogger {
             message: message
         )
         lock.lock()
-        buffer.append(entry)
-        if buffer.count > maxEntries {
-            buffer.removeFirst(buffer.count - maxEntries)
+        if buffer.count >= maxEntries {
+            buffer.removeAll(keepingCapacity: true)
         }
+        buffer.append(entry)
         lock.unlock()
     }
 
@@ -51,9 +53,8 @@ enum TunnelLogger {
         return try? JSONEncoder().encode(snapshot)
     }
 
-    /// Wipes the buffer without tearing down the tunnel. Auto-purge
-    /// at `maxEntries` still applies — this is a manual flush on top
-    /// of the existing ring semantics.
+    /// Wipes the buffer without tearing down the tunnel — a manual
+    /// flush on top of the clear at `maxEntries`.
     static func clear() {
         lock.lock()
         buffer.removeAll(keepingCapacity: true)

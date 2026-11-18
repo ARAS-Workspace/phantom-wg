@@ -35,7 +35,7 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
     override func startTunnel(options: [String: NSObject]? = nil) async throws {
         // Flush any residue from a previous session — iOS may reuse
         // the extension process across start/stop cycles, so static
-        // state like the ring buffer must be reset explicitly.
+        // state like the log buffer must be reset explicitly.
         TunnelLogger.clear()
         TunnelLogger.log(.tunnel, "PacketTunnelProvider starting...")
 
@@ -142,11 +142,11 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
                 completionHandler(TunnelRuntimeStats.read(fromUAPI: config).encoded())
             }
         case 1:
-            // Log entries (in-memory ring buffer snapshot)
+            // Log entries (in-memory log buffer snapshot)
             completionHandler(TunnelLogger.allEntriesAsData())
         case 2:
-            // Flush the in-extension log buffer. Auto-purge at
-            // maxEntries still applies; this is a manual flush.
+            // Flush the in-extension log buffer — a manual flush on
+            // top of the clear at maxEntries.
             TunnelLogger.clear()
             completionHandler(Data([2]))
         case 3:

@@ -63,7 +63,7 @@ final class LogStore: LogEntryProvider {
         pollingTask = nil
     }
 
-    /// Opcode `2` — wipe the extension's ring buffer, then drop local
+    /// Opcode `2` — wipe the extension's log buffer, then drop local
     /// entries. Polling keeps running; fresh emissions reappear as the
     /// tunnel continues to run.
     func clear() async {

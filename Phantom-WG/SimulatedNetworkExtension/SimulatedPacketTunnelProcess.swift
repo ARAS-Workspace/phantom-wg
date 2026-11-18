@@ -5,8 +5,8 @@ import NetworkExtension
 /// Stands in for the PhantomTunnel extension process while a simulated
 /// session is up. It answers the app's provider messages on the same
 /// opcodes and in the same reply shapes as `PacketTunnelProvider`:
-/// `0` runtime stats (`TunnelRuntimeStats`), `1` the log ring as JSON,
-/// `2` clear the ring, `3` rebuild the layer and answer with a
+/// `0` runtime stats (`TunnelRuntimeStats`), `1` the log buffer as JSON,
+/// `2` clear the buffer, `3` rebuild the layer and answer with a
 /// `TunnelResetReply`, a second request joining the one in flight.
 ///
 /// Starting refuses the same saved configurations the extension's
@@ -189,7 +189,7 @@ final class SimulatedPacketTunnelProcess {
         )
     }
 
-    // MARK: - Log Ring
+    // MARK: - Log Buffer
 
     private static let maxEntries = 2000
 
@@ -199,11 +199,13 @@ final class SimulatedPacketTunnelProcess {
         return formatter
     }()
 
+    /// Pages like `TunnelLogger`: a full buffer is cleared and the next
+    /// line starts a new page.
     private func log(_ tag: Tag, _ message: String) {
-        buffer.append(Entry(timestamp: Self.formatter.string(from: Date()), tag: tag.rawValue, message: message))
-        if buffer.count > Self.maxEntries {
-            buffer.removeFirst(buffer.count - Self.maxEntries)
+        if buffer.count >= Self.maxEntries {
+            buffer.removeAll(keepingCapacity: true)
         }
+        buffer.append(Entry(timestamp: Self.formatter.string(from: Date()), tag: tag.rawValue, message: message))
     }
 
     // MARK: - Timing
