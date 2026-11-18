@@ -77,10 +77,14 @@ class TunnelsManager {
 
     // MARK: - CRUD
 
+    /// The configuration is sealed into a new Keychain item before the
+    /// save; a refused save deletes that item, and once the save is
+    /// accepted the item is the stored entry's, whatever the load answers.
     /// @witness TunnelAdd.twoAddsOfOneNameThatCrossLeaveOneRow
     /// @witness TunnelAdd.aRefusedSaveLeavesNoRowAndFreesTheName
     /// @witness TunnelAdd.aBlankNameIsRefusedBeforeAProviderIsMinted
     /// @witness TunnelAdd.aRefusedSaveLeavesNoKeychainItem
+    /// @witness TunnelAdd.aRefusedLoadAfterAnAcceptedSaveKeepsTheItem
     func add(config: TunnelConfig) async throws -> TunnelContainer {
         let name = config.name.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !name.isEmpty else {
@@ -108,6 +112,14 @@ class TunnelsManager {
 
         do {
             try await provider.savePreferences()
+        } catch {
+            if let sealedItem = Self.keychainReference(of: provider) {
+                Keychain.deleteReference(called: sealedItem)
+            }
+            throw TunnelManagementError.vpnSystemErrorOnAddTunnel(systemError: error)
+        }
+
+        do {
             try await provider.loadPreferences()
         } catch {
             throw TunnelManagementError.vpnSystemErrorOnAddTunnel(systemError: error)

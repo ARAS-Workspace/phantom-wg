@@ -38,6 +38,14 @@
 //       referenced the one item the add sealed, and the claim is that
 //       this item opens nothing afterwards. Every Keychain item the step
 //       created is deleted on the way out.
+//
+//   E — A Refused Load After An Accepted Save Keeps The Item
+//       The same `.keychain` minting; the system accepts the save and
+//       refuses the load that follows. The add is refused as a system
+//       error, the system store holds the entry it accepted, and read
+//       back from what the system stored, the tunnel opens the
+//       configuration the add sealed — the item the entry references is
+//       still there.
 
 #if DEBUG
 import Foundation
@@ -50,7 +58,8 @@ final class TunnelAddWorkflow: TestWorkflow {
             WorkflowStep("Two Adds Of One Name That Cross Leave One Row", twoAddsOfOneNameThatCrossLeaveOneRow),
             WorkflowStep("A Refused Save Leaves No Row And Frees The Name", aRefusedSaveLeavesNoRowAndFreesTheName),
             WorkflowStep("A Blank Name Is Refused Before A Provider Is Minted", aBlankNameIsRefusedBeforeAProviderIsMinted),
-            WorkflowStep("A Refused Save Leaves No Keychain Item", aRefusedSaveLeavesNoKeychainItem)
+            WorkflowStep("A Refused Save Leaves No Keychain Item", aRefusedSaveLeavesNoKeychainItem),
+            WorkflowStep("A Refused Load After An Accepted Save Keeps The Item", aRefusedLoadAfterAnAcceptedSaveKeepsTheItem)
         ]
     }
 
@@ -223,6 +232,40 @@ final class TunnelAddWorkflow: TestWorkflow {
         let open = provider.keychainRefs.filter { Keychain.openReference(called: $0) != nil }
         check(open.isEmpty,
               "after the refusal, the item the add sealed opens nothing (open=\(open.count))")
+    }
+
+    func aRefusedLoadAfterAnAcceptedSaveKeepsTheItem() async {
+        guard let config = TestConfigFactory.throwaway(name: "TE-Add-Loaded-\(runTag)") else {
+            fail("the config factory produced no throwaway")
+            return
+        }
+        let factory = FakeSlotFactory(canned: [])
+        factory.minted.storage = .keychain
+        onTeardown("delete the step's Keychain items") {
+            for provider in factory.minted.providers { provider.sweepKeychain() }
+        }
+        let manager = TunnelsManager(tunnelProviders: [], providerFactory: factory)
+
+        factory.minted.loadAnswer = .fails(NSError(domain: "TE.Fake", code: 6,
+                                                   userInfo: [NSLocalizedDescriptionKey: "test rig refused the load"]))
+        let outcome = await attempt("load refused", manager, config)
+        var refusedAsSystem = false
+        if case .refused(let error) = outcome, case TunnelManagementError.vpnSystemErrorOnAddTunnel = error {
+            refusedAsSystem = true
+        }
+        check(refusedAsSystem,
+              "the add whose load the system refused after accepting its save is refused as a system error (\(outcome.label))")
+        guard let provider = factory.minted.last,
+              check(provider.entryExists && provider.keychainRefs.count == 1,
+                    "the system store holds the entry it accepted, and the add sealed one item"
+                    + " (entry=\(provider.entryExists), items=\(provider.keychainRefs.count))") else { return }
+
+        provider.loadAnswer = .succeeds
+        try? await provider.loadPreferences()
+        let stored = provider.tunnelConfig
+        check(stored == config,
+              "read back from what the system stored, the tunnel opens the configuration the add sealed"
+              + " (reads \(stored.map { "\"\($0.name)\"" } ?? "nothing"))")
     }
 }
 #endif
