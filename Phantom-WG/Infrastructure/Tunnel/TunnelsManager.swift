@@ -212,18 +212,21 @@ class TunnelsManager {
         (provider.protocolConfiguration as? NETunnelProviderProtocol)?.keychainReference
     }
 
+    /// The system entry goes first: the Keychain item it references is
+    /// deleted once the removal is accepted, and a refused removal finds
+    /// the entry and its item as they were.
     /// @witness TunnelRemove.aRefusedRemovalLeavesTheSavedTunnelReadable
+    /// @witness TunnelRemove.anAcceptedRemovalLeavesNoKeychainItem
     func remove(tunnel: TunnelContainer) async throws {
-        // Destroy config from Keychain (if underlying provider supports it)
-        if let proto = tunnel.tunnelProvider.protocolConfiguration as? NETunnelProviderProtocol {
-            proto.destroyConfigInKeychain()
-        }
+        let removedProtocol = tunnel.tunnelProvider.protocolConfiguration as? NETunnelProviderProtocol
 
         do {
             try await tunnel.tunnelProvider.removePreferences()
         } catch {
             throw TunnelManagementError.vpnSystemErrorOnRemoveTunnel(systemError: error)
         }
+
+        removedProtocol?.destroyConfigInKeychain()
 
         if let index = tunnels.firstIndex(where: { $0.id == tunnel.id }) {
             tunnels.remove(at: index)

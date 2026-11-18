@@ -19,16 +19,23 @@
 //       stored — what the next reload or the next launch reads — and the
 //       claim is that it still opens the configuration that was saved.
 //       Every Keychain item the step created is deleted on the way out.
+//
+//   B — An Accepted Removal Leaves No Keychain Item
+//       The same planting, and the system accepts the removal. The
+//       removal lands, the row is out of the list and the system store
+//       holds no entry for it, and the item the entry referenced opens
+//       nothing.
 
 #if DEBUG
 import Foundation
 
 final class TunnelRemoveWorkflow: TestWorkflow {
-    override var displayName: String { "Tunnel Remove (What A Refused Removal Leaves)" }
+    override var displayName: String { "Tunnel Remove (What A Removal Leaves)" }
 
     override var steps: [WorkflowStep] {
         [
-            WorkflowStep("A Refused Removal Leaves The Saved Tunnel Readable", aRefusedRemovalLeavesTheSavedTunnelReadable)
+            WorkflowStep("A Refused Removal Leaves The Saved Tunnel Readable", aRefusedRemovalLeavesTheSavedTunnelReadable),
+            WorkflowStep("An Accepted Removal Leaves No Keychain Item", anAcceptedRemovalLeavesNoKeychainItem)
         ]
     }
 
@@ -72,6 +79,36 @@ final class TunnelRemoveWorkflow: TestWorkflow {
         check(stored == original,
               "read back from what the system stored, the tunnel still opens the configuration that was saved"
               + " (reads \(stored.map { "\"\($0.name)\"" } ?? "nothing"))")
+    }
+
+    func anAcceptedRemovalLeavesNoKeychainItem() async {
+        guard let original = TestConfigFactory.throwaway(name: "TE-Remove-Accepted-\(runTag)") else {
+            fail("the config factory produced no throwaway")
+            return
+        }
+        let provider = FakeSlotProvider(storage: .keychain, config: original)
+        onTeardown("delete the step's Keychain items") { provider.sweepKeychain() }
+        guard check(provider.tunnelConfig == original && provider.keychainRefs.count == 1,
+                    "the planted row reads its configuration back from its one app group Keychain item"
+                    + " (items=\(provider.keychainRefs.count))") else { return }
+        let manager = TunnelsManager(tunnelProviders: [provider], providerFactory: FakeSlotFactory(canned: [provider]))
+        guard let row = manager.tunnels.first else {
+            fail("the planted row is not in the step's list")
+            return
+        }
+
+        var outcome: Error?
+        do {
+            try await manager.remove(tunnel: row)
+        } catch {
+            outcome = error
+        }
+        guard check(outcome == nil, "the removal the system accepted lands (\(String(describing: outcome)))") else { return }
+        check(!manager.tunnels.contains { $0.id == original.id } && !provider.entryExists,
+              "the row is out of the list and the system store holds no entry for it"
+              + " (rows=\(manager.tunnels.count), entry=\(provider.entryExists))")
+        let open = provider.keychainRefs.filter { Keychain.openReference(called: $0) != nil }
+        check(open.isEmpty, "the item the entry referenced opens nothing (open=\(open.count))")
     }
 }
 #endif
