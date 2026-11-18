@@ -39,6 +39,10 @@ class TunnelsManager {
 
     // MARK: - Factory
 
+    /// Loads the system's entries, then deletes the app group Keychain
+    /// items none of them references, as WireGuard's iOS app does at
+    /// launch. This runs here only: a reload can cross an add whose item
+    /// is sealed and not yet saved.
     /// @witness TunnelLoad.anItemNoEntryReferencesIsCollectedAtLaunch
     static func create() async throws -> TunnelsManager {
         #if DEBUG && targetEnvironment(simulator)
@@ -47,6 +51,7 @@ class TunnelsManager {
         let factory: TunnelProviderFactory = RealTunnelProviderFactory()
         #endif
         let providers = try await factory.loadAllFromPreferences()
+        Keychain.deleteReferences(except: Set(providers.compactMap { keychainReference(of: $0) }))
         return TunnelsManager(tunnelProviders: providers, providerFactory: factory)
     }
 

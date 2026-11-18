@@ -10,7 +10,8 @@ import Security
 /// starts. The access group is what lets the app write what the
 /// extension later reads. Every write seals a new item; deleting an
 /// item by its reference is the caller's (`TunnelsManager.modify`,
-/// `remove`).
+/// `remove`), and `deleteReferences(except:)` deletes the items the
+/// system's entries do not reference (`TunnelsManager.create`).
 enum Keychain {
 
     private static let accessGroup = "group.com.artek.phantom-wg"
@@ -60,5 +61,38 @@ enum Keychain {
     /// @witness Sanity.keychainRoundTrip
     static func deleteReference(called ref: Data) {
         SecItemDelete([kSecValuePersistentRef: ref] as CFDictionary)
+    }
+
+    /// Deletes every item of this service and access group whose
+    /// persistent reference is not among `kept`. Each kept reference is
+    /// compared as given and in the form the Keychain hands back for its
+    /// item (`canonicalReference`).
+    /// @witness TunnelLoad.anItemNoEntryReferencesIsCollectedAtLaunch
+    static func deleteReferences(except kept: Set<Data>) {
+        let keptForms = kept.union(kept.compactMap(canonicalReference))
+        var result: CFTypeRef?
+        let status = SecItemCopyMatching([
+            kSecClass: kSecClassGenericPassword,
+            kSecAttrService: service,
+            kSecAttrAccessGroup: accessGroup,
+            kSecMatchLimit: kSecMatchLimitAll,
+            kSecReturnPersistentRef: true
+        ] as CFDictionary, &result)
+        guard status == errSecSuccess, let refs = result as? [Data] else { return }
+        for ref in refs where !keptForms.contains(ref) {
+            deleteReference(called: ref)
+        }
+    }
+
+    /// The persistent reference the Keychain hands back for the item
+    /// `ref` opens; `nil` when that item is not found.
+    static func canonicalReference(_ ref: Data) -> Data? {
+        var result: CFTypeRef?
+        let status = SecItemCopyMatching([
+            kSecValuePersistentRef: ref,
+            kSecReturnPersistentRef: true
+        ] as CFDictionary, &result)
+        guard status == errSecSuccess else { return nil }
+        return result as? Data
     }
 }
