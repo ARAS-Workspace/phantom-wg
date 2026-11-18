@@ -69,8 +69,16 @@ struct TunnelConfig: Codable, Identifiable, Equatable {
 
         lines.append("[Interface]")
         lines.append("PrivateKey = \(wireguard.interface.privateKey.textual)")
+        if let listenPort = wireguard.interface.listenPort {
+            lines.append("ListenPort = \(listenPort)")
+        }
         lines.append("Address = \(wireguard.interface.addresses.map(\.textual).joined(separator: ", "))")
-        lines.append("DNS = \(wireguard.interface.dnsServers.map(\.textual).joined(separator: ", "))")
+        // WireGuardKit's DNS line carries the servers and then the
+        // search domains, the way it reads them back.
+        let dns = wireguard.interface.dnsServers.map(\.textual) + wireguard.interface.dnsSearch
+        if !dns.isEmpty {
+            lines.append("DNS = \(dns.joined(separator: ", "))")
+        }
         lines.append("MTU = \(wireguard.interface.mtu)")
         lines.append("")
 
@@ -104,12 +112,30 @@ struct InterfaceConfig: Codable, Equatable {
     var addresses: [AddressWithPrefix]
     var dnsServers: [IPAddressEntry]
     var mtu: Int
+    var dnsSearch: [String] = []
+    var listenPort: UInt16?
 
     enum CodingKeys: String, CodingKey {
         case privateKey = "private_key"
         case addresses
         case dnsServers = "dns_servers"
         case mtu
+        case dnsSearch = "dns_search"
+        case listenPort = "listen_port"
+    }
+}
+
+extension InterfaceConfig {
+    /// A payload written before `dns_search` and `listen_port` existed
+    /// decodes with no search domains and no listen port.
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        privateKey = try container.decode(WireGuardKey.self, forKey: .privateKey)
+        addresses = try container.decode([AddressWithPrefix].self, forKey: .addresses)
+        dnsServers = try container.decode([IPAddressEntry].self, forKey: .dnsServers)
+        mtu = try container.decode(Int.self, forKey: .mtu)
+        dnsSearch = try container.decodeIfPresent([String].self, forKey: .dnsSearch) ?? []
+        listenPort = try container.decodeIfPresent(UInt16.self, forKey: .listenPort)
     }
 }
 

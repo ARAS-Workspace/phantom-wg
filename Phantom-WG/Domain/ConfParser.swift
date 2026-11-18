@@ -28,7 +28,6 @@ enum ConfParser {
         case invalidLine(String)
         case unknownKey(section: String, key: String)
         case duplicateKey(section: String, key: String)
-        case invalidValue(section: String, key: String)
 
         var errorDescription: String? {
             switch self {
@@ -50,8 +49,6 @@ enum ConfParser {
                 return "[\(section)] has an unknown key: \(key)"
             case .duplicateKey(let section, let key):
                 return "[\(section)] lists \(key) more than once"
-            case .invalidValue(let section, let key):
-                return "[\(section)] has an invalid \(key)"
             }
         }
     }
@@ -207,15 +204,13 @@ enum ConfParser {
         guard let address = attrs["address"], !address.isEmpty else {
             throw ParseError.missingKey(section: "Interface", key: "Address")
         }
-        if let listenPort = attrs["listenport"], UInt16(listenPort) == nil {
-            throw ParseError.invalidValue(section: "Interface", key: "ListenPort")
-        }
 
         return InterfaceDraft(
             privateKey: privateKey,
             addresses: address,
             dnsServers: attrs["dns"] ?? "",
-            mtu: attrs["mtu"] ?? ""
+            mtu: attrs["mtu"] ?? "",
+            listenPort: attrs["listenport"] ?? ""
         )
     }
 

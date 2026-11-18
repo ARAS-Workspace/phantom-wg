@@ -10,7 +10,6 @@ enum FieldValidationError: Equatable {
     case empty
     case wireGuardKey(WireGuardKey.ParseError)
     case address(AddressWithPrefix.ParseError, atIndex: Int)
-    case ipAddress(IPAddressEntry.ParseError, atIndex: Int)
     case endpoint(IPEndpoint.ParseError)
     case wstunnelURL(WstunnelURL.ParseError)
     case intNotParsed(raw: String)
@@ -37,6 +36,7 @@ struct TunnelDraft: Equatable {
         case interfaceAddresses
         case interfaceDnsServers
         case interfaceMTU
+        case interfaceListenPort
         case peerPublicKey
         case peerPresharedKey
         case peerAllowedIPs
@@ -169,21 +169,24 @@ struct InterfaceDraft: Equatable {
 
     var privateKey: String
     var addresses: String      // comma-separated
-    var dnsServers: String     // comma-separated
+    var dnsServers: String     // comma-separated servers, then search domains
     var mtu: String            // raw text; range-checked in validate()
+    var listenPort: String     // raw text; empty → no listen port
 
-    init(privateKey: String, addresses: String, dnsServers: String, mtu: String) {
+    init(privateKey: String, addresses: String, dnsServers: String, mtu: String, listenPort: String = "") {
         self.privateKey = privateKey
         self.addresses = addresses
         self.dnsServers = dnsServers
         self.mtu = mtu
+        self.listenPort = listenPort
     }
 
     init(from config: InterfaceConfig) {
         self.privateKey = config.privateKey.textual
         self.addresses = config.addresses.map(\.textual).joined(separator: ", ")
-        self.dnsServers = config.dnsServers.map(\.textual).joined(separator: ", ")
+        self.dnsServers = (config.dnsServers.map(\.textual) + config.dnsSearch).joined(separator: ", ")
         self.mtu = String(config.mtu)
+        self.listenPort = config.listenPort.map(String.init) ?? ""
     }
 
     /// Returns (parsed config or nil) + per-field errors.
@@ -207,14 +210,17 @@ struct InterfaceDraft: Equatable {
         }
 
         let parsedAddresses = parseAddresses(addresses, into: &errors, field: .interfaceAddresses)
-        let parsedDNS = parseIPList(dnsServers, into: &errors, field: .interfaceDnsServers)
+        let dns = splitDNS(dnsServers)
         let parsedMTU = parseInt(
             mtu, range: 0...65535, default: Self.automaticMTU,
             into: &errors, field: .interfaceMTU
         )
+        let trimmedPort = listenPort.trimmingCharacters(in: .whitespaces)
+        let parsedPort = trimmedPort.isEmpty
+            ? nil
+            : parseInt(trimmedPort, range: 0...65535, default: 0, into: &errors, field: .interfaceListenPort)
 
-        guard errors.isEmpty, let privKey, let addrs = parsedAddresses,
-              let dns = parsedDNS, let mtuValue = parsedMTU else {
+        guard errors.isEmpty, let privKey, let addrs = parsedAddresses, let mtuValue = parsedMTU else {
             return (nil, errors)
         }
 
@@ -222,8 +228,10 @@ struct InterfaceDraft: Equatable {
             InterfaceConfig(
                 privateKey: privKey,
                 addresses: addrs,
-                dnsServers: dns,
-                mtu: mtuValue
+                dnsServers: dns.servers,
+                mtu: mtuValue,
+                dnsSearch: dns.search,
+                listenPort: parsedPort.map { UInt16($0) }
             ),
             [:]
         )
@@ -484,25 +492,19 @@ private func parseAddresses(
     return result
 }
 
-private func parseIPList(
-    _ input: String,
-    into errors: inout [TunnelDraft.Field: FieldValidationError],
-    field: TunnelDraft.Field
-) -> [IPAddressEntry]? {
-    let entries = splitList(input.trimmingCharacters(in: .whitespacesAndNewlines))
-    var result: [IPAddressEntry] = []
-    for (index, entry) in entries.enumerated() {
-        do {
-            let addr = try IPAddressEntry(parsing: entry)
-            result.append(addr)
-        } catch {
-            if let err = error as? IPAddressEntry.ParseError {
-                errors[field] = .ipAddress(err, atIndex: index)
-            }
-            return nil
+/// WireGuardKit's DNS rule: an entry that parses as an IP is a server,
+/// any other entry is a search domain.
+private func splitDNS(_ input: String) -> (servers: [IPAddressEntry], search: [String]) {
+    var servers: [IPAddressEntry] = []
+    var search: [String] = []
+    for entry in splitList(input.trimmingCharacters(in: .whitespacesAndNewlines)) {
+        if let server = try? IPAddressEntry(parsing: entry) {
+            servers.append(server)
+        } else {
+            search.append(entry)
         }
     }
-    return result
+    return (servers, search)
 }
 
 private func parseInt(
