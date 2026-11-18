@@ -57,7 +57,21 @@ class TunnelContainer: Identifiable {
         status = TunnelStatus(from: tunnel.connectionStatus)
     }
 
+    /// States the manager holds on its own: a queued tunnel, and an
+    /// activation attempt still on its retry ladder. The system reads
+    /// both as "no session", so a refresh does not write that reading
+    /// over them; a reading that says a session exists still lands.
+    var isManagerDriven: Bool {
+        switch status {
+        case .waiting: return true
+        case .activating, .reasserting: return isAttemptingActivation
+        case .inactive, .active, .deactivating: return false
+        }
+    }
+
     func refreshStatus() {
-        status = TunnelStatus(from: tunnelProvider.connectionStatus)
+        let derived = TunnelStatus(from: tunnelProvider.connectionStatus)
+        if isManagerDriven, derived == .inactive || derived == .deactivating { return }
+        status = derived
     }
 }

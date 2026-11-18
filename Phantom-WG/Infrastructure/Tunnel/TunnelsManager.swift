@@ -169,6 +169,10 @@ class TunnelsManager {
         if waitingTunnel?.id == tunnel.id {
             waitingTunnel = nil
         }
+
+        // The removed tunnel may be the one a queued tunnel was waiting
+        // behind.
+        activateWaitingTunnelIfNeeded()
     }
 
     // MARK: - Activation
@@ -187,8 +191,6 @@ class TunnelsManager {
             startDeactivation(of: activeTunnel)
             return
         }
-
-        disarmOtherRecoveryRules(except: tunnel)
 
         startActivation(of: tunnel, at: 0)
     }
@@ -307,6 +309,10 @@ class TunnelsManager {
         }
 
         if retryIndex == 0 {
+            // Every entrance reaches rung 0, the queue hand-off included,
+            // so the sweep lives here: recovery belongs to the tunnel
+            // starting now.
+            disarmOtherRecoveryRules(except: tunnel)
             tunnel.status = .activating
             tunnel.lastActivationError = nil
         }
@@ -402,18 +408,22 @@ class TunnelsManager {
         )
     }
 
+    /// Hands the slot to the queued tunnel once it is free. The slot is
+    /// dropped when the queued row is no longer listed; it is kept while
+    /// another tunnel still holds a session.
     private func activateWaitingTunnelIfNeeded() {
         guard let waitingTunnel else { return }
+        guard tunnels.contains(where: { $0 === waitingTunnel }) else {
+            self.waitingTunnel = nil
+            return
+        }
+        guard !tunnels.contains(where: {
+            $0.id != waitingTunnel.id && $0.status != .inactive && $0.status != .waiting
+        }) else { return }
         self.waitingTunnel = nil
 
         // Verify the waiting tunnel is still in waiting state
         guard waitingTunnel.status == .waiting else { return }
-
-        // The queue reaches the retry ladder directly, so the sweep that
-        // lives in the public entry point has to run here as well: the
-        // tunnel that just stopped may still carry its rule, and the one
-        // taking its turn is the one recovery now belongs to.
-        disarmOtherRecoveryRules(except: waitingTunnel)
 
         startActivation(of: waitingTunnel, at: 0)
     }
@@ -488,11 +498,11 @@ class TunnelsManager {
                 break
             }
         } else {
-            // Normal status tracking
-            let newStatus = TunnelStatus(from: systemStatus)
-            tunnel.status = newStatus
+            // Normal status tracking, through the gate that keeps a
+            // queued row's turn.
+            tunnel.refreshStatus()
 
-            if newStatus == .inactive {
+            if tunnel.status == .inactive {
                 activateWaitingTunnelIfNeeded()
             }
         }
@@ -534,5 +544,9 @@ class TunnelsManager {
         }
 
         tunnels = Self.sortedByCreatedAt(newTunnels)
+        // A session that ended without a status notification is grounded
+        // here; the queued row keeps its turn through the gate, and the
+        // hand-off starts it once the slot is free.
+        activateWaitingTunnelIfNeeded()
     }
 }
