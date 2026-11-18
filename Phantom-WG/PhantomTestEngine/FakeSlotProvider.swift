@@ -30,8 +30,9 @@
 //   .keychain   a real `NETunnelProviderProtocol` from the production
 //               `configure(with:)` path, sealed into the app group
 //               Keychain — for a step that measures what that path does
-//               to the stored copy. `sweepKeychain()` deletes every item
-//               this provider ever referenced.
+//               to the stored copy. `keychainRefs` lists every item this
+//               provider ever referenced, `keychainRef` the one its
+//               edited copy opens, and `sweepKeychain()` deletes them all.
 //
 // `drive(_:)` sets the status and posts `.NEVPNStatusDidChange` with
 // itself as the object — this fake stands in for both the manager and its
@@ -128,6 +129,10 @@ final class FakeSlotProvider: TunnelProviding {
         }
     }
 
+    var keychainRef: Data? {
+        (protocolConfiguration as? NETunnelProviderProtocol)?.providerConfiguration?["keychainRef"] as? Data
+    }
+
     // MARK: - The copy the system stored
 
     private(set) var entryExists: Bool
@@ -147,7 +152,7 @@ final class FakeSlotProvider: TunnelProviding {
     private(set) var stopCount = 0
     private(set) var removeCount = 0
     private(set) var providerMessageCount = 0
-    private var keychainRefs: [Data] = []
+    private(set) var keychainRefs: [Data] = []
 
     init(storage: Storage = .memory, config: TunnelConfig? = nil,
          status: NEVPNStatus = .disconnected, entryExists: Bool = true) {

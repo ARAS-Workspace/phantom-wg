@@ -8,8 +8,9 @@ import Security
 /// preferences. Items are written `kSecAttrAccessibleAfterFirstUnlock`
 /// so the extension can read them for on-demand and post-reboot
 /// starts. The access group is what lets the app write what the
-/// extension later reads. Note: updates rewrite only the value, so an
-/// item keeps the accessibility class it was created under.
+/// extension later reads. Every write seals a new item; deleting an
+/// item by its reference is the caller's (`TunnelsManager.modify`,
+/// `remove`).
 enum Keychain {
 
     private static let accessGroup = "group.com.artek.phantom-wg"
@@ -28,21 +29,21 @@ enum Keychain {
         return String(data: data, encoding: .utf8)
     }
 
+    /// Seals `value` into a new item and returns its persistent reference.
+    /// The account is `name` plus a fresh UUID, as WireGuard's iOS app
+    /// writes it, so a replacement sits beside the item it replaces until
+    /// the caller deletes one of the two.
     /// @witness Sanity.keychainRoundTrip
+    /// @witness TunnelEdit.anAcceptedSaveLeavesOnlyTheItemItSealed
     @discardableResult
-    static func makeReference(containing value: String, called name: String,
-                              previouslyReferencedBy oldRef: Data? = nil) -> Data? {
-        if let oldRef = oldRef {
-            deleteReference(called: oldRef)
-        }
-
+    static func makeReference(containing value: String, called name: String) -> Data? {
         guard let valueData = value.data(using: .utf8) else { return nil }
 
         var ref: CFTypeRef?
         let query: [CFString: Any] = [
             kSecClass: kSecClassGenericPassword,
             kSecAttrLabel: name,
-            kSecAttrAccount: name,
+            kSecAttrAccount: name + ": " + UUID().uuidString,
             kSecAttrDescription: "Phantom-WG Tunnel Configuration",
             kSecAttrService: service,
             kSecAttrAccessGroup: accessGroup,
@@ -51,32 +52,7 @@ enum Keychain {
             kSecAttrAccessible: kSecAttrAccessibleAfterFirstUnlock
         ]
 
-        var status = SecItemAdd(query as CFDictionary, &ref)
-
-        if status == errSecDuplicateItem {
-            // Update existing item
-            let searchQuery: [CFString: Any] = [
-                kSecClass: kSecClassGenericPassword,
-                kSecAttrService: service,
-                kSecAttrAccount: name,
-                kSecAttrAccessGroup: accessGroup
-            ]
-            let updateAttrs: [CFString: Any] = [
-                kSecValueData: valueData
-            ]
-            SecItemUpdate(searchQuery as CFDictionary, updateAttrs as CFDictionary)
-
-            // Re-fetch persistent reference
-            let fetchQuery: [CFString: Any] = [
-                kSecClass: kSecClassGenericPassword,
-                kSecAttrService: service,
-                kSecAttrAccount: name,
-                kSecAttrAccessGroup: accessGroup,
-                kSecReturnPersistentRef: true
-            ]
-            status = SecItemCopyMatching(fetchQuery as CFDictionary, &ref)
-        }
-
+        let status = SecItemAdd(query as CFDictionary, &ref)
         guard status == errSecSuccess, let persistentRef = ref as? Data else { return nil }
         return persistentRef
     }

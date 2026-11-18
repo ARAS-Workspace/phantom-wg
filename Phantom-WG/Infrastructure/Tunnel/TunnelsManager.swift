@@ -133,9 +133,15 @@ class TunnelsManager {
         }
     }
 
+    /// The edit is sealed into a new Keychain item beside the one the
+    /// stored copy references, and the system's answer to the save picks
+    /// which of the two is deleted: on acceptance the replaced item, on a
+    /// refusal the new one, with the provider set back to the protocol
+    /// and name it held.
     /// @witness TunnelEdit.aTakenNameIsRefusedAndItsOwnIsNot
     /// @witness TunnelEdit.aBlankNameIsRefusedBeforeTheSystemIsTouched
     /// @witness TunnelEdit.aRefusedSaveLeavesTheSavedTunnelReadable
+    /// @witness TunnelEdit.anAcceptedSaveLeavesOnlyTheItemItSealed
     func modify(tunnel: TunnelContainer, with config: TunnelConfig) async throws {
         let name = config.name.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !name.isEmpty else {
@@ -148,26 +154,49 @@ class TunnelsManager {
             throw TunnelManagementError.tunnelAlreadyExistsWithThatName
         }
 
-        tunnel.tunnelProvider.localizedDescription = name
+        let provider = tunnel.tunnelProvider
+        let savedProtocol = provider.protocolConfiguration
+        let savedName = provider.localizedDescription
+        let savedItem = Self.keychainReference(of: provider)
+
+        do {
+            try provider.configure(with: config)
+        } catch {
+            throw TunnelManagementError.vpnSystemErrorOnModifyTunnel(systemError: error)
+        }
+        let sealedItem = Self.keychainReference(of: provider)
+
+        provider.localizedDescription = name
         // `isEnabled` is left untouched for the same reason as in
         // `add`: flipping it on while another tunnel runs would tear
         // that session down. Edits require an inactive tunnel, and
         // activation enables the manager itself.
 
         do {
-            try tunnel.tunnelProvider.configure(with: config)
+            try await provider.savePreferences()
         } catch {
+            if let sealedItem, sealedItem != savedItem {
+                Keychain.deleteReference(called: sealedItem)
+            }
+            provider.protocolConfiguration = savedProtocol
+            provider.localizedDescription = savedName
             throw TunnelManagementError.vpnSystemErrorOnModifyTunnel(systemError: error)
+        }
+        if let savedItem, savedItem != sealedItem {
+            Keychain.deleteReference(called: savedItem)
         }
 
         do {
-            try await tunnel.tunnelProvider.savePreferences()
-            try await tunnel.tunnelProvider.loadPreferences()
+            try await provider.loadPreferences()
         } catch {
             throw TunnelManagementError.vpnSystemErrorOnModifyTunnel(systemError: error)
         }
 
         tunnel.name = name
+    }
+
+    private static func keychainReference(of provider: TunnelProviding) -> Data? {
+        (provider.protocolConfiguration as? NETunnelProviderProtocol)?.keychainReference
     }
 
     func remove(tunnel: TunnelContainer) async throws {
