@@ -280,6 +280,7 @@ class TunnelsManager {
     /// @witness ActivationSeam.aStopStandsTheRuleDownBeforeItGoesOut
     /// @witness ActivationSeam.aRefusedDisarmSurfacesAndTheStopStillGoesOut
     /// @witness ActivationSeam.aStopReachesARuleTheFlagDenies
+    /// @witness ActivationSeam.aStopTheRuleSaveCannotAnswerStillGoesOut
     /// @witness RecoverySwitch.groundBothTunnels
     /// @witness RecoverySwitch.groundAndFinalSweep
     func startDeactivation(of tunnel: TunnelContainer) {

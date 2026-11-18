@@ -53,6 +53,12 @@
 //   Q — A Mute Drop Files A Stand-In Error
 //       The same drop with no record: `failedWhileActivating` carries the
 //       app's stand-in (PhantomWG, code -1).
+//
+//   R — A Stop The Rule Save Cannot Answer Still Goes Out
+//       A stop on an armed row whose stand-down save the system holds and
+//       does not answer: the save goes out first and the stop waits on it,
+//       and the stop still goes out within a few seconds (Mac 2.2.1 waits
+//       three). The held save is released on the way out.
 
 #if DEBUG
 import Foundation
@@ -284,6 +290,29 @@ extension ActivationSeamWorkflow {
         }
         check(filed && standIn,
               "with no record, failedWhileActivating carries the app's stand-in (error=\(describe(row.lastActivationError)))")
+    }
+
+    func aStopTheRuleSaveCannotAnswerStillGoesOut() async {
+        guard let rig = rig("Patience", [.connected]) else {
+            fail("the rig did not materialize its row")
+            return
+        }
+        let (manager, fake, row) = (rig.manager, rig.fakes[0], rig.rows[0])
+        fake.arrangeArmed()
+        fake.saveAnswer = .hangs
+        onTeardown("release the held stand-down save") { [weak self] in
+            let released = fake.releaseHeldCompletions()
+            self?.log("teardown: released \(released) held save(s) of the patience rig")
+        }
+
+        manager.startDeactivation(of: row)
+        let saveIssued = await settle(within: 1) { fake.saveCount >= 1 }
+        guard check(saveIssued && fake.stopCount == 0,
+                    "the stand-down save goes out first and the stop waits on it (saves=\(fake.saveCount), stops=\(fake.stopCount))")
+        else { return }
+        let stopped = await settle(within: 5) { fake.stopCount >= 1 }
+        check(stopped,
+              "a stand-down save the system does not answer holds the stop no longer than a few seconds (stops=\(fake.stopCount))")
     }
 }
 #endif
