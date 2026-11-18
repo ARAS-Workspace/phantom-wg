@@ -1,5 +1,18 @@
 import SwiftUI
 
+// ─── TEST MARKERS ────────────────────────────────────────────────────
+//
+//   /// @witness <Workflow>.<step>
+//       The PhantomTestEngine harness (Debug builds only, behind the
+//       ladybug button next to the language flag) drives this symbol and
+//       asserts on it. `<Workflow>` names a workflow family under
+//       `Phantom-WG/PhantomTestEngine/workflows/`; `<step>` names one
+//       method in that family. Grep the name to read the assertions. A
+//       symbol carrying several markers is exercised from several angles.
+//
+// The markers are not exhaustive: an unmarked symbol usually has no
+// harness witness, but not always.
+
 @main
 struct PhantomApp: App {
     @State private var tunnelsManager = TunnelsManagerLoader()

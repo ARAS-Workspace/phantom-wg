@@ -5,6 +5,9 @@ struct TunnelListView: View {
     @Environment(LocalizationManager.self) private var loc
 
     @State private var showingImport = false
+    #if DEBUG
+    @State private var showingTestEngine = false
+    #endif
 
     /// The tunnel the top section mirrors. One non-inactive tunnel at
     /// a time: `TunnelsManager` queues activation behind deactivation,
@@ -25,6 +28,14 @@ struct TunnelListView: View {
                 .navigationDestination(isPresented: $showingImport) {
                     TunnelImportView()
                 }
+                #if DEBUG
+                .sheet(isPresented: $showingTestEngine) {
+                    TestEngineView()
+                }
+                .task {
+                    PhantomTestEngine.shared.autorunIfRequested(TestContext(tunnels: tunnelsManager))
+                }
+                #endif
         }
     }
 
@@ -79,6 +90,16 @@ struct TunnelListView: View {
         ToolbarItem(placement: .topBarLeading) {
             LanguageToggleButton()
         }
+        #if DEBUG
+        ToolbarItem(placement: .topBarLeading) {
+            Button {
+                showingTestEngine = true
+            } label: {
+                Image(systemName: "ladybug")
+            }
+            .accessibilityLabel(TestEngineStrings.of(loc.current).menuEntry)
+        }
+        #endif
         ToolbarItem(placement: .topBarTrailing) {
             Button {
                 showingImport = true

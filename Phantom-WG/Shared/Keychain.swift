@@ -15,6 +15,7 @@ enum Keychain {
     private static let accessGroup = "group.com.artek.phantom-wg"
     private static let service = "com.artek.Phantom-WG"
 
+    /// @witness Sanity.keychainRoundTrip
     static func openReference(called ref: Data) -> String? {
         var result: CFTypeRef?
         // Persistent reference already encodes the item identity —
@@ -27,6 +28,7 @@ enum Keychain {
         return String(data: data, encoding: .utf8)
     }
 
+    /// @witness Sanity.keychainRoundTrip
     @discardableResult
     static func makeReference(containing value: String, called name: String,
                               previouslyReferencedBy oldRef: Data? = nil) -> Data? {
@@ -79,6 +81,7 @@ enum Keychain {
         return persistentRef
     }
 
+    /// @witness Sanity.keychainRoundTrip
     static func deleteReference(called ref: Data) {
         SecItemDelete([kSecValuePersistentRef: ref] as CFDictionary)
     }

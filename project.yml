@@ -104,9 +104,14 @@ targets:
           # The simulated Network Extension is a Debug-on-simulator
           # stand-in, chosen in TunnelsManager.create(). Its files also
           # carry `#if DEBUG && targetEnvironment(simulator)`; Release
-          # never compiles them.
+          # never compiles them. The PhantomTestEngine harness is Debug
+          # only in the same way (`#if DEBUG` in every file). Globs match
+          # per path component, so every directory depth needs its own
+          # pattern.
           EXCLUDED_SOURCE_FILE_NAMES:
             - "*/SimulatedNetworkExtension/*"
+            - "*/PhantomTestEngine/*"
+            - "*/PhantomTestEngine/*/*"
     info:
       path: Phantom-WG/Info.plist
       properties:
