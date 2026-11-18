@@ -75,6 +75,11 @@ targets:
           copyFiles:
             destination: resources
             subpath: Licenses/WireGuardKit
+      # MiniZip from the WireGuardKit submodule, compiled into the app
+      # alone; the tunnel extension does not link it.
+      - path: Libraries/WireGuardKit/Sources/WireGuardApp/ZipArchive/3rdparty/minizip/ioapi.c
+      - path: Libraries/WireGuardKit/Sources/WireGuardApp/ZipArchive/3rdparty/minizip/unzip.c
+      - path: Libraries/WireGuardKit/Sources/WireGuardApp/ZipArchive/3rdparty/minizip/zip.c
     dependencies:
       - target: PhantomTunnel
         embed: true
@@ -92,8 +97,11 @@ targets:
         CODE_SIGN_STYLE: Automatic
         DEVELOPMENT_TEAM: GZUHTM7439
         SWIFT_OBJC_BRIDGING_HEADER: Phantom-WG/BridgingHeader.h
+        HEADER_SEARCH_PATHS:
+          - "$(PROJECT_DIR)/Libraries/WireGuardKit/Sources/WireGuardApp/ZipArchive/3rdparty/minizip"
         OTHER_LDFLAGS:
           - "-lresolv"
+          - "-lz"
           - "-Wl,-w"
         SWIFT_VERSION: "5.0"
         MARKETING_VERSION: "1.2.5"
