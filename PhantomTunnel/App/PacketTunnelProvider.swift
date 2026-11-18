@@ -118,6 +118,9 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
 
     // MARK: - App Message
 
+    /// @witness PhantomTunnel.logBufferStreams
+    /// @witness PhantomTunnel.flushRoundTrip
+    /// @witness PhantomTunnel.emptyAndUnknownOpcodeRejected
     override func handleAppMessage(_ messageData: Data, completionHandler: ((Data?) -> Void)? = nil) {
         guard let completionHandler else { return }
 

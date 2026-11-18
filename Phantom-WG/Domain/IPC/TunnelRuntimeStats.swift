@@ -23,6 +23,9 @@ struct TunnelRuntimeStats: Codable, Sendable, Equatable {
     /// Transfer counters are summed across peers; the handshake is the
     /// last one reported. Every other key in that output is stepped
     /// over without being copied anywhere.
+    /// @witness PhantomTunnel.handshakeProven
+    /// @witness PhantomTunnel.statsCarryThreeNumbersAndNoKey
+    /// @witness Unreachable.greenButDead
     static func read(fromUAPI config: String) -> TunnelRuntimeStats {
         var stats = TunnelRuntimeStats()
 

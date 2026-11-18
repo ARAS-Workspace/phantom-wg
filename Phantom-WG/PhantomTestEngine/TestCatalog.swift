@@ -22,6 +22,9 @@ enum TestCatalog {
             PrivateDataWorkflow(),
             LogsWorkflow(),
             TunnelLoadWorkflow(),
+            PhantomTunnelWorkflow(.standalone),
+            PhantomTunnelWorkflow(.ghost),
+            UnreachableWorkflow(),
             RecoverySwitchWorkflow()
         ]
     }

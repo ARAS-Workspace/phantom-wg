@@ -9,6 +9,7 @@ enum TunnelLogCountReply {
 
     static let opcode: UInt8 = 4
 
+    /// @witness PhantomTunnel.logCountMatchesTheBuffer
     static func encode(_ count: Int) -> Data {
         let value = UInt32(clamping: count)
         return Data([

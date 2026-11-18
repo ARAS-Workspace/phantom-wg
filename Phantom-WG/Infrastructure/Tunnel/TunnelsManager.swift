@@ -96,6 +96,7 @@ class TunnelsManager {
     /// @witness TunnelAdd.aBlankNameIsRefusedBeforeAProviderIsMinted
     /// @witness TunnelAdd.aRefusedSaveLeavesNoKeychainItem
     /// @witness TunnelAdd.aRefusedLoadAfterAnAcceptedSaveKeepsTheItem
+    /// @witness Unreachable.addThroughTheProductionPath
     func add(config: TunnelConfig) async throws -> TunnelContainer {
         let name = config.name.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !name.isEmpty else {
@@ -228,6 +229,7 @@ class TunnelsManager {
     /// the entry and its item as they were.
     /// @witness TunnelRemove.aRefusedRemovalLeavesTheSavedTunnelReadable
     /// @witness TunnelRemove.anAcceptedRemovalLeavesNoKeychainItem
+    /// @witness Unreachable.cleanupProof
     func remove(tunnel: TunnelContainer) async throws {
         let removedProtocol = tunnel.tunnelProvider.protocolConfiguration as? NETunnelProviderProtocol
 
@@ -258,6 +260,8 @@ class TunnelsManager {
     /// @witness ActivationSeam.aSecondQueuedPressTakesTheSlot
     /// @witness RecoverySwitch.armFirst
     /// @witness RecoverySwitch.switchToSecond
+    /// @witness PhantomTunnel.activate
+    /// @witness Unreachable.activationAttemptObserved
     func startActivation(of tunnel: TunnelContainer) {
         guard tunnel.status == .inactive else { return }
 
@@ -283,6 +287,9 @@ class TunnelsManager {
     /// @witness ActivationSeam.aStopTheRuleSaveCannotAnswerStillGoesOut
     /// @witness RecoverySwitch.groundBothTunnels
     /// @witness RecoverySwitch.groundAndFinalSweep
+    /// @witness PhantomTunnel.deactivateAndDisarmSweep
+    /// @witness Unreachable.userAbortContract
+    /// @witness Unreachable.truthAfterAbort
     func startDeactivation(of tunnel: TunnelContainer) {
         guard tunnel.status != .inactive && tunnel.status != .deactivating else { return }
 

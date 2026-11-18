@@ -28,6 +28,8 @@ extension TunnelsManager {
     /// @witness ActivationSeam.aResetNobodyAnswersEndsItsOwnWait
     /// @witness ActivationSeam.aResetTheSessionRefusesToSendIsNamed
     /// @witness ActivationSeam.aResetOnARestingRowSendsNothing
+    /// @witness PhantomTunnel.layerResetInPlace
+    /// @witness PhantomTunnel.concurrentResetConverges
     func resetConnection(of tunnel: TunnelContainer) async throws {
         guard tunnel.status == .active || tunnel.status == .reasserting else { return }
 
