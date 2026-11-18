@@ -107,6 +107,24 @@ struct TunnelDraft: Equatable {
             wstunnelConfig = nil
         }
 
+        // Every arm that builds nothing records an error today. These
+        // belts put a slip that forgets one onto the arm's defining
+        // field, so the editor names it: a nil half with an empty error
+        // map would otherwise end as a Save that does nothing, and a
+        // standalone peer with no endpoint would save and fail only at
+        // activation.
+        if wstunnel != nil, wstunnelConfig == nil, errors.isEmpty {
+            errors[.wstunnelUrl] = .empty
+        }
+        if interfaceConfig == nil, errors.isEmpty {
+            errors[.interfacePrivateKey] = .empty
+        }
+        if peerConfig == nil, errors.isEmpty {
+            errors[.peerPublicKey] = .empty
+        }
+        if wstunnel == nil, let peer = peerConfig, peer.endpoint == nil, errors.isEmpty {
+            errors[.peerEndpoint] = .empty
+        }
         guard
             errors.isEmpty,
             let interfaceConfig,
@@ -439,8 +457,14 @@ private func parseAddresses(
         errors[field] = .empty
         return nil
     }
+    // A comma-only list splits to nothing; it is as empty as a blank one.
+    let entries = splitList(trimmed)
+    if entries.isEmpty {
+        errors[field] = .empty
+        return nil
+    }
     var result: [AddressWithPrefix] = []
-    for (index, entry) in splitList(trimmed).enumerated() {
+    for (index, entry) in entries.enumerated() {
         do {
             let addr = try AddressWithPrefix(parsing: entry)
             result.append(addr)
@@ -464,8 +488,13 @@ private func parseIPList(
         errors[field] = .empty
         return nil
     }
+    let entries = splitList(trimmed)
+    if entries.isEmpty {
+        errors[field] = .empty
+        return nil
+    }
     var result: [IPAddressEntry] = []
-    for (index, entry) in splitList(trimmed).enumerated() {
+    for (index, entry) in entries.enumerated() {
         do {
             let addr = try IPAddressEntry(parsing: entry)
             result.append(addr)
