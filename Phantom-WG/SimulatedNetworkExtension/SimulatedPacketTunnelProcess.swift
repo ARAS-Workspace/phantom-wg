@@ -96,6 +96,7 @@ final class SimulatedPacketTunnelProcess {
             reply(nil, to: completion)
             return
         }
+        SimulatedNetworkExtension.log.debug("message opcode=\(opcode)")
         switch opcode {
         case 0:
             reply(session?.status == .connected ? runtimeStats().encoded() : nil, to: completion)
