@@ -2,9 +2,11 @@ import SwiftUI
 
 /// Entry point into the full-screen log view. Shows a live entry count
 /// badge so the operator knows the extension is emitting telemetry
-/// without having to open the detail pane.
+/// without having to open the detail pane. The badge reads
+/// `LogStore.count`, which the detail screen keeps current through
+/// opcode 4 alone.
 struct LogNavigationSection: View {
-    var logStore: any LogEntryProvider
+    var logStore: LogStore
     @Environment(LocalizationManager.self) private var loc
 
     var body: some View {
@@ -15,7 +17,7 @@ struct LogNavigationSection: View {
                 HStack {
                     Label(loc.t("detail_logs"), systemImage: "text.justify.left")
                     Spacer()
-                    Text("\(logStore.entries.count)")
+                    Text("\(logStore.count)")
                         .font(.footnote)
                         .foregroundStyle(.secondary)
                         .padding(.horizontal, 8)
@@ -36,6 +38,7 @@ struct LogNavigationSection: View {
 #Preview("Light") {
     let store = LogStore(tunnel: nil)
     store.entries = PreviewFixtures.logEntries
+    store.count = store.entries.count
     return NavigationStack {
         Form {
             LogNavigationSection(logStore: store)
@@ -48,6 +51,7 @@ struct LogNavigationSection: View {
 #Preview("Dark") {
     let store = LogStore(tunnel: nil)
     store.entries = PreviewFixtures.logEntries
+    store.count = store.entries.count
     return NavigationStack {
         Form {
             LogNavigationSection(logStore: store)

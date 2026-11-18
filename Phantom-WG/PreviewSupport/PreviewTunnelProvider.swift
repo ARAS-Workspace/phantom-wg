@@ -93,6 +93,8 @@ final class PreviewTunnelProvider: TunnelProviding {
             responseHandler(Data([2]))
         case 3:
             responseHandler(Data([3, TunnelResetReply.rebuilt.rawValue]))
+        case TunnelLogCountReply.opcode?:
+            responseHandler(TunnelLogCountReply.encode(logLines.count))
         default:
             responseHandler(nil)
         }

@@ -29,38 +29,47 @@ protocol LogEntryProvider: AnyObject, Observable {
 @MainActor
 final class LogStore: LogEntryProvider {
     var entries: [LogEntry] = []
+    /// What the detail badge shows: opcode 4's answer while only the
+    /// badge is on screen, the row count while the log screen is.
+    var count = 0
 
     @ObservationIgnored private weak var tunnel: TunnelContainer?
     @ObservationIgnored private var pollingTask: Task<Void, Never>?
     @ObservationIgnored private var pollingHolds = 0
+    @ObservationIgnored private var countingHolds = 0
+    @ObservationIgnored private var countUnanswered = false
     @ObservationIgnored private var idCounter = 0
 
     init(tunnel: TunnelContainer?) {
         self.tunnel = tunnel
     }
 
-    /// Each screen that shows the entries holds the poller while it is
-    /// on screen; the poller runs while any hold is left.
+    /// Every screen that shows log rows (the log screen) or their count
+    /// (the detail badge) holds the poller while it is on screen. Holds
+    /// are plain counts, because on push/pop the incoming screen's start
+    /// can land before the outgoing screen's stop, in either order. The
+    /// first rows hold fetches at once rather than after the first tick.
     func startPolling() {
         pollingHolds += 1
-        guard pollingTask == nil else { return }
-        pollingTask = Task { [weak self] in
-            while !Task.isCancelled {
-                do {
-                    try await Task.sleep(for: .seconds(0.5))
-                } catch {
-                    break
-                }
-                await self?.fetchLogs()
-            }
+        if pollingHolds == 1 {
+            Task { await fetchLogs() }
         }
+        runPoller()
     }
 
     func stopPolling() {
         pollingHolds = max(0, pollingHolds - 1)
-        guard pollingHolds == 0 else { return }
-        pollingTask?.cancel()
-        pollingTask = nil
+        stopPollerWhenIdle()
+    }
+
+    func startCounting() {
+        countingHolds += 1
+        runPoller()
+    }
+
+    func stopCounting() {
+        countingHolds = max(0, countingHolds - 1)
+        stopPollerWhenIdle()
     }
 
     /// Opcode `2` — wipe the extension's log buffer, then drop local
@@ -71,6 +80,7 @@ final class LogStore: LogEntryProvider {
             _ = await sendMessage(Data([2]))
         }
         entries.removeAll()
+        count = 0
     }
 
     // MARK: - Private
@@ -81,11 +91,69 @@ final class LogStore: LogEntryProvider {
         status == .active || status == .activating || status == .reasserting
     }
 
+    private func runPoller() {
+        guard pollingTask == nil else { return }
+        pollingTask = Task { [weak self] in
+            while !Task.isCancelled {
+                do {
+                    try await Task.sleep(for: .seconds(0.5))
+                } catch {
+                    break
+                }
+                guard let self else { break }
+                await self.poll()
+            }
+        }
+    }
+
+    private func stopPollerWhenIdle() {
+        guard pollingHolds == 0, countingHolds == 0 else { return }
+        pollingTask?.cancel()
+        pollingTask = nil
+    }
+
+    /// The rows while the log screen holds the poller, the count alone
+    /// while only the badge does — and the rows again once the extension
+    /// has left opcode 4 unanswered (an extension process from before
+    /// the count existed, still running after an update).
+    private func poll() async {
+        if pollingHolds > 0 || countUnanswered {
+            await fetchLogs()
+        } else {
+            await fetchCount()
+        }
+    }
+
+    private func endSession() {
+        if !entries.isEmpty { entries.removeAll() }
+        count = 0
+        countUnanswered = false
+    }
+
+    private func fetchCount() async {
+        guard let tunnel else { return }
+
+        guard Self.sessionImplied(tunnel.status) else {
+            endSession()
+            return
+        }
+
+        let reply = await sendMessage(Data([TunnelLogCountReply.opcode]))
+        guard Self.sessionImplied(tunnel.status) else { return }
+
+        if let value = TunnelLogCountReply.read(reply) {
+            count = value
+        } else {
+            countUnanswered = true
+            await fetchLogs()
+        }
+    }
+
     private func fetchLogs() async {
         guard let tunnel else { return }
 
         guard Self.sessionImplied(tunnel.status) else {
-            if !entries.isEmpty { entries.removeAll() }
+            endSession()
             return
         }
 
@@ -96,6 +164,7 @@ final class LogStore: LogEntryProvider {
         do {
             let decoded = try JSONDecoder().decode([RemoteEntry].self, from: data)
             entries = identify(decoded)
+            count = entries.count
         } catch {
             // Decode failed — ignore silently; the next poll brings a
             // fresh buffer. An unreachable extension never gets here:

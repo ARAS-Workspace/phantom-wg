@@ -66,11 +66,11 @@ struct TunnelDetailView: View {
             TunnelEditView(tunnel: tunnel)
         }
         .onAppear {
-            logStore.startPolling()
+            logStore.startCounting()
             if tunnel.status == .active { startStatsPolling() }
         }
         .onDisappear {
-            logStore.stopPolling()
+            logStore.stopCounting()
             stopStatsPolling()
         }
         .alert(loc.t("detail_delete_confirm_title"),
