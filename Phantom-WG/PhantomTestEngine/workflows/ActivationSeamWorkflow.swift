@@ -49,14 +49,15 @@
 //       ends no session is raised for B.
 //
 // The recovery rule's steps (H to S) are in
-// `ActivationSeamWorkflow+RecoveryRule.swift`.
+// `ActivationSeamWorkflow+RecoveryRule.swift`, the reset's (T to W) in
+// `ActivationSeamWorkflow+Reset.swift`.
 
 #if DEBUG
 import Foundation
 import NetworkExtension
 
 final class ActivationSeamWorkflow: TestWorkflow {
-    override var displayName: String { "Activation Seam (The Queue, Its Hand-Off And The Recovery Rule)" }
+    override var displayName: String { "Activation Seam (The Queue, The Recovery Rule And The Reset)" }
 
     override var steps: [WorkflowStep] {
         [
@@ -78,7 +79,11 @@ final class ActivationSeamWorkflow: TestWorkflow {
             WorkflowStep("A Drop Mid-Activation Files The System's Record", aDropMidActivationFilesTheSystemsRecord),
             WorkflowStep("A Mute Drop Files A Stand-In Error", aMuteDropFilesAStandInError),
             WorkflowStep("A Stop The Rule Save Cannot Answer Still Goes Out", aStopTheRuleSaveCannotAnswerStillGoesOut),
-            WorkflowStep("A Give-Up Whose Disarm Save Hangs Still Hands The Queue On", aGiveUpWhoseDisarmSaveHangsStillHandsTheQueueOn)
+            WorkflowStep("A Give-Up Whose Disarm Save Hangs Still Hands The Queue On", aGiveUpWhoseDisarmSaveHangsStillHandsTheQueueOn),
+            WorkflowStep("A Reset's Outcome Byte Decides The Caller's Verdict", aResetsOutcomeByteDecidesTheCallersVerdict),
+            WorkflowStep("A Reset Nobody Answers Ends Its Own Wait", aResetNobodyAnswersEndsItsOwnWait),
+            WorkflowStep("A Reset The Session Refuses To Send Is Named", aResetTheSessionRefusesToSendIsNamed),
+            WorkflowStep("A Reset On A Resting Row Sends Nothing", aResetOnARestingRowSendsNothing)
         ]
     }
 

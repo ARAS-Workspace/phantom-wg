@@ -15,6 +15,8 @@
 //                                            including ones a deployed
 //                                            extension cannot produce
 //   disconnectAnswer                         what the last-error probe says
+//   messageFailure                           a provider message the session
+//                                            refuses to send (it throws)
 //
 // A held completion is released on demand by `releaseHeldCompletions()`,
 // which is how a step measures a caller that is waiting on a save the
@@ -96,6 +98,7 @@ final class FakeSlotProvider: TunnelProviding {
     var startAnswer: StartAnswer = .succeeds
     var resetAnswer: ResetAnswer = .status(.rebuilt)
     var disconnectAnswer: DisconnectAnswer = .none
+    var messageFailure: NSError?
 
     private var heldCompletions: [@Sendable (Error?) -> Void] = []
 
@@ -214,6 +217,7 @@ final class FakeSlotProvider: TunnelProviding {
 
     func sendProviderMessage(_ data: Data, responseHandler: @escaping @Sendable (Data?) -> Void) throws {
         providerMessageCount += 1
+        if let messageFailure { throw messageFailure }
         guard data.first == 3 else {
             responseHandler(nil)
             return

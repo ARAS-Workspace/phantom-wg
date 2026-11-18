@@ -24,6 +24,10 @@ extension TunnelsManager {
     /// in a different state and only the user can pick the next move.
     /// A reply too short to carry an outcome is an older extension:
     /// nothing is claimed about it and nothing is thrown.
+    /// @witness ActivationSeam.aResetsOutcomeByteDecidesTheCallersVerdict
+    /// @witness ActivationSeam.aResetNobodyAnswersEndsItsOwnWait
+    /// @witness ActivationSeam.aResetTheSessionRefusesToSendIsNamed
+    /// @witness ActivationSeam.aResetOnARestingRowSendsNothing
     func resetConnection(of tunnel: TunnelContainer) async throws {
         guard tunnel.status == .active || tunnel.status == .reasserting else { return }
 

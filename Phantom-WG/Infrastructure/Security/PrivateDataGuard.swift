@@ -10,6 +10,10 @@ enum PrivateDataGuard {
 
     private static var asking = false
 
+    /// @witness PrivateData.aGrantedOwnerCheckOpensTheDoor
+    /// @witness PrivateData.aDeclinedOwnerCheckClosesItSilently
+    /// @witness PrivateData.aFailedOwnerCheckClosesItAndNamesTheFailure
+    /// @witness PrivateData.aSecondRequestWhileOneIsOpenAnswersFalseWithoutAsking
     static func grants(
         reason: String,
         authorize: (String) async -> PrivateDataAuthorization.Outcome = PrivateDataAuthorization.request,
