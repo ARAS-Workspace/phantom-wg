@@ -80,6 +80,7 @@ class TunnelsManager {
     /// @witness TunnelAdd.twoAddsOfOneNameThatCrossLeaveOneRow
     /// @witness TunnelAdd.aRefusedSaveLeavesNoRowAndFreesTheName
     /// @witness TunnelAdd.aBlankNameIsRefusedBeforeAProviderIsMinted
+    /// @witness TunnelAdd.aRefusedSaveLeavesNoKeychainItem
     func add(config: TunnelConfig) async throws -> TunnelContainer {
         let name = config.name.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !name.isEmpty else {

@@ -48,7 +48,8 @@
 // during a run, so a step can assert on rows the app created rather than
 // on rows the step handed it. Its `saveAnswers` names the save answer of
 // one provider by the order the factory mints it, counting from 1; the
-// others take `saveAnswer`.
+// others take `saveAnswer`. Its `storage` is the one the factory mints
+// them with (`.memory` unless a step names `.keychain`).
 
 #if DEBUG
 import Foundation
@@ -350,6 +351,7 @@ final class MintedProviderLedger {
     var saveAnswers: [Int: FakeSlotProvider.SaveAnswer] = [:]
     var loadAnswer: FakeSlotProvider.SaveAnswer = .succeeds
     var status: NEVPNStatus = .disconnected
+    var storage: FakeSlotProvider.Storage = .memory
 
     private(set) var providers: [FakeSlotProvider] = []
 
@@ -365,7 +367,7 @@ struct FakeSlotFactory: TunnelProviderFactory {
     let minted = MintedProviderLedger()
 
     func makeProvider() -> TunnelProviding {
-        let provider = FakeSlotProvider(status: minted.status, entryExists: false)
+        let provider = FakeSlotProvider(storage: minted.storage, status: minted.status, entryExists: false)
         provider.saveAnswer = minted.saveAnswers[minted.providers.count + 1] ?? minted.saveAnswer
         provider.loadAnswer = minted.loadAnswer
         minted.record(provider)

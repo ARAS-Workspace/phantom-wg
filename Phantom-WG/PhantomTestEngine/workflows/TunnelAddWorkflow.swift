@@ -1,7 +1,7 @@
 // Tunnel Add
 //
 // The ADD path's name bar, measured across the window `add()` opens for
-// itself.
+// itself, and what a refused save leaves in the app group Keychain.
 //
 // `add()` reads the list for the name on entry. The row it creates reaches
 // the list later, after the provider's save and load have both answered.
@@ -29,18 +29,28 @@
 //   C — A Blank Name Is Refused Before A Provider Is Minted
 //       A name of spaces is refused as an invalid name, and the factory
 //       minted nothing.
+//
+//   D — A Refused Save Leaves No Keychain Item
+//       The factory mints its provider with `.keychain` storage, so the
+//       add seals its configuration into the app group Keychain through
+//       the production `configure(with:)` path, and the system refuses
+//       the save. The add is refused as a system error, the provider
+//       referenced the one item the add sealed, and the claim is that
+//       this item opens nothing afterwards. Every Keychain item the step
+//       created is deleted on the way out.
 
 #if DEBUG
 import Foundation
 
 final class TunnelAddWorkflow: TestWorkflow {
-    override var displayName: String { "Tunnel Add (The Name Bar Across Its Own Window)" }
+    override var displayName: String { "Tunnel Add (The Name Bar And What A Refused Save Leaves)" }
 
     override var steps: [WorkflowStep] {
         [
             WorkflowStep("Two Adds Of One Name That Cross Leave One Row", twoAddsOfOneNameThatCrossLeaveOneRow),
             WorkflowStep("A Refused Save Leaves No Row And Frees The Name", aRefusedSaveLeavesNoRowAndFreesTheName),
-            WorkflowStep("A Blank Name Is Refused Before A Provider Is Minted", aBlankNameIsRefusedBeforeAProviderIsMinted)
+            WorkflowStep("A Blank Name Is Refused Before A Provider Is Minted", aBlankNameIsRefusedBeforeAProviderIsMinted),
+            WorkflowStep("A Refused Save Leaves No Keychain Item", aRefusedSaveLeavesNoKeychainItem)
         ]
     }
 
@@ -184,6 +194,35 @@ final class TunnelAddWorkflow: TestWorkflow {
         check(invalidName, "a name of spaces is refused as an invalid name (\(outcome.label))")
         check(factory.minted.providers.isEmpty && manager.tunnels.isEmpty,
               "and the factory minted nothing (minted=\(factory.minted.providers.count), rows=\(manager.tunnels.count))")
+    }
+
+    func aRefusedSaveLeavesNoKeychainItem() async {
+        guard let config = TestConfigFactory.throwaway(name: "TE-Add-Keychain-\(runTag)") else {
+            fail("the config factory produced no throwaway")
+            return
+        }
+        let factory = FakeSlotFactory(canned: [])
+        factory.minted.storage = .keychain
+        onTeardown("delete the step's Keychain items") {
+            for provider in factory.minted.providers { provider.sweepKeychain() }
+        }
+        let manager = TunnelsManager(tunnelProviders: [], providerFactory: factory)
+
+        factory.minted.saveAnswer = .fails(NSError(domain: "TE.Fake", code: 5,
+                                                   userInfo: [NSLocalizedDescriptionKey: "test rig refused the save"]))
+        let outcome = await attempt("refused", manager, config)
+        var refusedAsSystem = false
+        if case .refused(let error) = outcome, case TunnelManagementError.vpnSystemErrorOnAddTunnel = error {
+            refusedAsSystem = true
+        }
+        check(refusedAsSystem, "the add whose save the system refused is refused as a system error (\(outcome.label))")
+        guard let provider = factory.minted.last,
+              check(provider.keychainRefs.count == 1,
+                    "the add sealed its configuration into one app group Keychain item"
+                    + " (minted=\(factory.minted.providers.count), items=\(provider.keychainRefs.count))") else { return }
+        let open = provider.keychainRefs.filter { Keychain.openReference(called: $0) != nil }
+        check(open.isEmpty,
+              "after the refusal, the item the add sealed opens nothing (open=\(open.count))")
     }
 }
 #endif
