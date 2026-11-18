@@ -1,8 +1,9 @@
 import SwiftUI
 
-/// WireGuard interface configuration, read-only — private key, local
-/// addresses, DNS servers, and MTU. Values change only through
-/// `TunnelEditView`'s raw-text editor.
+/// WireGuard interface configuration, read-only — the public key
+/// derived from the private key, local addresses, DNS servers, and
+/// MTU. The private key itself appears only in `TunnelEditView`'s
+/// raw-text editor, where values change.
 struct InterfaceSection: View {
     let config: InterfaceConfig
     @Environment(LocalizationManager.self) private var loc
@@ -10,9 +11,9 @@ struct InterfaceSection: View {
     var body: some View {
         Section {
             PhantomStaticField(
-                label: loc.t("detail_private_key"),
-                value: config.privateKey.textual,
-                axIdentifier: AXID.TunnelDetail.Interface.privateKey
+                label: loc.t("detail_public_key"),
+                value: config.privateKey.derivedPublicKey?.textual ?? "—",
+                axIdentifier: AXID.TunnelDetail.Interface.publicKey
             )
             PhantomStaticField(
                 label: loc.t("detail_address"),

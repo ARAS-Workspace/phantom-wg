@@ -1,8 +1,9 @@
 import SwiftUI
 
-/// WireGuard peer configuration, read-only — public/preshared keys,
-/// allowed IPs, endpoint, and keepalive. The preshared row only
-/// appears when the config carries one; the endpoint row only for
+/// WireGuard peer configuration, read-only — public key, preshared
+/// key, allowed IPs, endpoint, and keepalive. The preshared row only
+/// appears when the config carries one, and reads "Enabled" rather
+/// than the key; the endpoint row only for
 /// standalone configs — in Ghost mode the endpoint is system-defined
 /// from the wstunnel listener and is not part of the peer data.
 /// Values change only through `TunnelEditView`'s raw-text editor.
@@ -17,10 +18,10 @@ struct PeerSection: View {
                 value: config.publicKey.textual,
                 axIdentifier: AXID.TunnelDetail.Peer.publicKey
             )
-            if let preshared = config.presharedKey {
+            if config.presharedKey != nil {
                 PhantomStaticField(
                     label: loc.t("detail_preshared_key"),
-                    value: preshared.textual,
+                    value: loc.t("detail_preshared_key_enabled"),
                     axIdentifier: AXID.TunnelDetail.Peer.presharedKey
                 )
             }

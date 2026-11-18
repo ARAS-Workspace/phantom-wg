@@ -74,7 +74,7 @@ enum AXID {
 
         enum Wstunnel {
             static let url        = "tunnel-detail.wstunnel.url"
-            static let secret     = "tunnel-detail.wstunnel.secret"
+            static let secretFingerprint = "tunnel-detail.wstunnel.secret-fingerprint"
             static let localHost  = "tunnel-detail.wstunnel.local-host"
             static let localPort  = "tunnel-detail.wstunnel.local-port"
             static let remoteHost = "tunnel-detail.wstunnel.remote-host"
@@ -82,7 +82,7 @@ enum AXID {
         }
 
         enum Interface {
-            static let privateKey = "tunnel-detail.interface.private-key"
+            static let publicKey  = "tunnel-detail.interface.public-key"
             static let addresses  = "tunnel-detail.interface.addresses"
             static let dnsServers = "tunnel-detail.interface.dns-servers"
             static let dnsSearch  = "tunnel-detail.interface.dns-search"

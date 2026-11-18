@@ -106,7 +106,7 @@ struct TunnelDetailView: View {
             NameSection(name: config.name)
 
             if let wstunnel = config.wstunnel {
-                WstunnelSection(config: wstunnel)
+                WstunnelSection(config: wstunnel, fingerprintKey: config.wireguard.interface.privateKey)
             }
 
             InterfaceSection(config: config.wireguard.interface)

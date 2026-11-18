@@ -2,10 +2,12 @@ import SwiftUI
 
 /// Ghost-mode section, read-only — only present when
 /// `TunnelConfig.wstunnel` is non-nil. Shows the six wstunnel bridge
-/// fields; adding, changing, or removing the bridge happens in
-/// `TunnelEditView`'s raw-text editor.
+/// fields, the secret as a fingerprint keyed by the tunnel's private
+/// key (`fingerprintKey`); adding, changing, or removing the bridge
+/// happens in `TunnelEditView`'s raw-text editor.
 struct WstunnelSection: View {
     let config: WstunnelConfig
+    let fingerprintKey: WireGuardKey
     @Environment(LocalizationManager.self) private var loc
 
     var body: some View {
@@ -16,9 +18,9 @@ struct WstunnelSection: View {
                 axIdentifier: AXID.TunnelDetail.Wstunnel.url
             )
             PhantomStaticField(
-                label: loc.t("detail_secret"),
-                value: config.secret,
-                axIdentifier: AXID.TunnelDetail.Wstunnel.secret
+                label: loc.t("detail_secret_fingerprint"),
+                value: config.secretFingerprint(keyedBy: fingerprintKey) ?? "—",
+                axIdentifier: AXID.TunnelDetail.Wstunnel.secretFingerprint
             )
             PhantomStaticField(
                 label: loc.t("detail_local_host"),
@@ -50,7 +52,10 @@ struct WstunnelSection: View {
 
 #Preview("Light") {
     Form {
-        WstunnelSection(config: PreviewFixtures.ghostConfig().wstunnel!)
+        WstunnelSection(
+            config: PreviewFixtures.ghostConfig().wstunnel!,
+            fingerprintKey: PreviewFixtures.ghostConfig().wireguard.interface.privateKey
+        )
     }
     .formStyle(.grouped)
     .previewEnvironment(scheme: .light)
@@ -58,7 +63,10 @@ struct WstunnelSection: View {
 
 #Preview("Dark") {
     Form {
-        WstunnelSection(config: PreviewFixtures.ghostConfig().wstunnel!)
+        WstunnelSection(
+            config: PreviewFixtures.ghostConfig().wstunnel!,
+            fingerprintKey: PreviewFixtures.ghostConfig().wireguard.interface.privateKey
+        )
     }
     .formStyle(.grouped)
     .previewEnvironment(scheme: .dark)
