@@ -41,6 +41,8 @@ struct LogView: View {
         }
         .navigationTitle(loc.t("detail_logs"))
         .navigationBarTitleDisplayMode(.inline)
+        .onAppear { logStore.startPolling() }
+        .onDisappear { logStore.stopPolling() }
         .toolbar {
             // Copy is the only practical way to get logs off the
             // device, so it lives here next to the entries — on

@@ -14,6 +14,8 @@ struct LogEntry: Identifiable, Hashable {
 @MainActor
 protocol LogEntryProvider: AnyObject, Observable {
     var entries: [LogEntry] { get }
+    func startPolling()
+    func stopPolling()
     /// Flushes the backing log source and the main-app's mirror
     /// array; polling keeps running, so new lines keep streaming.
     func clear() async
@@ -30,12 +32,16 @@ final class LogStore: LogEntryProvider {
 
     @ObservationIgnored private weak var tunnel: TunnelContainer?
     @ObservationIgnored private var pollingTask: Task<Void, Never>?
+    @ObservationIgnored private var pollingHolds = 0
 
     init(tunnel: TunnelContainer?) {
         self.tunnel = tunnel
     }
 
+    /// Each screen that shows the entries holds the poller while it is
+    /// on screen; the poller runs while any hold is left.
     func startPolling() {
+        pollingHolds += 1
         guard pollingTask == nil else { return }
         pollingTask = Task { [weak self] in
             while !Task.isCancelled {
@@ -50,6 +56,8 @@ final class LogStore: LogEntryProvider {
     }
 
     func stopPolling() {
+        pollingHolds = max(0, pollingHolds - 1)
+        guard pollingHolds == 0 else { return }
         pollingTask?.cancel()
         pollingTask = nil
     }
@@ -58,7 +66,7 @@ final class LogStore: LogEntryProvider {
     /// entries. Polling keeps running; fresh emissions reappear as the
     /// tunnel continues to run.
     func clear() async {
-        if tunnel?.status == .active || tunnel?.status == .activating {
+        if let tunnel, Self.sessionImplied(tunnel.status) {
             _ = await sendMessage(Data([2]))
         }
         entries.removeAll()
@@ -66,13 +74,23 @@ final class LogStore: LogEntryProvider {
 
     // MARK: - Private
 
+    /// A reset keeps the session up while the layer is rebuilt, so
+    /// `.reasserting` keeps the entries too.
+    private static func sessionImplied(_ status: TunnelStatus) -> Bool {
+        status == .active || status == .activating || status == .reasserting
+    }
+
     private func fetchLogs() async {
-        guard let tunnel, tunnel.status == .active || tunnel.status == .activating else {
+        guard let tunnel else { return }
+
+        guard Self.sessionImplied(tunnel.status) else {
             if !entries.isEmpty { entries.removeAll() }
             return
         }
 
         guard let data = await sendMessage(Data([1])) else { return }
+
+        guard Self.sessionImplied(tunnel.status) else { return }
 
         do {
             let decoded = try JSONDecoder().decode([RemoteEntry].self, from: data)
