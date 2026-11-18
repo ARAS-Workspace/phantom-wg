@@ -2,8 +2,9 @@ import SwiftUI
 
 /// Draws a plain surface with the ghost mark over a screen while its
 /// scene is not active — the app switcher, Control Center, or a system
-/// prompt in front of the app. Applied to the two screens that show a
-/// raw `.conf`, private key included: import and edit.
+/// prompt in front of the app. Applied at the app root, so it covers
+/// every pushed screen, and inside the one sheet (the QR scanner),
+/// which is presented above the root.
 private struct InactiveSceneCover: ViewModifier {
     @Environment(\.scenePhase) private var scenePhase
 

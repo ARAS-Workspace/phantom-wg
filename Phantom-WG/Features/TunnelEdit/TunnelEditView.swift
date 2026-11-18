@@ -45,7 +45,6 @@ struct TunnelEditView: View {
                 rawInputSection
             }
         }
-        .coveredWhileInactive()
         .navigationTitle(loc.t("edit_title"))
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {

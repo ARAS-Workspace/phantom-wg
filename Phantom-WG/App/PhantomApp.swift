@@ -24,6 +24,7 @@ struct PhantomApp: App {
             }
             .environment(loc)
             .tint(Color.accentColor)
+            .coveredWhileInactive()
         }
     }
 

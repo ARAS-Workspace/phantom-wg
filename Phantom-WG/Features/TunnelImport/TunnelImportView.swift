@@ -38,7 +38,6 @@ struct TunnelImportView: View {
                 quickActionsSection
             }
         }
-        .coveredWhileInactive()
         .navigationTitle(loc.t("import_title"))
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
@@ -55,6 +54,7 @@ struct TunnelImportView: View {
                 inputText = scanned
                 submit()
             }
+            .coveredWhileInactive()
         }
     }
 
