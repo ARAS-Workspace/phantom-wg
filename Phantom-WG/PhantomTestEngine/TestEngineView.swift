@@ -6,6 +6,10 @@
 // it to the runner, and renders the transcript with a colour and weight
 // per `OutputKind`.
 //
+// Under the control bar, the live gate's two rows say whether
+// `Test-Ghost` and `Test-WireGuard` are listed and on the real extension;
+// the gate never blocks the runner, it decides which families skip.
+//
 // The transcript can be copied or handed to the share sheet; every run
 // also writes it to the file `PhantomTestEngine.transcriptURL` names.
 
@@ -78,9 +82,38 @@ struct TestEngineView: View {
             }
             .padding(12)
 
+            liveGate
+                .padding(.horizontal, 12)
+                .padding(.bottom, 10)
+
             Divider()
 
             output
+        }
+    }
+
+    // MARK: - Live gate
+
+    private var liveGate: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text(s.gateTitle).font(.caption.weight(.semibold))
+            gateRow(TestContext.ghostName)
+            gateRow(TestContext.wireGuardName)
+            Text(s.gateIntro).font(.caption2).foregroundStyle(.secondary)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private func gateRow(_ name: String) -> some View {
+        let listed = ctx.tunnel(named: name) != nil
+        let real = ctx.runsOnTheRealExtension(name)
+        return HStack(spacing: 6) {
+            Image(systemName: real ? "checkmark.circle.fill" : listed ? "exclamationmark.circle" : "circle.dashed")
+                .foregroundStyle(real ? Color.green : listed ? Color.orange : Color.secondary)
+            Text(name).font(.system(.caption, design: .monospaced))
+            Text(real ? s.gateReal : listed ? s.gateElsewhere : s.gateMissing)
+                .font(.caption2)
+                .foregroundStyle(.secondary)
         }
     }
 

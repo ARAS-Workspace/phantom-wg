@@ -14,6 +14,13 @@
 // declare the environment unfit so the rest of the catalogue is not run
 // against it.
 //
+// The live gate: a family that drives real sessions declares
+// `requiresLiveTunnels`, and it runs only when `Test-Ghost` and
+// `Test-WireGuard` are listed and both run on the real Network Extension
+// (their provider is the system's `NETunnelProviderManager` and their
+// protocol names this app's tunnel extension). Otherwise each of its steps
+// is skipped with the gate's reading; on a simulator the gate stays shut.
+//
 // Every run writes its transcript to `Library/Caches/PhantomTestEngine/
 // last-run.txt` when it ends. Launched with `-PhantomTestEngineAutorun
 // YES`, the app runs the catalogue once on its own as soon as the tunnel
@@ -21,6 +28,7 @@
 
 #if DEBUG
 import Foundation
+import NetworkExtension
 
 enum OutputKind { case header, rule, step, info, ok, warn, error, skip, result }
 
@@ -36,9 +44,35 @@ struct TestContext {
 
     static let ghostName = "Test-Ghost"
     static let wireGuardName = "Test-WireGuard"
+    /// The provider bundle `NETunnelProviderProtocol(tunnelConfig:)` writes.
+    static let tunnelExtensionBundle = "com.artek.Phantom-WG.PhantomTunnel"
 
     func tunnel(named name: String) -> TunnelContainer? {
         tunnels.tunnels.first { $0.name == name }
+    }
+
+    /// Whether `name` is listed on the real Network Extension: its provider
+    /// is the system's `NETunnelProviderManager` and its protocol names this
+    /// app's tunnel extension.
+    func runsOnTheRealExtension(_ name: String) -> Bool {
+        guard let row = tunnel(named: name),
+              let manager = row.tunnelProvider as? NETunnelProviderManager,
+              let proto = manager.protocolConfiguration as? NETunnelProviderProtocol else { return false }
+        return proto.providerBundleIdentifier == Self.tunnelExtensionBundle
+    }
+
+    /// Why the live families cannot run here, or `nil` when the gate opens.
+    var liveGateRefusal: String? {
+        let names = [Self.ghostName, Self.wireGuardName]
+        let missing = names.filter { tunnel(named: $0) == nil }
+        if !missing.isEmpty {
+            return "live gate: \(missing.joined(separator: " and ")) not listed"
+        }
+        let elsewhere = names.filter { !runsOnTheRealExtension($0) }
+        if !elsewhere.isEmpty {
+            return "live gate: \(elsewhere.joined(separator: " and ")) not on the real Network Extension"
+        }
+        return nil
     }
 }
 

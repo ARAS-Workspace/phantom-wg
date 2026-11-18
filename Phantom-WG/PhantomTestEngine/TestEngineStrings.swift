@@ -20,6 +20,11 @@ struct TestEngineStrings {
     let share: String
     let emptyTitle: String
     let emptyDesc: String
+    let gateTitle: String
+    let gateIntro: String
+    let gateReal: String
+    let gateElsewhere: String
+    let gateMissing: String
 
     static func of(_ language: LocalizationManager.Language) -> TestEngineStrings {
         switch language {
@@ -37,7 +42,12 @@ struct TestEngineStrings {
         copy: "Kopyala",
         share: "Paylaş",
         emptyTitle: "Henüz koşum yok",
-        emptyDesc: "Çalıştır'a basın."
+        emptyDesc: "Çalıştır'a basın.",
+        gateTitle: "Canlı tüneller",
+        gateIntro: "Canlı aileler bu iki tünelle gerçek uzantıda koşar. Biri eksikse atlanır.",
+        gateReal: "gerçek uzantı",
+        gateElsewhere: "gerçek uzantıda değil",
+        gateMissing: "listede yok"
     )
 
     static let en = TestEngineStrings(
@@ -49,7 +59,12 @@ struct TestEngineStrings {
         copy: "Copy",
         share: "Share",
         emptyTitle: "No run yet",
-        emptyDesc: "Press Run."
+        emptyDesc: "Press Run.",
+        gateTitle: "Live tunnels",
+        gateIntro: "The live families run on the real extension with these two tunnels. With either missing, they are skipped.",
+        gateReal: "real extension",
+        gateElsewhere: "not on the real extension",
+        gateMissing: "not listed"
     )
 }
 #endif

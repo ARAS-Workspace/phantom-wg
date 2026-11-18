@@ -62,6 +62,9 @@ class TestWorkflow {
 
     var displayName: String { "" }
     var steps: [WorkflowStep] { [] }
+    /// True for a family that drives real sessions on the user's
+    /// `Test-Ghost` and `Test-WireGuard`; it runs behind the live gate.
+    var requiresLiveTunnels: Bool { false }
 
     // MARK: - Everything the app exposes to the user (no plumbing)
 
@@ -201,6 +204,13 @@ class TestWorkflow {
     }
     // swiftlint:disable:next identifier_name
     func _run() async {
+        if requiresLiveTunnels, let refusal = context.liveGateRefusal {
+            for step in steps {
+                engine?.emit("  • \(step.title)", .step)
+                engine?.emit("    ◦ SKIP (\(refusal))", .skip)
+            }
+            return
+        }
         for step in steps {
             if Task.isCancelled { break }
             if engine?.abortReason != nil { break }

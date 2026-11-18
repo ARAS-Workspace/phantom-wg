@@ -256,6 +256,8 @@ class TunnelsManager {
 
     /// @witness ActivationSeam.aPressOnABusySlotQueuesAndStopsTheOccupant
     /// @witness ActivationSeam.aSecondQueuedPressTakesTheSlot
+    /// @witness RecoverySwitch.armFirst
+    /// @witness RecoverySwitch.switchToSecond
     func startActivation(of tunnel: TunnelContainer) {
         guard tunnel.status == .inactive else { return }
 
@@ -278,6 +280,8 @@ class TunnelsManager {
     /// @witness ActivationSeam.aStopStandsTheRuleDownBeforeItGoesOut
     /// @witness ActivationSeam.aRefusedDisarmSurfacesAndTheStopStillGoesOut
     /// @witness ActivationSeam.aStopReachesARuleTheFlagDenies
+    /// @witness RecoverySwitch.groundBothTunnels
+    /// @witness RecoverySwitch.groundAndFinalSweep
     func startDeactivation(of tunnel: TunnelContainer) {
         guard tunnel.status != .inactive && tunnel.status != .deactivating else { return }
 
@@ -341,6 +345,7 @@ class TunnelsManager {
     /// last.
     /// @witness ActivationSeam.aListRefreshCannotTakeAQueuedTunnelsTurn
     /// @witness ActivationSeam.theSweepReachesARuleTheFlagDenies
+    /// @witness RecoverySwitch.switchToSecond
     private func disarmOtherRecoveryRules(except tunnel: TunnelContainer) {
         tunnels.filter { $0.id != tunnel.id && $0.carriesRecoveryRule }.forEach { other in
             other.tunnelProvider.isOnDemandEnabled = false
