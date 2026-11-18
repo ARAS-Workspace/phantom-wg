@@ -99,6 +99,14 @@ targets:
         MARKETING_VERSION: "1.2.5"
         CURRENT_PROJECT_VERSION: 1
         TARGETED_DEVICE_FAMILY: "1,2"
+      configs:
+        Release:
+          # The simulated Network Extension is a Debug-on-simulator
+          # stand-in, chosen in TunnelsManager.create(). Its files also
+          # carry `#if DEBUG && targetEnvironment(simulator)`; Release
+          # never compiles them.
+          EXCLUDED_SOURCE_FILE_NAMES:
+            - "*/SimulatedNetworkExtension/*"
     info:
       path: Phantom-WG/Info.plist
       properties:

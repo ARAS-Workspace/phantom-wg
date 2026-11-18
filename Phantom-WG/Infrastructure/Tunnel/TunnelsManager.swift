@@ -35,7 +35,11 @@ class TunnelsManager {
     // MARK: - Factory
 
     static func create() async throws -> TunnelsManager {
-        let factory = RealTunnelProviderFactory()
+        #if DEBUG && targetEnvironment(simulator)
+        let factory: TunnelProviderFactory = SimulatedTunnelProviderFactory()
+        #else
+        let factory: TunnelProviderFactory = RealTunnelProviderFactory()
+        #endif
         let providers = try await factory.loadAllFromPreferences()
         return TunnelsManager(tunnelProviders: providers, providerFactory: factory)
     }
