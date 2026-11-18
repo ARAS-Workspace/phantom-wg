@@ -39,6 +39,7 @@ class TunnelsManager {
 
     // MARK: - Factory
 
+    /// @witness TunnelLoad.anItemNoEntryReferencesIsCollectedAtLaunch
     static func create() async throws -> TunnelsManager {
         #if DEBUG && targetEnvironment(simulator)
         let factory: TunnelProviderFactory = SimulatedTunnelProviderFactory()
