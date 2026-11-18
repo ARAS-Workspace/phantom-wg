@@ -45,6 +45,13 @@ enum TunnelLogger {
         lock.unlock()
     }
 
+    /// Line count for opcode 4.
+    static func entryCount() -> Int {
+        lock.lock()
+        defer { lock.unlock() }
+        return buffer.count
+    }
+
     /// Snapshot of the current buffer serialized for `handleAppMessage`.
     static func allEntriesAsData() -> Data? {
         lock.lock()

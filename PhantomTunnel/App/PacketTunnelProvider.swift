@@ -163,6 +163,9 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
                 let outcome = await self.serializedReset()
                 completionHandler(Data([3, outcome.rawValue]))
             }
+        case TunnelLogCountReply.opcode:
+            // The log line count alone, for the detail screen's badge.
+            completionHandler(TunnelLogCountReply.encode(TunnelLogger.entryCount()))
         default:
             completionHandler(nil)
         }

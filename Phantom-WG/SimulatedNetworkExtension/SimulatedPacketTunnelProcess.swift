@@ -7,7 +7,8 @@ import NetworkExtension
 /// opcodes and in the same reply shapes as `PacketTunnelProvider`:
 /// `0` runtime stats (`TunnelRuntimeStats`), `1` the log buffer as JSON,
 /// `2` clear the buffer, `3` rebuild the layer and answer with a
-/// `TunnelResetReply`, a second request joining the one in flight.
+/// `TunnelResetReply`, a second request joining the one in flight, `4`
+/// the line count as a `TunnelLogCountReply`.
 ///
 /// Starting refuses the same saved configurations the extension's
 /// `WireGuardConfigBuilder` refuses — no address, no AllowedIPs, a
@@ -109,6 +110,8 @@ final class SimulatedPacketTunnelProcess {
             reset { [weak self] outcome in
                 self?.reply(Data([3, outcome.rawValue]), to: completion)
             }
+        case TunnelLogCountReply.opcode:
+            reply(TunnelLogCountReply.encode(buffer.count), to: completion)
         default:
             reply(nil, to: completion)
         }
