@@ -3,6 +3,7 @@ import SwiftUI
 struct LogView: View {
     var logStore: any LogEntryProvider
     @State private var copied = false
+    @State private var followsTail = true
     @Environment(LocalizationManager.self) private var loc
 
     var body: some View {
@@ -31,12 +32,10 @@ struct LogView: View {
                 .accessibilityIdentifier(AXID.LogView.list)
             }
             .background(Color(.systemGroupedBackground))
-            .onChange(of: logStore.entries.count) { _, _ in
-                if let last = logStore.entries.last {
-                    withAnimation(.easeOut(duration: 0.2)) {
-                        proxy.scrollTo(last.id, anchor: .bottom)
-                    }
-                }
+            .tracksLogFollow($followsTail)
+            .onChange(of: logStore.entries.last?.id) { _, lastID in
+                guard followsTail, let lastID else { return }
+                proxy.scrollTo(lastID, anchor: .bottom)
             }
         }
         .navigationTitle(loc.t("detail_logs"))
