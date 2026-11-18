@@ -38,6 +38,7 @@ struct TunnelImportView: View {
                 quickActionsSection
             }
         }
+        .coveredWhileInactive()
         .navigationTitle(loc.t("import_title"))
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
