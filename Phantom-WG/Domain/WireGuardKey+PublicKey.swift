@@ -6,6 +6,7 @@ import Foundation
 /// the key is not a valid Curve25519 private key.
 extension WireGuardKey {
 
+    /// @witness ConfigContract.secretlessDetail
     var derivedPublicKey: WireGuardKey? {
         guard let raw = Data(base64Encoded: base64),
               let privateKey = try? Curve25519.KeyAgreement.PrivateKey(rawRepresentation: raw) else {

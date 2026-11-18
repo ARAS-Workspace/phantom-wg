@@ -56,6 +56,7 @@ struct TunnelConfig: Codable, Identifiable, Equatable {
 
     /// Serializes the config into the `.conf` textual format accepted by
     /// `ConfParser.parse(...)`. Matches what the Copy Config action produces.
+    /// @witness ConfigContract.searchDomainsAndListenPort
     func asConfString() -> String {
         var lines: [String] = []
 
@@ -128,6 +129,7 @@ struct InterfaceConfig: Codable, Equatable {
 extension InterfaceConfig {
     /// A payload written before `dns_search` and `listen_port` existed
     /// decodes with no search domains and no listen port.
+    /// @witness ConfigContract.searchDomainsAndListenPort
     init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         privateKey = try container.decode(WireGuardKey.self, forKey: .privateKey)

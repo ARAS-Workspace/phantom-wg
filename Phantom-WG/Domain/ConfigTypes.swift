@@ -63,6 +63,7 @@ struct AddressWithPrefix: Equatable, Hashable, Codable {
     /// Read the way WireGuardKit reads it: an address without a prefix is
     /// a host route (`/32`, `/128`), and a prefix past the family's limit
     /// is clipped to it.
+    /// @witness ConfigContract.confReading
     init(parsing text: String) throws {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
         let slashIndex = trimmed.firstIndex(of: "/")

@@ -7,6 +7,7 @@ import Foundation
 /// hex digits. `nil` for an empty secret or an undecodable key.
 extension WstunnelConfig {
 
+    /// @witness ConfigContract.secretlessDetail
     func secretFingerprint(keyedBy key: WireGuardKey) -> String? {
         guard !secret.isEmpty, let raw = Data(base64Encoded: key.base64) else {
             return nil

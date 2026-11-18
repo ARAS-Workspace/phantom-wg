@@ -77,6 +77,9 @@ class TunnelsManager {
 
     // MARK: - CRUD
 
+    /// @witness TunnelAdd.twoAddsOfOneNameThatCrossLeaveOneRow
+    /// @witness TunnelAdd.aRefusedSaveLeavesNoRowAndFreesTheName
+    /// @witness TunnelAdd.aBlankNameIsRefusedBeforeAProviderIsMinted
     func add(config: TunnelConfig) async throws -> TunnelContainer {
         let name = config.name.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !name.isEmpty else {
@@ -130,6 +133,9 @@ class TunnelsManager {
         }
     }
 
+    /// @witness TunnelEdit.aTakenNameIsRefusedAndItsOwnIsNot
+    /// @witness TunnelEdit.aBlankNameIsRefusedBeforeTheSystemIsTouched
+    /// @witness TunnelEdit.aRefusedSaveLeavesTheSavedTunnelReadable
     func modify(tunnel: TunnelContainer, with config: TunnelConfig) async throws {
         let name = config.name.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !name.isEmpty else {

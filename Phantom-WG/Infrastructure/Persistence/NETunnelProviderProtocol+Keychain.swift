@@ -15,6 +15,7 @@ extension NETunnelProviderProtocol {
 
     /// Create protocol and store config in Keychain. providerConfiguration holds only
     /// the persistent reference — private keys never leave the Keychain.
+    /// @witness TunnelEdit.aRefusedSaveLeavesTheSavedTunnelReadable
     convenience init?(tunnelConfig config: TunnelConfig,
                       previouslyFrom proto: NETunnelProviderProtocol? = nil) {
         self.init()

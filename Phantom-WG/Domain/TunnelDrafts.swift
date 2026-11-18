@@ -81,6 +81,8 @@ struct TunnelDraft: Equatable {
 
     // MARK: Validate
 
+    /// @witness ConfigContract.leakGuardsAndBelts
+    /// @witness ConfigContract.searchDomainsAndListenPort
     func validate() -> ValidationResult {
         var errors: [Field: FieldValidationError] = [:]
 

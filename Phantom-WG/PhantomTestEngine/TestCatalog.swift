@@ -13,7 +13,10 @@ import Foundation
 enum TestCatalog {
     static var workflows: [TestWorkflow] {
         [
-            SanityWorkflow()
+            SanityWorkflow(),
+            ConfigContractWorkflow(),
+            TunnelAddWorkflow(),
+            TunnelEditWorkflow()
         ]
     }
 }
