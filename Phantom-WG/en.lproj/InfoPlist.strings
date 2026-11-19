@@ -5,3 +5,4 @@
    are kept identical. */
 
 "NSCameraUsageDescription" = "Camera access is needed to scan QR codes for tunnel configuration import.";
+"NSFaceIDUsageDescription" = "Face ID confirms the device owner before a tunnel configuration is copied, exported, edited, or deleted.";

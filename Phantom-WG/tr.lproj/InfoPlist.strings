@@ -4,3 +4,4 @@
    fallback Apple requires; these are what actually ship. */
 
 "NSCameraUsageDescription" = "Tünel yapılandırması içe aktarmak üzere QR kod taramak için kamera erişimi gerekiyor.";
+"NSFaceIDUsageDescription" = "Face ID, bir tünel yapılandırması kopyalanmadan, dışa aktarılmadan, düzenlenmeden ya da silinmeden önce cihaz sahibini doğrular.";
