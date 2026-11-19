@@ -82,6 +82,7 @@ struct TunnelDraft: Equatable {
 
     // MARK: Validate
 
+    /// @witness ConfigContract.confReading
     /// @witness ConfigContract.leakGuardsAndBelts
     /// @witness ConfigContract.searchDomainsAndListenPort
     func validate() -> ValidationResult {

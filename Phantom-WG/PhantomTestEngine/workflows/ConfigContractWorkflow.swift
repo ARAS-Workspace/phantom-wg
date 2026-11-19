@@ -1,10 +1,15 @@
 // Config Contract
 //
-// Config-shape contracts, from the parser down to `validate()` and the
-// payload the Keychain holds. Nothing here raises a session or touches a
-// store: every row is `.conf` text through `ConfParser.parse` and
+// Config-shape contracts, from the parser down to `validate()`, the
+// payload the Keychain holds and the two values the tunnel detail shows
+// in place of a secret. Nothing here raises a session or touches a
+// store. A, B and C read `.conf` text through `ConfParser.parse` and
 // `TunnelDraft.validate()`, the way the import and edit screens run it.
-// Each check names its row, so a red line says which rule regressed.
+// B also runs `validate()` on two drafts the parser refuses, built or
+// edited by hand, and C also encodes and decodes the payload and reads
+// back the `.conf` text a configuration writes. D derives public keys
+// and secret fingerprints from fixed keys and secrets. A check in A, B
+// or C names its row, so a red line says which rule regressed.
 //
 // Scenarios:
 //
@@ -70,11 +75,12 @@ final class ConfigContractWorkflow: TestWorkflow {
         row = standalone("Address = 10.0.0.2/40")
         check(row.config?.wireguard.interface.addresses.first?.textual == "10.0.0.2/32",
               "R3 a prefix past the limit is clipped")
+        row = standalone("Address = fd00::2/129", "AllowedIPs = ::/0")
+        check(row.config?.wireguard.interface.addresses.first?.textual == "fd00::2/128",
+              "R3 an IPv6 prefix past the limit is clipped")
         row = standalone("Address = 10.0.0.2/32")
-        check(row.config?.wireguard.interface.mtu == InterfaceDraft.automaticMTU,
-              "R4 a missing MTU is 0, automatic")
-        check(row.config?.wireguard.peer.persistentKeepalive == PeerDraft.keepaliveOff,
-              "R5 a missing PersistentKeepalive is 0, off")
+        check(row.config?.wireguard.interface.mtu == 0, "R4 a missing MTU is 0, automatic")
+        check(row.config?.wireguard.peer.persistentKeepalive == 0, "R5 a missing PersistentKeepalive is 0, off")
         check(row.config?.wireguard.interface.dnsServers.isEmpty == true,
               "R6 a missing DNS is no DNS server")
         row = standalone("Address = 10.0.0.2/32\nMTU = 65535")
