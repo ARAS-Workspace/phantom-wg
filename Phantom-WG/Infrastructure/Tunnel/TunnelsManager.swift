@@ -44,6 +44,7 @@ class TunnelsManager {
     /// launch. This runs here only: a reload can cross an add whose item
     /// is sealed and not yet saved. An export file a run left staged while
     /// the picker was open is removed here too.
+    /// @witness Sanity.systemUnderTest
     /// @witness TunnelLoad.anItemNoEntryReferencesIsCollectedAtLaunch
     /// @witness TunnelTransfer.aLeftoverStagedFileIsSweptAtLaunch
     static func create() async throws -> TunnelsManager {
