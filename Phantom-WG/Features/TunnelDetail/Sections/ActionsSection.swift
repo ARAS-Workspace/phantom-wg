@@ -22,7 +22,10 @@ import SwiftUI
 ///   answer the user is still waiting for.
 /// - Delete is routed back to the parent's confirmation dialog via a
 ///   binding so the destructive action lives at the view root. It
-///   stays down while a removal is in flight.
+///   stays down while a removal is in flight, and opens only for a row
+///   the list's delete gate lets go (`isSettledInactive`): the system
+///   reads no session, the row is painted at rest, no activation attempt
+///   is under way.
 struct ActionsSection: View {
     var tunnel: TunnelContainer
     let canCopy: Bool
@@ -65,7 +68,7 @@ struct ActionsSection: View {
             } label: {
                 Label(loc.t("detail_delete_tunnel"), systemImage: "trash")
             }
-            .disabled(tunnel.status != .inactive || deleting)
+            .disabled(!tunnel.isSettledInactive || deleting)
             .accessibilityIdentifier(AXID.TunnelDetail.Actions.deleteButton)
         } header: {
             Label(loc.t("detail_actions"), systemImage: "ellipsis.circle")
@@ -79,8 +82,8 @@ struct ActionsSection: View {
         tunnel.status == .active || tunnel.status == .reasserting
     }
 
-    /// Config edits require a fully stopped tunnel — mirrors the
-    /// delete gate.
+    /// Config edits require a tunnel painted at rest; the delete gate
+    /// reads the system and the activation attempt too.
     private var canEdit: Bool {
         tunnel.status == .inactive
     }
