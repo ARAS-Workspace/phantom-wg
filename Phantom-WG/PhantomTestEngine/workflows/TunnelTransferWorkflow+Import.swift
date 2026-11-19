@@ -10,28 +10,34 @@
 //
 //   G — Files And A Zip Import Into One List
 //       A valid .conf, a broken one, one whose name the list already holds
-//       and a zip carrying a Ghost .conf beside an AppleDouble entry and a
-//       text file. The valid file and the zip's .conf are added; the broken
-//       file is reported with its parse error and the taken name as a name
-//       clash; the AppleDouble entry and the text file are passed over.
+//       and a zip carrying a Ghost .conf beside three AppleDouble entries
+//       and a text file: one entry under `__MACOSX/` and named `._`, one
+//       only named `._`, one only under `__MACOSX/`. The valid file and the
+//       zip's .conf are added; the broken file is reported with its parse
+//       error and the taken name as a name clash; the AppleDouble entries
+//       and the text file are passed over.
 //
 //   H — The Content Decides, Not The Name
 //       A zip saved as "archive.conf" is read as an archive and its .conf
 //       is added; a .conf saved as "plain.zip" is read as a .conf and added
 //       under that name; a .conf saved as "Kept.conf 2", as the Files app
-//       names a kept duplicate, is added under that name. A file past 64 KB
-//       is reported as too large and bytes that are not UTF-8 as not text.
+//       names a kept duplicate, is added under that name. The archive's
+//       second entry ends `.CONF` and spells a letter decomposed (S and a
+//       combining cedilla): it is read and added under the composed name
+//       with the suffix taken off. A file past 64 KB is reported as too
+//       large and bytes that are not UTF-8 as not text.
 //
 //   I — An Exported Archive Imports Back The Same
 //       A Standalone and a Ghost tunnel are exported through the bulk
-//       export; the archive, written to a file, imports into an empty list,
-//       and each tunnel comes back with its name and its WireGuard and
-//       Wstunnel configuration.
+//       export, which hands an archive; the archive, written to a file,
+//       imports into an empty list, and each tunnel comes back with its
+//       name and its WireGuard and Wstunnel configuration.
 //
 //   J — Every Picked File's Access Is Released
-//       Over a recording access, a .conf, a zip and a file that is not
-//       there are imported: each one's access is asked for once and
-//       released once.
+//       Over a recording access that refuses one file, a .conf, a zip, the
+//       refused .conf and a file that is not there are imported: each one's
+//       access is asked for once, and released once where it was granted.
+//       The file that is not there is reported as unreadable.
 
 #if DEBUG
 import Foundation
@@ -43,13 +49,22 @@ extension TunnelTransferWorkflow {
         private let lock = NSLock()
         private var startedPaths: [String] = []
         private var stoppedPaths: [String] = []
+        private let refused: Set<String>
+
+        /// `refusing` names the files whose access this ledger answers false.
+        init(refusing refused: Set<String> = []) {
+            self.refused = refused
+        }
 
         var started: [String] { lock.withLock { startedPaths } }
         var stopped: [String] { lock.withLock { stoppedPaths } }
 
         var access: PickedFileAccess {
             PickedFileAccess(
-                start: { url in self.lock.withLock { self.startedPaths.append(url.lastPathComponent) }; return true },
+                start: { url in
+                    self.lock.withLock { self.startedPaths.append(url.lastPathComponent) }
+                    return !self.refused.contains(url.lastPathComponent)
+                },
                 stop: { url in self.lock.withLock { self.stoppedPaths.append(url.lastPathComponent) } }
             )
         }
@@ -111,6 +126,8 @@ extension TunnelTransferWorkflow {
         guard let bundle = try? ZipArchive.archive([
             ("bundle/TE-Import-B.conf", confData(configB)),
             ("__MACOSX/bundle/._TE-Import-B.conf", Data([0, 5, 22, 7])),
+            ("bundle/._TE-Import-B.conf", Data([0, 5, 22, 7])),
+            ("__MACOSX/bundle/TE-Import-B.conf", Data([0, 5, 22, 7])),
             ("bundle/notes.txt", Data("notes\n".utf8))
         ]), let urls = write([
             ("TE-Import-A.conf", confData(configA)),
@@ -135,7 +152,8 @@ extension TunnelTransferWorkflow {
         check(taken == .addFailed(TunnelManagementError.tunnelAlreadyExistsWithThatName.localizedDescription),
               "the file whose name the list holds was reported as a name clash (\(String(describing: taken)))")
         check(report.skipped.count == 2,
-              "only those two were reported: the AppleDouble entry and notes.txt were passed over (skipped=\(report.skipped.count))")
+              "only those two were reported: the three AppleDouble entries and notes.txt were passed over"
+              + " (skipped=\(report.skipped.count))")
         check(rows.filter { $0 == "TE-Import-Taken" }.count == 1 && rows.contains("TE-Import-A") && rows.contains("TE-Import-B"),
               "the list holds both new tunnels and the taken name once (rows=\(rows))")
     }
@@ -148,12 +166,13 @@ extension TunnelTransferWorkflow {
         guard let inner = TestConfigFactory.throwaway(name: "inner"),
               let plain = TestConfigFactory.throwaway(name: "plain"),
               let kept = TestConfigFactory.throwaway(name: "kept"),
-              let archive = try? ZipArchive.archive([("inner.conf", confData(inner))]) else {
+              let archive = try? ZipArchive.archive([("inner.conf", confData(inner)),
+                                                     ("S\u{327}ube.CONF", confData(kept))]) else {
             fail("the config factory or the archive writer did not produce what this step needs")
             return
         }
         var large = confData(plain)
-        large.append(Data(repeating: 0x23, count: TunnelImportBatch.limits.entryBytes))
+        large.append(Data(repeating: 0x23, count: 64 * 1024))
         guard let urls = write([
             ("archive.conf", archive),
             ("plain.zip", confData(plain)),
@@ -173,11 +192,16 @@ extension TunnelTransferWorkflow {
               "the .conf saved as plain.zip was read as a .conf and added under that name (added=\(report.added))")
         check(report.added.contains("Kept.conf 2"),
               "the .conf saved as \"Kept.conf 2\" was added under that name (added=\(report.added))")
+        let composed = report.added.first { $0.hasSuffix("ube") }.map { $0.unicodeScalars.map(\.value) }
+        check(composed == [0x15E, 0x75, 0x62, 0x65],
+              "the archive's entry S\u{327}ube.CONF, its name decomposed, was read and added as \u{15E}ube, composed"
+              + " (scalars=\(composed ?? []))")
         let oversized = report.skipped.first { $0.label == "large.conf" }?.skip
         let binary = report.skipped.first { $0.label == "binary.conf" }?.skip
-        check(oversized == .tooLarge && binary == .notText && report.added.count == 3,
+        check(oversized == .tooLarge && binary == .notText && report.added.count == 4,
               "the file past 64 KB is too large and the bytes that are not UTF-8 are not text"
-              + " (large=\(String(describing: oversized)), binary=\(String(describing: binary)))")
+              + " (large=\(String(describing: oversized)), binary=\(String(describing: binary)),"
+              + " added=\(report.added.count))")
     }
 
     func anExportedArchiveImportsBackTheSame() async {
@@ -192,9 +216,10 @@ extension TunnelTransferWorkflow {
         }
         let originals = [standalone, ghost]
         let tunnels = originals.map { TunnelContainer(tunnel: FakeSlotProvider(config: $0)) }
-        guard case .archived(let file, _, _, _) = await bulkExport(tunnels, answering: .granted, Ledger()),
-              let urls = write([(file.name, file.data)], into: folder) else {
-            fail("the bulk export did not hand an archive to import")
+        let outcome = await bulkExport(tunnels, answering: .granted, Ledger())
+        guard let file = archive(handedBy: outcome) else { return }
+        guard let urls = write([(file.name, file.data)], into: folder) else {
+            fail("the archive could not be written into the step's folder")
             return
         }
 
@@ -204,8 +229,11 @@ extension TunnelTransferWorkflow {
               "the archive imports every tunnel and reports nothing (added=\(report.added), skipped=\(report.skipped.count))")
         for original in originals {
             let back = list.tunnels.first { $0.name == original.name }?.tunnelConfig
-            check(back?.wireguard == original.wireguard && back?.wstunnel == original.wstunnel,
-                  "\(original.name) comes back with its WireGuard and Wstunnel configuration (read=\(back != nil))")
+            let sameWireguard = back?.wireguard == original.wireguard
+            let sameWstunnel = back != nil && back?.wstunnel == original.wstunnel
+            check(sameWireguard && sameWstunnel,
+                  "\(original.name) comes back with its WireGuard and Wstunnel configuration"
+                  + " (read=\(back != nil), same WireGuard=\(sameWireguard), same Wstunnel=\(sameWstunnel))")
         }
     }
 
@@ -216,16 +244,19 @@ extension TunnelTransferWorkflow {
         }
         guard let config = TestConfigFactory.throwaway(name: "TE-Access"),
               let archive = try? ZipArchive.archive([("TE-Access-Zipped.conf", confData(config))]),
-              var urls = write([("TE-Access.conf", confData(config)), ("TE-Access.zip", archive)], into: folder) else {
+              var urls = write([("TE-Access.conf", confData(config)), ("TE-Access.zip", archive),
+                                ("TE-Access-Refused.conf", confData(config))], into: folder) else {
             fail("the files this step imports could not be written")
             return
         }
         urls.append(folder.appendingPathComponent("TE-Access-Missing.conf"))
-        let ledger = AccessLedger()
-        _ = await TunnelBulkImport.run(urls, into: emptyList(), access: ledger.access)
+        let ledger = AccessLedger(refusing: ["TE-Access-Refused.conf"])
+        let report = await TunnelBulkImport.run(urls, into: emptyList(), access: ledger.access)
+        let missing = report.skipped.first { $0.label == "TE-Access-Missing.conf" }?.skip
+        check(missing == .unreadable, "the file that is not there is reported as unreadable (\(String(describing: missing)))")
         let names = urls.map(\.lastPathComponent).sorted()
-        check(ledger.started.sorted() == names && ledger.stopped.sorted() == names,
-              "each picked file's access was asked for once and released once"
+        check(ledger.started.sorted() == names && ledger.stopped.sorted() == names.filter { $0 != "TE-Access-Refused.conf" },
+              "each picked file's access was asked for once, and released once where it was granted"
               + " (started=\(ledger.started.sorted()), stopped=\(ledger.stopped.sorted()))")
     }
 }

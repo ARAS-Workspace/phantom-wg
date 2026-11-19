@@ -63,6 +63,8 @@ enum TunnelImportBatch {
             .sorted { $0.label.localizedStandardCompare($1.label) == .orderedAscending }
     }
 
+    /// @witness TunnelTransfer.filesAndAZipImportIntoOneList
+    /// @witness TunnelTransfer.theContentDecidesNotTheName
     static func config(for candidate: Candidate) -> Result<TunnelConfig, Skip> {
         let data: Data
         switch candidate.content {
@@ -105,6 +107,7 @@ enum TunnelImportBatch {
         path.lowercased().hasSuffix(".conf")
     }
 
+    /// @witness TunnelTransfer.filesAndAZipImportIntoOneList
     static func isAppleDouble(_ path: String) -> Bool {
         path.hasPrefix("__MACOSX/") || (path as NSString).lastPathComponent.hasPrefix("._")
     }

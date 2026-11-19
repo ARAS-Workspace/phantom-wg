@@ -9,19 +9,20 @@
 // A, B, E and F run over `FakeSlotProvider`s of the step's own, and the
 // owner check is answered by a closure, as Private Data does. C stages into
 // a folder of its own and answers the picker's delegate calls itself. D
-// stages into the app's real staging folder and runs the launch path,
-// `TunnelsManager.create()`, as Tunnel Load does. The picker's sheet and
-// the Files app are the user-facing surface and are tried by hand.
+// stages through an exporter made with no folder named, as the app makes
+// it, and runs the launch path, `TunnelsManager.create()`, as Tunnel Load
+// does. The picker's sheet and the Files app are the user-facing surface
+// and are tried by hand.
 //
 // Scenarios:
 //
 //   A — The Detail Export Hands The .conf Bytes
 //       A Standalone and a Ghost tunnel, each named with a slash, a colon
-//       and Turkish letters, are exported with the owner granting. The
-//       document holds the tunnel's `.conf` text and a line end, reads back
-//       through `ConfParser` to the same WireGuard and Wstunnel
-//       configuration, and is named by the rule (slash and colon to
-//       hyphens, `.conf` added). The app declares no type for `.conf`;
+//       and Turkish letters, are exported with the owner granting. Each
+//       export hands a document: it holds the tunnel's `.conf` text and a
+//       line end, reads back through `ConfParser` to the same WireGuard and
+//       Wstunnel configuration, and is named by the rule (slash and colon
+//       to hyphens, `.conf` added). The app declares no type for `.conf`;
 //       what the extension resolves to on this system is logged.
 //
 //   B — The Detail Export Asks The Owner First
@@ -32,22 +33,26 @@
 //
 //   C — The Staged File Lives Until The Picker Answers
 //       Staged, the folder holds the file alone, with the document's bytes
-//       and mode 0600. A cancelled answer removes the folder and tells the
-//       caller nothing was saved; staged again, a picked answer removes it
-//       too and tells the caller the file was saved.
+//       and mode 0600; a staging that throws fails that claim, and the
+//       picker is made only over a file that is there. A cancelled answer
+//       removes the folder and tells the caller nothing was saved; staged
+//       again, a picked answer removes it too and tells the caller the file
+//       was saved.
 //
 //   D — A Leftover Staged File Is Swept At Launch
-//       A file is left in the app's staging folder, as a run that ended
-//       with the picker open leaves it. After `TunnelsManager.create()` the
-//       folder is gone.
+//       An exporter made with no folder named stages a file into the app's
+//       staging folder and leaves it, as a run that ended with the picker
+//       open leaves it; a staging that throws fails that claim. After
+//       `TunnelsManager.create()` the exporter's folder is gone.
 //
 //   E — The Bulk Export Archives Every Readable Tunnel
 //       Four listed tunnels, out of order: "Ev Ağı", "Ağ Kuzey", "ev ağı"
 //       and one whose configuration reads nothing. With the owner granting,
-//       the archive is named phantom-wg-export.zip and holds the three
-//       readable tunnels' `.conf` bytes, sorted by tunnel name, the name that
-//       clashes without regard to case taking " 2"; the unreadable tunnel is
-//       reported as unread, three of four counted.
+//       an archive is handed and its bytes read back as a zip archive. It is
+//       named phantom-wg-export.zip and holds the three readable tunnels'
+//       `.conf` bytes, sorted by tunnel name, the name that clashes without
+//       regard to case taking " 2"; the unreadable tunnel is reported as
+//       unread, three of four counted.
 //
 //   F — The Bulk Export Asks The Owner First
 //       A declined check archives nothing and names no failure; a failed
@@ -128,6 +133,14 @@ final class TunnelTransferWorkflow: TestWorkflow {
         )
     }
 
+    /// The archive a granted bulk export handed, as a claim: red when it handed none.
+    func archive(handedBy outcome: TunnelBulkExport.Outcome) -> ExportedFile? {
+        var handed: ExportedFile?
+        if case .archived(let file, _, _, _) = outcome { handed = file }
+        check(handed != nil, "the granted bulk export hands an archive (\(handed == nil ? "\(outcome)" : "archived"))")
+        return handed
+    }
+
     /// A listed tunnel whose configuration reads nothing.
     private func unreadable(named name: String) -> TunnelContainer {
         let provider = FakeSlotProvider(config: nil)
@@ -152,17 +165,17 @@ final class TunnelTransferWorkflow: TestWorkflow {
             }
             config.name = "Ev/Ağı: İç \(mode)"
             let tunnel = TunnelContainer(tunnel: FakeSlotProvider(config: config))
-            guard let document = await export(tunnel, answering: .granted, Ledger()) else {
-                fail("\(mode): the granted export handed no document")
-                continue
-            }
+            let handed = await export(tunnel, answering: .granted, Ledger())
+            guard check(handed != nil, "\(mode): the granted export hands a document"), let document = handed else { continue }
             check(document.data == Data((config.asConfString() + "\n").utf8),
                   "\(mode): the document holds the tunnel's .conf text and a line end (\(document.data.count) bytes)")
             let text = String(bytes: document.data, encoding: .utf8)
             let back = text.flatMap { TestConfigFactory.validated($0, name: "TE-Transfer-Back").config }
-            check(back?.wireguard == config.wireguard && back?.wstunnel == config.wstunnel,
+            let sameWireguard = back?.wireguard == config.wireguard
+            let sameWstunnel = back != nil && back?.wstunnel == config.wstunnel
+            check(sameWireguard && sameWstunnel,
                   "\(mode): it reads back through ConfParser to the same WireGuard and Wstunnel configuration"
-                  + " (read=\(back != nil))")
+                  + " (read=\(back != nil), same WireGuard=\(sameWireguard), same Wstunnel=\(sameWstunnel))")
             check(document.name == "Ev-Ağı- İç \(mode).conf",
                   "\(mode): it is named by the rule, slash and colon to hyphens and .conf added (\(document.name))")
         }
@@ -208,18 +221,21 @@ final class TunnelTransferWorkflow: TestWorkflow {
         let exporter = TunnelExportPicker(folder: folder) { answers.append($0) }
 
         for answer in ["cancelled", "picked"] {
+            let staging = "staged before the \(answer) answer, the folder holds the file alone with its bytes and mode 0600"
             let url: URL
             do {
                 url = try exporter.stage(file)
             } catch {
-                fail("the file could not be staged (\(error.localizedDescription))")
+                check(false, "\(staging) (not staged: \(error.localizedDescription))")
                 return
             }
             let listed = (try? FileManager.default.contentsOfDirectory(atPath: folder.path)) ?? []
             let mode = (try? FileManager.default.attributesOfItem(atPath: url.path))?[.posixPermissions] as? Int ?? -1
-            check(listed == [file.name] && (try? Data(contentsOf: url)) == file.data && mode == 0o600,
-                  "staged before the \(answer) answer, the folder holds the file alone with its bytes and mode 0600"
-                  + " (files=\(listed), mode=\(String(mode, radix: 8)))")
+            let intact = (try? Data(contentsOf: url)) == file.data
+            check(listed == [file.name] && intact && mode == 0o600,
+                  "\(staging) (files=\(listed), bytes as written=\(intact), mode=\(String(mode, radix: 8)))")
+            // UIKit raises when a picker is made over a file that is not there.
+            guard FileManager.default.fileExists(atPath: url.path) else { return }
 
             let picker = UIDocumentPickerViewController(forExporting: [url], asCopy: false)
             if answer == "cancelled" {
@@ -239,24 +255,24 @@ final class TunnelTransferWorkflow: TestWorkflow {
             fail("the config factory produced no throwaway")
             return
         }
-        let folder = TunnelExportPicker.stagingFolder
-        onTeardown("remove a leftover staged file") { TunnelExportPicker.sweep(folder) }
+        let left = "a file is left in the app's staging folder, as a run that ended with the picker open leaves it"
+        let exporter = TunnelExportPicker()
+        onTeardown("remove a leftover staged file") { TunnelExportPicker.sweep(exporter.folder) }
         let staged: URL
         do {
-            staged = try TunnelExportPicker(folder: folder).stage(file)
+            staged = try exporter.stage(file)
         } catch {
-            fail("the file could not be staged (\(error.localizedDescription))")
+            check(false, "\(left) (not staged: \(error.localizedDescription))")
             return
         }
-        guard check(FileManager.default.fileExists(atPath: staged.path),
-                    "a file is left in the app's staging folder, as a run that ended with the picker open leaves it") else { return }
+        guard check(FileManager.default.fileExists(atPath: staged.path), left) else { return }
         do {
             _ = try await TunnelsManager.create()
         } catch {
             fail("the launch path was refused (\(error.localizedDescription))")
             return
         }
-        check(!FileManager.default.fileExists(atPath: folder.path),
+        check(!FileManager.default.fileExists(atPath: exporter.folder.path),
               "after the launch path TunnelsManager.create() the staging folder is gone")
     }
 
@@ -269,19 +285,15 @@ final class TunnelTransferWorkflow: TestWorkflow {
         }
         let tunnels = configs.map { TunnelContainer(tunnel: FakeSlotProvider(config: $0)) } + [unreadable(named: "Okunmaz")]
         let outcome = await bulkExport(tunnels, answering: .granted, Ledger())
-        guard case .archived(let file, let count, let total, let unread) = outcome else {
-            fail("the granted bulk export archived nothing (\(outcome))")
-            return
-        }
+        guard archive(handedBy: outcome) != nil, case .archived(let file, let count, let total, let unread) = outcome else { return }
         check(file.name == "phantom-wg-export.zip" && count == 3 && total == 4 && unread == ["Okunmaz"],
               "the archive is phantom-wg-export.zip, three of four counted, the unreadable tunnel reported as unread"
               + " (name=\(file.name), count=\(count), total=\(total), unread=\(unread))")
 
         let limits = ZipArchive.Limits(listed: 64, selected: 64, entryBytes: 64 * 1024)
-        guard let entries = try? ZipArchive.entries(in: file.data, limits: limits, pages: .unitedStates, where: { _ in true }) else {
-            fail("the archive's bytes did not read back")
-            return
-        }
+        let read = try? ZipArchive.entries(in: file.data, limits: limits, pages: .unitedStates, where: { _ in true })
+        guard check(read != nil, "the archive's bytes read back as a zip archive (\(file.data.count) bytes)"),
+              let entries = read else { return }
         let paths = entries.map(\.path)
         // The plan sorts by tunnel name and numbers a clash after sorting,
         // so the order is read on the names with " 2" and ".conf" taken off.

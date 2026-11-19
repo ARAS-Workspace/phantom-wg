@@ -57,6 +57,8 @@ struct TunnelConfig: Codable, Identifiable, Equatable {
     /// Serializes the config into the `.conf` textual format accepted by
     /// `ConfParser.parse(...)`. Matches what the Copy Config action produces.
     /// @witness ConfigContract.searchDomainsAndListenPort
+    /// @witness TunnelTransfer.theDetailExportHandsTheConfBytes
+    /// @witness TunnelTransfer.anExportedArchiveImportsBackTheSame
     func asConfString() -> String {
         var lines: [String] = []
 
