@@ -12,6 +12,7 @@ struct TunnelListView: View {
     @State private var showingSearch = false
     @State private var savedOrder = TunnelListOrderStore.load()
     @State private var selecting = false
+    @State private var deletion = TunnelDeleteSelection()
     #if DEBUG
     @State private var showingTestEngine = false
     #endif
@@ -99,8 +100,8 @@ struct TunnelListView: View {
                     if selecting {
                         TunnelDeleteSection(
                             rows: ordered,
+                            selection: deletion,
                             onFinish: report(deleted:),
-                            onCancel: { selecting = false },
                             onFailure: { transferNotice = TransferNotice(title: loc.t("error"), message: $0) }
                         )
                     } else {
@@ -113,15 +114,27 @@ struct TunnelListView: View {
                             onStep: { id, up in
                                 reorder(TunnelListRules.movedByOne(ordered.map(\.id), id, up: up))
                             },
-                            onSelect: { selecting = true }
+                            onSelect: {
+                                deletion = TunnelDeleteSelection()
+                                selecting = true
+                            }
                         )
                     }
                 }
                 .formStyle(.grouped)
+                .safeAreaInset(edge: .bottom) {
+                    if selecting {
+                        TunnelDeleteBar(rows: ordered, selection: deletion, onCancel: { selecting = false })
+                    }
+                }
 
-                Divider()
+                // The delete selection's bar takes the bottom edge while it
+                // is open.
+                if !selecting {
+                    Divider()
 
-                bottomLinks
+                    bottomLinks
+                }
             }
         }
     }
