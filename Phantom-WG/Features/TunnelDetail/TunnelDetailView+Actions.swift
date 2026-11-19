@@ -50,14 +50,14 @@ extension TunnelDetailView {
 
     /// The editor shows the raw `.conf`, private key included, so it
     /// opens only after the owner grants it — and only if the tunnel is
-    /// still inactive once the question is answered.
+    /// still at rest (`isSettledInactive`) once the question is answered.
     func openEdit() {
         Task {
             let granted = await PrivateDataGuard.grants(reason: loc.t("edit_private_data_reason")) { message in
                 errorMessage = message
                 showingError = true
             }
-            guard granted, tunnel.status == .inactive else { return }
+            guard granted, tunnel.isSettledInactive else { return }
             showingEdit = true
         }
     }

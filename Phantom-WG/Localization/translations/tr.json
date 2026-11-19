@@ -124,6 +124,7 @@
   "import_name_section": "Tünel Adı",
   "import_name_placeholder": "tunel-adi",
   "import_footer": "Phantom-WG yapılandırmanızı yapıştırın (.conf formatı).",
+  "edit_err_not_settled": "Tünel artık tamamen durmuş durumda değil; bu yüzden yapılandırma şu anda kaydedilemez. Tüneli durdurun, sonra tekrar deneyin.",
   "import_quick_actions": "Hızlı Eylemler",
   "import_scan_qr": "QR Kod Tara",
   "import_paste": "Panodan Yapıştır",

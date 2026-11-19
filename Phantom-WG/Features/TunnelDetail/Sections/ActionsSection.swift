@@ -11,7 +11,8 @@ import SwiftUI
 /// - Copy owns its own "Copied!" feedback timer locally and shows it
 ///   only when something was copied.
 /// - Edit opens `TunnelEditView` (raw-text editing, the WireGuard app
-///   pattern) and is enabled only while the tunnel is inactive.
+///   pattern) and is enabled only for a row the delete gate lets go
+///   (`isSettledInactive`).
 /// - Reset is enabled only while the tunnel is active/reasserting;
 ///   tapping it asks the extension to restart the tunnel layer in
 ///   place (wstunnel + WireGuard in ghost mode, WireGuard alone in
@@ -82,10 +83,10 @@ struct ActionsSection: View {
         tunnel.status == .active || tunnel.status == .reasserting
     }
 
-    /// Config edits require a tunnel painted at rest; the delete gate
-    /// reads the system and the activation attempt too.
+    /// Config edits open on the same gate as the delete
+    /// (`isSettledInactive`), as Mac 2.2.1's do.
     private var canEdit: Bool {
-        tunnel.status == .inactive
+        tunnel.isSettledInactive
     }
 
     private func copyButton(_ title: String, icon: String, id: String, action: @escaping () async -> Bool) -> some View {

@@ -9,7 +9,7 @@ import SwiftUI
 /// here: adding or deleting the `[Wstunnel]` section converts the
 /// tunnel between ghost and standalone WireGuard, through exactly the
 /// same validation steps as import. Reachable only while the tunnel
-/// is inactive.
+/// is at rest (`isSettledInactive`), and a save reads that gate again.
 struct TunnelEditView: View {
     var tunnel: TunnelContainer
     @Environment(TunnelsManager.self) private var tunnelsManager
@@ -120,7 +120,7 @@ struct TunnelEditView: View {
     private var canSubmit: Bool {
         original != nil
             && !saving
-            && tunnel.status == .inactive
+            && tunnel.isSettledInactive
             && !name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
             && !rawInput.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
     }
@@ -132,6 +132,14 @@ struct TunnelEditView: View {
         // Identity anchor: the Keychain copy this edit started from.
         // `canSubmit` already requires it, so this is defensive.
         guard let original else { return }
+
+        // The gate is read again at the moment of the tap, as Mac 2.2.1
+        // does: a row that has moved since the button was drawn is refused
+        // here, before modify.
+        guard tunnel.isSettledInactive else {
+            errorMessages = [loc.t("edit_err_not_settled")]
+            return
+        }
 
         let trimmedName = name.trimmingCharacters(in: .whitespacesAndNewlines)
         let trimmedInput = rawInput.trimmingCharacters(in: .whitespacesAndNewlines)

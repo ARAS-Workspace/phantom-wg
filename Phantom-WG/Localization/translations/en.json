@@ -124,6 +124,7 @@
   "import_name_section": "Tunnel Name",
   "import_name_placeholder": "my-tunnel",
   "import_footer": "Paste your Phantom-WG configuration (.conf format).",
+  "edit_err_not_settled": "The tunnel is no longer fully stopped, so the configuration cannot be saved right now. Stop the tunnel, then try again.",
   "import_quick_actions": "Quick Actions",
   "import_scan_qr": "Scan QR Code",
   "import_paste": "Paste from Clipboard",
