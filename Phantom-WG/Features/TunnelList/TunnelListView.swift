@@ -160,8 +160,9 @@ struct TunnelListView: View {
 
     // MARK: - Import
 
-    /// Adds every `.conf` among the picked files and inside the picked zip
-    /// archives, then reports what was added and what was not.
+    /// Reads every picked file that is not a zip archive, and every `.conf`
+    /// entry inside the picked zip archives, as a `.conf`; adds what
+    /// validates and reports what was added and what was not.
     private func importFiles(_ urls: [URL]) {
         transferring = true
         Task {

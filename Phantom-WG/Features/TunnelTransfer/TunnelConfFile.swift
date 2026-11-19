@@ -1,12 +1,12 @@
 import Foundation
 
 /// The `.conf` file of one tunnel: its name and its bytes. Mac 2.2.1's
-/// `TunnelConfFile` is the source; there it also named the type for the
-/// save panel and wrote the file it chose. On iOS `document(of:)` hands
-/// the bytes once the owner grants it, and `TunnelExportPicker` stages them
-/// for the export picker. The app declares no type for `.conf`: the
-/// picker takes the file by its path, and an import decides from the
-/// content.
+/// `TunnelConfFile` is the source; there it also named the type its save
+/// and open panels allow and wrote the file the save panel chose. On iOS
+/// `document(of:)` hands the bytes once the owner grants it, and
+/// `TunnelExportPicker` stages them for the export picker. The app
+/// declares no type for `.conf`: the picker takes the file by its path,
+/// and an import decides from the content.
 enum TunnelConfFile {
 
     /// @witness TunnelTransfer.theDetailExportHandsTheConfBytes

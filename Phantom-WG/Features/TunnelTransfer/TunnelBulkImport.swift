@@ -1,11 +1,12 @@
 import Foundation
 
-/// The list's bulk import: every `.conf` among the picked files and inside
-/// the picked zip archives is read, validated and added through `add()`;
-/// what is not added is reported with its reason. Mac 2.2.1's
-/// `TunnelBulkImport` is the source. Mac gives up after three unreachable
-/// vault answers in a row; iOS has no vault, and how a refused VPN
-/// permission answers a run of adds is to be measured on a device first.
+/// The list's bulk import: every picked file that is not a zip archive,
+/// and every `.conf` entry inside the picked zip archives, is read as a
+/// `.conf`, validated and added through `add()`; what is not added is
+/// reported with its reason. Mac 2.2.1's `TunnelBulkImport` is the source.
+/// Mac gives up after three unreachable vault answers in a row; iOS has no
+/// vault, and how a refused VPN permission answers a run of adds is to be
+/// measured on a device first.
 @MainActor
 enum TunnelBulkImport {
 

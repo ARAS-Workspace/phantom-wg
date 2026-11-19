@@ -3,10 +3,10 @@ import Foundation
 /// Zip archives through MiniZip. An archive is read from a file
 /// (`entries(at:)`) or from bytes already in memory (`entries(in:)`); the
 /// app's own archive is built in memory and handed back as bytes
-/// (`archive(_:)`), so the app writes no archive file of its own. Entry
-/// contents are read into memory, never extracted to disk. Mac 2.2.1's
-/// reader is kept as it is; its writer wrote to a file the save panel
-/// named.
+/// (`archive(_:)`), and MiniZip opens no file to write it. The bytes reach
+/// a file only when `TunnelExportPicker` stages them for the export picker.
+/// Entry contents are read into memory, never extracted to disk. Mac 2.2.1's
+/// reader is kept as it is; its writer wrote to a file the save panel named.
 enum ZipArchive {
 
     struct Limits: Equatable {

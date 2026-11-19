@@ -4,8 +4,10 @@ import Foundation
 /// archive in memory: a buffer and a position, read, written and sought the
 /// way MiniZip uses a file. A write past the end grows the buffer and a
 /// write inside it overwrites in place, as MiniZip's rewrite of a local
-/// header needs. A seek to a negative position or from an unknown origin
-/// marks the stream failed, and MiniZip reads that through its error call.
+/// header needs. A seek to a negative position, past `Int`'s range or from
+/// an unknown origin answers -1 and marks the stream failed. MiniZip asks
+/// the error call only when a header field comes up short;
+/// `ZipArchive.archive(_:)` reads the mark once the archive is closed.
 ///
 /// `functions` refers to the stream without retaining it: the stream must
 /// outlive every archive handle opened over them.

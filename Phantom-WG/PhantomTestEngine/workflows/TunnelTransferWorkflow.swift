@@ -1,13 +1,14 @@
 // Tunnel Transfer
 //
-// How a tunnel's configuration leaves the app as a file. Mac 2.2.1's Tunnel
-// Transfer drives the bulk import and export; on iOS the detail's single
-// `.conf` export came first (package 4b), the list's zip export followed
-// (4c), and the import (4d) lives in TunnelTransferWorkflow+Import.
+// How a tunnel's configuration leaves the app as a file and comes back in.
+// Mac 2.2.1's Tunnel Transfer drives the bulk import and export; on iOS the
+// detail's single `.conf` export came first (package 4b), the list's zip
+// export followed (4c), and the import (4d) lives in
+// TunnelTransferWorkflow+Import.
 //
-// A and B run over a `FakeSlotProvider` of the step's own, and the owner
-// check is answered by a closure, as Private Data does. C stages into a
-// folder of its own and answers the picker's delegate calls itself. D
+// A, B, E and F run over `FakeSlotProvider`s of the step's own, and the
+// owner check is answered by a closure, as Private Data does. C stages into
+// a folder of its own and answers the picker's delegate calls itself. D
 // stages into the app's real staging folder and runs the launch path,
 // `TunnelsManager.create()`, as Tunnel Load does. The picker's sheet and
 // the Files app are the user-facing surface and are tried by hand.
