@@ -88,7 +88,13 @@ enum TunnelImportBatch {
         return .success(config)
     }
 
+    /// The tunnel name a file or an archive entry is added under: its last
+    /// path component with a trailing `.conf` taken off, as on Mac. Nothing
+    /// else is read into the name, so a file the Files app named
+    /// `X.conf 2` (Keep Both) is added as `X.conf 2`.
+    ///
     /// @witness TunnelTransfer.filesAndAZipImportIntoOneList
+    /// @witness TunnelTransfer.theContentDecidesNotTheName
     static func tunnelName(fromPath path: String) -> String {
         let last = (path as NSString).lastPathComponent
         let base = last.lowercased().hasSuffix(".conf") ? String(last.dropLast(5)) : last
