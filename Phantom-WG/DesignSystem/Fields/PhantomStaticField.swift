@@ -5,7 +5,10 @@ import SwiftUI
 /// configuration editing happens exclusively in `TunnelEditView`'s
 /// raw-text editor. `axIdentifier` attaches a stable accessibility
 /// identifier so automation and accessibility tooling can address
-/// the value by string.
+/// the value by string. The value is typeset with no linguistic language
+/// (`zxx`), so a long key with no break in it is broken between two
+/// characters and no hyphen is added: base64 holds no hyphen, and one
+/// drawn at the line's end reads as part of the key.
 struct PhantomStaticField: View {
     let label: String
     let value: String
@@ -18,6 +21,7 @@ struct PhantomStaticField: View {
                 .foregroundStyle(Color.secondary)
             Text(value)
                 .font(.system(.body, design: .monospaced))
+                .typesettingLanguage(Locale.Language(identifier: "zxx"))
                 .textSelection(.enabled)
                 .accessibilityIdentifier(axIdentifier ?? "")
         }
