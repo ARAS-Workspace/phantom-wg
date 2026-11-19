@@ -3,6 +3,8 @@ import SwiftUI
 /// Headerless top block mirroring the running tunnel: the same
 /// status row the detail view renders, surfaced so connection state
 /// and the master toggle are reachable without opening the detail.
+/// A tap on the row opens the tunnel's detail, as a list row does and
+/// as Mac 2.2.1's section does.
 /// Deliberately not a titled section — its position above the titled
 /// tunnel list already says what it is, matching the macOS layout.
 /// While every tunnel is inactive a quiet placeholder keeps the block
@@ -15,13 +17,16 @@ struct ActiveTunnelSection: View {
     var body: some View {
         Section {
             if let tunnel = activeTunnel {
-                TunnelStatusRow(
-                    tunnel: tunnel,
-                    isGhost: tunnel.isGhost,
-                    title: tunnel.name,
-                    toggleAXID: AXID.TunnelList.activeToggle,
-                    errorAXID: AXID.TunnelList.activeError
-                )
+                NavigationLink(destination: TunnelDetailView(tunnel: tunnel)) {
+                    TunnelStatusRow(
+                        tunnel: tunnel,
+                        isGhost: tunnel.isGhost,
+                        title: tunnel.name,
+                        toggleAXID: AXID.TunnelList.activeToggle,
+                        errorAXID: AXID.TunnelList.activeError
+                    )
+                }
+                .accessibilityIdentifier(AXID.TunnelList.activeLink)
                 .padding(.bottom, 8)
             } else {
                 noActiveRow

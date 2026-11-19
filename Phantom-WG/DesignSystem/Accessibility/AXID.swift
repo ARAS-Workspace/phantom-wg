@@ -33,6 +33,7 @@ enum AXID {
         static let languageToggle    = "tunnel-list.language-toggle"
 
         static let activeToggle = "tunnel-list.active.toggle"
+        static let activeLink   = "tunnel-list.active.link"
         static let activeError  = "tunnel-list.active.activation-error"
         static let activeNone   = "tunnel-list.active.none"
         static let listCount    = "tunnel-list.count"
