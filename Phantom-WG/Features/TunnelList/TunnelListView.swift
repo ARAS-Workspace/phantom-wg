@@ -21,7 +21,7 @@ struct TunnelListView: View {
     /// active-first pinning; the top section is where the running
     /// tunnel surfaces.
     private var activeTunnel: TunnelContainer? {
-        tunnelsManager.tunnels.first { $0.status != .inactive }
+        TunnelListRules.slotHolder(in: tunnelsManager.tunnels, status: \.status)
     }
 
     var body: some View {
