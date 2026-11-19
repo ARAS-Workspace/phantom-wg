@@ -16,8 +16,15 @@ enum AXID {
 
     // MARK: Tunnel List
 
+    enum TunnelSearch {
+        static let field = "tunnel-search.field"
+        static let clear = "tunnel-search.clear"
+        static let close = "tunnel-search.close"
+    }
+
     enum TunnelList {
         static let addButton         = "tunnel-list.add-button"
+        static let searchButton      = "tunnel-list.search-button"
         static let transferMenu      = "tunnel-list.transfer-menu"
         static let importFilesButton = "tunnel-list.import-files"
         static let exportAllButton   = "tunnel-list.export-all"
@@ -29,6 +36,7 @@ enum AXID {
         static let activeError  = "tunnel-list.active.activation-error"
         static let activeNone   = "tunnel-list.active.none"
         static let listCount    = "tunnel-list.count"
+        static let searchNoMatch = "tunnel-list.search.no-match"
 
         static func row(_ name: String) -> String { "tunnel-row.\(name)" }
         static func rowToggle(_ name: String) -> String { "tunnel-row.\(name).toggle" }

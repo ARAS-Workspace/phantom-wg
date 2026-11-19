@@ -1,12 +1,16 @@
 // Tunnel List
 //
 // The tunnel list's rules (package 5), checked apart from the list's views:
-// which tunnel the top section shows. Mac 2.2.1's `TunnelListRules` is the
-// source; Mac runs no engine family over them.
+// which tunnel the top section shows and which names a search holds. Mac
+// 2.2.1's `TunnelListRules` is the source; Mac runs no engine family over
+// them.
 //
 // A runs the rule over plain rows first, then over a `TunnelsManager` of
 // the step's own whose rows are `FakeSlotProvider`s, as Activation Seam
-// does. The section on screen is tried by hand.
+// does. B runs the search rule over plain names and logs the run's
+// locale. The rule folds under one fixed locale, and a run launched under a
+// Turkish one (`-AppleLocale tr_TR -AppleLanguages (tr)`) answers the same.
+// The section and the search field on screen are tried by hand.
 //
 // Scenarios:
 //
@@ -17,16 +21,24 @@
 //       listed above A, is pressed while A holds the slot: while B waits
 //       and A goes down, the section shows A; once A's session ends, it
 //       shows B.
+//
+//   B — Search Folds Case, Marks And The Turkish I
+//       A query holds a name whatever its letter case and marks: "agi"
+//       and "AĞI" find "Ev Ağı", "KILIC" finds "Kılıç", "istanbul"
+//       finds "İstanbul" and "isik" finds "Işık". Spaces around a
+//       query are passed over and a query of spaces alone holds every
+//       name; a query the name does not hold finds nothing.
 
 #if DEBUG
 import Foundation
 
 final class TunnelListWorkflow: TestWorkflow {
-    override var displayName: String { "Tunnel List (The Active Section)" }
+    override var displayName: String { "Tunnel List (The Active Section And Search)" }
 
     override var steps: [WorkflowStep] {
         [
-            WorkflowStep("The Active Section Shows The Slot Holder", theActiveSectionShowsTheSlotHolder)
+            WorkflowStep("The Active Section Shows The Slot Holder", theActiveSectionShowsTheSlotHolder),
+            WorkflowStep("Search Folds Case, Marks And The Turkish I", searchFoldsCaseMarksAndTheTurkishI)
         ]
     }
 
@@ -42,6 +54,13 @@ final class TunnelListWorkflow: TestWorkflow {
     private struct SlotCase {
         let rows: [Row]
         let shows: String?
+    }
+
+    /// One case of step B: a name, a query and whether the name holds it.
+    private struct SearchCase {
+        let name: String
+        let query: String
+        let holds: Bool
     }
 
     // MARK: - Steps
@@ -99,6 +118,35 @@ final class TunnelListWorkflow: TestWorkflow {
         let after = TunnelListRules.slotHolder(in: manager.tunnels, status: \.status)
         check(handedOn && after === rowB,
               "once A's session ends, the section shows B (starts=\(fakeB.startCount), shows=\(after?.name ?? "none"))")
+    }
+
+    func searchFoldsCaseMarksAndTheTurkishI() async {
+        log("this run's locale is \(Locale.current.identifier)")
+        let cases = [
+            SearchCase(name: "Ev Ağı", query: "ev", holds: true),
+            SearchCase(name: "Ev Ağı", query: "agi", holds: true),
+            SearchCase(name: "Ev Ağı", query: "AĞI", holds: true),
+            SearchCase(name: "Kılıç", query: "kilic", holds: true),
+            SearchCase(name: "Kılıç", query: "KILIÇ", holds: true),
+            SearchCase(name: "Kılıç", query: "KILIC", holds: true),
+            SearchCase(name: "İstanbul", query: "istanbul", holds: true),
+            SearchCase(name: "İstanbul", query: "ıstanbul", holds: true),
+            SearchCase(name: "İstanbul", query: "ISTANBUL", holds: true),
+            SearchCase(name: "Işık", query: "isik", holds: true),
+            SearchCase(name: "Işık", query: "IŞIK", holds: true),
+            SearchCase(name: "Işık", query: "ışık", holds: true),
+            SearchCase(name: "Şube Öğle", query: "sube ogle", holds: true),
+            SearchCase(name: "Home", query: "HOME", holds: true),
+            SearchCase(name: "Home", query: " ho ", holds: true),
+            SearchCase(name: "Home", query: "   ", holds: true),
+            SearchCase(name: "Home", query: "zz", holds: false),
+            SearchCase(name: "Ev Ağı", query: "Ağ Kuzey", holds: false)
+        ]
+        for entry in cases {
+            let held = TunnelListRules.matches(entry.name, query: entry.query)
+            check(held == entry.holds,
+                  "\"\(entry.name)\" \(entry.holds ? "holds" : "does not hold") the query \"\(entry.query)\" (held=\(held))")
+        }
     }
 }
 #endif

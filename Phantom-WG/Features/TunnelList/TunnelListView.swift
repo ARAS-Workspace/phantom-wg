@@ -9,6 +9,7 @@ struct TunnelListView: View {
     @State private var transferring = false
     @State private var showingFileImport = false
     @State private var transferNotice: TransferNotice?
+    @State private var showingSearch = false
     #if DEBUG
     @State private var showingTestEngine = false
     #endif
@@ -31,6 +32,9 @@ struct TunnelListView: View {
                 .toolbar { toolbarContent }
                 .navigationDestination(isPresented: $showingImport) {
                     TunnelImportView()
+                }
+                .navigationDestination(isPresented: $showingSearch) {
+                    TunnelSearchView()
                 }
                 .alert(
                     transferNotice?.title ?? "",
@@ -80,29 +84,7 @@ struct TunnelListView: View {
                 Form {
                     ActiveTunnelSection(activeTunnel: activeTunnel)
 
-                    Section {
-                        ForEach(tunnelsManager.tunnels) { tunnel in
-                            NavigationLink(destination: TunnelDetailView(tunnel: tunnel)) {
-                                TunnelRow(tunnel: tunnel)
-                            }
-                        }
-                    } header: {
-                        HStack {
-                            Label(loc.t("tunnel_list_section_header"), systemImage: "list.bullet")
-                            Spacer()
-                            Text("\(tunnelsManager.tunnels.count)")
-                                .font(.footnote)
-                                .foregroundStyle(.secondary)
-                                .padding(.horizontal, 8)
-                                .padding(.vertical, 2)
-                                .background(
-                                    Capsule()
-                                        .fill(Color.secondary.opacity(0.15))
-                                )
-                                .accessibilityIdentifier(AXID.TunnelList.listCount)
-                        }
-                        .padding(.bottom, 6)
-                    }
+                    TunnelListSection(rows: tunnelsManager.tunnels, count: "\(tunnelsManager.tunnels.count)")
                 }
                 .formStyle(.grouped)
 
@@ -128,6 +110,16 @@ struct TunnelListView: View {
             .accessibilityLabel(TestEngineStrings.of(loc.current).menuEntry)
         }
         #endif
+        ToolbarItem(placement: .topBarTrailing) {
+            Button {
+                showingSearch = true
+            } label: {
+                Image(systemName: "magnifyingglass")
+            }
+            .disabled(tunnelsManager.tunnels.isEmpty)
+            .accessibilityLabel(loc.t("tunnel_list_search_placeholder"))
+            .accessibilityIdentifier(AXID.TunnelList.searchButton)
+        }
         ToolbarItem(placement: .topBarTrailing) {
             Menu {
                 Button {
