@@ -92,8 +92,9 @@ struct TunnelListView: View {
                 // A grouped form to match the macOS presentation —
                 // every screen on both platforms renders in one.
                 // A row is deleted by swiping it left
-                // (`TunnelListSection`) or from the detail's Actions
-                // section.
+                // (`TunnelListSection`), in the selection the header's
+                // trash button opens (`TunnelDeleteSection`), or from the
+                // detail's Actions section.
                 Form {
                     ActiveTunnelSection(activeTunnel: activeTunnel)
 
@@ -280,7 +281,8 @@ struct TunnelListView: View {
     }
 
     /// Fixed footer — the form above scrolls as it grows, the links
-    /// stay put. Mirrors the empty state's bottom-link styling.
+    /// stay put; the delete selection's bar takes their place while it
+    /// is open. Mirrors the empty state's bottom-link styling.
     ///
     /// The line above the links is the declaration itself, not a link to
     /// one: it sits on the first screen, before a tunnel has been

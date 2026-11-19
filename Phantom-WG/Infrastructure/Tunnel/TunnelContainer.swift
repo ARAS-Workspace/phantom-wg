@@ -59,9 +59,10 @@ class TunnelContainer: Identifiable {
         status = TunnelStatus(from: tunnel.connectionStatus)
     }
 
-    /// The gate for removing this row from the list: the system reads no
-    /// session (disconnected, or invalid as an entry saved disabled reads),
-    /// the row is painted at rest, and no activation attempt is under way.
+    /// The gate a delete or an edit of this tunnel passes: the system reads
+    /// no session (disconnected, or invalid as an entry saved disabled
+    /// reads), the row is painted at rest, and no activation attempt is
+    /// under way.
     /// Mac 2.2.1's `isSettledInactive` is the source; iOS keeps no disarm
     /// ledger, so Mac's fourth axis, a counted stop waiting on its rule, is
     /// not read here.

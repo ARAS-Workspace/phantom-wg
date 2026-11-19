@@ -1,8 +1,9 @@
 import SwiftUI
 
-/// Headerless top block mirroring the running tunnel: the same
-/// status row the detail view renders, surfaced so connection state
-/// and the master toggle are reachable without opening the detail.
+/// Headerless top block mirroring the tunnel that holds the slot
+/// (`TunnelListRules.slotHolder`): the same status row the detail view
+/// renders, surfaced so connection state and the master toggle are
+/// reachable without opening the detail.
 /// A tap on the row opens the tunnel's detail, as a list row does and
 /// as Mac 2.2.1's section does.
 /// Deliberately not a titled section — its position above the titled
