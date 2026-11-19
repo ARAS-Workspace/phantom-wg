@@ -42,9 +42,12 @@ class TunnelsManager {
     /// Loads the system's entries, then deletes the app group Keychain
     /// items none of them references, as WireGuard's iOS app does at
     /// launch. This runs here only: a reload can cross an add whose item
-    /// is sealed and not yet saved.
+    /// is sealed and not yet saved. An export file a run left staged while
+    /// the picker was open is removed here too.
     /// @witness TunnelLoad.anItemNoEntryReferencesIsCollectedAtLaunch
+    /// @witness TunnelTransfer.aLeftoverStagedFileIsSweptAtLaunch
     static func create() async throws -> TunnelsManager {
+        TunnelExportPicker.sweep()
         #if DEBUG && targetEnvironment(simulator)
         let factory: TunnelProviderFactory = SimulatedTunnelProviderFactory()
         #else

@@ -1,11 +1,13 @@
 import SwiftUI
 
-/// Footer actions — copy-to-clipboard, edit, reset connection, and
-/// delete.
+/// Footer actions — copy-to-clipboard, export, edit, reset connection,
+/// and delete.
 ///
-/// - Copy, edit, and delete reach the tunnel's private data, so each
-///   asks the device owner first (`PrivateDataGuard`, in the parent's
-///   actions).
+/// - Copy, export, edit, and delete reach the tunnel's private data, so
+///   each asks the device owner first (`PrivateDataGuard`, in the
+///   parent's actions).
+/// - Export hands the `.conf` file to the system's export picker, where
+///   the user picks the place it is saved.
 /// - Copy owns its own "Copied!" feedback timer locally and shows it
 ///   only when something was copied.
 /// - Edit opens `TunnelEditView` (raw-text editing, the WireGuard app
@@ -25,6 +27,7 @@ struct ActionsSection: View {
     var tunnel: TunnelContainer
     let canCopy: Bool
     let copyAction: () async -> Bool
+    let exportAction: () -> Void
     let editAction: () -> Void
     let resetAction: () -> Void
     let resetting: Bool
@@ -38,6 +41,12 @@ struct ActionsSection: View {
             copyButton(loc.t("detail_copy_conf"), icon: "doc.text", id: "conf", action: copyAction)
                 .disabled(!canCopy)
                 .accessibilityIdentifier(AXID.TunnelDetail.Actions.copyButton)
+
+            Button(action: exportAction) {
+                Label(loc.t("detail_export_conf"), systemImage: "square.and.arrow.up")
+            }
+            .disabled(!canCopy)
+            .accessibilityIdentifier(AXID.TunnelDetail.Actions.exportButton)
 
             Button(action: editAction) {
                 Label(loc.t("detail_edit_conf"), systemImage: "square.and.pencil")
@@ -102,6 +111,7 @@ struct ActionsSection: View {
                 tunnel: manager.tunnels[0],
                 canCopy: true,
                 copyAction: { true },
+                exportAction: {},
                 editAction: {},
                 resetAction: {},
                 resetting: false,
@@ -122,6 +132,7 @@ struct ActionsSection: View {
                 tunnel: manager.tunnels[0],
                 canCopy: true,
                 copyAction: { true },
+                exportAction: {},
                 editAction: {},
                 resetAction: {},
                 resetting: false,
@@ -142,6 +153,7 @@ struct ActionsSection: View {
                 tunnel: manager.tunnels[1],
                 canCopy: true,
                 copyAction: { true },
+                exportAction: {},
                 editAction: {},
                 resetAction: {},
                 resetting: false,

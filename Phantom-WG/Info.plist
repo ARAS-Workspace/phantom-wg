@@ -23,7 +23,7 @@
 	<key>NSCameraUsageDescription</key>
 	<string>Camera access is needed to scan QR codes for tunnel configuration import.</string>
 	<key>NSFaceIDUsageDescription</key>
-	<string>Face ID confirms the device owner before a tunnel configuration is copied, edited, or deleted.</string>
+	<string>Face ID confirms the device owner before a tunnel configuration is copied, exported, edited, or deleted.</string>
 	<key>UILaunchScreen</key>
 	<dict>
 		<key>UIImageName</key>

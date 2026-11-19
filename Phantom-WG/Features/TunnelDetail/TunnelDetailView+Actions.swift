@@ -26,6 +26,26 @@ extension TunnelDetailView {
         return true
     }
 
+    // MARK: - Export
+
+    /// Hands the `.conf` file, private key included, to the export
+    /// picker once the owner grants it (`TunnelExportPicker`).
+    func exportConf() {
+        Task {
+            let file = await TunnelConfFile.document(of: tunnel, reason: loc.t("export_private_data_reason")) { message in
+                errorMessage = message
+                showingError = true
+            }
+            guard let file, let presenter = TunnelExportPicker.topViewController() else { return }
+            do {
+                try TunnelExportPicker().present(file, over: presenter)
+            } catch {
+                errorMessage = error.localizedDescription
+                showingError = true
+            }
+        }
+    }
+
     // MARK: - Edit
 
     /// The editor shows the raw `.conf`, private key included, so it

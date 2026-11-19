@@ -52,6 +52,7 @@ struct TunnelDetailView: View {
                 tunnel: tunnel,
                 canCopy: config != nil,
                 copyAction: copyConf,
+                exportAction: exportConf,
                 editAction: openEdit,
                 resetAction: resetConnection,
                 resetting: isResetting,

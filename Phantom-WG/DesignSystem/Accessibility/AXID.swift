@@ -100,6 +100,7 @@ enum AXID {
 
         enum Actions {
             static let copyButton    = "tunnel-detail.actions.copy"
+            static let exportButton  = "tunnel-detail.actions.export"
             static let editButton    = "tunnel-detail.actions.edit"
             static let resetButton   = "tunnel-detail.actions.reset"
             static let deleteButton  = "tunnel-detail.actions.delete"

@@ -16,6 +16,7 @@ enum TestCatalog {
             SanityWorkflow(),
             ConfigContractWorkflow(),
             ArchiveNamesWorkflow(),
+            TunnelTransferWorkflow(),
             TunnelAddWorkflow(),
             TunnelEditWorkflow(),
             TunnelRemoveWorkflow(),
