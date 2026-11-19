@@ -20,6 +20,9 @@ struct TunnelListSection: View {
     var onMove: ((IndexSet, Int) -> Void)?
     /// One step of a row up (`true`) or down, from VoiceOver.
     var onStep: ((UUID, Bool) -> Void)?
+    /// Opens the delete selection from the header's trash button; nil
+    /// draws no button.
+    var onSelect: (() -> Void)?
 
     @Environment(TunnelsManager.self) private var tunnelsManager
     @Environment(LocalizationManager.self) private var loc
@@ -79,6 +82,13 @@ struct TunnelListSection: View {
                             .fill(Color.secondary.opacity(0.15))
                     )
                     .accessibilityIdentifier(AXID.TunnelList.listCount)
+                if let onSelect {
+                    Button(action: onSelect) {
+                        Image(systemName: "trash")
+                    }
+                    .accessibilityLabel(loc.t("tunnel_list_delete"))
+                    .accessibilityIdentifier(AXID.TunnelList.deleteButton)
+                }
             }
             .padding(.bottom, 6)
         }

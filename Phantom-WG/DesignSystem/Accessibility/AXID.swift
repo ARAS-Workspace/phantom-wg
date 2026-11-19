@@ -43,6 +43,14 @@ enum AXID {
         static func rowToggle(_ name: String) -> String { "tunnel-row.\(name).toggle" }
         static func rowDelete(_ name: String) -> String { "tunnel-row.\(name).delete" }
         static let rowDeleteConfirm = "tunnel-row.delete-confirm"
+        static let deleteButton        = "tunnel-list.delete"
+        static let deleteMarked        = "tunnel-list.delete.marked"
+        static let deleteCancel        = "tunnel-list.delete.cancel"
+        static let deleteSelectAll     = "tunnel-list.delete.select-all"
+        static let deleteProgress      = "tunnel-list.delete.progress"
+        static let deleteConfirm       = "tunnel-list.delete-confirm.confirm"
+        static let deleteConfirmCancel = "tunnel-list.delete-confirm.cancel"
+        static func deleteRow(_ name: String) -> String { "tunnel-list.delete.row.\(name)" }
     }
 
     // MARK: Tunnel Import

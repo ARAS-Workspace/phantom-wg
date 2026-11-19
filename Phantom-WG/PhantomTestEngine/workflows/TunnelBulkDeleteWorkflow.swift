@@ -1,9 +1,9 @@
 // Tunnel Bulk Delete
 //
 // The list's deletes, driven through `TunnelBulkDelete` the way the list
-// drives them, without the swipe, the confirmation and the owner prompt
-// around them. Mac 2.2.1's Tunnel Bulk Delete A and B are the source; C is
-// iOS's.
+// drives them, without the swipe, the selection's screen, the confirmation
+// and the owner prompt around them. Mac 2.2.1's Tunnel Bulk Delete A and B
+// are the source; C and D are iOS's.
 //
 // A and B run over a `TunnelsManager` of the step's own whose rows are
 // `FakeSlotProvider`s, as Activation Seam does; C reads containers over
@@ -32,6 +32,12 @@
 //       session is coming up or going down while it is painted at rest, a
 //       row painted queued, and a row with an activation attempt under way
 //       are held.
+//
+//   D — Select All Marks The Rows The Gate Lets Go
+//       Over two settled rows and a connected one, Select All marks the two
+//       settled rows, and pressed again takes those marks off; with one of
+//       them marked it marks the other. Over rows the gate holds alone,
+//       nothing is marked and the selection does not read as all marked.
 
 #if DEBUG
 import Foundation
@@ -44,7 +50,8 @@ final class TunnelBulkDeleteWorkflow: TestWorkflow {
         [
             WorkflowStep("A Mixed Selection Deletes Only The Settled Rows", aMixedSelectionDeletesOnlyTheSettledRows),
             WorkflowStep("A Settled Selection Deletes Whole And Skips Nothing", aSettledSelectionDeletesWhole),
-            WorkflowStep("The Gate Reads The System, The Row And The Attempt", theGateReadsTheSystemTheRowAndTheAttempt)
+            WorkflowStep("The Gate Reads The System, The Row And The Attempt", theGateReadsTheSystemTheRowAndTheAttempt),
+            WorkflowStep("Select All Marks The Rows The Gate Lets Go", selectAllMarksTheRowsTheGateLetsGo)
         ]
     }
 
@@ -231,6 +238,36 @@ final class TunnelBulkDeleteWorkflow: TestWorkflow {
             check(row.isSettledInactive == entry.lets,
                   "a row \(entry.label) is \(entry.lets ? "let go" : "held") (status=\(row.status), live=\(fake.connectionStatus.rawValue))")
         }
+    }
+
+    func selectAllMarksTheRowsTheGateLetsGo() async {
+        let first = name("Select-1")
+        let live = name("Select-Live")
+        let second = name("Select-2")
+        guard let rig = rig([Row(name: first, status: .disconnected), Row(name: live, status: .connected),
+                             Row(name: second, status: .disconnected)]),
+              let held = self.rig([Row(name: name("Held-1"), status: .connected), Row(name: name("Held-2"), status: .connecting)])
+        else {
+            fail("the config factory did not produce the throwaways this step needs")
+            return
+        }
+        let rows = rig.manager.tunnels
+        let id = { (row: String) in rows.first { $0.name == row }?.id ?? UUID() }
+        let settled: Set<UUID> = [id(first), id(second)]
+
+        let all = TunnelBulkDelete.toggledAll([], rows: rows)
+        check(all == settled && TunnelBulkDelete.allMarked(all, rows: rows),
+              "Select All marks the two settled rows and not the connected one (marked=\(all.count), connected marked=\(all.contains(id(live))))")
+        let none = TunnelBulkDelete.toggledAll(all, rows: rows)
+        check(none.isEmpty && !TunnelBulkDelete.allMarked(none, rows: rows),
+              "pressed again it takes those marks off (marked=\(none.count))")
+        let completed = TunnelBulkDelete.toggledAll([id(first)], rows: rows)
+        check(completed == settled, "with one settled row marked it marks the other (marked=\(completed.count))")
+
+        let heldRows = held.manager.tunnels
+        let heldAll = TunnelBulkDelete.toggledAll([], rows: heldRows)
+        check(heldAll.isEmpty && !TunnelBulkDelete.allMarked([], rows: heldRows),
+              "over rows the gate holds alone nothing is marked and the selection is not all marked (marked=\(heldAll.count))")
     }
 }
 #endif

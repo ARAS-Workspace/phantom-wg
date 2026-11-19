@@ -11,6 +11,7 @@ struct TunnelListView: View {
     @State private var transferNotice: TransferNotice?
     @State private var showingSearch = false
     @State private var savedOrder = TunnelListOrderStore.load()
+    @State private var selecting = false
     #if DEBUG
     @State private var showingTestEngine = false
     #endif
@@ -42,6 +43,9 @@ struct TunnelListView: View {
                 }
                 .navigationDestination(isPresented: $showingSearch) {
                     TunnelSearchView(order: savedOrder)
+                }
+                .onChange(of: tunnelsManager.tunnels.isEmpty) { _, empty in
+                    if empty { selecting = false }
                 }
                 .alert(
                     transferNotice?.title ?? "",
@@ -92,16 +96,26 @@ struct TunnelListView: View {
                 Form {
                     ActiveTunnelSection(activeTunnel: activeTunnel)
 
-                    TunnelListSection(
-                        rows: ordered,
-                        count: "\(tunnelsManager.tunnels.count)",
-                        onMove: { offsets, destination in
-                            reorder(TunnelListRules.moved(ordered.map(\.id), from: offsets, to: destination))
-                        },
-                        onStep: { id, up in
-                            reorder(TunnelListRules.movedByOne(ordered.map(\.id), id, up: up))
-                        }
-                    )
+                    if selecting {
+                        TunnelDeleteSection(
+                            rows: ordered,
+                            onFinish: report(deleted:),
+                            onCancel: { selecting = false },
+                            onFailure: { transferNotice = TransferNotice(title: loc.t("error"), message: $0) }
+                        )
+                    } else {
+                        TunnelListSection(
+                            rows: ordered,
+                            count: "\(tunnelsManager.tunnels.count)",
+                            onMove: { offsets, destination in
+                                reorder(TunnelListRules.moved(ordered.map(\.id), from: offsets, to: destination))
+                            },
+                            onStep: { id, up in
+                                reorder(TunnelListRules.movedByOne(ordered.map(\.id), id, up: up))
+                            },
+                            onSelect: { selecting = true }
+                        )
+                    }
                 }
                 .formStyle(.grouped)
 
@@ -133,7 +147,7 @@ struct TunnelListView: View {
             } label: {
                 Image(systemName: "magnifyingglass")
             }
-            .disabled(tunnelsManager.tunnels.isEmpty)
+            .disabled(tunnelsManager.tunnels.isEmpty || selecting)
             .accessibilityLabel(loc.t("tunnel_list_search_placeholder"))
             .accessibilityIdentifier(AXID.TunnelList.searchButton)
         }
@@ -173,6 +187,17 @@ struct TunnelListView: View {
     private func reorder(_ order: [UUID]) {
         savedOrder = order
         TunnelListOrderStore.save(order)
+    }
+
+    // MARK: - Delete
+
+    /// Ends the selection with its report: a whole delete is told in the
+    /// title, a partial one names each row left and why.
+    private func report(deleted report: TunnelBulkDelete.Report) {
+        selecting = false
+        transferNotice = report.skipped.isEmpty
+            ? TransferNotice(title: loc.t("delete_report_success", report.deleted.count), message: "")
+            : TransferNotice(title: TunnelBulkDelete.title(report, loc: loc), message: TunnelBulkDelete.message(report, loc: loc))
     }
 
     // MARK: - Import

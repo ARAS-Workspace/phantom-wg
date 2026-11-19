@@ -2,9 +2,11 @@ import SwiftUI
 
 /// Single row in the tunnel list. Left-side status indicator, stacked
 /// name/status text, and a trailing master toggle that dispatches
-/// activation/deactivation through `TunnelsManager`.
+/// activation/deactivation through `TunnelsManager`. The delete selection
+/// draws the row without the toggle (`showsToggle`), as Mac 2.2.1 does.
 struct TunnelRow: View {
     var tunnel: TunnelContainer
+    var showsToggle = true
     @Environment(TunnelsManager.self) private var tunnelsManager
 
     var body: some View {
@@ -21,9 +23,11 @@ struct TunnelRow: View {
 
             Spacer()
 
-            Toggle("", isOn: tunnel.toggleBinding(manager: tunnelsManager))
-                .labelsHidden()
-                .accessibilityIdentifier(AXID.TunnelList.rowToggle(tunnel.name))
+            if showsToggle {
+                Toggle("", isOn: tunnel.toggleBinding(manager: tunnelsManager))
+                    .labelsHidden()
+                    .accessibilityIdentifier(AXID.TunnelList.rowToggle(tunnel.name))
+            }
         }
         .padding(.vertical, 2)
         .accessibilityIdentifier(AXID.TunnelList.row(tunnel.name))

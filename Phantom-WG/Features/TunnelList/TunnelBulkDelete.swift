@@ -35,6 +35,25 @@ enum TunnelBulkDelete {
         ordered.filter { marked.contains($0.id) }
     }
 
+    /// Whether every row the gate lets go is marked; false while the gate
+    /// lets none go.
+    ///
+    /// @witness TunnelBulkDelete.selectAllMarksTheRowsTheGateLetsGo
+    static func allMarked(_ marked: Set<UUID>, rows: [TunnelContainer]) -> Bool {
+        let eligible = Set(rows.filter(\.isSettledInactive).map(\.id))
+        return !eligible.isEmpty && eligible.isSubset(of: marked)
+    }
+
+    /// The marks after Select All, which marks every row the gate lets go,
+    /// or after Deselect All once all of them are marked, which takes those
+    /// marks off. Mac 2.2.1's delete footer is the source.
+    ///
+    /// @witness TunnelBulkDelete.selectAllMarksTheRowsTheGateLetsGo
+    static func toggledAll(_ marked: Set<UUID>, rows: [TunnelContainer]) -> Set<UUID> {
+        let eligible = Set(rows.filter(\.isSettledInactive).map(\.id))
+        return allMarked(marked, rows: rows) ? marked.subtracting(eligible) : marked.union(eligible)
+    }
+
     /// Removes each target in turn and counts every target on `onProgress`,
     /// the skipped and the refused ones included.
     ///
