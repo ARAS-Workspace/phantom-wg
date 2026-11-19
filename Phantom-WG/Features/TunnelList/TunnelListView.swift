@@ -1,4 +1,5 @@
 import SwiftUI
+import UniformTypeIdentifiers
 
 struct TunnelListView: View {
     @Environment(TunnelsManager.self) private var tunnelsManager
@@ -6,6 +7,7 @@ struct TunnelListView: View {
 
     @State private var showingImport = false
     @State private var transferring = false
+    @State private var showingFileImport = false
     @State private var transferNotice: TransferNotice?
     #if DEBUG
     @State private var showingTestEngine = false
@@ -41,6 +43,18 @@ struct TunnelListView: View {
                         .accessibilityIdentifier(AXID.TunnelList.transferNoticeOK)
                 } message: {
                     Text(transferNotice?.message ?? "")
+                }
+                .fileImporter(
+                    isPresented: $showingFileImport,
+                    allowedContentTypes: [.zip, .data],
+                    allowsMultipleSelection: true
+                ) { result in
+                    switch result {
+                    case .success(let urls):
+                        if !urls.isEmpty { importFiles(urls) }
+                    case .failure(let error):
+                        transferNotice = TransferNotice(title: loc.t("error"), message: error.localizedDescription)
+                    }
                 }
                 #if DEBUG
                 .sheet(isPresented: $showingTestEngine) {
@@ -116,6 +130,13 @@ struct TunnelListView: View {
         #endif
         ToolbarItem(placement: .topBarTrailing) {
             Menu {
+                Button {
+                    showingFileImport = true
+                } label: {
+                    Label(loc.t("settings_import_tunnels"), systemImage: "square.and.arrow.down")
+                }
+                .disabled(transferring)
+                .accessibilityIdentifier(AXID.TunnelList.importFilesButton)
                 Button(action: exportAll) {
                     Label(loc.t("settings_export_tunnels"), systemImage: "square.and.arrow.up")
                 }
@@ -134,6 +155,22 @@ struct TunnelListView: View {
                 Image(systemName: "plus")
             }
             .accessibilityIdentifier(AXID.TunnelList.addButton)
+        }
+    }
+
+    // MARK: - Import
+
+    /// Adds every `.conf` among the picked files and inside the picked zip
+    /// archives, then reports what was added and what was not.
+    private func importFiles(_ urls: [URL]) {
+        transferring = true
+        Task {
+            let report = await TunnelBulkImport.run(urls, into: tunnelsManager)
+            transferring = false
+            transferNotice = report.skipped.isEmpty
+                ? TransferNotice(title: loc.t("import_report_success", report.added.count), message: "")
+                : TransferNotice(title: TunnelBulkImport.title(report, loc: loc),
+                                 message: TunnelBulkImport.message(report, loc: loc))
         }
     }
 

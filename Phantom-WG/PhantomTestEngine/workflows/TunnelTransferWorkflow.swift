@@ -2,8 +2,8 @@
 //
 // How a tunnel's configuration leaves the app as a file. Mac 2.2.1's Tunnel
 // Transfer drives the bulk import and export; on iOS the detail's single
-// `.conf` export came first (package 4b), the list's zip export follows
-// (4c), and the import steps join with package 4d.
+// `.conf` export came first (package 4b), the list's zip export followed
+// (4c), and the import (4d) lives in TunnelTransferWorkflow+Import.
 //
 // A and B run over a `FakeSlotProvider` of the step's own, and the owner
 // check is answered by a closure, as Private Data does. C stages into a
@@ -53,6 +53,8 @@
 //       check archives nothing and names its failure once. With the owner
 //       granting, a list whose tunnels all read nothing archives nothing
 //       and reports each of them, sorted, as unread.
+//
+// G to J, the import, are described in TunnelTransferWorkflow+Import.
 
 #if DEBUG
 import Foundation
@@ -69,15 +71,19 @@ final class TunnelTransferWorkflow: TestWorkflow {
             WorkflowStep("The Staged File Lives Until The Picker Answers", theStagedFileLivesUntilThePickerAnswers),
             WorkflowStep("A Leftover Staged File Is Swept At Launch", aLeftoverStagedFileIsSweptAtLaunch),
             WorkflowStep("The Bulk Export Archives Every Readable Tunnel", theBulkExportArchivesEveryReadableTunnel),
-            WorkflowStep("The Bulk Export Asks The Owner First", theBulkExportAsksTheOwnerFirst)
+            WorkflowStep("The Bulk Export Asks The Owner First", theBulkExportAsksTheOwnerFirst),
+            WorkflowStep("Files And A Zip Import Into One List", filesAndAZipImportIntoOneList),
+            WorkflowStep("The Content Decides, Not The Name", theContentDecidesNotTheName),
+            WorkflowStep("An Exported Archive Imports Back The Same", anExportedArchiveImportsBackTheSame),
+            WorkflowStep("Every Picked File's Access Is Released", everyPickedFilesAccessIsReleased)
         ]
     }
 
-    private static let reason = "TE export reason"
+    static let reason = "TE export reason"
 
     /// What one export left behind at the owner check.
     @MainActor
-    private final class Ledger {
+    final class Ledger {
         var asked: [String] = []
         var failures: [String] = []
     }
@@ -105,7 +111,7 @@ final class TunnelTransferWorkflow: TestWorkflow {
         )
     }
 
-    private func bulkExport(
+    func bulkExport(
         _ tunnels: [TunnelContainer],
         answering outcome: PrivateDataAuthorization.Outcome,
         _ ledger: Ledger
