@@ -1,11 +1,11 @@
 import UIKit
 
-/// The detail's `.conf` export through UIKit's export picker. The file is
-/// written into the staging folder (`tmp/Export`) with mode 0600 and handed
-/// to the picker, which moves it where the user chooses. Saved or
-/// cancelled, the picker answers and the folder is removed. A file a run
-/// left while the picker was open is removed at launch
-/// (`TunnelsManager.create()`).
+/// The export picker for the detail's `.conf` and the list's zip archive.
+/// The file is written into the staging folder (`tmp/Export`) with mode
+/// 0600 and handed to the picker, which moves it where the user chooses.
+/// Saved or cancelled, the picker answers, the folder is removed and
+/// `onAnswer` hears whether the file was saved. A file a run left while the
+/// picker was open is removed at launch (`TunnelsManager.create()`).
 ///
 /// The picker refers to its delegate weakly, so an exporter holds itself
 /// from `present` until the picker answers.
@@ -16,10 +16,12 @@ final class TunnelExportPicker: NSObject, UIDocumentPickerDelegate {
         .appendingPathComponent("Export", isDirectory: true)
 
     let folder: URL
+    private let onAnswer: (Bool) -> Void
     private var keepAlive: TunnelExportPicker?
 
-    init(folder: URL = TunnelExportPicker.stagingFolder) {
+    init(folder: URL = TunnelExportPicker.stagingFolder, onAnswer: @escaping (Bool) -> Void = { _ in }) {
         self.folder = folder
+        self.onAnswer = onAnswer
     }
 
     /// Writes the file into the folder with mode 0600 and answers its URL.
@@ -44,17 +46,18 @@ final class TunnelExportPicker: NSObject, UIDocumentPickerDelegate {
 
     /// @witness TunnelTransfer.theStagedFileLivesUntilThePickerAnswers
     func documentPicker(_ controller: UIDocumentPickerViewController, didPickDocumentsAt urls: [URL]) {
-        finish()
+        finish(saved: true)
     }
 
     /// @witness TunnelTransfer.theStagedFileLivesUntilThePickerAnswers
     func documentPickerWasCancelled(_ controller: UIDocumentPickerViewController) {
-        finish()
+        finish(saved: false)
     }
 
-    private func finish() {
+    private func finish(saved: Bool) {
         Self.sweep(folder)
         keepAlive = nil
+        onAnswer(saved)
     }
 
     /// Removes the staging folder and everything in it.

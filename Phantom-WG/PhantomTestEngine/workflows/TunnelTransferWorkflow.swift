@@ -2,8 +2,8 @@
 //
 // How a tunnel's configuration leaves the app as a file. Mac 2.2.1's Tunnel
 // Transfer drives the bulk import and export; on iOS the detail's single
-// `.conf` export comes first (package 4b), and the bulk steps join as their
-// packages land.
+// `.conf` export came first (package 4b), the list's zip export follows
+// (4c), and the import steps join with package 4d.
 //
 // A and B run over a `FakeSlotProvider` of the step's own, and the owner
 // check is answered by a closure, as Private Data does. C stages into a
@@ -31,13 +31,28 @@
 //
 //   C — The Staged File Lives Until The Picker Answers
 //       Staged, the folder holds the file alone, with the document's bytes
-//       and mode 0600. A cancelled answer removes the folder; staged again,
-//       a picked answer removes it too.
+//       and mode 0600. A cancelled answer removes the folder and tells the
+//       caller nothing was saved; staged again, a picked answer removes it
+//       too and tells the caller the file was saved.
 //
 //   D — A Leftover Staged File Is Swept At Launch
 //       A file is left in the app's staging folder, as a run that ended
 //       with the picker open leaves it. After `TunnelsManager.create()` the
 //       folder is gone.
+//
+//   E — The Bulk Export Archives Every Readable Tunnel
+//       Four listed tunnels, out of order: "Ev Ağı", "Ağ Kuzey", "ev ağı"
+//       and one whose configuration reads nothing. With the owner granting,
+//       the archive is named phantom-wg-export.zip and holds the three
+//       readable tunnels' `.conf` bytes, sorted by tunnel name, the name that
+//       clashes without regard to case taking " 2"; the unreadable tunnel is
+//       reported as unread, three of four counted.
+//
+//   F — The Bulk Export Asks The Owner First
+//       A declined check archives nothing and names no failure; a failed
+//       check archives nothing and names its failure once. With the owner
+//       granting, a list whose tunnels all read nothing archives nothing
+//       and reports each of them, sorted, as unread.
 
 #if DEBUG
 import Foundation
@@ -52,7 +67,9 @@ final class TunnelTransferWorkflow: TestWorkflow {
             WorkflowStep("The Detail Export Hands The .conf Bytes", theDetailExportHandsTheConfBytes),
             WorkflowStep("The Detail Export Asks The Owner First", theDetailExportAsksTheOwnerFirst),
             WorkflowStep("The Staged File Lives Until The Picker Answers", theStagedFileLivesUntilThePickerAnswers),
-            WorkflowStep("A Leftover Staged File Is Swept At Launch", aLeftoverStagedFileIsSweptAtLaunch)
+            WorkflowStep("A Leftover Staged File Is Swept At Launch", aLeftoverStagedFileIsSweptAtLaunch),
+            WorkflowStep("The Bulk Export Archives Every Readable Tunnel", theBulkExportArchivesEveryReadableTunnel),
+            WorkflowStep("The Bulk Export Asks The Owner First", theBulkExportAsksTheOwnerFirst)
         ]
     }
 
@@ -86,6 +103,29 @@ final class TunnelTransferWorkflow: TestWorkflow {
             },
             onFailure: { ledger.failures.append($0) }
         )
+    }
+
+    private func bulkExport(
+        _ tunnels: [TunnelContainer],
+        answering outcome: PrivateDataAuthorization.Outcome,
+        _ ledger: Ledger
+    ) async -> TunnelBulkExport.Outcome {
+        await TunnelBulkExport.run(
+            tunnels,
+            reason: Self.reason,
+            authorize: { reason in
+                ledger.asked.append(reason)
+                return outcome
+            },
+            onFailure: { ledger.failures.append($0) }
+        )
+    }
+
+    /// A listed tunnel whose configuration reads nothing.
+    private func unreadable(named name: String) -> TunnelContainer {
+        let provider = FakeSlotProvider(config: nil)
+        provider.localizedDescription = name
+        return TunnelContainer(tunnel: provider)
     }
 
     private func file(named name: String) -> ExportedFile? {
@@ -157,7 +197,8 @@ final class TunnelTransferWorkflow: TestWorkflow {
         let folder = FileManager.default.temporaryDirectory
             .appendingPathComponent("te-export-\(UUID().uuidString)", isDirectory: true)
         onTeardown("remove the step's staging folder") { TunnelExportPicker.sweep(folder) }
-        let exporter = TunnelExportPicker(folder: folder)
+        var answers: [Bool] = []
+        let exporter = TunnelExportPicker(folder: folder) { answers.append($0) }
 
         for answer in ["cancelled", "picked"] {
             let url: URL
@@ -182,6 +223,8 @@ final class TunnelTransferWorkflow: TestWorkflow {
             check(!FileManager.default.fileExists(atPath: folder.path),
                   "after the \(answer) answer the staging folder is gone")
         }
+        check(answers == [false, true],
+              "the caller heard the cancelled answer as not saved and the picked answer as saved (answers=\(answers))")
     }
 
     func aLeftoverStagedFileIsSweptAtLaunch() async {
@@ -208,6 +251,69 @@ final class TunnelTransferWorkflow: TestWorkflow {
         }
         check(!FileManager.default.fileExists(atPath: folder.path),
               "after the launch path TunnelsManager.create() the staging folder is gone")
+    }
+
+    func theBulkExportArchivesEveryReadableTunnel() async {
+        let names = ["Ev Ağı", "Ağ Kuzey", "ev ağı"]
+        let configs = names.compactMap { TestConfigFactory.throwaway(name: $0) }
+        guard configs.count == names.count else {
+            fail("the config factory did not produce the three throwaways this step needs")
+            return
+        }
+        let tunnels = configs.map { TunnelContainer(tunnel: FakeSlotProvider(config: $0)) } + [unreadable(named: "Okunmaz")]
+        let outcome = await bulkExport(tunnels, answering: .granted, Ledger())
+        guard case .archived(let file, let count, let total, let unread) = outcome else {
+            fail("the granted bulk export archived nothing (\(outcome))")
+            return
+        }
+        check(file.name == "phantom-wg-export.zip" && count == 3 && total == 4 && unread == ["Okunmaz"],
+              "the archive is phantom-wg-export.zip, three of four counted, the unreadable tunnel reported as unread"
+              + " (name=\(file.name), count=\(count), total=\(total), unread=\(unread))")
+
+        let limits = ZipArchive.Limits(listed: 64, selected: 64, entryBytes: 64 * 1024)
+        guard let entries = try? ZipArchive.entries(in: file.data, limits: limits, pages: .unitedStates, where: { _ in true }) else {
+            fail("the archive's bytes did not read back")
+            return
+        }
+        let paths = entries.map(\.path)
+        // The plan sorts by tunnel name and numbers a clash after sorting,
+        // so the order is read on the names with " 2" and ".conf" taken off.
+        let stems = paths.map { $0.replacingOccurrences(of: " 2.conf", with: "").replacingOccurrences(of: ".conf", with: "") }
+        let sorted = zip(stems, stems.dropFirst()).allSatisfy { $0.localizedStandardCompare($1) != .orderedDescending }
+        check(paths.first == "Ağ Kuzey.conf" && sorted,
+              "the entries are sorted by tunnel name (paths=\(paths))")
+        check(Set(paths.map { $0.lowercased() }) == ["ağ kuzey.conf", "ev ağı.conf", "ev ağı 2.conf"]
+                && paths.filter { $0.hasSuffix(" 2.conf") }.count == 1,
+              "the name that clashes without regard to case takes \" 2\" (paths=\(paths))")
+        let contents = Set(entries.compactMap { try? $0.content.get() })
+        let expected = Set(configs.map { TunnelConfFile.data($0.asConfString()) })
+        check(contents == expected && entries.count == 3,
+              "the archive holds the three readable tunnels' .conf bytes (entries=\(entries.count))")
+    }
+
+    func theBulkExportAsksTheOwnerFirst() async {
+        guard let config = TestConfigFactory.throwaway(name: "TE-Transfer-Bulk-Owner") else {
+            fail("the config factory produced no throwaway")
+            return
+        }
+        let tunnels = [TunnelContainer(tunnel: FakeSlotProvider(config: config))]
+        let cases = [
+            OwnerCase(label: "a declined check", outcome: .declined, failures: []),
+            OwnerCase(label: "a failed check", outcome: .failed("TE owner check failed"), failures: ["TE owner check failed"])
+        ]
+        for entry in cases {
+            let ledger = Ledger()
+            let outcome = await bulkExport(tunnels, answering: entry.outcome, ledger)
+            check(outcome == .declined && ledger.asked == [Self.reason] && ledger.failures == entry.failures,
+                  "after \(entry.label) nothing is archived, the check was asked once with the export's reason"
+                  + " and the failures named are \(entry.failures) (outcome=\(outcome), asked=\(ledger.asked),"
+                  + " failures=\(ledger.failures))")
+        }
+
+        let unreadList = [unreadable(named: "Okunmaz B"), unreadable(named: "Okunmaz A")]
+        let outcome = await bulkExport(unreadList, answering: .granted, Ledger())
+        check(outcome == .nothing(unread: ["Okunmaz A", "Okunmaz B"]),
+              "a list whose tunnels all read nothing archives nothing and reports each, sorted, as unread (\(outcome))")
     }
 }
 #endif

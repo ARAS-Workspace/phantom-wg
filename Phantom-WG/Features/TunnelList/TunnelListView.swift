@@ -5,6 +5,8 @@ struct TunnelListView: View {
     @Environment(LocalizationManager.self) private var loc
 
     @State private var showingImport = false
+    @State private var transferring = false
+    @State private var transferNotice: TransferNotice?
     #if DEBUG
     @State private var showingTestEngine = false
     #endif
@@ -27,6 +29,18 @@ struct TunnelListView: View {
                 .toolbar { toolbarContent }
                 .navigationDestination(isPresented: $showingImport) {
                     TunnelImportView()
+                }
+                .alert(
+                    transferNotice?.title ?? "",
+                    isPresented: Binding(
+                        get: { transferNotice != nil },
+                        set: { if !$0 { transferNotice = nil } }
+                    )
+                ) {
+                    Button(loc.t("ok")) {}
+                        .accessibilityIdentifier(AXID.TunnelList.transferNoticeOK)
+                } message: {
+                    Text(transferNotice?.message ?? "")
                 }
                 #if DEBUG
                 .sheet(isPresented: $showingTestEngine) {
@@ -101,12 +115,74 @@ struct TunnelListView: View {
         }
         #endif
         ToolbarItem(placement: .topBarTrailing) {
+            Menu {
+                Button(action: exportAll) {
+                    Label(loc.t("settings_export_tunnels"), systemImage: "square.and.arrow.up")
+                }
+                .disabled(transferring || tunnelsManager.tunnels.isEmpty)
+                .accessibilityIdentifier(AXID.TunnelList.exportAllButton)
+            } label: {
+                Image(systemName: "gearshape")
+            }
+            .accessibilityLabel(loc.t("transfer_menu"))
+            .accessibilityIdentifier(AXID.TunnelList.transferMenu)
+        }
+        ToolbarItem(placement: .topBarTrailing) {
             Button {
                 showingImport = true
             } label: {
                 Image(systemName: "plus")
             }
             .accessibilityIdentifier(AXID.TunnelList.addButton)
+        }
+    }
+
+    // MARK: - Export
+
+    /// Archives every readable tunnel once the owner grants it and hands
+    /// the zip to the export picker; the report follows a save.
+    private func exportAll() {
+        transferring = true
+        Task {
+            let outcome = await TunnelBulkExport.run(tunnelsManager.tunnels, reason: loc.t("export_private_data_reason")) { message in
+                transferNotice = TransferNotice(title: loc.t("error"), message: message)
+            }
+            switch outcome {
+            case .archived(let file, let count, let total, let unread):
+                present(file) { saved in
+                    guard saved else { return }
+                    transferNotice = unread.isEmpty
+                        ? TransferNotice(title: loc.t("export_report_success", count), message: "")
+                        : TransferNotice(title: loc.t("export_report_partial", count, total),
+                                         message: TunnelBulkExport.unreadLines(unread, loc: loc))
+                }
+            case .nothing(let unread):
+                transferring = false
+                transferNotice = TransferNotice(title: loc.t("export_report_none"),
+                                                message: TunnelBulkExport.unreadLines(unread, loc: loc))
+            case .unwritable:
+                transferring = false
+                transferNotice = TransferNotice(title: loc.t("error"), message: loc.t("export_err_write"))
+            case .declined:
+                transferring = false
+            }
+        }
+    }
+
+    private func present(_ file: ExportedFile, onSaved: @escaping (Bool) -> Void) {
+        let exporter = TunnelExportPicker { saved in
+            transferring = false
+            onSaved(saved)
+        }
+        guard let presenter = TunnelExportPicker.topViewController() else {
+            transferring = false
+            return
+        }
+        do {
+            try exporter.present(file, over: presenter)
+        } catch {
+            transferring = false
+            transferNotice = TransferNotice(title: loc.t("error"), message: error.localizedDescription)
         }
     }
 
@@ -143,6 +219,12 @@ struct TunnelListView: View {
         .frame(maxWidth: .infinity)
         .padding(.vertical, 12)
     }
+}
+
+/// A transfer's report or failure, shown as an alert.
+private struct TransferNotice {
+    let title: String
+    let message: String
 }
 
 // MARK: - Previews

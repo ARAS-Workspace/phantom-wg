@@ -18,6 +18,9 @@ enum AXID {
 
     enum TunnelList {
         static let addButton         = "tunnel-list.add-button"
+        static let transferMenu      = "tunnel-list.transfer-menu"
+        static let exportAllButton   = "tunnel-list.export-all"
+        static let transferNoticeOK  = "tunnel-list.transfer-notice.ok"
         static let emptyImportButton = "tunnel-list.empty.import-button"
         static let languageToggle    = "tunnel-list.language-toggle"
 
