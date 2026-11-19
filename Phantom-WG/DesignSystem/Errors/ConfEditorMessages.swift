@@ -1,9 +1,10 @@
 import Foundation
 
-/// Shared banner formatting for the two raw-text config surfaces —
-/// `TunnelImportView` and `TunnelEditView`. Maps structural
-/// `ConfParser` failures and the per-field validation map to ordered,
-/// localized banner lines so both flows report identically.
+/// Shared message formatting for the two raw-text config surfaces —
+/// `TunnelImportView` and `TunnelEditView` — and for the file import's
+/// report (`TunnelBulkImport`). Maps structural `ConfParser` failures
+/// and the per-field validation map to ordered, localized lines so the
+/// three report identically.
 enum ConfEditorMessages {
 
     /// Stable ordering used when listing validation errors in the

@@ -5,8 +5,8 @@ import SwiftUI
 /// synchronously off the provider's Keychain reference, so the
 /// sections render instantly; `nil` means the Keychain entry itself
 /// is gone. Editing happens as raw text in `TunnelEditView`
-/// (Actions → Edit Config), enabled only while the tunnel is
-/// inactive — the macOS flow.
+/// (Actions → Edit Config), enabled only while the tunnel is at rest
+/// (`isSettledInactive`) — the macOS flow.
 struct TunnelDetailView: View {
     var tunnel: TunnelContainer
     @State var logStore: LogStore

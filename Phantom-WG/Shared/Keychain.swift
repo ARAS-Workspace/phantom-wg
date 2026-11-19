@@ -9,9 +9,10 @@ import Security
 /// so the extension can read them for on-demand and post-reboot
 /// starts. The access group is what lets the app write what the
 /// extension later reads. Every write seals a new item; deleting an
-/// item by its reference is the caller's (`TunnelsManager.modify`,
-/// `remove`), and `deleteReferences(except:)` deletes the items the
-/// system's entries do not reference (`TunnelsManager.create`).
+/// item by its reference is the caller's (`TunnelsManager.add`,
+/// `modify`, `remove`), and `deleteReferences(except:)` deletes the
+/// items the system's entries do not reference
+/// (`TunnelsManager.create`).
 enum Keychain {
 
     private static let accessGroup = "group.com.artek.phantom-wg"

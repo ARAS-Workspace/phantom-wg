@@ -1,9 +1,10 @@
 import SwiftUI
 
 /// WireGuard interface configuration, read-only — the public key
-/// derived from the private key, local addresses, DNS servers, and
-/// MTU. The private key itself appears only in `TunnelEditView`'s
-/// raw-text editor, where values change.
+/// derived from the private key, local addresses, DNS servers, MTU,
+/// and, when the configuration carries them, the DNS search domains
+/// and the listen port. The private key itself appears only in
+/// `TunnelEditView`'s raw-text editor, where values change.
 struct InterfaceSection: View {
     let config: InterfaceConfig
     @Environment(LocalizationManager.self) private var loc

@@ -2,7 +2,8 @@ import SwiftUI
 
 /// Shared status row — indicator, localized status text, and the
 /// master activation toggle. Rendered by the detail's status section
-/// and mirrored at the top of the tunnel list for the active tunnel.
+/// and mirrored at the top of the tunnel list for the tunnel holding
+/// the slot (`ActiveTunnelSection`).
 /// A non-nil `title` puts the tunnel name above the status line and
 /// hides the mode badge — the list mirror needs the name as meta and
 /// the ghost/standalone signal comes from the indicator icon there;

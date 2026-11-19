@@ -3,7 +3,9 @@ import NetworkExtension
 /// Factory for creating and loading tunnel providers — the seam that
 /// lets `TunnelsManager` run against something other than the live
 /// NE preferences store. Production uses RealTunnelProviderFactory;
-/// previews inject PreviewTunnelProviderFactory.
+/// a Debug build on the simulator uses SimulatedTunnelProviderFactory,
+/// previews inject PreviewTunnelProviderFactory, and the test engine
+/// its own FakeSlotFactory.
 protocol TunnelProviderFactory {
     func makeProvider() -> TunnelProviding
     func loadAllFromPreferences() async throws -> [TunnelProviding]

@@ -1,8 +1,8 @@
 // Private Data
 //
-// `PrivateDataGuard.grants`, the one door copy, edit and delete ask before
-// they touch a tunnel's private data, measured at its own boundary: the
-// owner check is handed in as a closure answering granted, declined or
+// `PrivateDataGuard.grants`, the one door copy, export, edit and delete ask
+// before they touch a tunnel's private data, measured at its own boundary:
+// the owner check is handed in as a closure answering granted, declined or
 // failed. The device's Face ID and passcode sheet is not driven here; it
 // is the user-facing surface that answers this method, tried by hand.
 //

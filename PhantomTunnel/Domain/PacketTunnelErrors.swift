@@ -24,7 +24,7 @@ enum PacketTunnelProviderError: String, Error, LocalizedError {
 }
 
 /// WireGuard adapter log sink. Severity is deliberately flattened —
-/// the ring buffer stores plain tagged lines only.
+/// the log buffer stores plain tagged lines only.
 func wg_log(message: String) {
     TunnelLogger.log(.wireGuard, message)
 }

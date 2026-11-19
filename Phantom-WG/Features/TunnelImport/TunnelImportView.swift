@@ -20,9 +20,10 @@ struct TunnelImportView: View {
     /// `submit` refusing.
     @State private var saving = false
 
-    /// Raised only by a failed `add`, never by a parse or validation
-    /// error. Saving is the step the system's VPN permission gates, so
-    /// it is the only failure a route into Settings could answer.
+    /// Raised only by an `add` the system refused
+    /// (`offersVPNSettingsRoute`), never by a name refusal or a parse or
+    /// validation error. Saving is the step the system's VPN permission
+    /// gates, so it is the only failure a route into Settings could answer.
     @State private var offersVPNSettings = false
 
     private var canSubmit: Bool {

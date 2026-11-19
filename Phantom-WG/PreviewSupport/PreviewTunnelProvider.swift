@@ -10,8 +10,9 @@ import NetworkExtension
 /// drives `TunnelContainer` exactly as it does for the real system.
 ///
 /// Provider messages mirror PhantomTunnel's opcode surface:
-/// `0` → WireGuard UAPI stats dump, `1` → JSON log entries,
-/// `2` → clear log ring, `3` → reset ACK.
+/// `0` → the three runtime numbers (`TunnelRuntimeStats`), `1` → JSON
+/// log entries, `2` → clear the log lines, `3` → the reset's reply,
+/// always `rebuilt`, `4` → the log line count.
 final class PreviewTunnelProvider: TunnelProviding {
 
     /// One extension-side log line, encoded for opcode `1` in the

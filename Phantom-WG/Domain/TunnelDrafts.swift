@@ -22,7 +22,8 @@ enum FieldValidationError: Equatable {
 /// typed configuration: `ConfParser` fills one from parsed text, and
 /// `validate()` turns it into a `TunnelConfig` plus a per-field error
 /// map for the banner. Both raw-text surfaces — import and
-/// `TunnelEditView` — run through it.
+/// `TunnelEditView` — and the file import (`TunnelBulkImport`) run
+/// through it.
 struct TunnelDraft: Equatable {
     let id: UUID
     var name: String

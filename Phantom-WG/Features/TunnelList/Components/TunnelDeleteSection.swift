@@ -7,7 +7,8 @@ import SwiftUI
 /// a `TunnelDeleteSelection`. The delete the bar asks for is confirmed here
 /// with the first names, asks the owner once and goes through
 /// `TunnelBulkDelete`; its report goes to `onFinish`. Mac 2.2.1's delete
-/// mode is the source; there the buttons sit in the list's header.
+/// mode is the source; there Cancel and Delete sit in the list's header
+/// and Select All in a footer under the rows.
 struct TunnelDeleteSection: View {
     let rows: [TunnelContainer]
     @Bindable var selection: TunnelDeleteSelection

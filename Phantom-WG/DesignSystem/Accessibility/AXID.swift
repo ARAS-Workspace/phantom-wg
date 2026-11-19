@@ -67,7 +67,7 @@ enum AXID {
         static let vpnSettingsButton = "tunnel-import.vpn-settings-button"
     }
 
-    // MARK: Tunnel Detail
+    // MARK: QR Scanner
 
     enum QRScanner {
         static let cancelButton   = "qr-scanner.cancel-button"
