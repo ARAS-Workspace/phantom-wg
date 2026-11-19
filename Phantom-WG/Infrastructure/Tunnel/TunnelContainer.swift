@@ -59,6 +59,20 @@ class TunnelContainer: Identifiable {
         status = TunnelStatus(from: tunnel.connectionStatus)
     }
 
+    /// The gate for removing this row from the list: the system reads no
+    /// session (disconnected, or invalid as an entry saved disabled reads),
+    /// the row is painted at rest, and no activation attempt is under way.
+    /// Mac 2.2.1's `isSettledInactive` is the source; iOS keeps no disarm
+    /// ledger, so Mac's fourth axis, a counted stop waiting on its rule, is
+    /// not read here.
+    ///
+    /// @witness TunnelBulkDelete.theGateReadsTheSystemTheRowAndTheAttempt
+    var isSettledInactive: Bool {
+        TunnelStatus(from: tunnelProvider.connectionStatus) == .inactive
+            && status == .inactive
+            && !isAttemptingActivation
+    }
+
     /// States the manager holds on its own: a queued tunnel, and an
     /// activation attempt still on its retry ladder. The system reads
     /// both as "no session", so a refresh does not write that reading

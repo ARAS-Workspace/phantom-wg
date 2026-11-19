@@ -86,8 +86,9 @@ struct TunnelListView: View {
             VStack(spacing: 0) {
                 // A grouped form to match the macOS presentation —
                 // every screen on both platforms renders in one.
-                // Deleting happens in the detail's Actions section,
-                // not by swiping rows, mirroring the macOS flow.
+                // A row is deleted by swiping it left
+                // (`TunnelListSection`) or from the detail's Actions
+                // section.
                 Form {
                     ActiveTunnelSection(activeTunnel: activeTunnel)
 

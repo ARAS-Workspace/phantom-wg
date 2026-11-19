@@ -18,6 +18,7 @@ enum TestCatalog {
             ArchiveNamesWorkflow(),
             TunnelTransferWorkflow(),
             TunnelListWorkflow(),
+            TunnelBulkDeleteWorkflow(),
             TunnelAddWorkflow(),
             TunnelEditWorkflow(),
             TunnelRemoveWorkflow(),

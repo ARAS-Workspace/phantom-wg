@@ -41,6 +41,8 @@ enum AXID {
 
         static func row(_ name: String) -> String { "tunnel-row.\(name)" }
         static func rowToggle(_ name: String) -> String { "tunnel-row.\(name).toggle" }
+        static func rowDelete(_ name: String) -> String { "tunnel-row.\(name).delete" }
+        static let rowDeleteConfirm = "tunnel-row.delete-confirm"
     }
 
     // MARK: Tunnel Import
