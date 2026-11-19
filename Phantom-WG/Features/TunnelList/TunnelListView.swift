@@ -10,6 +10,7 @@ struct TunnelListView: View {
     @State private var showingFileImport = false
     @State private var transferNotice: TransferNotice?
     @State private var showingSearch = false
+    @State private var savedOrder = TunnelListOrderStore.load()
     #if DEBUG
     @State private var showingTestEngine = false
     #endif
@@ -19,10 +20,16 @@ struct TunnelListView: View {
     /// activation behind the deactivation it starts, so during a
     /// hand-off one tunnel waits while another goes down; the section
     /// shows the one going down until its session ends. The list itself
-    /// stays in plain newest-first order — no active-first pinning; the
-    /// top section is where the running tunnel surfaces.
+    /// follows the user's order, not the slot — no active-first pinning;
+    /// the top section is where the running tunnel surfaces.
     private var activeTunnel: TunnelContainer? {
         TunnelListRules.slotHolder(in: tunnelsManager.tunnels, status: \.status)
+    }
+
+    /// The rows in the user's order (`TunnelListRules.ordered`): newest
+    /// first until a row is dragged, and a tunnel added since on top.
+    private var ordered: [TunnelContainer] {
+        TunnelListRules.ordered(tunnelsManager.tunnels, saved: savedOrder, id: \.id)
     }
 
     var body: some View {
@@ -34,7 +41,7 @@ struct TunnelListView: View {
                     TunnelImportView()
                 }
                 .navigationDestination(isPresented: $showingSearch) {
-                    TunnelSearchView()
+                    TunnelSearchView(order: savedOrder)
                 }
                 .alert(
                     transferNotice?.title ?? "",
@@ -84,7 +91,16 @@ struct TunnelListView: View {
                 Form {
                     ActiveTunnelSection(activeTunnel: activeTunnel)
 
-                    TunnelListSection(rows: tunnelsManager.tunnels, count: "\(tunnelsManager.tunnels.count)")
+                    TunnelListSection(
+                        rows: ordered,
+                        count: "\(tunnelsManager.tunnels.count)",
+                        onMove: { offsets, destination in
+                            reorder(TunnelListRules.moved(ordered.map(\.id), from: offsets, to: destination))
+                        },
+                        onStep: { id, up in
+                            reorder(TunnelListRules.movedByOne(ordered.map(\.id), id, up: up))
+                        }
+                    )
                 }
                 .formStyle(.grouped)
 
@@ -148,6 +164,14 @@ struct TunnelListView: View {
             }
             .accessibilityIdentifier(AXID.TunnelList.addButton)
         }
+    }
+
+    // MARK: - Order
+
+    /// Keeps the order a drag or a step left, at once and across launches.
+    private func reorder(_ order: [UUID]) {
+        savedOrder = order
+        TunnelListOrderStore.save(order)
     }
 
     // MARK: - Import

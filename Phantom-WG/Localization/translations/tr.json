@@ -12,6 +12,8 @@
   "tunnel_list_search_placeholder": "Tünel ara",
   "tunnel_list_search_no_match": "“%@” ile eşleşen tünel yok",
   "tunnel_list_search_clear": "Temizle",
+  "tunnel_list_move_up": "Yukarı Taşı",
+  "tunnel_list_move_down": "Aşağı Taşı",
   "tunnel_list_no_active": "Aktif tünel yok",
   "website": "Web Sitesi",
   "documentation": "Dokümantasyon",

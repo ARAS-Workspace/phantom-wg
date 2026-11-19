@@ -12,6 +12,8 @@
   "tunnel_list_search_placeholder": "Search tunnels",
   "tunnel_list_search_no_match": "No tunnels match “%@”",
   "tunnel_list_search_clear": "Clear",
+  "tunnel_list_move_up": "Move Up",
+  "tunnel_list_move_down": "Move Down",
   "tunnel_list_no_active": "No active tunnel",
   "website": "Website",
   "documentation": "Documentation",

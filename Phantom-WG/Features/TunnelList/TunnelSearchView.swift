@@ -5,12 +5,16 @@ import SwiftUI
 /// system's own search opens. The field takes focus when the page first
 /// opens; a row opens the tunnel's detail as the list does, and coming back
 /// from it finds the query as it was and the keyboard closed. The round
-/// close button beside the field goes back to the list. The rows are read
-/// with `TunnelListRules.matches`.
+/// close button beside the field goes back to the list. The rows keep the
+/// list's order and are read with `TunnelListRules.matches`; they are not
+/// dragged here.
 struct TunnelSearchView: View {
     @Environment(TunnelsManager.self) private var tunnelsManager
     @Environment(LocalizationManager.self) private var loc
     @Environment(\.dismiss) private var dismiss
+
+    /// The user's saved order, as the list holds it.
+    let order: [UUID]
 
     @State private var query = ""
     @FocusState private var fieldFocused: Bool
@@ -21,7 +25,8 @@ struct TunnelSearchView: View {
     }
 
     private var rows: [TunnelContainer] {
-        tunnelsManager.tunnels.filter { TunnelListRules.matches($0.name, query: query) }
+        TunnelListRules.ordered(tunnelsManager.tunnels, saved: order, id: \.id)
+            .filter { TunnelListRules.matches($0.name, query: query) }
     }
 
     var body: some View {

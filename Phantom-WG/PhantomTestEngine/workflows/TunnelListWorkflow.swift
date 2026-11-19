@@ -1,8 +1,9 @@
 // Tunnel List
 //
 // The tunnel list's rules (package 5), checked apart from the list's views:
-// which tunnel the top section shows and which names a search holds. Mac
-// 2.2.1's `TunnelListRules` is the source; Mac runs no engine family over
+// which tunnel the top section shows, which names a search holds, and the
+// order a drag leaves. Mac 2.2.1's `TunnelListRules` and
+// `TunnelListOrderStore` are the source; Mac runs no engine family over
 // them.
 //
 // A runs the rule over plain rows first, then over a `TunnelsManager` of
@@ -10,7 +11,10 @@
 // does. B runs the search rule over plain names and logs the run's
 // locale. The rule folds under one fixed locale, and a run launched under a
 // Turkish one (`-AppleLocale tr_TR -AppleLanguages (tr)`) answers the same.
-// The section and the search field on screen are tried by hand.
+// C and D run the order rules over plain ids, D beside SwiftUI's own move
+// of an array; E writes the order into a defaults suite of the step's own
+// and removes it. The section, the search page and the drag on screen are
+// tried by hand.
 //
 // Scenarios:
 //
@@ -28,17 +32,39 @@
 //       finds "İstanbul" and "isik" finds "Işık". Spaces around a
 //       query are passed over and a query of spaces alone holds every
 //       name; a query the name does not hold finds nothing.
+//
+//   C — A Saved Order Keeps Its Rows And Puts New Ones First
+//       Rows the saved order names follow it; rows it names not yet come
+//       first, in the list's own order. An id saved for a tunnel the list
+//       holds no longer is passed over, and an id saved twice places its
+//       row once. With nothing saved the list keeps its order.
+//
+//   D — A Drag Lands Where It Drops
+//       Rows dragged down, up, past the end and two at once land before the
+//       row that stood at the drop, as SwiftUI's own move gives for each;
+//       a drop on the row's own place changes nothing. One step up or down
+//       swaps a row with its neighbour, and a row at the edge, or an id the
+//       order does not hold, stays.
+//
+//   E — The Order Is Kept Across A Launch
+//       An order saved into a defaults suite reads back the same; a stored
+//       entry that is not an id is passed over, and a suite that holds no
+//       order reads back none.
 
 #if DEBUG
 import Foundation
+import SwiftUI
 
 final class TunnelListWorkflow: TestWorkflow {
-    override var displayName: String { "Tunnel List (The Active Section And Search)" }
+    override var displayName: String { "Tunnel List (The Active Section, Search And Order)" }
 
     override var steps: [WorkflowStep] {
         [
             WorkflowStep("The Active Section Shows The Slot Holder", theActiveSectionShowsTheSlotHolder),
-            WorkflowStep("Search Folds Case, Marks And The Turkish I", searchFoldsCaseMarksAndTheTurkishI)
+            WorkflowStep("Search Folds Case, Marks And The Turkish I", searchFoldsCaseMarksAndTheTurkishI),
+            WorkflowStep("A Saved Order Keeps Its Rows And Puts New Ones First", aSavedOrderKeepsItsRowsAndPutsNewOnesFirst),
+            WorkflowStep("A Drag Lands Where It Drops", aDragLandsWhereItDrops),
+            WorkflowStep("The Order Is Kept Across A Launch", theOrderIsKeptAcrossALaunch)
         ]
     }
 
@@ -61,6 +87,26 @@ final class TunnelListWorkflow: TestWorkflow {
         let name: String
         let query: String
         let holds: Bool
+    }
+
+    /// One plain row of steps C and D: a name and an id.
+    private struct Named {
+        let name: String
+        let id = UUID()
+    }
+
+    /// One drag of step D: the offsets dragged, the drop and the names after.
+    private struct DragCase {
+        let offsets: IndexSet
+        let destination: Int
+        let after: [String]
+    }
+
+    /// One step of step D: the row, the direction and the names after.
+    private struct StepCase {
+        let row: String
+        let up: Bool
+        let after: [String]
     }
 
     // MARK: - Steps
@@ -147,6 +193,79 @@ final class TunnelListWorkflow: TestWorkflow {
             check(held == entry.holds,
                   "\"\(entry.name)\" \(entry.holds ? "holds" : "does not hold") the query \"\(entry.query)\" (held=\(held))")
         }
+    }
+
+    func aSavedOrderKeepsItsRowsAndPutsNewOnesFirst() async {
+        let rows = ["new 2", "new 1", "a", "b", "c"].map { Named(name: $0) }
+        let byName = Dictionary(uniqueKeysWithValues: rows.map { ($0.name, $0.id) })
+        let names: ([UUID]) -> [String] = { saved in
+            TunnelListRules.ordered(rows, saved: saved, id: \.id).map(\.name)
+        }
+        let gone = UUID()
+        let saved = ["c", "gone", "a", "c", "b"].map { byName[$0] ?? gone }
+        let mixed = names(saved)
+        check(mixed == ["new 2", "new 1", "c", "a", "b"],
+              "saved c, a, b with a gone id and c twice: the new rows first, then c, a, b once each (rows=\(mixed))")
+        let unsaved = names([])
+        check(unsaved == ["new 2", "new 1", "a", "b", "c"],
+              "with nothing saved the list keeps its own order (rows=\(unsaved))")
+        let whole = names(["b", "new 1", "c", "a", "new 2"].compactMap { byName[$0] })
+        check(whole == ["b", "new 1", "c", "a", "new 2"],
+              "an order naming every row is followed as it is (rows=\(whole))")
+    }
+
+    func aDragLandsWhereItDrops() async {
+        let rows = ["a", "b", "c", "d"].map { Named(name: $0) }
+        let ids = rows.map(\.id)
+        let name: (UUID) -> String = { id in rows.first { $0.id == id }?.name ?? "?" }
+        let drags = [
+            DragCase(offsets: [0], destination: 3, after: ["b", "c", "a", "d"]),
+            DragCase(offsets: [3], destination: 0, after: ["d", "a", "b", "c"]),
+            DragCase(offsets: [1], destination: 4, after: ["a", "c", "d", "b"]),
+            DragCase(offsets: [0, 2], destination: 4, after: ["b", "d", "a", "c"]),
+            DragCase(offsets: [2], destination: 2, after: ["a", "b", "c", "d"]),
+            DragCase(offsets: [2], destination: 3, after: ["a", "b", "c", "d"])
+        ]
+        for drag in drags {
+            let landed = TunnelListRules.moved(ids, from: drag.offsets, to: drag.destination).map(name)
+            var swiftUI = ids
+            swiftUI.move(fromOffsets: drag.offsets, toOffset: drag.destination)
+            let dragged = drag.offsets.map { rows[$0].name }
+            check(landed == drag.after && landed == swiftUI.map(name),
+                  "\(dragged) dropped at \(drag.destination) gives \(drag.after), as SwiftUI's move does"
+                  + " (rows=\(landed), swiftUI=\(swiftUI.map(name)))")
+        }
+        let steps = [
+            StepCase(row: "b", up: true, after: ["b", "a", "c", "d"]),
+            StepCase(row: "c", up: false, after: ["a", "b", "d", "c"]),
+            StepCase(row: "a", up: true, after: ["a", "b", "c", "d"]),
+            StepCase(row: "d", up: false, after: ["a", "b", "c", "d"])
+        ]
+        for step in steps {
+            guard let id = rows.first(where: { $0.name == step.row })?.id else { continue }
+            let stepped = TunnelListRules.movedByOne(ids, id, up: step.up).map(name)
+            check(stepped == step.after,
+                  "one step \(step.up ? "up" : "down") for \(step.row) gives \(step.after) (rows=\(stepped))")
+        }
+        let stranger = TunnelListRules.movedByOne(ids, UUID(), up: true).map(name)
+        check(stranger == ["a", "b", "c", "d"], "a step for an id the order does not hold changes nothing (rows=\(stranger))")
+    }
+
+    func theOrderIsKeptAcrossALaunch() async {
+        let suite = "TE-List-Order-\(runTag)"
+        guard let defaults = UserDefaults(suiteName: suite) else {
+            fail("the defaults suite \(suite) could not be opened")
+            return
+        }
+        onTeardown("remove the step's defaults suite") { defaults.removePersistentDomain(forName: suite) }
+        check(TunnelListOrderStore.load(from: defaults).isEmpty, "a suite that holds no order reads back none")
+        let order = [UUID(), UUID(), UUID()]
+        TunnelListOrderStore.save(order, to: defaults)
+        let back = TunnelListOrderStore.load(from: defaults)
+        check(back == order, "the saved order reads back the same (\(back.count) of \(order.count) ids, same order=\(back == order))")
+        defaults.set(["not an id", order[1].uuidString], forKey: TunnelListOrderStore.key)
+        let filtered = TunnelListOrderStore.load(from: defaults)
+        check(filtered == [order[1]], "a stored entry that is not an id is passed over (ids=\(filtered.count))")
     }
 }
 #endif
