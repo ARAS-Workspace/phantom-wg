@@ -22,9 +22,15 @@
 // is skipped with the gate's reading; on a simulator the gate stays shut.
 //
 // Every run writes its transcript to `Library/Caches/PhantomTestEngine/
-// last-run.txt` when it ends. Launched with `-PhantomTestEngineAutorun
-// YES`, the app runs the catalogue once on its own as soon as the tunnel
-// list is up, so a run can be started and read without the screen.
+// last-run.txt` when it ends, and the transcript's first line says which
+// workflows the run took. Launched with `-PhantomTestEngineAutorun YES`,
+// the app runs the catalogue once on its own as soon as the tunnel list
+// is up, so a run can be started and read without the screen. With
+// `-PhantomTestEngineWorkflows` beside it, naming families by their short
+// names with commas between them (`Sanity,TunnelList`), that run takes
+// those workflows alone, in catalogue order; a name that is no family's
+// aborts the run before any workflow. The screen's Run takes the whole
+// catalogue.
 
 #if DEBUG
 import Foundation
@@ -102,10 +108,12 @@ final class PhantomTestEngine {
 
     var plainText: String { lines.map(\.text).joined(separator: "\n") }
 
-    func start(_ workflows: [TestWorkflow], _ ctx: TestContext) {
+    /// Runs `workflows` in the order given. A run asked for by names that
+    /// are no family's (`unknown`) is aborted before its first workflow.
+    func start(_ workflows: [TestWorkflow], _ ctx: TestContext, unknown: [String] = []) {
         guard !isRunning else { return }
         isRunning = true
-        abortReason = nil
+        abortReason = unknown.isEmpty ? nil : "no workflow named \(unknown.joined(separator: ", "))"
         reset()
         runTask = Task { [weak self] in
             await self?.run(workflows, ctx)
@@ -117,13 +125,25 @@ final class PhantomTestEngine {
     // MARK: - Autorun
 
     static let autorunArgument = "PhantomTestEngineAutorun"
+    static let workflowsArgument = "PhantomTestEngineWorkflows"
 
-    /// Starts the catalogue once per launch when the app was launched
-    /// with `-PhantomTestEngineAutorun YES`; otherwise does nothing.
+    /// Starts a run once per launch when the app was launched with
+    /// `-PhantomTestEngineAutorun YES`; otherwise does nothing. The run
+    /// takes the whole catalogue, or the families
+    /// `-PhantomTestEngineWorkflows` names, with commas between them.
     func autorunIfRequested(_ ctx: TestContext) {
         guard !autorunDone, UserDefaults.standard.bool(forKey: Self.autorunArgument) else { return }
         autorunDone = true
-        start(TestCatalog.workflows, ctx)
+        let names = (UserDefaults.standard.string(forKey: Self.workflowsArgument) ?? "")
+            .split(separator: ",")
+            .map { $0.trimmingCharacters(in: .whitespaces) }
+            .filter { !$0.isEmpty }
+        guard !names.isEmpty else {
+            start(TestCatalog.workflows, ctx)
+            return
+        }
+        let asked = TestCatalog.selection(names)
+        start(asked.workflows, ctx, unknown: asked.unknown)
     }
 
     // MARK: - Transcript File
@@ -152,10 +172,17 @@ final class PhantomTestEngine {
             isRunning = false
             runTask = nil
         }
-        for (index, workflow) in workflows.enumerated() {
+        var families: [String] = []
+        for family in workflows.map(\.family) where !families.contains(family) { families.append(family) }
+        let catalogue = TestCatalog.workflows.count
+        let taken = workflows.count == catalogue
+            ? "all \(catalogue) workflows"
+            : "\(families.isEmpty ? "none" : families.joined(separator: ", ")) (\(workflows.count) of \(catalogue) workflows)"
+        emit("run: \(taken)", .info)
+        for workflow in workflows {
             if Task.isCancelled { break }
             if abortReason != nil { break }
-            if index > 0 { emit("", .info) }
+            emit("", .info)
             emit("▸ \(workflow.displayName)", .header)
             emit(String(repeating: "─", count: 44), .rule)
             workflow._bind(ctx, self)

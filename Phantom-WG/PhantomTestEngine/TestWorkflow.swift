@@ -67,6 +67,15 @@ class TestWorkflow {
     /// `Test-Ghost` and `Test-WireGuard`; it runs behind the live gate.
     var requiresLiveTunnels: Bool { false }
 
+    /// The family's short name, the one a run asks for it by: the type's
+    /// name without its `Workflow` suffix, as the `@witness` markers and
+    /// the file names spell it. Both registrations of
+    /// `PhantomTunnelWorkflow` answer to `PhantomTunnel`.
+    var family: String {
+        let typeName = String(describing: type(of: self))
+        return typeName.hasSuffix("Workflow") ? String(typeName.dropLast("Workflow".count)) : typeName
+    }
+
     // MARK: - Everything the app exposes to the user (no plumbing)
 
     var tunnels: TunnelsManager { context.tunnels }
