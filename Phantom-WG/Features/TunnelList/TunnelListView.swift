@@ -13,13 +13,13 @@ struct TunnelListView: View {
     @State private var showingTestEngine = false
     #endif
 
-    /// The tunnel the top section mirrors. One non-inactive tunnel at
-    /// a time: `TunnelsManager` queues activation behind deactivation,
-    /// and the OS's single-enabled-configuration rule backs the same
-    /// invariant from below — so "first non-inactive" is the whole
-    /// story. The list itself stays in plain newest-first order — no
-    /// active-first pinning; the top section is where the running
-    /// tunnel surfaces.
+    /// The tunnel the top section mirrors: the one holding the slot
+    /// (`TunnelListRules.slotHolder`). `TunnelsManager` queues an
+    /// activation behind the deactivation it starts, so during a
+    /// hand-off one tunnel waits while another goes down; the section
+    /// shows the one going down until its session ends. The list itself
+    /// stays in plain newest-first order — no active-first pinning; the
+    /// top section is where the running tunnel surfaces.
     private var activeTunnel: TunnelContainer? {
         TunnelListRules.slotHolder(in: tunnelsManager.tunnels, status: \.status)
     }
