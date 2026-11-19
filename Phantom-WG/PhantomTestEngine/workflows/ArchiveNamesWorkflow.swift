@@ -9,11 +9,12 @@
 // Scenarios:
 //
 //   A — Windows Code Pages Read Turkish Names
-//       Names in CP857 from FAT and NTFS hosts and in CP1254 from a VFAT
-//       host read as Turkish under the TR region's pages; a UTF-8 name
-//       without the flag from a Unix host stays UTF-8; a byte the chosen
-//       page leaves undefined reads in CP437; outside Turkey the OEM name
-//       reads in CP437.
+//       Names in CP857 from FAT, NTFS and Unix hosts and in CP1254 from a
+//       VFAT host read as Turkish under the TR region's pages; a UTF-8
+//       name without the flag from a Unix host stays UTF-8; a byte the
+//       chosen page leaves undefined reads in CP437; outside Turkey the
+//       OEM name reads in CP437. The TR region picks pages 857 and 1254,
+//       any other region 437 and 1252.
 //
 //   B — Unicode Path Field and UTF-8 Flag
 //       Info-ZIP's Unicode path field wins over the raw name only while its

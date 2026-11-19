@@ -45,7 +45,8 @@ enum ArchiveNameChecks {
             NameCase(id: "A3", entry: FixtureEntry(name: latin("\u{DE}ube.conf"), host: 14), expected: "Şube.conf"),
             NameCase(id: "A4", entry: FixtureEntry(name: Array("Unix şarkı.conf".utf8), host: 3), expected: "Unix şarkı.conf"),
             NameCase(id: "A5", entry: FixtureEntry(name: latin("\u{9E}ehir NTFS.conf"), host: 11), expected: "Şehir NTFS.conf"),
-            NameCase(id: "A8", entry: FixtureEntry(name: latin("Dosya\u{81}.conf"), host: 14), expected: "Dosya\u{FC}.conf")
+            NameCase(id: "A9", entry: FixtureEntry(name: latin("\u{9E}ehir Unix.conf"), host: 3), expected: "Şehir Unix.conf"),
+            NameCase(id: "A8", entry: FixtureEntry(name: latin("Dosya\u{9E}.conf"), host: 14), expected: "Dosya\u{20A7}.conf")
         ]
         let url = directory.appendingPathComponent("windows.zip")
         var outcomes: [Outcome] = []
@@ -54,26 +55,28 @@ enum ArchiveNameChecks {
             let turkish = try ZipArchive.entries(at: url, limits: limits, pages: .turkey) { _ in true }
             for (index, item) in cases.enumerated() {
                 let entry = turkish.indices.contains(index) ? turkish[index] : nil
+                let intact = entry?.content == .success(Data(item.entry.name))
+                let read = (entry?.path ?? "missing") + (entry == nil || intact ? "" : ", content not as written")
                 outcomes.append(Outcome(
                     id: item.id,
-                    passed: entry?.path == item.expected && entry?.content == .success(Data(item.entry.name)),
-                    message: "host \(item.entry.host) name reads as \(item.expected): \(entry?.path ?? "missing")"
+                    passed: entry?.path == item.expected && intact,
+                    message: "host \(item.entry.host) name reads as \(item.expected) (read \(read))"
                 ))
             }
             let american = try ZipArchive.entries(at: url, limits: limits, pages: .unitedStates) { _ in true }
             outcomes.append(Outcome(
                 id: "A6",
                 passed: american.first?.path == "\u{20A7}irket Raporu.conf",
-                message: "outside Turkey the same OEM name reads in CP437: \(american.first?.path ?? "missing")"
+                message: "outside Turkey the same OEM name reads in CP437 (read \(american.first?.path ?? "missing"))"
             ))
         } catch {
-            outcomes.append(Outcome(id: "A0", passed: false, message: "windows.zip did not read: \(error)"))
+            outcomes.append(Outcome(id: "A0", passed: false, message: "windows.zip did not read (\(error))"))
         }
         outcomes.append(Outcome(
             id: "A7",
-            passed: WindowsCodePages(region: "TR") == .turkey
-                && WindowsCodePages(region: "US") == .unitedStates
-                && WindowsCodePages(region: nil) == .unitedStates,
+            passed: WindowsCodePages(region: "TR") == WindowsCodePages(oem: 857, ansi: 1254)
+                && WindowsCodePages(region: "US") == WindowsCodePages(oem: 437, ansi: 1252)
+                && WindowsCodePages(region: nil) == WindowsCodePages(oem: 437, ansi: 1252),
             message: "the TR region picks 857/1254, any other region 437/1252"
         ))
         return outcomes
@@ -101,10 +104,10 @@ enum ArchiveNameChecks {
             let entries = try ZipArchive.entries(at: url, limits: limits, pages: .turkey) { _ in true }
             return cases.enumerated().map { index, item in
                 let path = entries.indices.contains(index) ? entries[index].path : "missing"
-                return Outcome(id: item.id, passed: path == item.expected, message: "reads as \(item.expected): \(path)")
+                return Outcome(id: item.id, passed: path == item.expected, message: "reads as \(item.expected) (read \(path))")
             }
         } catch {
-            return [Outcome(id: "B0", passed: false, message: "unicode-path.zip did not read: \(error)")]
+            return [Outcome(id: "B0", passed: false, message: "unicode-path.zip did not read (\(error))")]
         }
     }
 
@@ -121,32 +124,33 @@ enum ArchiveNameChecks {
             let archive = try ZipArchive.archive(files)
             let entries = try ZipArchive.entries(in: archive, limits: limits, pages: .unitedStates) { _ in true }
             let headers = centralHeaders(of: archive)
+            let intact = zip(entries, files).filter { $0.content == .success($1.data) }.count
             try archive.write(to: url)
             let throughFile = try ZipArchive.entries(at: url, limits: limits, pages: .unitedStates) { _ in true }
             return [
                 Outcome(
                     id: "C1",
                     passed: entries.map(\.path) == files.map(\.path) && entries.map(\.content) == files.map { .success($0.data) },
-                    message: "names and contents come back as written: \(entries.map(\.path))"
+                    message: "names and contents come back as written (\(entries.map(\.path)), \(intact) of \(files.count) contents as written)"
                 ),
                 Outcome(
                     id: "C2",
                     passed: headers.count == files.count && headers.allSatisfy { $0.flag & 0x0800 != 0 },
-                    message: "every central header carries the UTF-8 flag: \(headers.map { String($0.flag, radix: 16) })"
+                    message: "every central header carries the UTF-8 flag (\(headers.map { String($0.flag, radix: 16) }))"
                 ),
                 Outcome(
                     id: "C3",
                     passed: headers.count == files.count && headers.allSatisfy { $0.madeBy >> 8 == 3 && $0.attributes >> 16 == 0o100600 },
-                    message: "every entry is made by Unix with mode 0600: \(headers.map { "\($0.madeBy >> 8)/\(String($0.attributes >> 16, radix: 8))" })"
+                    message: "every entry is made by Unix with mode 0600 (\(headers.map { "\($0.madeBy >> 8)/\(String($0.attributes >> 16, radix: 8))" }))"
                 ),
                 Outcome(
                     id: "C4",
                     passed: !entries.isEmpty && throughFile == entries,
-                    message: "the same bytes written into a file read back the same: \(throughFile.map(\.path))"
+                    message: "the same bytes written into a file read back the same (\(throughFile.map(\.path)))"
                 )
             ]
         } catch {
-            return [Outcome(id: "C0", passed: false, message: "own.zip did not round-trip: \(error)")]
+            return [Outcome(id: "C0", passed: false, message: "own.zip did not round-trip (\(error))")]
         }
     }
 

@@ -16,6 +16,7 @@ struct WindowsCodePages: Equatable {
         self.ansi = ansi
     }
 
+    /// @witness ArchiveNames.windowsCodePages
     init(region: String?) {
         self = region == "TR" ? .turkey : .unitedStates
     }
