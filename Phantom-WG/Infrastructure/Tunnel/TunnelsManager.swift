@@ -101,6 +101,7 @@ class TunnelsManager {
     /// @witness TunnelAdd.aBlankNameIsRefusedBeforeAProviderIsMinted
     /// @witness TunnelAdd.aRefusedSaveLeavesNoKeychainItem
     /// @witness TunnelAdd.aRefusedLoadAfterAnAcceptedSaveKeepsTheItem
+    /// @witness TunnelAdd.onlyASystemRefusalOffersTheVPNSettings
     /// @witness TunnelAdd.aListReloadThatCrossesAnAddLeavesOneRow
     /// @witness Unreachable.addThroughTheProductionPath
     func add(config: TunnelConfig) async throws -> TunnelContainer {
@@ -173,6 +174,7 @@ class TunnelsManager {
     /// @witness TunnelEdit.aBlankNameIsRefusedBeforeTheSystemIsTouched
     /// @witness TunnelEdit.aRefusedSaveLeavesTheSavedTunnelReadable
     /// @witness TunnelEdit.anAcceptedSaveLeavesOnlyTheItemItSealed
+    /// @witness TunnelEdit.aRefusedLoadAfterAnAcceptedSaveKeepsTheEdit
     func modify(tunnel: TunnelContainer, with config: TunnelConfig) async throws {
         let name = config.name.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !name.isEmpty else {

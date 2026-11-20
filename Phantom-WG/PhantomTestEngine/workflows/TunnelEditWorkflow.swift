@@ -1,7 +1,8 @@
 // Tunnel Edit
 //
 // The EDIT path: what `modify()` refuses, and what it leaves behind when
-// the system refuses or accepts its save.
+// the system refuses or accepts its save, or accepts the save and refuses
+// the load that follows.
 //
 // Everything here runs over a `TunnelsManager` of the step's own, whose
 // listed rows are `FakeSlotProvider`s handed both as the opening rows and
@@ -11,9 +12,11 @@
 // Scenarios:
 //
 //   A — A Name Another Row Holds Is Refused, Its Own Is Not
-//       An edit to another row's name, in other letter case, is refused as
-//       a name clash before the system is asked; an edit to the row's own
-//       name in other letter case lands and the row carries it.
+//       An edit to another row's name, in other letter case and with spaces
+//       around it, is refused as a name clash before the system is asked;
+//       an edit to the row's own name, handed the same way, lands and the
+//       row carries it without the spaces. Read back from what the system
+//       stored, the entry carries the row's name.
 //
 //   B — A Blank Name Is Refused Before The System Is Touched
 //       A name of spaces is refused as an invalid name; no save is issued
@@ -22,14 +25,16 @@
 //   C — A Refused Save Leaves The Saved Tunnel Readable
 //       The row's configuration is sealed into the app group Keychain by
 //       the production `configure(with:)` path (`.keychain` storage), and
-//       the system refuses the edit's save. The edit is refused as a
-//       system error and the row keeps its name; the provider in memory is
-//       back on the saved configuration and its item, and of the items the
-//       step's provider referenced only the saved one opens. Then the
-//       provider is read back from what the system stored — what the next
-//       reload or the next launch reads — and the claim is that it still
-//       opens the configuration that was saved. Every Keychain item the
-//       step created is deleted on the way out.
+//       the step's first claim is that the row reads it back. The system
+//       refuses the edit's save. The edit is refused as a system error
+//       carrying the system's refusal and the row keeps its name; the
+//       provider in memory is back on the saved configuration and its item;
+//       the edit sealed an item of its own beside the saved one, and of the
+//       items the step's provider referenced only the saved one opens. Then
+//       the provider is read back from what the system stored — what the
+//       next reload or the next launch reads — and the claim is that it
+//       still opens the configuration that was saved. Every Keychain item
+//       the step created is deleted on the way out.
 //
 //   D — An Accepted Save Leaves Only The Item It Sealed
 //       The same planting, and the system accepts the edit's save. The
@@ -37,6 +42,15 @@
 //       what the system stored, the tunnel opens the edit, and of the
 //       items the step's provider referenced only the one the edit sealed
 //       opens — the item it replaced is deleted.
+//
+//   E — A Refused Load After An Accepted Save Keeps The Edit
+//       The same planting; the system accepts the edit's save and refuses
+//       the load that follows. The edit is refused as a system error
+//       carrying the system's refusal; read back from what the system
+//       stored, the tunnel opens the edit, and of the items the step's
+//       provider referenced only the one the edit sealed opens. The row's
+//       name is not among the claims: `modify()` names the row after its
+//       load.
 
 #if DEBUG
 import Foundation
@@ -49,7 +63,8 @@ final class TunnelEditWorkflow: TestWorkflow {
             WorkflowStep("A Name Another Row Holds Is Refused, Its Own Is Not", aTakenNameIsRefusedAndItsOwnIsNot),
             WorkflowStep("A Blank Name Is Refused Before The System Is Touched", aBlankNameIsRefusedBeforeTheSystemIsTouched),
             WorkflowStep("A Refused Save Leaves The Saved Tunnel Readable", aRefusedSaveLeavesTheSavedTunnelReadable),
-            WorkflowStep("An Accepted Save Leaves Only The Item It Sealed", anAcceptedSaveLeavesOnlyTheItemItSealed)
+            WorkflowStep("An Accepted Save Leaves Only The Item It Sealed", anAcceptedSaveLeavesOnlyTheItemItSealed),
+            WorkflowStep("A Refused Load After An Accepted Save Keeps The Edit", aRefusedLoadAfterAnAcceptedSaveKeepsTheEdit)
         ]
     }
 
@@ -89,7 +104,7 @@ final class TunnelEditWorkflow: TestWorkflow {
         }
 
         var taken = configA
-        taken.name = configB.name.lowercased()
+        taken.name = "  \(configB.name.lowercased())  "
         let clash = await outcome(manager, rowA, taken)
         var refusedAsClash = false
         if let clash, case TunnelManagementError.tunnelAlreadyExistsWithThatName = clash { refusedAsClash = true }
@@ -97,12 +112,17 @@ final class TunnelEditWorkflow: TestWorkflow {
         check(providerA.saveCount == 0 && rowA.name == configA.name && providerA.tunnelConfig?.name == configA.name,
               "before the system is asked: no save, and the row and its configuration keep their name (saves=\(providerA.saveCount))")
 
+        let shown = configA.name.uppercased()
         var own = configA
-        own.name = configA.name.uppercased()
+        own.name = "  \(shown)  "
         let ownOutcome = await outcome(manager, rowA, own)
         check(ownOutcome == nil, "an edit to the row's own name in other letter case lands (\(String(describing: ownOutcome)))")
-        check(rowA.name == own.name && providerA.saveCount == 1,
+        check(rowA.name == shown && providerA.saveCount == 1,
               "the row carries the new letter case after one save (name=\(rowA.name), saves=\(providerA.saveCount))")
+        try? await providerA.loadPreferences()
+        check(providerA.localizedDescription == rowA.name,
+              "read back from what the system stored, the entry carries the row's name"
+              + " (entry=\(providerA.localizedDescription.map { "\"\($0)\"" } ?? "none"))")
     }
 
     func aBlankNameIsRefusedBeforeTheSystemIsTouched() async {
@@ -133,12 +153,10 @@ final class TunnelEditWorkflow: TestWorkflow {
         }
         let provider = FakeSlotProvider(storage: .keychain, config: original)
         onTeardown("delete the step's Keychain items") { provider.sweepKeychain() }
-        guard let savedRef = provider.keychainRef else {
-            fail("the planted row carries no Keychain reference")
-            return
-        }
         guard check(provider.tunnelConfig == original,
-                    "the planted row reads its configuration back from the app group Keychain") else { return }
+                    "the planted row reads its configuration back from the app group Keychain"
+                    + " (sealed=\(provider.keychainRef != nil), reads \(provider.tunnelConfig.map { "\"\($0.name)\"" } ?? "nothing"))"),
+              let savedRef = provider.keychainRef else { return }
         let manager = TunnelsManager(tunnelProviders: [provider], providerFactory: FakeSlotFactory(canned: [provider]))
         guard let row = manager.tunnels.first else {
             fail("the planted row is not in the step's list")
@@ -149,18 +167,24 @@ final class TunnelEditWorkflow: TestWorkflow {
         edited.name = "\(original.name)-Edited"
         provider.saveAnswer = .fails(refusal)
         let refused = await outcome(manager, row, edited)
-        var asSystemError = false
-        if let refused, case TunnelManagementError.vpnSystemErrorOnModifyTunnel = refused { asSystemError = true }
-        check(asSystemError, "the edit whose save the system refused is refused as a system error (\(String(describing: refused)))")
+        var carriesTheRefusal = false
+        if let refused, case TunnelManagementError.vpnSystemErrorOnModifyTunnel(let carried) = refused {
+            carriesTheRefusal = (carried as NSError) == refusal
+        }
+        check(carriesTheRefusal,
+              "the edit whose save the system refused is refused as a system error carrying the system's refusal"
+              + " (\(String(describing: refused)))")
         check(row.name == original.name, "the row keeps its name (name=\(row.name))")
         check(provider.tunnelConfig == original && provider.keychainRef == savedRef
                 && provider.localizedDescription == original.name,
               "the provider in memory is back on the saved configuration, its item and its name"
               + " (reads \(provider.tunnelConfig.map { "\"\($0.name)\"" } ?? "nothing"))")
+        check(provider.keychainRefs.count == 2,
+              "the edit sealed an item of its own beside the saved one (referenced=\(provider.keychainRefs.count))")
         let open = opening(provider)
         check(open == [savedRef],
-              "of the \(provider.keychainRefs.count) items the step's provider referenced, only the saved one opens"
-              + " (open=\(open.count), saved opens=\(open.contains(savedRef)))")
+              "of the items the step's provider referenced, only the saved one opens"
+              + " (referenced=\(provider.keychainRefs.count), open=\(open.count), saved opens=\(open.contains(savedRef)))")
 
         provider.loadAnswer = .succeeds
         try? await provider.loadPreferences()
@@ -177,12 +201,10 @@ final class TunnelEditWorkflow: TestWorkflow {
         }
         let provider = FakeSlotProvider(storage: .keychain, config: original)
         onTeardown("delete the step's Keychain items") { provider.sweepKeychain() }
-        guard let savedRef = provider.keychainRef else {
-            fail("the planted row carries no Keychain reference")
-            return
-        }
         guard check(provider.tunnelConfig == original,
-                    "the planted row reads its configuration back from the app group Keychain") else { return }
+                    "the planted row reads its configuration back from the app group Keychain"
+                    + " (sealed=\(provider.keychainRef != nil), reads \(provider.tunnelConfig.map { "\"\($0.name)\"" } ?? "nothing"))"),
+              let savedRef = provider.keychainRef else { return }
         let manager = TunnelsManager(tunnelProviders: [provider], providerFactory: FakeSlotFactory(canned: [provider]))
         guard let row = manager.tunnels.first else {
             fail("the planted row is not in the step's list")
@@ -202,8 +224,50 @@ final class TunnelEditWorkflow: TestWorkflow {
               + " (reads \(stored.map { "\"\($0.name)\"" } ?? "nothing"))")
         let open = opening(provider)
         check(open.count == 1 && open.first == provider.keychainRef && !open.contains(savedRef),
-              "of the \(provider.keychainRefs.count) items the step's provider referenced, only the one the edit sealed opens"
-              + " (open=\(open.count), replaced opens=\(open.contains(savedRef)))")
+              "of the items the step's provider referenced, only the one the edit sealed opens"
+              + " (referenced=\(provider.keychainRefs.count), open=\(open.count), replaced opens=\(open.contains(savedRef)))")
+    }
+
+    func aRefusedLoadAfterAnAcceptedSaveKeepsTheEdit() async {
+        guard let original = TestConfigFactory.throwaway(name: "TE-Edit-Load-\(runTag)") else {
+            fail("the config factory produced no throwaway")
+            return
+        }
+        let provider = FakeSlotProvider(storage: .keychain, config: original)
+        onTeardown("delete the step's Keychain items") { provider.sweepKeychain() }
+        guard check(provider.tunnelConfig == original,
+                    "the planted row reads its configuration back from the app group Keychain"
+                    + " (sealed=\(provider.keychainRef != nil), reads \(provider.tunnelConfig.map { "\"\($0.name)\"" } ?? "nothing"))"),
+              let savedRef = provider.keychainRef else { return }
+        let manager = TunnelsManager(tunnelProviders: [provider], providerFactory: FakeSlotFactory(canned: [provider]))
+        guard let row = manager.tunnels.first else {
+            fail("the planted row is not in the step's list")
+            return
+        }
+
+        var edited = original
+        edited.name = "\(original.name)-Edited"
+        let loadRefusal = NSError(domain: "TE.Fake", code: 6, userInfo: [NSLocalizedDescriptionKey: "test rig refused the load"])
+        provider.loadAnswer = .fails(loadRefusal)
+        let refused = await outcome(manager, row, edited)
+        var carriesTheRefusal = false
+        if let refused, case TunnelManagementError.vpnSystemErrorOnModifyTunnel(let carried) = refused {
+            carriesTheRefusal = (carried as NSError) == loadRefusal
+        }
+        check(carriesTheRefusal,
+              "the edit whose load the system refused after accepting its save is refused as a system error"
+              + " carrying the system's refusal (\(String(describing: refused)))")
+
+        provider.loadAnswer = .succeeds
+        try? await provider.loadPreferences()
+        let stored = provider.tunnelConfig
+        check(stored == edited,
+              "read back from what the system stored, the tunnel opens the edit"
+              + " (reads \(stored.map { "\"\($0.name)\"" } ?? "nothing"))")
+        let open = opening(provider)
+        check(open.count == 1 && open.first == provider.keychainRef && !open.contains(savedRef),
+              "of the items the step's provider referenced, only the one the edit sealed opens"
+              + " (referenced=\(provider.keychainRefs.count), open=\(open.count), replaced opens=\(open.contains(savedRef)))")
     }
 }
 #endif

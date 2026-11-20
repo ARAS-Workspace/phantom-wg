@@ -19,6 +19,10 @@ enum Keychain {
     private static let service = "com.artek.Phantom-WG"
 
     /// @witness Sanity.keychainRoundTrip
+    /// @witness TunnelAdd.aRefusedLoadAfterAnAcceptedSaveKeepsTheItem
+    /// @witness TunnelEdit.aRefusedSaveLeavesTheSavedTunnelReadable
+    /// @witness TunnelEdit.anAcceptedSaveLeavesOnlyTheItemItSealed
+    /// @witness TunnelEdit.aRefusedLoadAfterAnAcceptedSaveKeepsTheEdit
     static func openReference(called ref: Data) -> String? {
         var result: CFTypeRef?
         // Persistent reference already encodes the item identity —
@@ -60,6 +64,10 @@ enum Keychain {
     }
 
     /// @witness Sanity.keychainRoundTrip
+    /// @witness TunnelAdd.aRefusedSaveLeavesNoKeychainItem
+    /// @witness TunnelEdit.aRefusedSaveLeavesTheSavedTunnelReadable
+    /// @witness TunnelEdit.anAcceptedSaveLeavesOnlyTheItemItSealed
+    /// @witness TunnelEdit.aRefusedLoadAfterAnAcceptedSaveKeepsTheEdit
     static func deleteReference(called ref: Data) {
         SecItemDelete([kSecValuePersistentRef: ref] as CFDictionary)
     }
