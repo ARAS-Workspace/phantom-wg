@@ -52,6 +52,7 @@ class TunnelContainer: Identifiable {
     @ObservationIgnored var activationAttemptId: String?
     @ObservationIgnored var activationTask: Task<Void, Never>?
 
+    /// @witness ActivationSeam.aPressOnABusySlotQueuesAndStopsTheOccupant
     init(tunnel: TunnelProviding) {
         tunnelProvider = tunnel
         id = tunnel.tunnelConfig?.id ?? UUID()
@@ -90,6 +91,7 @@ class TunnelContainer: Identifiable {
     }
 
     /// @witness ActivationSeam.aListRefreshCannotCancelAnActivation
+    /// @witness ActivationSeam.aQueuedRowTheSystemBroughtUpIsNotStartedAgain
     /// @witness ActivationSeam.aListRefreshCannotTakeAQueuedTunnelsTurn
     func refreshStatus() {
         let derived = TunnelStatus(from: tunnelProvider.connectionStatus)

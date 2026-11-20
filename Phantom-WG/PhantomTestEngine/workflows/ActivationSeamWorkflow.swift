@@ -9,14 +9,15 @@
 // `FakeSlotProvider`s (in memory) handed both as the opening rows and as
 // the factory's canned answer. A fake answers only notifications that
 // carry itself, so the app's own manager never reacts to a driven status.
-// Step G posts `NEVPNConfigurationChange`, which every live manager answers
-// with a reload; the app's own reload reads the system and changes nothing.
+// Steps G and Y post `NEVPNConfigurationChange`, which every live manager
+// answers with a reload; the app's own reload reads the system and changes
+// nothing.
 //
 // Scenarios:
 //
 //   A — A Press On A Busy Slot Queues And Stops The Occupant
-//       A holds a session; a press on B queues B and stops A. When A's
-//       session ends, B takes its turn.
+//       A holds a session, and a press on A changes nothing; a press on B
+//       queues B and stops A. When A's session ends, B takes its turn.
 //
 //   B — A Second Queued Press Takes The Slot
 //       With B queued behind A, a press on C queues C, returns B to rest,
@@ -28,16 +29,18 @@
 //       the slot. When A's session ends, B does not start.
 //
 //   D — A List Refresh Cannot Cancel An Activation
-//       While B's activation waits on its arm save, refreshes reading
-//       disconnected, invalid and disconnecting leave it activating; the
-//       activation still reaches startTunnel, and a connected refresh
-//       lands.
+//       The activation issues its arm save. While it waits on that save,
+//       refreshes reading disconnected, invalid and disconnecting leave it
+//       activating; the activation still reaches startTunnel, and a
+//       connected refresh lands.
 //
 //   E — A List Refresh Cannot Take A Queued Tunnel's Turn
-//       With B queued behind A and C idle but armed, a refresh and a
+//       With B queued behind A, and C idle but armed with its object still
+//       holding the enabled flag of its own activation, a refresh and a
 //       disconnecting reading leave B queued, and so does a driven
-//       disconnected notification for B. When A's session ends, B takes
-//       its turn and the hand-off stands C's rule down in the store.
+//       disconnected notification for B. When A's session ends, B takes its
+//       turn and the hand-off stands C's rule down in the store and saves C
+//       disabled.
 //
 //   F — A Removal Hands The Queue On Only When The Slot Is Free
 //       With B queued behind A going down, removing a bystander leaves B
@@ -48,9 +51,18 @@
 //       a reload drops its row. The slot is discarded, and when A's session
 //       ends no session is raised for B.
 //
+//   X — A Queued Row The System Brought Up Is Not Started Again
+//       With B queued behind A, the system reports a session for B and the
+//       reading lands on the queued row. When A's session ends, B is not
+//       started again and the queue slot is freed.
+//
+//   Y — A List Reload Grounds A Session That Ended Unannounced
+//       With B queued behind A going down, A's session ends with no status
+//       notification. A list reload reads A at rest and hands the queue on.
+//
 // The recovery rule's steps (H to S) are in
 // `ActivationSeamWorkflow+RecoveryRule.swift`, the reset's (T to W) in
-// `ActivationSeamWorkflow+Reset.swift`.
+// `ActivationSeamWorkflow+Reset.swift`. X and Y run after them.
 
 #if DEBUG
 import Foundation
@@ -83,7 +95,9 @@ final class ActivationSeamWorkflow: TestWorkflow {
             WorkflowStep("A Reset's Outcome Byte Decides The Caller's Verdict", aResetsOutcomeByteDecidesTheCallersVerdict),
             WorkflowStep("A Reset Nobody Answers Ends Its Own Wait", aResetNobodyAnswersEndsItsOwnWait),
             WorkflowStep("A Reset The Session Refuses To Send Is Named", aResetTheSessionRefusesToSendIsNamed),
-            WorkflowStep("A Reset On A Resting Row Sends Nothing", aResetOnARestingRowSendsNothing)
+            WorkflowStep("A Reset On A Resting Row Sends Nothing", aResetOnARestingRowSendsNothing),
+            WorkflowStep("A Queued Row The System Brought Up Is Not Started Again", aQueuedRowTheSystemBroughtUpIsNotStartedAgain),
+            WorkflowStep("A List Reload Grounds A Session That Ended Unannounced", aListReloadGroundsASessionThatEndedUnannounced)
         ]
     }
 
@@ -126,6 +140,11 @@ final class ActivationSeamWorkflow: TestWorkflow {
         let (manager, fakeA, fakeB, rowA, rowB) = (rig.manager, rig.fakes[0], rig.fakes[1], rig.rows[0], rig.rows[1])
         guard check(rowA.status == .active, "the rig's first row opens active (status=\(rowA.status))") else { return }
 
+        manager.startActivation(of: rowA)
+        check(rowA.status == .active && fakeA.stopCount == 0 && manager.waitingTunnel == nil,
+              "a press on the row that holds the slot changes nothing"
+              + " (status=\(rowA.status), stops=\(fakeA.stopCount), queued=\(manager.waitingTunnel != nil))")
+
         manager.startActivation(of: rowB)
         check(rowB.status == .waiting && manager.waitingTunnel === rowB,
               "the press on the busy slot queues B (status=\(rowB.status), queued=\(manager.waitingTunnel === rowB))")
@@ -135,7 +154,8 @@ final class ActivationSeamWorkflow: TestWorkflow {
         fakeA.drive(.disconnected)
         let tookItsTurn = await settle(within: 3) { fakeB.startCount >= 1 }
         check(tookItsTurn && manager.waitingTunnel == nil,
-              "when A's session ends, B takes its turn (starts=\(fakeB.startCount), status=\(rowB.status))")
+              "when A's session ends, B takes its turn"
+              + " (starts=\(fakeB.startCount), status=\(rowB.status), queued=\(manager.waitingTunnel != nil))")
     }
 
     func aSecondQueuedPressTakesTheSlot() async {
@@ -150,7 +170,8 @@ final class ActivationSeamWorkflow: TestWorkflow {
         guard check(rowB.status == .waiting, "B queues behind A (status=\(rowB.status))") else { return }
         manager.startActivation(of: rowC)
         check(rowC.status == .waiting && manager.waitingTunnel === rowC && rowB.status == .inactive,
-              "a press on C takes the slot and returns B to rest (C=\(rowC.status), B=\(rowB.status))")
+              "a press on C takes the slot and returns B to rest"
+              + " (C=\(rowC.status), B=\(rowB.status), C queued=\(manager.waitingTunnel === rowC))")
         check(fakeA.stopCount == 1, "and A is sent no second stop (stops=\(fakeA.stopCount))")
 
         fakeA.drive(.disconnected)
@@ -186,10 +207,8 @@ final class ActivationSeamWorkflow: TestWorkflow {
         fake.saveAnswer = .succeedsAfter(seconds: 1.5)
 
         manager.startActivation(of: row)
-        guard await settle(within: 3, until: { fake.saveCount >= 1 }) else {
-            skip("environment: the activation never reached its arm save")
-            return
-        }
+        let armSaveIssued = await settle(within: 3) { fake.saveCount >= 1 }
+        guard check(armSaveIssued, "the activation issues its arm save (saves=\(fake.saveCount))") else { return }
         row.refreshStatus()
         check(row.status == .activating, "a disconnected refresh leaves the activation alone (status=\(row.status))")
         fake.setStatusSilently(.invalid)
@@ -214,6 +233,8 @@ final class ActivationSeamWorkflow: TestWorkflow {
         }
         let (manager, fakeA, fakeB, fakeC, rowB) = (rig.manager, rig.fakes[0], rig.fakes[1], rig.fakes[2], rig.rows[1])
         fakeC.arrangeArmed()
+        // C's object still holds the enabled flag its own activation wrote.
+        fakeC.isEnabled = true
 
         manager.startActivation(of: rowB)
         guard check(rowB.status == .waiting, "B queues behind A (status=\(rowB.status))") else { return }
@@ -247,26 +268,29 @@ final class ActivationSeamWorkflow: TestWorkflow {
         guard check(rowB.status == .waiting && rowA.status == .deactivating,
                     "B queues behind A going down (B=\(rowB.status), A=\(rowA.status))") else { return }
 
+        let bystander = "the bystander leaves the list and the slot is still held for B"
         do {
             try await manager.remove(tunnel: rowC)
         } catch {
-            fail("removing the bystander was refused (\(error))")
+            check(false, bystander + " (the removal was refused: \(error))")
             return
         }
-        check(!manager.tunnels.contains { $0.id == rowC.id } && manager.waitingTunnel === rowB,
-              "the bystander leaves the list and the slot is still held for B")
+        let listed = manager.tunnels.contains { $0.id == rowC.id }
+        check(!listed && manager.waitingTunnel === rowB,
+              bystander + " (listed=\(listed), queued=\(manager.waitingTunnel === rowB))")
         let startedEarly = await settle(within: 1) { fakeB.startCount > 0 }
         check(!startedEarly && rowB.status == .waiting,
               "the removal starts no session for B while A is still going down (starts=\(fakeB.startCount), status=\(rowB.status))")
 
+        let handedOn = "removing the occupant hands the queue on"
         do {
             try await manager.remove(tunnel: rowA)
         } catch {
-            fail("removing the occupant was refused (\(error))")
+            check(false, handedOn + " (the removal was refused: \(error))")
             return
         }
         let tookItsTurn = await settle(within: 3) { fakeB.startCount >= 1 }
-        check(tookItsTurn, "removing the occupant hands the queue on (starts=\(fakeB.startCount))")
+        check(tookItsTurn, handedOn + " (starts=\(fakeB.startCount))")
     }
 
     func aQueueSlotWhoseTunnelLeftTheListIsDiscarded() async {
@@ -281,15 +305,51 @@ final class ActivationSeamWorkflow: TestWorkflow {
 
         try? await fakeB.removePreferences()
         NotificationCenter.default.post(name: .NEVPNConfigurationChange, object: nil)
-        guard await settle(within: 3, until: { !manager.tunnels.contains { $0.id == rowB.id } }) else {
-            skip("environment: the reload kept B's row, so there is no stale slot to discard")
-            return
-        }
+        let dropped = await settle(within: 3) { !manager.tunnels.contains { $0.id == rowB.id } }
+        guard check(dropped, "the reload drops the row whose entry left the system (rows=\(manager.tunnels.count))") else { return }
         check(manager.waitingTunnel == nil, "the slot of the row the list dropped is discarded")
 
         fakeA.drive(.disconnected)
         let stayedDown = await holds(for: 1) { fakeB.startCount == 0 }
         check(stayedDown, "when A's session ends, no session is raised for B (starts=\(fakeB.startCount))")
+    }
+
+    func aQueuedRowTheSystemBroughtUpIsNotStartedAgain() async {
+        guard let rig = rig("Up", [.connected, .disconnected]) else {
+            fail("the rig did not materialize its two rows")
+            return
+        }
+        let (manager, fakeA, fakeB, rowB) = (rig.manager, rig.fakes[0], rig.fakes[1], rig.rows[1])
+
+        manager.startActivation(of: rowB)
+        guard check(rowB.status == .waiting, "B queues behind A (status=\(rowB.status))") else { return }
+        fakeB.drive(.connected)
+        let landed = await settle(within: 1) { rowB.status == .active }
+        guard check(landed, "a connected reading lands on the queued row (status=\(rowB.status))") else { return }
+
+        fakeA.drive(.disconnected)
+        let notStarted = await holds(for: 1) { fakeB.startCount == 0 }
+        check(notStarted && manager.waitingTunnel == nil,
+              "when A's session ends, the row already up is not started again and the slot is freed"
+              + " (starts=\(fakeB.startCount), status=\(rowB.status), queued=\(manager.waitingTunnel != nil))")
+    }
+
+    func aListReloadGroundsASessionThatEndedUnannounced() async {
+        guard let rig = rig("Ground", [.connected, .disconnected]) else {
+            fail("the rig did not materialize its two rows")
+            return
+        }
+        let (manager, fakeA, fakeB, rowA, rowB) = (rig.manager, rig.fakes[0], rig.fakes[1], rig.rows[0], rig.rows[1])
+
+        manager.startActivation(of: rowB)
+        guard check(rowB.status == .waiting && rowA.status == .deactivating,
+                    "B queues behind A going down (B=\(rowB.status), A=\(rowA.status))") else { return }
+
+        fakeA.setStatusSilently(.disconnected)
+        NotificationCenter.default.post(name: .NEVPNConfigurationChange, object: nil)
+        let handedOn = await settle(within: 3) { fakeB.startCount >= 1 }
+        check(handedOn && rowA.status == .inactive,
+              "a list reload grounds A and hands the queue on (A=\(rowA.status), starts=\(fakeB.startCount))")
     }
 }
 #endif

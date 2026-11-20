@@ -240,6 +240,7 @@ class TunnelsManager {
     /// @witness Unreachable.cleanupProof
     /// @witness TunnelBulkDelete.aMixedSelectionDeletesOnlyTheSettledRows
     /// @witness TunnelBulkDelete.aSettledSelectionDeletesWhole
+    /// @witness ActivationSeam.aRemovalHandsTheQueueOnOnlyWhenTheSlotIsFree
     func remove(tunnel: TunnelContainer) async throws {
         let removedProtocol = tunnel.tunnelProvider.protocolConfiguration as? NETunnelProviderProtocol
 
@@ -290,6 +291,7 @@ class TunnelsManager {
         startActivation(of: tunnel, at: 0)
     }
 
+    /// @witness ActivationSeam.aSecondQueuedPressTakesTheSlot
     /// @witness ActivationSeam.aQueuedRowToggledOffGivesUpItsTurn
     /// @witness ActivationSeam.aStopStandsTheRuleDownBeforeItGoesOut
     /// @witness ActivationSeam.aRefusedDisarmSurfacesAndTheStopStillGoesOut
@@ -371,6 +373,7 @@ class TunnelsManager {
         }
     }
 
+    /// @witness ActivationSeam.aListRefreshCannotCancelAnActivation
     /// @witness ActivationSeam.theLadderRunningOutLeavesTheRuleArmed
     private func startActivation(of tunnel: TunnelContainer, at retryIndex: Int) {
         guard retryIndex < maxRetries else {
@@ -426,6 +429,7 @@ class TunnelsManager {
         }
     }
 
+    /// @witness ActivationSeam.aListRefreshCannotCancelAnActivation
     /// @witness ActivationSeam.aConfigThatWillNotLoadLosesItsRule
     /// @witness ActivationSeam.aStartTheSystemRefusesLosesItsRule
     /// @witness ActivationSeam.aGiveUpWhoseDisarmSaveHangsStillHandsTheQueueOn
@@ -499,8 +503,10 @@ class TunnelsManager {
     /// Hands the slot to the queued tunnel once it is free. The slot is
     /// dropped when the queued row is no longer listed; it is kept while
     /// another tunnel still holds a session.
+    /// @witness ActivationSeam.aPressOnABusySlotQueuesAndStopsTheOccupant
     /// @witness ActivationSeam.aRemovalHandsTheQueueOnOnlyWhenTheSlotIsFree
     /// @witness ActivationSeam.aQueueSlotWhoseTunnelLeftTheListIsDiscarded
+    /// @witness ActivationSeam.aQueuedRowTheSystemBroughtUpIsNotStartedAgain
     private func activateWaitingTunnelIfNeeded() {
         guard let waitingTunnel else { return }
         guard tunnels.contains(where: { $0 === waitingTunnel }) else {
@@ -535,6 +541,7 @@ class TunnelsManager {
         }
     }
 
+    /// @witness ActivationSeam.aPressOnABusySlotQueuesAndStopsTheOccupant
     /// @witness ActivationSeam.aListRefreshCannotTakeAQueuedTunnelsTurn
     /// @witness ActivationSeam.aDropMidActivationFilesTheSystemsRecord
     /// @witness ActivationSeam.aMuteDropFilesAStandInError
@@ -616,6 +623,9 @@ class TunnelsManager {
         }
     }
 
+    /// @witness TunnelAdd.aListReloadThatCrossesAnAddLeavesOneRow
+    /// @witness ActivationSeam.aQueueSlotWhoseTunnelLeftTheListIsDiscarded
+    /// @witness ActivationSeam.aListReloadGroundsASessionThatEndedUnannounced
     private func reload() async {
         guard let providers = try? await providerFactory.loadAllFromPreferences() else { return }
 
