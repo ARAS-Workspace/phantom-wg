@@ -24,6 +24,7 @@ enum TunnelBulkDelete {
         let deleted: [String]
         let skipped: [Skipped]
 
+        /// @witness TunnelBulkDelete.aMixedSelectionDeletesOnlyTheSettledRows
         var total: Int { deleted.count + skipped.count }
     }
 
@@ -93,12 +94,14 @@ enum TunnelBulkDelete {
         return lines.joined(separator: "\n")
     }
 
+    /// @witness TunnelBulkDelete.aMixedSelectionDeletesOnlyTheSettledRows
     static func title(_ report: Report, loc: LocalizationManager) -> String {
         report.deleted.isEmpty
             ? loc.t("delete_report_none")
             : loc.t("delete_report_partial", report.deleted.count, report.total)
     }
 
+    /// @witness TunnelBulkDelete.aMixedSelectionDeletesOnlyTheSettledRows
     static func message(_ report: Report, loc: LocalizationManager) -> String {
         let shown = TunnelBulkExport.shownLines
         var lines = report.skipped.prefix(shown).map { "\($0.name) — \(reason($0.skip, loc: loc))" }
@@ -108,6 +111,7 @@ enum TunnelBulkDelete {
         return lines.joined(separator: "\n")
     }
 
+    /// @witness TunnelBulkDelete.aMixedSelectionDeletesOnlyTheSettledRows
     static func reason(_ skip: Skip, loc: LocalizationManager) -> String {
         switch skip {
         case .connected:

@@ -16,6 +16,8 @@ enum TunnelBulkExport {
         case declined
     }
 
+    /// @witness TunnelBulkDelete.aMixedSelectionDeletesOnlyTheSettledRows
+    /// @witness TunnelBulkDelete.aSettledSelectionDeletesWhole
     static let shownLines = 20
 
     /// @witness TunnelTransfer.theBulkExportArchivesEveryReadableTunnel

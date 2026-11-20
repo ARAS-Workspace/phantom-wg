@@ -16,15 +16,22 @@
 //   A — A Mixed Selection Deletes Only The Settled Rows
 //       Six rows, five marked plus a mark for a row that is gone. One marked
 //       row is connected when the list paints it, one connects after it is
-//       marked, and one refuses its removal. The two settled rows go, in
-//       list order; the connected rows are reported as connected and left
-//       alone; the refusal is reported with its error and its row stays; the
-//       unmarked row is untouched. The progress counts every target.
+//       marked, and one refuses its removal. The gate lets go every row but
+//       the one painted connected. The two settled rows go, in list order;
+//       the connected rows are reported as connected and left alone; the
+//       refusal is reported with its error and its row stays; the unmarked
+//       row is untouched. The progress counts every target. Two texts no run
+//       of the step leaves are read off reports the step builds: the title
+//       of a report with nothing deleted, and the lines of one with
+//       twenty-three skipped rows, which name the first twenty and count the
+//       rest.
 //
 //   B — A Settled Selection Deletes Whole And Skips Nothing
-//       Twenty-three settled rows, all marked. Every row goes and nothing is
-//       reported. The confirmation text lists the first twenty names and
-//       counts the rest, and the progress climbs one by one to the last row.
+//       Twenty-three settled rows, all marked, each let go by the gate.
+//       Every row goes and nothing is reported. The confirmation text lists
+//       the first twenty names and counts the rest; over exactly twenty
+//       names it opens with its question, lists them all and counts no rest.
+//       The progress climbs one by one to the last row.
 //
 //   C — The Gate Reads The System, The Row And The Attempt
 //       A row the system reads disconnected, or invalid as an entry saved
@@ -36,7 +43,8 @@
 //   D — Select All Marks The Rows The Gate Lets Go
 //       Over two settled rows and a connected one, Select All marks the two
 //       settled rows, and pressed again takes those marks off; with one of
-//       them marked it marks the other. Over rows the gate holds alone,
+//       them marked it marks the other. A mark on a row the gate has come to
+//       hold stays through both presses. Over rows the gate holds alone,
 //       nothing is marked and the selection does not read as all marked.
 
 #if DEBUG
@@ -58,6 +66,9 @@ final class TunnelBulkDeleteWorkflow: TestWorkflow {
     private let runTag = String(UUID().uuidString.prefix(8))
 
     private func name(_ label: String) -> String { "TE-Delete-\(label)-\(runTag)" }
+
+    /// The error step A's rig answers one removal with.
+    private let rigError = "test rig refused the removal"
 
     /// One row a rig opens: a name and the status the fake system reads.
     private struct Row {
@@ -120,10 +131,9 @@ final class TunnelBulkDeleteWorkflow: TestWorkflow {
         }
         let rows = rig.manager.tunnels
         let settled = Set(rows.filter(\.isSettledInactive).map(\.name))
-        guard rows.count == 6, settled == Set(mixed.gone + [mixed.late, mixed.stuck, mixed.keep]) else {
-            fail("the step's manager did not paint the rows this step needs (rows=\(rows.count), settled=\(settled.count))")
-            return
-        }
+        guard check(rows.count == 6 && settled == Set(mixed.gone + [mixed.late, mixed.stuck, mixed.keep]),
+                    "the list holds the six rows and the gate lets go all but the one painted connected"
+                    + " (rows=\(rows.count), let go=\(settled.count))") else { return }
 
         let markedNames = Set(mixed.gone + [mixed.live, mixed.late, mixed.stuck])
         let marked = Set(rows.filter { markedNames.contains($0.name) }.map(\.id)).union([UUID()])
@@ -133,7 +143,7 @@ final class TunnelBulkDeleteWorkflow: TestWorkflow {
 
         rig.providers[mixed.late]?.setStatusSilently(.connected)
         rig.providers[mixed.stuck]?.removeAnswer = .fails(NSError(
-            domain: "TE.Fake", code: 6, userInfo: [NSLocalizedDescriptionKey: "test rig refused the removal"]
+            domain: "TE.Fake", code: 6, userInfo: [NSLocalizedDescriptionKey: rigError]
         ))
 
         var progress: [Int] = []
@@ -156,11 +166,12 @@ final class TunnelBulkDeleteWorkflow: TestWorkflow {
         let refusal = report.skipped.first { $0.name == mixed.stuck }?.skip
         let refusedText: String? = { if case .failed(let text) = refusal { return text }; return nil }()
         let stuckRow = rig.manager.tunnels.first { $0.name == mixed.stuck }
-        check(refusedText.map { !$0.isEmpty } == true && stuckRow?.tunnelConfig != nil,
+        check(refusedText?.contains(rigError) == true && stuckRow?.tunnelConfig != nil,
               "the refused removal was reported with its error, its row and its configuration stay (\(String(describing: refusal)))")
 
         check(listed.contains(mixed.keep) && rig.providers[mixed.keep]?.removeCount == 0,
-              "the unmarked row was left alone")
+              "the unmarked row was left alone"
+              + " (listed=\(listed.contains(mixed.keep)), removals=\(rig.providers[mixed.keep]?.removeCount ?? -1))")
         checkReportText(report, rows: rows, targets: targets.count, mixed: mixed, refusedText: refusedText)
         check(progress == Array(1...targets.count),
               "the progress counted each target once, the skipped and the refused ones included (progress=\(progress))")
@@ -182,6 +193,13 @@ final class TunnelBulkDeleteWorkflow: TestWorkflow {
                 && lines == expectedLines,
               "the report counts every target and names each skipped row with its reason, in list order"
               + " (total=\(report.total), lines=\(lines.count))")
+        let none = TunnelBulkDelete.Report(deleted: [], skipped: report.skipped)
+        check(TunnelBulkDelete.title(none, loc: loc) == loc.t("delete_report_none"),
+              "the title of a report with nothing deleted says none were deleted (title=\(TunnelBulkDelete.title(none, loc: loc)))")
+        let many = TunnelBulkDelete.Report(deleted: [], skipped: (1...23).map { .init(name: "row \($0)", skip: .connected) })
+        let manyLines = TunnelBulkDelete.message(many, loc: loc).components(separatedBy: "\n")
+        check(manyLines == (1...20).map { "row \($0) — \(loc.t("delete_skip_connected"))" } + [loc.t("import_report_more", 3)],
+              "a report of twenty-three skipped rows names the first twenty and counts the rest (lines=\(manyLines.count))")
     }
 
     func aSettledSelectionDeletesWhole() async {
@@ -191,20 +209,23 @@ final class TunnelBulkDeleteWorkflow: TestWorkflow {
             return
         }
         let rows = rig.manager.tunnels
-        guard rows.count == names.count, rows.allSatisfy(\.isSettledInactive) else {
-            fail("the step's manager did not paint \(names.count) settled rows (rows=\(rows.count))")
-            return
-        }
+        let settled = rows.filter(\.isSettledInactive).count
+        guard check(rows.count == names.count && settled == names.count,
+                    "the list holds the twenty-three rows and the gate lets each go"
+                    + " (rows=\(rows.count), let go=\(settled))") else { return }
         let targets = TunnelBulkDelete.targets(rows, marked: Set(rows.map(\.id)))
 
         let loc = LocalizationManager.shared
-        let shownLines = TunnelBulkExport.shownLines
+        let shownLines = 20
         let confirm = TunnelBulkDelete.confirmMessage(targets.map(\.name), loc: loc).components(separatedBy: "\n")
         let shown = targets.prefix(shownLines).map { "• \($0.name)" }
         check(confirm.count == shownLines + 2
                 && Array(confirm.dropFirst().prefix(shownLines)) == shown
                 && confirm.last == loc.t("import_report_more", targets.count - shownLines),
               "the confirmation lists the first \(shownLines) names in list order and counts the rest (lines=\(confirm.count))")
+        let exact = TunnelBulkDelete.confirmMessage(targets.prefix(shownLines).map(\.name), loc: loc).components(separatedBy: "\n")
+        check(exact.first == loc.t("tunnel_list_delete_confirm_message") && Array(exact.dropFirst()) == shown,
+              "a confirmation of twenty names opens with the question, lists them all and counts no rest (lines=\(exact.count))")
 
         var progress: [Int] = []
         let report = await TunnelBulkDelete.run(targets, in: rig.manager) { progress.append($0) }
@@ -263,6 +284,11 @@ final class TunnelBulkDeleteWorkflow: TestWorkflow {
               "pressed again it takes those marks off (marked=\(none.count))")
         let completed = TunnelBulkDelete.toggledAll([id(first)], rows: rows)
         check(completed == settled, "with one settled row marked it marks the other (marked=\(completed.count))")
+        let grown = TunnelBulkDelete.toggledAll([id(live), id(first)], rows: rows)
+        let shrunk = TunnelBulkDelete.toggledAll(grown, rows: rows)
+        check(grown == settled.union([id(live)]) && shrunk == [id(live)],
+              "a mark on a row the gate holds stays through Select All and Deselect All"
+              + " (after select=\(grown.count), after deselect=\(shrunk.count))")
 
         let heldRows = held.manager.tunnels
         let heldAll = TunnelBulkDelete.toggledAll([], rows: heldRows)

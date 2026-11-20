@@ -235,6 +235,8 @@ class TunnelsManager {
     /// @witness TunnelRemove.aRefusedRemovalLeavesTheSavedTunnelReadable
     /// @witness TunnelRemove.anAcceptedRemovalLeavesNoKeychainItem
     /// @witness Unreachable.cleanupProof
+    /// @witness TunnelBulkDelete.aMixedSelectionDeletesOnlyTheSettledRows
+    /// @witness TunnelBulkDelete.aSettledSelectionDeletesWhole
     func remove(tunnel: TunnelContainer) async throws {
         let removedProtocol = tunnel.tunnelProvider.protocolConfiguration as? NETunnelProviderProtocol
 

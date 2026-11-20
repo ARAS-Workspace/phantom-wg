@@ -67,7 +67,10 @@ class TunnelContainer: Identifiable {
     /// ledger, so Mac's fourth axis, a counted stop waiting on its rule, is
     /// not read here.
     ///
+    /// @witness TunnelBulkDelete.aMixedSelectionDeletesOnlyTheSettledRows
+    /// @witness TunnelBulkDelete.aSettledSelectionDeletesWhole
     /// @witness TunnelBulkDelete.theGateReadsTheSystemTheRowAndTheAttempt
+    /// @witness TunnelBulkDelete.selectAllMarksTheRowsTheGateLetsGo
     var isSettledInactive: Bool {
         TunnelStatus(from: tunnelProvider.connectionStatus) == .inactive
             && status == .inactive
