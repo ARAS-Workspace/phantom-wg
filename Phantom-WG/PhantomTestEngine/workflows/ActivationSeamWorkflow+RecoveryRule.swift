@@ -8,8 +8,9 @@
 // Scenarios:
 //
 //   H — The Armed Rule Is One Connect Rule For Any Interface
-//       An activation arms one `NEOnDemandRuleConnect` matching any
-//       interface, and the store holds it armed and enabled.
+//       An activation that reaches startTunnel has armed one
+//       `NEOnDemandRuleConnect` matching any interface, and the store holds
+//       it armed and enabled.
 //
 //   I — A Stop Stands The Rule Down Before It Goes Out
 //       A stop on an armed row saves the rule down first; while that save
@@ -18,7 +19,8 @@
 //
 //   J — A Refused Disarm Surfaces And The Stop Still Goes Out
 //       The stop's stand-down save is refused: the stop still goes out, the
-//       refusal is the row's `stopDisarmRefused`, nothing is loaded back,
+//       refusal is the row's `stopDisarmRefused` carrying the system's
+//       error, nothing is loaded back,
 //       the flag holds the manager's write while the store holds what the
 //       refusal left, and the row rests once the session ends.
 //
@@ -32,12 +34,13 @@
 //
 //   M — A Config That Will Not Load Loses Its Rule
 //       The load after the arm save is refused: the row rests with
-//       `loadingFailed`, the attempt is over, the store holds the rule
-//       down, and no session was raised.
+//       `loadingFailed` carrying the system's error, the attempt is over,
+//       the store holds the rule down, and no session was raised.
 //
 //   N — A Start The System Refuses Loses Its Rule
-//       `startTunnel` throws: the row rests with `startingFailed` and the
-//       store holds the rule down.
+//       `startTunnel` throws: the row rests with `startingFailed` carrying
+//       the system's error, the store holds the rule down, and the attempt
+//       is over.
 //
 //   O — The Ladder Running Out Leaves The Rule Armed
 //       Over a manager paced at 0.1 s and three rungs, a session that never
@@ -82,6 +85,13 @@ extension ActivationSeamWorkflow {
         error.map { String(describing: $0) } ?? "nil"
     }
 
+    /// True when `error` is this file's rig refusal with that code.
+    private func carries(_ error: Error?, code: Int) -> Bool {
+        guard let error else { return false }
+        let nsError = error as NSError
+        return nsError.domain == "TE.Seam" && nsError.code == code
+    }
+
     func theArmedRuleIsOneConnectRuleForAnyInterface() async {
         guard let rig = rig("Arm", [.disconnected]) else {
             fail("the rig did not materialize its row")
@@ -89,10 +99,8 @@ extension ActivationSeamWorkflow {
         }
         let (manager, fake, row) = (rig.manager, rig.fakes[0], rig.rows[0])
         manager.startActivation(of: row)
-        guard await settle(within: 3, until: { fake.startCount >= 1 }) else {
-            fail("the activation never reached startTunnel (starts=\(fake.startCount))")
-            return
-        }
+        let started = await settle(within: 3) { fake.startCount >= 1 }
+        guard check(started, "the activation reaches startTunnel (starts=\(fake.startCount))") else { return }
         let rules = fake.onDemandRules ?? []
         let connect = rules.first as? NEOnDemandRuleConnect
         check(rules.count == 1 && connect?.interfaceTypeMatch == .any,
@@ -136,8 +144,13 @@ extension ActivationSeamWorkflow {
         let stopped = await settle(within: 3) { fake.stopCount >= 1 }
         check(stopped, "the stop still goes out past the refused save (stops=\(fake.stopCount))")
         var surfaced = false
-        if case .stopDisarmRefused = row.lastActivationError { surfaced = true }
+        var carried: Error?
+        if case .stopDisarmRefused(let error) = row.lastActivationError {
+            surfaced = true
+            carried = error
+        }
         check(surfaced, "the refusal is the row's stopDisarmRefused (error=\(describe(row.lastActivationError)))")
+        check(carries(carried, code: 43), "and it carries the system's refusal")
         check(fake.loadCount == loadsBefore, "nothing is loaded back after it (loads=\(fake.loadCount), before=\(loadsBefore))")
         check(!fake.isOnDemandEnabled && fake.storedOnDemand,
               "the flag holds the manager's write while the store holds what the refusal left"
@@ -174,7 +187,7 @@ extension ActivationSeamWorkflow {
         let (manager, fake, row) = (rig.manager, rig.fakes[0], rig.rows[0])
         fake.arrangeArmed()
         fake.isOnDemandEnabled = false
-        guard check(fake.onDemandRules?.isEmpty == false && fake.storedOnDemand,
+        guard check(!fake.isOnDemandEnabled && fake.onDemandRules?.isEmpty == false && fake.storedOnDemand,
                     "the row's flag reads down while its rule is set and stored armed") else { return }
 
         manager.startDeactivation(of: row)
@@ -192,15 +205,20 @@ extension ActivationSeamWorkflow {
         fake.loadAnswer = .fails(refusal(46, "test rig refused the load"))
 
         manager.startActivation(of: row)
+        let rests = "the row rests with loadingFailed and the attempt is over"
         guard await settle(within: 3, until: { row.lastActivationError != nil }) else {
-            fail("the load refusal was never filed")
+            check(false, rests + " (no error was filed, status=\(row.status))")
             return
         }
         var named = false
-        if case .loadingFailed = row.lastActivationError { named = true }
+        var carried: Error?
+        if case .loadingFailed(let error) = row.lastActivationError {
+            named = true
+            carried = error
+        }
         check(named && row.status == .inactive && !row.isAttemptingActivation,
-              "the row rests with loadingFailed and the attempt is over"
-              + " (error=\(describe(row.lastActivationError)), status=\(row.status), attempting=\(row.isAttemptingActivation))")
+              rests + " (error=\(describe(row.lastActivationError)), status=\(row.status), attempting=\(row.isAttemptingActivation))")
+        check(carries(carried, code: 46), "and the error it files carries the system's refusal")
         let disarmed = await settle(within: 3) { !fake.storedOnDemand }
         check(disarmed, "the store holds the rule down (store=\(fake.storedOnDemand), flag=\(fake.isOnDemandEnabled))")
         check(fake.startCount == 0, "and no session was raised (starts=\(fake.startCount))")
@@ -215,36 +233,44 @@ extension ActivationSeamWorkflow {
         fake.startAnswer = .fails(refusal(47, "test rig refused the start"))
 
         manager.startActivation(of: row)
+        let rests = "the row rests with startingFailed"
         guard await settle(within: 3, until: { row.lastActivationError != nil }) else {
-            fail("the start refusal was never filed")
+            check(false, rests + " (no error was filed, status=\(row.status))")
             return
         }
         var named = false
-        if case .startingFailed = row.lastActivationError { named = true }
+        var carried: Error?
+        if case .startingFailed(let error) = row.lastActivationError {
+            named = true
+            carried = error
+        }
         check(named && row.status == .inactive,
-              "the row rests with startingFailed (error=\(describe(row.lastActivationError)), status=\(row.status))")
+              rests + " (error=\(describe(row.lastActivationError)), status=\(row.status))")
+        check(carries(carried, code: 47), "and the error it files carries the system's refusal")
         let disarmed = await settle(within: 3) { !fake.storedOnDemand }
         check(disarmed, "the store holds the rule down (store=\(fake.storedOnDemand), flag=\(fake.isOnDemandEnabled))")
+        check(!row.isAttemptingActivation, "and the attempt is over (attempting=\(row.isAttemptingActivation))")
     }
 
     func theLadderRunningOutLeavesTheRuleArmed() async {
-        guard let rig = rig("Ladder", [.disconnected], pacing: (0.1, 3)) else {
+        let rungs = 3
+        guard let rig = rig("Ladder", [.disconnected], pacing: (0.1, rungs)) else {
             fail("the rig did not materialize its row")
             return
         }
         let (manager, fake, row) = (rig.manager, rig.fakes[0], rig.rows[0])
 
         manager.startActivation(of: row)
+        let rests = "the row rests with retryLimitReached"
         guard await settle(within: 4, until: { row.lastActivationError != nil }) else {
-            fail("the ladder never ran out (starts=\(fake.startCount), status=\(row.status))")
+            check(false, rests + " (the ladder never ran out: starts=\(fake.startCount), status=\(row.status))")
             return
         }
         var named = false
         if case .retryLimitReached = row.lastActivationError { named = true }
         check(named && row.status == .inactive,
-              "the row rests with retryLimitReached (error=\(describe(row.lastActivationError)), status=\(row.status))")
-        check(fake.startCount == manager.maxRetries,
-              "after one start per rung (starts=\(fake.startCount), rungs=\(manager.maxRetries))")
+              rests + " (error=\(describe(row.lastActivationError)), status=\(row.status))")
+        check(fake.startCount == rungs, "after one start per rung (starts=\(fake.startCount), rungs=\(rungs))")
         let armed = await holds(for: 0.3) { fake.storedOnDemand && fake.isOnDemandEnabled }
         check(armed, "and the rule stays armed in the store (store=\(fake.storedOnDemand), flag=\(fake.isOnDemandEnabled))")
     }
@@ -258,13 +284,12 @@ extension ActivationSeamWorkflow {
         fake.disconnectAnswer = .record(refusal(51, "test rig disconnect record"))
 
         manager.startActivation(of: row)
-        guard await settle(within: 3, until: { fake.startCount >= 1 }) else {
-            fail("the activation never reached startTunnel (starts=\(fake.startCount))")
-            return
-        }
+        let started = await settle(within: 3) { fake.startCount >= 1 }
+        guard check(started, "the activation reaches startTunnel (starts=\(fake.startCount))") else { return }
         fake.drive(.disconnected)
+        let rests = "the row rests with failedWhileActivating carrying the system's record"
         guard await settle(within: 3, until: { row.lastActivationError != nil }) else {
-            fail("the drop filed no error (status=\(row.status))")
+            check(false, rests + " (the drop filed no error, status=\(row.status))")
             return
         }
         var record = false
@@ -273,8 +298,7 @@ extension ActivationSeamWorkflow {
             record = nsError.domain == "TE.Seam" && nsError.code == 51
         }
         check(record && row.status == .inactive,
-              "the row rests with failedWhileActivating carrying the system's record"
-              + " (error=\(describe(row.lastActivationError)), status=\(row.status))")
+              rests + " (error=\(describe(row.lastActivationError)), status=\(row.status))")
     }
 
     func aMuteDropFilesAStandInError() async {
@@ -285,10 +309,8 @@ extension ActivationSeamWorkflow {
         let (manager, fake, row) = (rig.manager, rig.fakes[0], rig.rows[0])
 
         manager.startActivation(of: row)
-        guard await settle(within: 3, until: { fake.startCount >= 1 }) else {
-            fail("the activation never reached startTunnel (starts=\(fake.startCount))")
-            return
-        }
+        let started = await settle(within: 3) { fake.startCount >= 1 }
+        guard check(started, "the activation reaches startTunnel (starts=\(fake.startCount))") else { return }
         fake.drive(.disconnected)
         let filed = await settle(within: 3) { row.lastActivationError != nil }
         var standIn = false
@@ -348,28 +370,25 @@ extension ActivationSeamWorkflow {
         fakeA.loadAnswer = .hangs
 
         manager.startActivation(of: rowA)
-        guard await settle(within: 2, until: { fakeA.loadCount >= 1 }) else {
-            fail("A's activation never reached its load (loads=\(fakeA.loadCount))")
-            return
-        }
+        let reachedLoad = await settle(within: 2) { fakeA.loadCount >= 1 }
+        guard check(reachedLoad, "A's activation reaches its load (loads=\(fakeA.loadCount))") else { return }
         manager.startActivation(of: rowB)
         guard check(rowB.status == .waiting, "B queues behind A's activation (status=\(rowB.status))") else { return }
-        guard await settle(within: 2, until: { fakeA.stopCount >= 1 }) else {
-            fail("A's stop never went out (stops=\(fakeA.stopCount))")
-            return
-        }
+        let stopped = await settle(within: 2) { fakeA.stopCount >= 1 }
+        guard check(stopped, "and A's stop goes out (stops=\(fakeA.stopCount))") else { return }
 
         fakeA.saveAnswer = .hangs
         let released = fakeA.releaseHeldCompletions()
         guard check(released == 1, "A's held load is answered with an error (released=\(released))") else { return }
+        let givesUp = "A gives up with loadingFailed"
         guard await settle(within: 2, until: { rowA.lastActivationError != nil }) else {
-            fail("A's give-up filed no error (status=\(rowA.status))")
+            check(false, givesUp + " (no error was filed, status=\(rowA.status))")
             return
         }
         var named = false
         if case .loadingFailed = rowA.lastActivationError { named = true }
         check(named && rowA.status == .inactive,
-              "A gives up with loadingFailed (error=\(describe(rowA.lastActivationError)), status=\(rowA.status))")
+              givesUp + " (error=\(describe(rowA.lastActivationError)), status=\(rowA.status))")
         let tookItsTurn = await settle(within: 5) { fakeB.startCount >= 1 }
         check(tookItsTurn,
               "with A's stand-down save held unanswered, B still takes its turn within a few seconds (starts=\(fakeB.startCount))")

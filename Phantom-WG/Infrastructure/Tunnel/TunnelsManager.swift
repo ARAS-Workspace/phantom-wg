@@ -59,6 +59,7 @@ class TunnelsManager {
         return TunnelsManager(tunnelProviders: providers, providerFactory: factory)
     }
 
+    /// @witness ActivationSeam.theLadderRunningOutLeavesTheRuleArmed
     init(tunnelProviders: [TunnelProviding],
          providerFactory: TunnelProviderFactory = RealTunnelProviderFactory(),
          retryInterval: TimeInterval = 5.0,
@@ -374,6 +375,7 @@ class TunnelsManager {
     }
 
     /// @witness ActivationSeam.aListRefreshCannotCancelAnActivation
+    /// @witness ActivationSeam.theArmedRuleIsOneConnectRuleForAnyInterface
     /// @witness ActivationSeam.theLadderRunningOutLeavesTheRuleArmed
     private func startActivation(of tunnel: TunnelContainer, at retryIndex: Int) {
         guard retryIndex < maxRetries else {
