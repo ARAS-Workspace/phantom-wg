@@ -7,6 +7,43 @@ authenticated gateway in front of it; nginx serves the dashboard over
 TLS. ./tools/prod.sh installs, runs and updates the stack.
 
 
+v2.0.1 - 2026-11-20
+-------------------
+
+  Security maintenance release. The stack moves to base images 1.1.1,
+  where Debian's nginx goes from 1.26.3-3+deb13u10 to
+  1.26.3-3+deb13u11 (DSA-6642-1). The package fixes three findings
+  nginx published on 2026-11-18: CVE-2026-123007 (a flow control
+  window overflow in HTTP/2 that can crash a worker or corrupt its
+  memory), CVE-2026-123633 (a use-after-free in HTTP/2 while
+  proxying to a backend, when a worker runs low on
+  worker_connections) and CVE-2026-123634 (a use-after-free in the
+  resolver, when an SSI or mirror subrequest resolves the server
+  name its request resolves). None of the three paths is exercised
+  here: the configuration of the stack, with or without the
+  Cloudflare mode, does not enable HTTP/2 and has no SSI, mirror or
+  other directive that issues a subrequest. The HTTP/2 path is not
+  open in this stack; the upgrade is taken all the same.
+
+  * Images. phantom-nginx-base 1.1.1 carries nginx and nginx-common
+    1.26.3-3+deb13u11 on amd64 and arm64. No other package of the
+    three images changes and the Dockerfiles are the same;
+    tools/compose/MANIFEST.json lists the packages. 2026-11-20:
+      https://github.com/ARAS-Workspace/phantom-wg/actions/runs/44791495166
+
+  * Registry source. ./tools/prod.sh update pulls the images the
+    release pins.
+
+  * Build source. update builds the same Dockerfiles, and a host
+    that built them before reuses its Docker cache and keeps the
+    earlier package. To build from scratch:
+
+      ./tools/prod.sh rebuild
+      ./tools/prod.sh up
+
+  No API, schema, or migration impact.
+
+
 v2.0.0 - 2026-11-14
 -------------------
 
