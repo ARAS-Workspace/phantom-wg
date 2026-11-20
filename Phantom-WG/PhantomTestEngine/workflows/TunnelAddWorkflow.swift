@@ -9,52 +9,66 @@
 //
 // Everything here runs over a `TunnelsManager` of the step's own, over a
 // `FakeSlotFactory` that mints the providers `add()` asks for. Nothing
-// reaches the user's list or the system.
+// reaches the user's list or the system. Step G posts
+// `NEVPNConfigurationChange`, which every live manager answers with a reload;
+// the app's own reload reads the system and changes nothing.
 //
 // Scenarios:
 //
 //   A — Two Adds Of One Name That Cross Leave One Row
 //       The first add is held inside its provider save; the second is
-//       started in that window. The claim is the outcome and not the
-//       mechanism: one add lands, the other is refused as a name clash,
-//       and the list and the system store each hold the name once. The
-//       order the two returned in is logged and carries no verdict.
+//       started in that window, with the name in another letter case and
+//       spaces around it, which the name bar reads as the same name. The
+//       claim is the outcome and not the mechanism: one add lands, the other
+//       is refused as a name clash, and the list and the system store each
+//       hold the name once. The order the two returned in is logged and
+//       carries no verdict.
 //
 //   B — A Refused Save Leaves No Row And Frees The Name
 //       The system refuses the first add's save: the add is refused as a
-//       system error and lists nothing; a second add of the same name,
-//       whose save the system takes, lands. A name the refused add held
-//       through its window would refuse the second.
+//       system error carrying the system's refusal and lists nothing; a
+//       second add of the same name, handed with spaces around it, whose
+//       save the system takes, lands under the name without them. A name the
+//       refused add held through its window would refuse the second.
 //
 //   C — A Blank Name Is Refused Before A Provider Is Minted
 //       A name of spaces is refused as an invalid name, and the factory
 //       minted nothing.
 //
 //   D — A Refused Save Leaves No Keychain Item
-//       The factory mints its provider with `.keychain` storage, so the
-//       add seals its configuration into the app group Keychain through
-//       the production `configure(with:)` path, and the system refuses
-//       the save. The add is refused as a system error, the provider
-//       referenced the one item the add sealed, and the claim is that
-//       this item opens nothing afterwards. Every Keychain item the step
-//       created is deleted on the way out.
+//       The factory mints its provider with `.keychain` storage, so the add
+//       seals its configuration into the app group Keychain through the
+//       production `configure(with:)` path, and the system refuses the save.
+//       The add is refused as a system error carrying the system's refusal,
+//       the provider referenced the one item the add sealed, and the claim
+//       is that this item opens nothing afterwards. Every Keychain item the
+//       step created is deleted on the way out.
 //
 //   E — A Refused Load After An Accepted Save Keeps The Item
 //       The same `.keychain` minting; the system accepts the save and
-//       refuses the load that follows. The add is refused as a system
-//       error, the system store holds the entry it accepted, and read
-//       back from what the system stored, the tunnel opens the
-//       configuration the add sealed — the item the entry references is
-//       still there.
+//       refuses the load that follows. The add is refused as a system error
+//       carrying the system's refusal, the system store holds the entry it
+//       accepted, and read back from what the system stored, the tunnel
+//       opens the configuration the add sealed — the item the entry
+//       references is still there.
 //
 //   F — Only A System Refusal Offers The VPN Settings
 //       The import screen's banner asks `offersVPNSettingsRoute(after:)`
-//       with the error `add()` threw. A name clash and a blank name are
-//       the app's own refusals and are not offered the route; an add whose
-//       save the system refused is.
+//       with the error `add()` threw. A name clash, here a listed name
+//       handed in another letter case with spaces around it, and a blank
+//       name are the app's own refusals and are not offered the route; an
+//       add whose save the system refused is.
+//
+//   G — A List Reload That Crosses An Add Leaves One Row
+//       The system takes the save at once and the add is held inside its
+//       provider load, so the system store holds the entry while the list
+//       does not hold the row. A posted configuration change reloads the
+//       list, which lists the entry; the add then lands on that row, and the
+//       list holds the name once.
 
 #if DEBUG
 import Foundation
+import NetworkExtension
 
 final class TunnelAddWorkflow: TestWorkflow {
     override var displayName: String { "Tunnel Add (The Name Bar And What A Refused Save Leaves)" }
@@ -66,7 +80,8 @@ final class TunnelAddWorkflow: TestWorkflow {
             WorkflowStep("A Blank Name Is Refused Before A Provider Is Minted", aBlankNameIsRefusedBeforeAProviderIsMinted),
             WorkflowStep("A Refused Save Leaves No Keychain Item", aRefusedSaveLeavesNoKeychainItem),
             WorkflowStep("A Refused Load After An Accepted Save Keeps The Item", aRefusedLoadAfterAnAcceptedSaveKeepsTheItem),
-            WorkflowStep("Only A System Refusal Offers The VPN Settings", onlyASystemRefusalOffersTheVPNSettings)
+            WorkflowStep("Only A System Refusal Offers The VPN Settings", onlyASystemRefusalOffersTheVPNSettings),
+            WorkflowStep("A List Reload That Crosses An Add Leaves One Row", aListReloadThatCrossesAnAddLeavesOneRow)
         ]
     }
 
@@ -110,6 +125,14 @@ final class TunnelAddWorkflow: TestWorkflow {
         return true
     }
 
+    /// Whether the add was refused as a system error that carries `refusal`,
+    /// the error the step's rig answered with.
+    private func refusedAsSystemError(_ outcome: Outcome, carrying refusal: NSError) -> Bool {
+        guard case .refused(let error) = outcome,
+              case TunnelManagementError.vpnSystemErrorOnAddTunnel(let carried) = error else { return false }
+        return (carried as NSError) == refusal
+    }
+
     /// One refused add of step F and whether its banner offers the route.
     private struct RouteCase {
         let label: String
@@ -126,24 +149,21 @@ final class TunnelAddWorkflow: TestWorkflow {
     func twoAddsOfOneNameThatCrossLeaveOneRow() async {
         let contested = "TE-Add-Contested-\(runTag)"
         guard let first = TestConfigFactory.throwaway(name: contested),
-              let second = TestConfigFactory.throwaway(name: contested) else {
+              var second = TestConfigFactory.throwaway(name: contested) else {
             fail("the config factory did not produce the two throwaways this step needs")
             return
         }
+        second.name = "  \(contested.lowercased())  "
         let factory = FakeSlotFactory(canned: [])
         let manager = TunnelsManager(tunnelProviders: [], providerFactory: factory)
         returnOrder = []
 
         factory.minted.saveAnswer = .succeedsAfter(seconds: 1.5)
         let held = Task { @MainActor in await self.attempt("first", manager, first) }
-        guard await settle(within: 1.5, until: { factory.minted.providers.first?.saveCount == 1 }) else {
-            skip("environment: the first add never reached its provider save")
-            _ = await held.value
-            return
-        }
-        guard check(first.id != second.id && manager.tunnels.isEmpty,
+        let reached = await settle(within: 1.5, until: { factory.minted.providers.first?.saveCount == 1 })
+        guard check(reached && first.id != second.id && manager.tunnels.isEmpty,
                     "the first add is waiting on its provider save and its row is not in the list yet"
-                    + " — the window this step is about (rows=\(manager.tunnels.count))") else {
+                    + " — the window this step is about (reached its save=\(reached), rows=\(manager.tunnels.count))") else {
             _ = await held.value
             return
         }
@@ -175,21 +195,19 @@ final class TunnelAddWorkflow: TestWorkflow {
     func aRefusedSaveLeavesNoRowAndFreesTheName() async {
         let name = "TE-Add-Refused-\(runTag)"
         guard let refused = TestConfigFactory.throwaway(name: name),
-              let retried = TestConfigFactory.throwaway(name: name) else {
+              var retried = TestConfigFactory.throwaway(name: name) else {
             fail("the config factory did not produce the two throwaways this step needs")
             return
         }
+        retried.name = "  \(name)  "
         let factory = FakeSlotFactory(canned: [])
         let manager = TunnelsManager(tunnelProviders: [], providerFactory: factory)
 
-        factory.minted.saveAnswer = .fails(NSError(domain: "TE.Fake", code: 5,
-                                                   userInfo: [NSLocalizedDescriptionKey: "test rig refused the save"]))
+        let refusal = NSError(domain: "TE.Fake", code: 5, userInfo: [NSLocalizedDescriptionKey: "test rig refused the save"])
+        factory.minted.saveAnswer = .fails(refusal)
         let first = await attempt("refused", manager, refused)
-        var refusedAsSystem = false
-        if case .refused(let error) = first, case TunnelManagementError.vpnSystemErrorOnAddTunnel = error {
-            refusedAsSystem = true
-        }
-        check(refusedAsSystem, "the add whose save the system refused is refused as a system error (\(first.label))")
+        check(refusedAsSystemError(first, carrying: refusal),
+              "the add whose save the system refused is refused as a system error carrying the system's refusal (\(first.label))")
         check(manager.tunnels.isEmpty, "and it lists nothing (rows=\(manager.tunnels.count))")
 
         factory.minted.saveAnswer = .succeeds
@@ -231,14 +249,11 @@ final class TunnelAddWorkflow: TestWorkflow {
         }
         let manager = TunnelsManager(tunnelProviders: [], providerFactory: factory)
 
-        factory.minted.saveAnswer = .fails(NSError(domain: "TE.Fake", code: 5,
-                                                   userInfo: [NSLocalizedDescriptionKey: "test rig refused the save"]))
+        let refusal = NSError(domain: "TE.Fake", code: 5, userInfo: [NSLocalizedDescriptionKey: "test rig refused the save"])
+        factory.minted.saveAnswer = .fails(refusal)
         let outcome = await attempt("refused", manager, config)
-        var refusedAsSystem = false
-        if case .refused(let error) = outcome, case TunnelManagementError.vpnSystemErrorOnAddTunnel = error {
-            refusedAsSystem = true
-        }
-        check(refusedAsSystem, "the add whose save the system refused is refused as a system error (\(outcome.label))")
+        check(refusedAsSystemError(outcome, carrying: refusal),
+              "the add whose save the system refused is refused as a system error carrying the system's refusal (\(outcome.label))")
         guard let provider = factory.minted.last,
               check(provider.keychainRefs.count == 1,
                     "the add sealed its configuration into one app group Keychain item"
@@ -260,15 +275,12 @@ final class TunnelAddWorkflow: TestWorkflow {
         }
         let manager = TunnelsManager(tunnelProviders: [], providerFactory: factory)
 
-        factory.minted.loadAnswer = .fails(NSError(domain: "TE.Fake", code: 6,
-                                                   userInfo: [NSLocalizedDescriptionKey: "test rig refused the load"]))
+        let refusal = NSError(domain: "TE.Fake", code: 6, userInfo: [NSLocalizedDescriptionKey: "test rig refused the load"])
+        factory.minted.loadAnswer = .fails(refusal)
         let outcome = await attempt("load refused", manager, config)
-        var refusedAsSystem = false
-        if case .refused(let error) = outcome, case TunnelManagementError.vpnSystemErrorOnAddTunnel = error {
-            refusedAsSystem = true
-        }
-        check(refusedAsSystem,
-              "the add whose load the system refused after accepting its save is refused as a system error (\(outcome.label))")
+        check(refusedAsSystemError(outcome, carrying: refusal),
+              "the add whose load the system refused after accepting its save is refused as a system error"
+              + " carrying the system's refusal (\(outcome.label))")
         guard let provider = factory.minted.last,
               check(provider.entryExists && provider.keychainRefs.count == 1,
                     "the system store holds the entry it accepted, and the add sealed one item"
@@ -285,13 +297,14 @@ final class TunnelAddWorkflow: TestWorkflow {
     func onlyASystemRefusalOffersTheVPNSettings() async {
         let name = "TE-Add-Route-\(runTag)"
         guard let listed = TestConfigFactory.throwaway(name: name),
-              let clashing = TestConfigFactory.throwaway(name: name),
+              var clashing = TestConfigFactory.throwaway(name: name),
               var blank = TestConfigFactory.throwaway(name: "TE-Add-Route-Blank-\(runTag)"),
               let refused = TestConfigFactory.throwaway(name: "TE-Add-Route-Refused-\(runTag)") else {
             fail("the config factory did not produce the four throwaways this step needs")
             return
         }
         blank.name = "   "
+        clashing.name = "  \(name.lowercased())  "
         let factory = FakeSlotFactory(canned: [])
         let manager = TunnelsManager(tunnelProviders: [], providerFactory: factory)
 
@@ -309,15 +322,55 @@ final class TunnelAddWorkflow: TestWorkflow {
         ]
         for entry in cases {
             let outcome = await attempt(entry.label, manager, entry.config)
+            let claim = "after \(entry.label) the banner \(entry.offered ? "offers" : "does not offer") the VPN settings"
             guard case .refused(let error) = outcome else {
-                fail("\(entry.label) was not refused (\(outcome.label))")
+                check(false, claim + " (not refused: \(outcome.label))")
                 continue
             }
             let offered = TunnelImportView.offersVPNSettingsRoute(after: error)
-            check(offered == entry.offered,
-                  "after \(entry.label) the banner \(entry.offered ? "offers" : "does not offer") the VPN settings"
-                  + " (offered=\(offered), \(outcome.label))")
+            check(offered == entry.offered, claim + " (offered=\(offered), \(outcome.label))")
         }
+    }
+
+    func aListReloadThatCrossesAnAddLeavesOneRow() async {
+        let name = "TE-Add-Reloaded-\(runTag)"
+        guard let config = TestConfigFactory.throwaway(name: name) else {
+            fail("the config factory produced no throwaway")
+            return
+        }
+        let factory = FakeSlotFactory(canned: [])
+        let manager = TunnelsManager(tunnelProviders: [], providerFactory: factory)
+        returnOrder = []
+
+        // The save is taken at once and the load is held: the system store
+        // holds the entry while the add has not listed its row.
+        factory.minted.loadAnswer = .succeedsAfter(seconds: 1.5)
+        let held = Task { @MainActor in await self.attempt("held", manager, config) }
+        let reached = await settle(within: 1.5, until: { factory.minted.providers.first?.loadCount == 1 })
+        guard check(reached && factory.minted.last?.entryExists == true && manager.tunnels.isEmpty,
+                    "the add is waiting on its provider load, the system store holds its entry and its row is not in the list yet"
+                    + " (reached its load=\(reached), rows=\(manager.tunnels.count))") else {
+            _ = await held.value
+            return
+        }
+
+        // Every live manager answers this notification, the step's own among them.
+        NotificationCenter.default.post(name: .NEVPNConfigurationChange, object: nil)
+        let reloaded = await settle(within: 1, until: { manager.tunnels.count == 1 })
+        guard check(reloaded && returnOrder.isEmpty,
+                    "a list reload lists the entry while the add is still waiting"
+                    + " (rows=\(manager.tunnels.count), add returned=\(!returnOrder.isEmpty))") else {
+            _ = await held.value
+            return
+        }
+
+        guard let outcome = await race(6, { await held.value }) else {
+            fail("the add never returned past its provider load")
+            return
+        }
+        check(landed(outcome) && manager.tunnels.count == 1 && rows(named: name, in: manager) == 1,
+              "the add lands on the row the reload listed, and the list holds the name once"
+              + " (\(outcome.label), rows=\(manager.tunnels.count))")
     }
 }
 #endif

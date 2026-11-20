@@ -101,6 +101,7 @@ class TunnelsManager {
     /// @witness TunnelAdd.aBlankNameIsRefusedBeforeAProviderIsMinted
     /// @witness TunnelAdd.aRefusedSaveLeavesNoKeychainItem
     /// @witness TunnelAdd.aRefusedLoadAfterAnAcceptedSaveKeepsTheItem
+    /// @witness TunnelAdd.aListReloadThatCrossesAnAddLeavesOneRow
     /// @witness Unreachable.addThroughTheProductionPath
     func add(config: TunnelConfig) async throws -> TunnelContainer {
         let name = config.name.trimmingCharacters(in: .whitespacesAndNewlines)
