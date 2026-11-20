@@ -13,18 +13,22 @@
 // Turkish one (`-AppleLocale tr_TR -AppleLanguages (tr)`) answers the same.
 // C and D run the order rules over plain ids, D beside SwiftUI's own move
 // of an array; E writes the order into a defaults suite of the step's own
-// and removes it. The section, the search page and the drag on screen are
-// tried by hand.
+// and empties it. The suite has one name for every run: the system keeps a
+// file for each suite it has made. The section, the search page and the
+// drag on screen are tried by hand.
 //
 // Scenarios:
 //
 //   A — The Active Section Shows The Slot Holder
-//       Over plain rows in either order, a tunnel up, coming up or
-//       reasserting is shown before one going down, and one going down
-//       before one queued; a list at rest shows none. Over the manager, B,
-//       listed above A, is pressed while A holds the slot: while B waits
-//       and A goes down, the section shows A; once A's session ends, it
-//       shows B.
+//       Over plain rows, a tunnel up, coming up or reasserting is shown
+//       though one going down is listed above it, one going down is shown
+//       before one queued in either order, and one coming up or reasserting
+//       before one queued. Of two of equal rank the one listed first is
+//       shown. A list at rest shows none. Over the manager, B, the newer
+//       tunnel, is listed above A, and a tunnel whose configuration cannot
+//       be read below the dated ones. B is pressed while A holds the slot:
+//       while B waits and A goes down, the section shows A; once A's session
+//       ends, it shows B.
 //
 //   B — Search Folds Case, Marks And The Turkish I
 //       A query holds a name whatever its letter case and marks: "agi"
@@ -47,9 +51,10 @@
 //       order does not hold, stays.
 //
 //   E — The Order Is Kept Across A Launch
-//       An order saved into a defaults suite reads back the same; a stored
-//       entry that is not an id is passed over, and a suite that holds no
-//       order reads back none.
+//       An order saved into a defaults suite reads back the same and is
+//       stored under `tunnel_list_order` as the ids' strings; a stored entry
+//       that is not an id is passed over, and a suite that holds no order
+//       reads back none.
 
 #if DEBUG
 import Foundation
@@ -109,23 +114,35 @@ final class TunnelListWorkflow: TestWorkflow {
         let after: [String]
     }
 
+    /// Step A's plain rows, in list order, and the row the section shows.
+    private let slotCases = [
+        SlotCase(rows: [Row(name: "queued", status: .waiting), Row(name: "going down", status: .deactivating)],
+                 shows: "going down"),
+        SlotCase(rows: [Row(name: "going down", status: .deactivating), Row(name: "queued", status: .waiting)],
+                 shows: "going down"),
+        SlotCase(rows: [Row(name: "queued", status: .waiting), Row(name: "coming up", status: .activating)],
+                 shows: "coming up"),
+        SlotCase(rows: [Row(name: "at rest", status: .inactive), Row(name: "reasserting", status: .reasserting),
+                        Row(name: "queued", status: .waiting)],
+                 shows: "reasserting"),
+        SlotCase(rows: [Row(name: "going down", status: .deactivating), Row(name: "up", status: .active)],
+                 shows: "up"),
+        SlotCase(rows: [Row(name: "going down", status: .deactivating), Row(name: "coming up", status: .activating)],
+                 shows: "coming up"),
+        SlotCase(rows: [Row(name: "going down", status: .deactivating), Row(name: "reasserting", status: .reasserting)],
+                 shows: "reasserting"),
+        SlotCase(rows: [Row(name: "reasserting", status: .reasserting), Row(name: "coming up", status: .activating)],
+                 shows: "reasserting"),
+        SlotCase(rows: [Row(name: "coming up", status: .activating), Row(name: "reasserting", status: .reasserting)],
+                 shows: "coming up"),
+        SlotCase(rows: [Row(name: "at rest A", status: .inactive), Row(name: "at rest B", status: .inactive)],
+                 shows: nil)
+    ]
+
     // MARK: - Steps
 
     func theActiveSectionShowsTheSlotHolder() async {
-        let cases = [
-            SlotCase(rows: [Row(name: "queued", status: .waiting), Row(name: "going down", status: .deactivating)],
-                     shows: "going down"),
-            SlotCase(rows: [Row(name: "going down", status: .deactivating), Row(name: "queued", status: .waiting)],
-                     shows: "going down"),
-            SlotCase(rows: [Row(name: "queued", status: .waiting), Row(name: "coming up", status: .activating)],
-                     shows: "coming up"),
-            SlotCase(rows: [Row(name: "at rest", status: .inactive), Row(name: "reasserting", status: .reasserting),
-                            Row(name: "queued", status: .waiting)],
-                     shows: "reasserting"),
-            SlotCase(rows: [Row(name: "at rest A", status: .inactive), Row(name: "at rest B", status: .inactive)],
-                     shows: nil)
-        ]
-        for entry in cases {
+        for entry in slotCases {
             let shown = TunnelListRules.slotHolder(in: entry.rows) { $0.status }?.name
             check(shown == entry.shows,
                   "over \(entry.rows.map { "\($0.name) \($0.status)" }) the section shows \(entry.shows ?? "none")"
@@ -151,6 +168,11 @@ final class TunnelListWorkflow: TestWorkflow {
         guard check(manager.tunnels.first === rowB && rowA.status == .active,
                     "B, the newer tunnel, is listed above A, and A holds the slot"
                     + " (order=\(manager.tunnels.map(\.name)), A=\(rowA.status))") else { return }
+        let unread = TunnelContainer(tunnel: FakeSlotProvider(config: nil))
+        let listed = TunnelsManager.sortedByCreatedAt([unread, rowA, rowB])
+        check(listed.first === rowB && listed.last === unread,
+              "a tunnel whose configuration cannot be read is listed below the dated ones"
+              + " (order=\(listed.map { $0 === unread ? "unread" : $0.name }))")
 
         manager.startActivation(of: rowB)
         guard check(rowB.status == .waiting && rowA.status == .deactivating,
@@ -252,17 +274,24 @@ final class TunnelListWorkflow: TestWorkflow {
     }
 
     func theOrderIsKeptAcrossALaunch() async {
-        let suite = "TE-List-Order-\(runTag)"
+        // One name for every run: the system keeps a file for each suite it has made.
+        let suite = "TE-List-Order"
         guard let defaults = UserDefaults(suiteName: suite) else {
             fail("the defaults suite \(suite) could not be opened")
             return
         }
-        onTeardown("remove the step's defaults suite") { defaults.removePersistentDomain(forName: suite) }
-        check(TunnelListOrderStore.load(from: defaults).isEmpty, "a suite that holds no order reads back none")
+        defaults.removePersistentDomain(forName: suite)
+        onTeardown("empty the step's defaults suite") { defaults.removePersistentDomain(forName: suite) }
+        let atFirst = TunnelListOrderStore.load(from: defaults)
+        check(atFirst.isEmpty, "a suite that holds no order reads back none (ids=\(atFirst.count))")
         let order = [UUID(), UUID(), UUID()]
         TunnelListOrderStore.save(order, to: defaults)
         let back = TunnelListOrderStore.load(from: defaults)
         check(back == order, "the saved order reads back the same (\(back.count) of \(order.count) ids, same order=\(back == order))")
+        let stored = defaults.stringArray(forKey: "tunnel_list_order")
+        check(stored == order.map(\.uuidString),
+              "the order is stored under tunnel_list_order as the ids' strings"
+              + " (stored=\(stored?.count ?? 0) of \(order.count), as written=\(stored == order.map(\.uuidString)))")
         defaults.set(["not an id", order[1].uuidString], forKey: TunnelListOrderStore.key)
         let filtered = TunnelListOrderStore.load(from: defaults)
         check(filtered == [order[1]], "a stored entry that is not an id is passed over (ids=\(filtered.count))")

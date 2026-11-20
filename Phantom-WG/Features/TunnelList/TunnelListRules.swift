@@ -82,6 +82,7 @@ enum TunnelListRules {
 
     private static let foldingLocale = Locale(identifier: "en_US_POSIX")
 
+    /// @witness TunnelList.searchFoldsCaseMarksAndTheTurkishI
     private static func folded(_ text: String) -> String {
         text.replacingOccurrences(of: "ı", with: "i")
             .folding(options: [.caseInsensitive, .diacriticInsensitive], locale: foldingLocale)
@@ -90,6 +91,8 @@ enum TunnelListRules {
 
 extension TunnelStatus {
     /// Where a status stands for the slot, lowest first; nil at rest.
+    ///
+    /// @witness TunnelList.theActiveSectionShowsTheSlotHolder
     var slotRank: Int? {
         switch self {
         case .active, .reasserting, .activating:

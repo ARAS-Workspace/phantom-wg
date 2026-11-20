@@ -73,6 +73,7 @@ class TunnelsManager {
 
     /// Newest first — tunnels without a persisted `createdAt` fall back
     /// to `.distantPast` so they sort below freshly-created ones.
+    /// @witness TunnelList.theActiveSectionShowsTheSlotHolder
     static func sortedByCreatedAt(_ list: [TunnelContainer]) -> [TunnelContainer] {
         list.sorted {
             let lhs = $0.tunnelConfig?.createdAt ?? .distantPast
