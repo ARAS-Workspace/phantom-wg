@@ -1,13 +1,13 @@
 {
-  "version": "1.1.0",
-  "commit": "d8d661ef24e5e7b12e6d6a3f56cefc4970ea41d3",
-  "sources_image": "ghcr.io/aras-workspace/phantom-sources:1.1.0@sha256:e557cde147fbec7ca0ec254ebeddcc6a4f3a9c825f055cd81d1f6c651c15bc21",
+  "version": "1.1.1",
+  "commit": "b3ce05694241e486fb540d0d3c423ed1f3ce4edd",
+  "sources_image": "ghcr.io/aras-workspace/phantom-sources:1.1.1@sha256:10e5a7c590a2819d0d32e4678fe6d263185cc82a2577add442390d8770c096dd",
   "images": {
     "phantom-daemon-base": {
-      "reference": "ghcr.io/aras-workspace/phantom-daemon-base:1.1.0@sha256:a8efd20bb5cf66320706cebe6b5bf98094ab9746078c01df910f96972a3faa85",
+      "reference": "ghcr.io/aras-workspace/phantom-daemon-base:1.1.1@sha256:2002c0695f0d5c2ea381ebe086a7232c62047754560818bc8fc1a950596b3db3",
       "architectures": {
         "amd64": {
-          "digest": "sha256:2b805da2bf0331687977e3c612719f9702f56125402a3b3033b8542e6735556d",
+          "digest": "sha256:acf320fafa9d32016ef3c0db62c836104f78815bb5bda41c1c1782d6b473847e",
           "packages": [
             {
               "name": "base-files",
@@ -700,7 +700,7 @@
           ]
         },
         "arm64": {
-          "digest": "sha256:ae95352bfd20a960048d95da312d20647ba6e52c6ffa14c89d1fd07c74dffb1a",
+          "digest": "sha256:21bd35bbef004aae8bc78e7c790f1aa1ed5066a4d225c90cf0c552502f6f8f04",
           "packages": [
             {
               "name": "base-files",
@@ -1395,10 +1395,10 @@
       }
     },
     "phantom-auth-base": {
-      "reference": "ghcr.io/aras-workspace/phantom-auth-base:1.1.0@sha256:45fd8b07f238c822e6a9ad76e55223304447908edd3f63170359f1bea0a9cb62",
+      "reference": "ghcr.io/aras-workspace/phantom-auth-base:1.1.1@sha256:449e13ca34c0dc9e252a5808f5781fe4eb36b4123e09060033562f91a369579b",
       "architectures": {
         "amd64": {
-          "digest": "sha256:aa8964c34743fc9f09c2a454e947318568767375cb9973b2e710fc7e711174d0",
+          "digest": "sha256:96849e86ddb86cfe0d5991a1fc141310a93f9dd4e0c2feb3bc92399e6daf529b",
           "packages": [
             {
               "name": "base-files",
@@ -2007,7 +2007,7 @@
           ]
         },
         "arm64": {
-          "digest": "sha256:7cf480be921f845c099891168b7e13794bc2e01c2a5d73572508dd8c1b74b958",
+          "digest": "sha256:663f01a74005489c4cc50d4b8d66069f27088197b4d0b233ceccec8b2f9414b9",
           "packages": [
             {
               "name": "base-files",
@@ -2618,10 +2618,10 @@
       }
     },
     "phantom-nginx-base": {
-      "reference": "ghcr.io/aras-workspace/phantom-nginx-base:1.1.0@sha256:784ce5100dbb2c3f231d5df13a233fb0b060b5d85445439570656cfb5e8ca09e",
+      "reference": "ghcr.io/aras-workspace/phantom-nginx-base:1.1.1@sha256:c7e71c717368413b47c3c480326fe89ca283c6436a8633a6dd8818fc11292563",
       "architectures": {
         "amd64": {
-          "digest": "sha256:7c4cf4bef2dd60646cde9934e0bee0e8454b1adb0ce0ffefacb8a3e4b354efea",
+          "digest": "sha256:5b198d65f0fce5d11031a2e55fc6207d51f983d9d783f91448c6e46577a5964e",
           "packages": [
             {
               "name": "base-files",
@@ -3087,15 +3087,15 @@
             },
             {
               "name": "nginx",
-              "version": "1.26.3-3+deb13u10",
+              "version": "1.26.3-3+deb13u11",
               "source": "nginx",
-              "source_version": "1.26.3-3+deb13u10"
+              "source_version": "1.26.3-3+deb13u11"
             },
             {
               "name": "nginx-common",
-              "version": "1.26.3-3+deb13u10",
+              "version": "1.26.3-3+deb13u11",
               "source": "nginx",
-              "source_version": "1.26.3-3+deb13u10"
+              "source_version": "1.26.3-3+deb13u11"
             },
             {
               "name": "openssl-provider-legacy",
@@ -3154,7 +3154,7 @@
           ]
         },
         "arm64": {
-          "digest": "sha256:e080deac597e82ba0edcaee8fdb4e2f3fc62fa0b4a8f054dd0ae5f5b979e4327",
+          "digest": "sha256:7d48e8e926a7153a02c49d10ea182de47214cb25decb6ce2ef137092c5d3575c",
           "packages": [
             {
               "name": "base-files",
@@ -3620,15 +3620,15 @@
             },
             {
               "name": "nginx",
-              "version": "1.26.3-3+deb13u10",
+              "version": "1.26.3-3+deb13u11",
               "source": "nginx",
-              "source_version": "1.26.3-3+deb13u10"
+              "source_version": "1.26.3-3+deb13u11"
             },
             {
               "name": "nginx-common",
-              "version": "1.26.3-3+deb13u10",
+              "version": "1.26.3-3+deb13u11",
               "source": "nginx",
-              "source_version": "1.26.3-3+deb13u10"
+              "source_version": "1.26.3-3+deb13u11"
             },
             {
               "name": "openssl-provider-legacy",
@@ -4829,17 +4829,17 @@
     },
     {
       "name": "nginx",
-      "version": "1.26.3-3+deb13u10",
+      "version": "1.26.3-3+deb13u11",
       "files": [
         {
-          "name": "nginx_1.26.3-3+deb13u10.debian.tar.xz",
-          "size": 107008,
-          "sha256": "22b58b7a5261cd427022544814d502935aba9d84bf2ca4e03d9f7a17e678c388"
+          "name": "nginx_1.26.3-3+deb13u11.debian.tar.xz",
+          "size": 113656,
+          "sha256": "9cf15e20a0765729077fd032d752e1cf99244764795bc3f28f0a082b6cf80b69"
         },
         {
-          "name": "nginx_1.26.3-3+deb13u10.dsc",
+          "name": "nginx_1.26.3-3+deb13u11.dsc",
           "size": 3610,
-          "sha256": "b1b8dc9c2fa47dcd46844f68833bc80244220a127299be36754bbb3b5d56192e"
+          "sha256": "d86119ea85cf8912aea05ef9c3056191c386cc3ca8d0b9a507376c250e76beeb"
         },
         {
           "name": "nginx_1.26.3.orig.tar.gz",
