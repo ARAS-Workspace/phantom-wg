@@ -55,6 +55,7 @@ enum TunnelManagementError: Error, LocalizedError {
         }
     }
 
+    /// @witness TunnelRemove.aRefusedRemovalLeavesTheSavedTunnelReadable
     var errorDescription: String? {
         let loc = LocalizationManager.shared
         switch self {

@@ -14,11 +14,13 @@
 //       The row's configuration is sealed into the app group Keychain by
 //       the production `configure(with:)` path (`.keychain` storage), and
 //       the system refuses the removal. The removal is refused as a system
-//       error, the row is still listed and the system store still holds
-//       the entry. Then the provider is read back from what the system
-//       stored — what the next reload or the next launch reads — and the
-//       claim is that it still opens the configuration that was saved.
-//       Every Keychain item the step created is deleted on the way out.
+//       error carrying the system's refusal, and its text is the removal's
+//       sentence carrying the system's words. The row is still listed and
+//       the system store still holds the entry. Then the provider is read
+//       back from what the system stored — what the next reload or the next
+//       launch reads — and the claim is that it still opens the
+//       configuration that was saved. Every Keychain item the step created
+//       is deleted on the way out.
 //
 //   B — An Accepted Removal Leaves No Keychain Item
 //       The same planting, and the system accepts the removal. The
@@ -52,8 +54,10 @@ final class TunnelRemoveWorkflow: TestWorkflow {
         }
         let provider = FakeSlotProvider(storage: .keychain, config: original)
         onTeardown("delete the step's Keychain items") { provider.sweepKeychain() }
-        guard check(provider.tunnelConfig == original,
-                    "the planted row reads its configuration back from the app group Keychain") else { return }
+        let read = provider.tunnelConfig
+        guard check(read == original,
+                    "the planted row reads its configuration back from the app group Keychain"
+                    + " (sealed=\(provider.keychainRef != nil), reads \(read.map { "\"\($0.name)\"" } ?? "nothing"))") else { return }
         let manager = TunnelsManager(tunnelProviders: [provider], providerFactory: FakeSlotFactory(canned: [provider]))
         guard let row = manager.tunnels.first else {
             fail("the planted row is not in the step's list")
@@ -67,9 +71,17 @@ final class TunnelRemoveWorkflow: TestWorkflow {
         } catch {
             refused = error
         }
-        var asSystemError = false
-        if let refused, case TunnelManagementError.vpnSystemErrorOnRemoveTunnel = refused { asSystemError = true }
-        check(asSystemError, "the removal the system refused is refused as a system error (\(String(describing: refused)))")
+        var carriesTheRefusal = false
+        if let refused, case TunnelManagementError.vpnSystemErrorOnRemoveTunnel(let carried) = refused {
+            carriesTheRefusal = (carried as NSError) == refusal
+        }
+        check(carriesTheRefusal,
+              "the removal the system refused is refused as a system error carrying the system's refusal"
+              + " (\(String(describing: refused)))")
+        let sentence = LocalizationManager.shared.t("error_remove_tunnel", refusal.localizedDescription)
+        check(refused?.localizedDescription == sentence,
+              "the refusal reads as the removal's sentence carrying the system's words"
+              + " (\(refused?.localizedDescription ?? "nothing"))")
         check(manager.tunnels.contains { $0.id == original.id } && provider.entryExists,
               "the row is still listed and the system store still holds the entry"
               + " (rows=\(manager.tunnels.count), entry=\(provider.entryExists))")
@@ -88,9 +100,10 @@ final class TunnelRemoveWorkflow: TestWorkflow {
         }
         let provider = FakeSlotProvider(storage: .keychain, config: original)
         onTeardown("delete the step's Keychain items") { provider.sweepKeychain() }
-        guard check(provider.tunnelConfig == original && provider.keychainRefs.count == 1,
+        let read = provider.tunnelConfig
+        guard check(read == original && provider.keychainRefs.count == 1,
                     "the planted row reads its configuration back from its one app group Keychain item"
-                    + " (items=\(provider.keychainRefs.count))") else { return }
+                    + " (items=\(provider.keychainRefs.count), reads \(read.map { "\"\($0.name)\"" } ?? "nothing"))") else { return }
         let manager = TunnelsManager(tunnelProviders: [provider], providerFactory: FakeSlotFactory(canned: [provider]))
         guard let row = manager.tunnels.first else {
             fail("the planted row is not in the step's list")

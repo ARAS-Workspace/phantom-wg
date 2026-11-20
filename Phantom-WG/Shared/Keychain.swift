@@ -23,6 +23,8 @@ enum Keychain {
     /// @witness TunnelEdit.aRefusedSaveLeavesTheSavedTunnelReadable
     /// @witness TunnelEdit.anAcceptedSaveLeavesOnlyTheItemItSealed
     /// @witness TunnelEdit.aRefusedLoadAfterAnAcceptedSaveKeepsTheEdit
+    /// @witness TunnelRemove.aRefusedRemovalLeavesTheSavedTunnelReadable
+    /// @witness TunnelRemove.anAcceptedRemovalLeavesNoKeychainItem
     static func openReference(called ref: Data) -> String? {
         var result: CFTypeRef?
         // Persistent reference already encodes the item identity —
@@ -68,6 +70,7 @@ enum Keychain {
     /// @witness TunnelEdit.aRefusedSaveLeavesTheSavedTunnelReadable
     /// @witness TunnelEdit.anAcceptedSaveLeavesOnlyTheItemItSealed
     /// @witness TunnelEdit.aRefusedLoadAfterAnAcceptedSaveKeepsTheEdit
+    /// @witness TunnelRemove.anAcceptedRemovalLeavesNoKeychainItem
     static func deleteReference(called ref: Data) {
         SecItemDelete([kSecValuePersistentRef: ref] as CFDictionary)
     }
