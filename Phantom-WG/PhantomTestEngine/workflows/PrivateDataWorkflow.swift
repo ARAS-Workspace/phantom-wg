@@ -13,7 +13,8 @@
 //       and reports no failure.
 //
 //   B — A Declined Owner Check Closes It Silently
-//       The door answers false and reports no failure.
+//       The check is asked once; the door answers false and reports no
+//       failure.
 //
 //   C — A Failed Owner Check Closes It And Names The Failure
 //       The door answers false and hands the check's message to the
@@ -21,8 +22,10 @@
 //
 //   D — A Second Request While One Is Open Answers False Without Asking
 //       While a first check is held open, a second request answers false
-//       at once and the check is not asked again; the first, once
+//       at once, silently, and the check is not asked again; the first, once
 //       granted, opens the door; a third request after it is asked again.
+//       A refused request does not release the first: another one after
+//       it is refused the same way.
 
 #if DEBUG
 import Foundation
@@ -90,6 +93,7 @@ final class PrivateDataWorkflow: TestWorkflow {
     func aDeclinedOwnerCheckClosesItSilently() async {
         let ledger = Ledger()
         let opened = await request(.declined, ledger)
+        check(ledger.asked.count == 1, "the declined check is asked once (asked=\(ledger.asked.count))")
         check(!opened && ledger.failures.isEmpty,
               "the door answers false and reports no failure (opened=\(opened), failures=\(ledger.failures.count))")
     }
@@ -108,15 +112,20 @@ final class PrivateDataWorkflow: TestWorkflow {
             await PrivateDataGuard.grants(reason: "TE first", authorize: { _ in await held.ask() }, onFailure: { _ in })
         }
         onTeardown("answer a check still held open") { held.answer(.declined) }
-        guard await settle(within: 2, until: { held.isOpen }) else {
-            fail("the first request never reached its check (asked=\(held.asked))")
-            return
-        }
+        let reached = await settle(within: 2, until: { held.isOpen })
+        guard check(reached, "the first request reaches its check (asked=\(held.asked))") else { return }
 
         let ledger = Ledger()
         let second = await request(.granted, ledger)
         check(!second && ledger.asked.isEmpty,
               "a second request while the first is open answers false and its check is not asked (second=\(second), asked=\(ledger.asked.count))")
+        check(ledger.failures.isEmpty, "the refused request reports no failure (failures=\(ledger.failures.count))")
+
+        let again = Ledger()
+        let another = await request(.granted, again)
+        check(!another && again.asked.isEmpty,
+              "another request while the first is still open answers false too and its check is not asked"
+              + " (another=\(another), asked=\(again.asked.count))")
 
         held.answer(.granted)
         let firstOpened = await first.value
