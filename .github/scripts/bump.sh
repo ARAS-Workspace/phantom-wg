@@ -36,8 +36,8 @@ sed -i '' "s/MARKETING_VERSION: \"${CURRENT}\"/MARKETING_VERSION: \"${NEW}\"/g" 
 
 # Verify
 COUNT=$(grep -c "MARKETING_VERSION: \"${NEW}\"" "$PROJECT_YML")
-if [[ "$COUNT" -ne 3 ]]; then
-    echo "WARNING: Expected 3 MARKETING_VERSION entries, found ${COUNT}"
+if [[ "$COUNT" -ne 2 ]]; then
+    echo "WARNING: Expected 2 MARKETING_VERSION entries, found ${COUNT}"
 fi
 
 echo "${CURRENT} → ${NEW}"
