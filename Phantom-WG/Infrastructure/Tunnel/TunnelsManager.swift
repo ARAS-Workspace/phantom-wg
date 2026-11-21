@@ -105,6 +105,7 @@ class TunnelsManager {
     /// @witness TunnelAdd.onlyASystemRefusalOffersTheVPNSettings
     /// @witness TunnelAdd.aListReloadThatCrossesAnAddLeavesOneRow
     /// @witness Unreachable.addThroughTheProductionPath
+    /// @witness TunnelLoad.anItemNoEntryReferencesIsCollectedAtLaunch
     func add(config: TunnelConfig) async throws -> TunnelContainer {
         let name = config.name.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !name.isEmpty else {

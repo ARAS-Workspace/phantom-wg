@@ -14,16 +14,21 @@
 //
 //   A — An Item No Entry References Is Collected At Launch
 //       A first `create()` counts the listed entries that read their
-//       configuration, and adds a `Test-` entry of the step's own through
-//       it, so the system holds one entry this step answers for. Then an
-//       item that no entry references is sealed through
+//       configuration. An item that no entry references is sealed through
 //       `Keychain.makeReference` (a throwaway value, no secret), and a
-//       second `create()` runs. The claims are that the item opens
-//       nothing afterwards, that the step's own entry still reads its
-//       configuration, and that the entries read before still read it.
-//       Whether the step entry's stored reference equals the form the
-//       Keychain hands back for it is logged. The item and the `Test-`
-//       entry are deleted on the way out.
+//       `Test-` entry of the step's own is added through the first
+//       manager, so the system holds one entry this step answers for.
+//       That the item is sealed and opens, and that the entry is added
+//       and reads its configuration, are the step's first two claims: a
+//       refusal of either is the red of its claim, and the step ends
+//       there. Then a second `create()` runs. The claims after it are
+//       that the item opens nothing, that the step's own entry still
+//       reads its configuration, and that the entries read before still
+//       read it.
+//       How many of the listed entries' stored references equal the form
+//       the Keychain hands back for them, and whether the step entry's
+//       does, is logged. The item and the `Test-` entry are deleted on the
+//       way out.
 
 #if DEBUG
 import Foundation
@@ -56,6 +61,32 @@ final class TunnelLoadWorkflow: TestWorkflow {
         return handed == ref
     }
 
+    /// The step's own `Test-` entry, added through `manager`: the claim
+    /// that it is added and reads its configuration, its removal on the
+    /// way out, and the log line on its stored reference. `nil` once the
+    /// factory or the claim failed.
+    private func ownEntry(addedThrough manager: TunnelsManager) async -> TunnelConfig? {
+        guard let own = TestConfigFactory.throwaway(name: "Test-Load-\(runTag)") else {
+            fail("the config factory produced no throwaway")
+            return nil
+        }
+        let added = "the step's own entry is added and reads its configuration"
+        let row: TunnelContainer
+        do {
+            row = try await manager.add(config: own)
+        } catch {
+            check(false, added + " (refused: \(error))")
+            return nil
+        }
+        onTeardown("remove the step's Test- entry") { try? await manager.remove(tunnel: row) }
+        guard check(row.tunnelConfig == own, added + " (reads=\(row.tunnelConfig != nil))") else { return nil }
+        if let ref = (row.tunnelProvider.protocolConfiguration as? NETunnelProviderProtocol)?.keychainReference {
+            log("the step entry's stored reference is \(ref.count) bytes; the Keychain hands back the same bytes for it: "
+                + "\(referenceIsCanonical(ref).map { $0 ? "yes" : "no" } ?? "item not found")")
+        }
+        return own
+    }
+
     // MARK: - Steps
 
     func anItemNoEntryReferencesIsCollectedAtLaunch() async {
@@ -68,31 +99,20 @@ final class TunnelLoadWorkflow: TestWorkflow {
         }
         let readableBefore = readable(first)
         log("the system lists \(first.tunnels.count) entries, \(readableBefore.count) of them reading their configuration")
+        let stored = first.tunnels.compactMap {
+            ($0.tunnelProvider.protocolConfiguration as? NETunnelProviderProtocol)?.keychainReference
+        }
+        log("of their \(stored.count) stored references the Keychain hands back the same bytes for"
+            + " \(stored.filter { referenceIsCanonical($0) == true }.count)")
 
-        guard let own = TestConfigFactory.throwaway(name: "Test-Load-\(runTag)") else {
-            fail("the config factory produced no throwaway")
-            return
-        }
-        let ownRow: TunnelContainer
-        do {
-            ownRow = try await first.add(config: own)
-        } catch {
-            fail("the system refused the step's Test- entry (\(error))")
-            return
-        }
-        onTeardown("remove the step's Test- entry") { try? await first.remove(tunnel: ownRow) }
-        if let ref = (ownRow.tunnelProvider.protocolConfiguration as? NETunnelProviderProtocol)?.keychainReference {
-            log("the step entry's stored reference is \(ref.count) bytes; the Keychain hands back the same bytes for it: "
-                + "\(referenceIsCanonical(ref).map { $0 ? "yes" : "no" } ?? "item not found")")
-        }
-
+        let sealed = "an item that no entry references is sealed and opens"
         guard let orphan = Keychain.makeReference(containing: "TE orphan \(runTag)", called: "TE-Load-Orphan-\(runTag)") else {
-            fail("makeReference refused the orphan item")
+            check(false, sealed + " (makeReference refused the item)")
             return
         }
         onTeardown("delete the step's Keychain item") { Keychain.deleteReference(called: orphan) }
-        guard check(Keychain.openReference(called: orphan) != nil,
-                    "an item that no entry references is sealed and opens") else { return }
+        guard check(Keychain.openReference(called: orphan) != nil, sealed) else { return }
+        guard let own = await ownEntry(addedThrough: first) else { return }
 
         let second: TunnelsManager
         do {
@@ -103,14 +123,16 @@ final class TunnelLoadWorkflow: TestWorkflow {
         }
         check(Keychain.openReference(called: orphan) == nil,
               "after the launch path ran, the item no entry references opens nothing")
-        let ownListed = second.tunnels.first { $0.id == own.id }
+        // A row whose configuration does not open carries an id of its own:
+        // once the entry's id finds no row, the entry is looked up by its name.
+        let ownListed = second.tunnels.first { $0.id == own.id } ?? second.tunnels.first { $0.name == own.name }
         check(ownListed?.tunnelConfig == own,
               "the step's own entry is listed and still reads its configuration"
               + " (listed=\(ownListed != nil), reads=\(ownListed?.tunnelConfig != nil))")
         let readableAfter = readable(second)
-        check(readableAfter == readableBefore.union([own.id]),
+        check(readableBefore.isSubset(of: readableAfter),
               "the entries that read their configuration before still read it"
-              + " (before=\(readableBefore.count), after=\(readableAfter.count) with the step's own)")
+              + " (before=\(readableBefore.count), of them after=\(readableBefore.intersection(readableAfter).count))")
     }
 }
 #endif
