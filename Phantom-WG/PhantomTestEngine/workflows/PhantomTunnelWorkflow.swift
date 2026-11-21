@@ -8,18 +8,20 @@
 //
 // Claim discipline: a claim about our own code FAILS when broken whatever
 // the server does; a claim that needs a server to answer SKIPS when the
-// answer does not come.
+// answer does not come. An opcode the extension leaves unanswered is the
+// red of the step's claim.
 //
 // Scenarios:
 //
 //   A — Activate
-//       Waits on the activation ladder's own length. The configuration's
-//       mode agrees with the registration, and the activation armed
-//       recovery on this tunnel alone.
+//       The tunnel reaches active within the activation ladder's own
+//       length. The configuration's mode agrees with the registration,
+//       and the activation armed recovery on this tunnel alone.
 //
 //   B — Opcode 0: Handshake Proven
 //       Within 20 s the stats reply carries a handshake. Answers without
-//       one skip (the server did not answer); no answer at all fails.
+//       one skip (the server did not answer); no answer at all is the
+//       claim's red.
 //
 //   C — Opcode 0: Three Numbers And No Key
 //       The stats reply decodes as `TunnelRuntimeStats`, its keys are
@@ -29,14 +31,19 @@
 //
 //   D — Opcode 1: Log Buffer Streams
 //   E — Opcode 4: Log Count Matches The Buffer
-//       The count is read first and the buffer right after; lines that
-//       land between the two reads may only add rows.
+//       The count is asked with the opcode's number, 4, and read first,
+//       the buffer right after; lines that land between the two reads may
+//       only add rows.
 //   F — Opcode 2: Flush Round-Trip
 //       The flush answers with its opcode and the buffer read after it is
 //       smaller than the one before.
 //   G — Opcode 3: Layer Reset In Place
 //       `resetConnection` returns without an error within 15 s, the row is
 //       active again, and a handshake newer than B's arrives within 30 s.
+//       The stamp counts whole seconds, so the reset waits for the second
+//       of B's handshake to pass; answers that carry no newer one skip
+//       with the last stamp read.
+//       The extension's log holds the line a rebuild ends on.
 //   H — Opcode 3: The Reply Names The Outcome
 //       A raw opcode 3 answers two bytes, the opcode and `rebuilt`.
 //   I — Opcode 3 x2: Concurrent Reset Converges
@@ -56,6 +63,15 @@ import Foundation
 private enum ResetCall: Sendable {
     case returned
     case refused(String)
+
+    /// What a call's ending says when it is not a plain return.
+    static func failure(_ call: ResetCall?) -> String? {
+        switch call {
+        case .returned?: return nil
+        case .refused(let why)?: return "it threw: \(why)"
+        case nil: return "it did not return"
+        }
+    }
 }
 
 final class PhantomTunnelWorkflow: TestWorkflow {
@@ -110,6 +126,33 @@ final class PhantomTunnelWorkflow: TestWorkflow {
         return TunnelRuntimeStats.decoded(from: data)
     }
 
+    /// The handshake stamp counts whole seconds: a reset in the second B's
+    /// handshake landed in would bring a new one that reads as the old.
+    /// Waits, two seconds at most, until that second has passed.
+    private func untilTheSecondPasses(_ stamp: Int64) async {
+        let limit = Date().addingTimeInterval(2)
+        while stamp > 0, Date().timeIntervalSince1970 < Double(stamp + 1), Date() < limit {
+            try? await Task.sleep(for: .milliseconds(100))
+        }
+    }
+
+    /// Asks the stats once a second, 30 s at most, until they carry a
+    /// handshake newer than B's: the last stamp read, and whether any ask
+    /// was answered.
+    private func handshakeAfterTheReset(on row: TunnelContainer) async -> (stamp: Int64, answered: Bool) {
+        var stamp: Int64 = 0
+        var answered = false
+        let start = Date()
+        while stamp <= lastHandshake, Date().timeIntervalSince(start) < 30 {
+            if Task.isCancelled { break }
+            let reply = await providerMessage(row, [0])
+            if case .unanswered = reply {} else { answered = true }
+            if let reading = stats(reply) { stamp = reading.lastHandshakeTimestamp }
+            if stamp <= lastHandshake { try? await Task.sleep(for: .seconds(1)) }
+        }
+        return (stamp, answered)
+    }
+
     /// Brings the test tunnel to rest and writes its rule down.
     private func ground(_ row: TunnelContainer) async -> String {
         var notes: [String] = []
@@ -128,6 +171,15 @@ final class PhantomTunnelWorkflow: TestWorkflow {
             }
         }
         return notes.isEmpty ? "already rested, not armed" : notes.joined(separator: ", ")
+    }
+
+    /// Whether the extension's log buffer holds the line a rebuild ends on.
+    /// The buffer starts with the session and G's reset is the session's
+    /// first, so a line here is that reset's.
+    private func rebuildLogged(on row: TunnelContainer) async -> Bool {
+        guard case .data(let data) = await providerMessage(row, [1]),
+              let rows = (try? JSONSerialization.jsonObject(with: data)) as? [[String: Any]] else { return false }
+        return rows.contains { ($0["message"] as? String) == "Reset complete" }
     }
 
     // MARK: - Steps
@@ -151,11 +203,10 @@ final class PhantomTunnelWorkflow: TestWorkflow {
             self.log("teardown: \(self.configName) \(note)")
         }
         tunnels.startActivation(of: row)
-        guard await awaitStatus(row, is: .active, within: activationBudget) else {
-            fail("\(configName) did not reach active within \(Int(activationBudget))s"
-                 + " (error=\(row.lastActivationError.map { String(describing: $0) } ?? "nil"))")
-            return
-        }
+        guard check(await awaitStatus(row, is: .active, within: activationBudget),
+                    "the tunnel reaches active within the activation ladder's length (\(Int(activationBudget))s,"
+                    + " status=\(row.status), error=\(row.lastActivationError.map { String(describing: $0) } ?? "nil"))")
+        else { return }
         sessionUp = true
         let ghost = row.tunnelConfig?.wstunnel != nil
         check(ghost == (mode == .ghost), "the configuration's mode agrees with the registration (ghost=\(ghost))")
@@ -169,23 +220,26 @@ final class PhantomTunnelWorkflow: TestWorkflow {
             return
         }
         var answered = false
+        var carried: TunnelRuntimeStats?
         let start = Date()
-        while Date().timeIntervalSince(start) < 20 {
+        while carried == nil, Date().timeIntervalSince(start) < 20 {
             if Task.isCancelled { return }
             let reply = await providerMessage(row, [0])
             if case .unanswered = reply {} else { answered = true }
             if let reading = stats(reply), reading.lastHandshakeTimestamp > 0 {
-                lastHandshake = reading.lastHandshakeTimestamp
-                log("handshake at \(reading.lastHandshakeTimestamp), rx=\(reading.rxBytes) tx=\(reading.txBytes)", .ok)
-                return
+                carried = reading
+            } else {
+                try? await Task.sleep(for: .seconds(1))
             }
-            try? await Task.sleep(for: .seconds(1))
         }
-        if answered {
+        if answered, carried == nil {
             skip("environment: no handshake within 20s, the server did not answer")
-        } else {
-            fail("the stats opcode was unanswered for 20s while the row was active")
+            return
         }
+        lastHandshake = carried?.lastHandshakeTimestamp ?? 0
+        let read = carried.map { "at \($0.lastHandshakeTimestamp), rx=\($0.rxBytes) tx=\($0.txBytes)" }
+            ?? "the stats opcode was unanswered for 20s while the row was active"
+        check(carried != nil, "the stats reply carries a handshake within 20s (\(read))")
     }
 
     func statsCarryThreeNumbersAndNoKey() async {
@@ -193,14 +247,16 @@ final class PhantomTunnelWorkflow: TestWorkflow {
             skip("the session is not up")
             return
         }
-        guard case .data(let data) = await providerMessage(row, [0]) else {
-            fail("the stats opcode did not answer with data")
+        let shape = "the reply decodes as the three numbers and carries no other field"
+        let reply = await providerMessage(row, [0])
+        guard case .data(let data) = reply else {
+            check(false, shape + " (reply=\(reply.label))")
             return
         }
         let keys = ((try? JSONSerialization.jsonObject(with: data)) as? [String: Any]).map { Set($0.keys) } ?? []
         check(TunnelRuntimeStats.decoded(from: data) != nil
                 && keys == ["rxBytes", "txBytes", "lastHandshakeTimestamp"],
-              "the reply decodes as the three numbers and carries no other field (keys=\(keys.sorted()))")
+              shape + " (keys=\(keys.sorted()))")
         let text = String(data: data, encoding: .utf8) ?? ""
         let named = ["private_key", "preshared_key", "public_key", "privateKey", "presharedKey"].filter { text.contains($0) }
         check(named.isEmpty, "and its text names no key field (named=\(named))")
@@ -211,15 +267,10 @@ final class PhantomTunnelWorkflow: TestWorkflow {
             skip("the session is not up")
             return
         }
-        switch await providerMessage(row, [1]) {
-        case .data(let data):
-            preFlushBytes = data.count
-            check(!data.isEmpty, "the log buffer streams (\(data.count) bytes)")
-        case .empty:
-            fail("the log request was answered with no data")
-        case .unanswered:
-            fail("the log request was unanswered (5s)")
-        }
+        let reply = await providerMessage(row, [1])
+        if case .data(let data) = reply { preFlushBytes = data.count }
+        let read = preFlushBytes > 0 ? "\(preFlushBytes) bytes" : "reply=\(reply.label)"
+        check(preFlushBytes > 0, "the log buffer streams (\(read))")
     }
 
     func logCountMatchesTheBuffer() async {
@@ -227,19 +278,20 @@ final class PhantomTunnelWorkflow: TestWorkflow {
             skip("the session is not up")
             return
         }
-        let countReply = await providerMessage(row, [TunnelLogCountReply.opcode])
+        let matches = "the log count matches the buffer read right after"
+        let countReply = await providerMessage(row, [4])
         guard case .data(let data) = countReply, let count = TunnelLogCountReply.read(data) else {
-            fail("the log count was unreadable (reply=\(countReply.label))")
+            check(false, matches + " (the count was unreadable: reply=\(countReply.label))")
             return
         }
         switch await providerMessage(row, [1]) {
         case .data(let logs):
             let rows = ((try? JSONSerialization.jsonObject(with: logs)) as? [Any])?.count ?? -1
-            check(rows >= count && rows - count <= 20, "log count \(count), the buffer read right after holds \(rows) rows")
+            check(rows >= count && rows - count <= 20, matches + " (count=\(count), rows=\(rows))")
         case .empty:
-            check(count == 0, "log count \(count), the buffer read right after is empty")
+            check(count == 0, matches + " (count=\(count), the buffer is empty)")
         case .unanswered:
-            fail("the buffer read after the count was unanswered")
+            check(false, matches + " (count=\(count), the buffer read was unanswered)")
         }
     }
 
@@ -257,7 +309,8 @@ final class PhantomTunnelWorkflow: TestWorkflow {
         case .empty:
             check(preFlushBytes > 0, "the buffer after the flush is empty (from \(preFlushBytes) bytes)")
         case .unanswered:
-            fail("the buffer read after the flush was unanswered")
+            check(false, "the buffer after the flush is smaller"
+                  + " (\(preFlushBytes) bytes before, the read after it was unanswered)")
         }
     }
 
@@ -266,6 +319,7 @@ final class PhantomTunnelWorkflow: TestWorkflow {
             skip("the session is not up")
             return
         }
+        await untilTheSecondPasses(lastHandshake)
         let outcome: ResetCall? = await race(15) {
             do {
                 try await self.tunnels.resetConnection(of: row)
@@ -274,29 +328,23 @@ final class PhantomTunnelWorkflow: TestWorkflow {
                 return .refused(error.localizedDescription)
             }
         }
-        guard let outcome else {
-            fail("the reset did not return within 15s")
-            return
-        }
-        if case .refused(let why) = outcome {
-            fail("the reset was refused rather than rebuilding the layer (\(why))")
-            return
-        }
+        let failure = ResetCall.failure(outcome)
+        guard check(failure == nil, "the reset returns without an error within 15s" + (failure.map { " (\($0))" } ?? ""))
+        else { return }
         guard check(await awaitStatus(row, is: .active, within: 30), "the row is active after the reset (status=\(row.status))") else { return }
+        check(await rebuildLogged(on: row), "the extension's log holds the line a rebuild ends on (Reset complete)")
         guard lastHandshake > 0 else {
             skip("no handshake from step B to compare against")
             return
         }
-        let start = Date()
-        while Date().timeIntervalSince(start) < 30 {
-            if Task.isCancelled { return }
-            if let reading = stats(await providerMessage(row, [0])), reading.lastHandshakeTimestamp > lastHandshake {
-                log("a handshake newer than the one before the reset: \(reading.lastHandshakeTimestamp) > \(lastHandshake)", .ok)
-                return
-            }
-            try? await Task.sleep(for: .seconds(1))
+        let after = await handshakeAfterTheReset(on: row)
+        if after.answered, after.stamp <= lastHandshake {
+            skip("environment: the layer was rebuilt, no newer handshake within 30s"
+                 + " (last read \(after.stamp), before the reset \(lastHandshake))")
+            return
         }
-        skip("environment: the layer was rebuilt, no newer handshake within 30s")
+        let read = after.answered ? "\(after.stamp) > \(lastHandshake)" : "the stats opcode was unanswered for 30s after the reset"
+        check(after.stamp > lastHandshake, "a handshake newer than the one before the reset arrives within 30s (\(read))")
     }
 
     func resetReplyNamesTheOutcome() async {
@@ -304,12 +352,13 @@ final class PhantomTunnelWorkflow: TestWorkflow {
             skip("the session is not up")
             return
         }
-        guard case .data(let reply) = await providerMessage(row, [3], timeout: 20) else {
-            fail("opcode 3 did not answer within 20s")
+        let shape = "the reply is the opcode and an outcome byte"
+        let answer = await providerMessage(row, [3], timeout: 20)
+        guard case .data(let reply) = answer else {
+            check(false, shape + " (reply=\(answer.label) after 20s)")
             return
         }
-        check(reply.count == 2 && reply[reply.startIndex] == 3,
-              "the reply is the opcode and an outcome byte (bytes=\(Array(reply)))")
+        check(reply.count == 2 && reply[reply.startIndex] == 3, shape + " (bytes=\(Array(reply)))")
         check(TunnelResetReply.read(reply) == .outcome(.rebuilt), "a live layer answers rebuilt (\(TunnelResetReply.read(reply)))")
         check(await awaitStatus(row, is: .active, within: 30), "the row is active after the raw reset (status=\(row.status))")
     }
@@ -322,11 +371,10 @@ final class PhantomTunnelWorkflow: TestWorkflow {
         async let first: Bool? = race(20) { (try? await self.tunnels.resetConnection(of: row)) != nil }
         async let second: Bool? = race(20) { (try? await self.tunnels.resetConnection(of: row)) != nil }
         let (one, two) = await (first, second)
-        guard let one, let two else {
-            fail("an overlapping reset did not return within 20s")
-            return
-        }
-        check(one && two, "both overlapping resets return without an error (first=\(one), second=\(two))")
+        let said = [one, two].map { $0.map { "\($0)" } ?? "no return within 20s" }
+        check(one == true && two == true,
+              "both overlapping resets return without an error (first=\(said[0]), second=\(said[1]))")
+        guard one != nil, two != nil else { return }
         async let rawFirst = providerMessage(row, [3], timeout: 20)
         async let rawSecond = providerMessage(row, [3], timeout: 20)
         let (replyOne, replyTwo) = await (rawFirst, rawSecond)

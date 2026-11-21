@@ -436,6 +436,9 @@ class TunnelsManager {
     /// @witness ActivationSeam.aConfigThatWillNotLoadLosesItsRule
     /// @witness ActivationSeam.aStartTheSystemRefusesLosesItsRule
     /// @witness ActivationSeam.aGiveUpWhoseDisarmSaveHangsStillHandsTheQueueOn
+    /// @witness PhantomTunnel.activate
+    /// @witness RecoverySwitch.armFirst
+    /// @witness Unreachable.activationAttemptObserved
     private func doStartVPNTunnel(tunnel: TunnelContainer, attemptId: String, retryIndex: Int) async {
         do {
             try await tunnel.tunnelProvider.loadPreferences()

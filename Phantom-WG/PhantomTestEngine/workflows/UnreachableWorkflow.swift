@@ -17,8 +17,8 @@
 //       configuration back from the app group Keychain.
 //
 //   B — Activation Attempt Observed
-//       The row leaves rest within 10 s; whether it reaches active is
-//       logged.
+//       The row leaves rest within 10 s and is active within 15 s more:
+//       the adapter comes up with no peer behind it.
 //
 //   C — Green But Dead: Stats Stay Truthful
 //       With the row active, the stats carry no handshake.
@@ -79,10 +79,11 @@ final class UnreachableWorkflow: TestWorkflow {
             return
         }
         planted = config
+        let listed = "the tunnel is listed and reads its configuration back from the app group Keychain"
         do {
             row = try await tunnels.add(config: config)
         } catch {
-            fail("add was refused (\(error.localizedDescription))")
+            check(false, listed + " (add threw: \(error.localizedDescription))")
             return
         }
         onTeardown("remove the planted unreachable tunnel") { [weak self] in
@@ -99,8 +100,7 @@ final class UnreachableWorkflow: TestWorkflow {
             }
         }
         item = (row?.tunnelProvider.protocolConfiguration as? NETunnelProviderProtocol)?.keychainReference
-        check(tunnel(named: config.name) != nil && row?.tunnelConfig == config,
-              "the tunnel is listed and reads its configuration back from the app group Keychain (\(config.name))")
+        check(tunnel(named: config.name) != nil && row?.tunnelConfig == config, listed + " (\(config.name))")
     }
 
     func activationAttemptObserved() async {
@@ -111,12 +111,8 @@ final class UnreachableWorkflow: TestWorkflow {
         tunnels.startActivation(of: row)
         let left = await settle(within: 10) { row.status != .inactive }
         check(left, "the row leaves rest (status=\(row.status))")
-        if await awaitStatus(row, is: .active, within: 15) {
-            reachedActive = true
-            log("the adapter is up on a blackhole endpoint: the green-but-dead window is open", .ok)
-        } else {
-            log("the row did not reach active (status=\(row.status))", .warn)
-        }
+        reachedActive = check(await awaitStatus(row, is: .active, within: 15),
+                              "the adapter comes up on the blackhole endpoint: the row is active (status=\(row.status))")
     }
 
     func greenButDead() async {
@@ -128,17 +124,15 @@ final class UnreachableWorkflow: TestWorkflow {
             skip("the session did not reach active")
             return
         }
-        switch await providerMessage(row, [0]) {
-        case .data(let data):
-            let reading = TunnelRuntimeStats.decoded(from: data)
-            check(reading?.lastHandshakeTimestamp == 0,
-                  "the stats stay truthful: the row is active and no handshake is carried"
-                  + " (handshake=\(reading?.lastHandshakeTimestamp ?? -1), tx=\(reading?.txBytes ?? -1))")
-        case .empty:
-            fail("the stats were answered with no data")
-        case .unanswered:
-            fail("the stats were unanswered while the row was active")
+        let truthful = "the stats stay truthful: the row is active and no handshake is carried"
+        let reply = await providerMessage(row, [0])
+        guard case .data(let data) = reply else {
+            check(false, truthful + " (reply=\(reply.label))")
+            return
         }
+        let reading = TunnelRuntimeStats.decoded(from: data)
+        check(reading?.lastHandshakeTimestamp == 0,
+              truthful + " (handshake=\(reading?.lastHandshakeTimestamp ?? -1), tx=\(reading?.txBytes ?? -1))")
     }
 
     func userAbortContract() async {
@@ -187,14 +181,14 @@ final class UnreachableWorkflow: TestWorkflow {
         do {
             try await tunnels.remove(tunnel: row)
         } catch {
-            fail("remove was refused (\(error.localizedDescription))")
+            check(false, "the tunnel is out of the list (remove threw: \(error.localizedDescription))")
             return
         }
         check(tunnel(named: planted.name) == nil, "the tunnel is out of the list")
         if let item {
             check(Keychain.openReference(called: item) == nil, "and its Keychain item opens nothing")
         } else {
-            fail("the planted tunnel carried no Keychain reference to check")
+            check(false, "and its Keychain item opens nothing (the planted tunnel carried no reference to open)")
         }
         for name in [TestContext.ghostName, TestContext.wireGuardName] {
             check(tunnel(named: name)?.tunnelConfig != nil, "\(name) is still listed and reads its configuration")

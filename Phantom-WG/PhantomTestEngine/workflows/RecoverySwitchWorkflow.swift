@@ -23,8 +23,9 @@
 //   C — Switch To Second (Ghost), Invariant Sampled Throughout
 //       A press on `Test-Ghost` queues it and stops `Test-WireGuard`; the
 //       armed count across the list is sampled every 100 ms until
-//       `Test-Ghost` is active. The peak never exceeds one, recovery moves
-//       to `Test-Ghost`, and `Test-WireGuard` is disarmed.
+//       `Test-Ghost` is active. The switch lands within the activation
+//       ladder's length, the peak never exceeds one, recovery moves to
+//       `Test-Ghost`, and `Test-WireGuard` is disarmed.
 //
 //   D — Ground And Final Sweep
 //       Both test tunnels rest, and no tunnel in the list is armed.
@@ -114,11 +115,10 @@ final class RecoverySwitchWorkflow: TestWorkflow {
             return
         }
         tunnels.startActivation(of: row)
-        guard await awaitStatus(row, is: .active, within: activationBudget) else {
-            fail("\(row.name) did not reach active within \(Int(activationBudget))s"
-                 + " (error=\(row.lastActivationError.map { String(describing: $0) } ?? "nil"))")
-            return
-        }
+        guard check(await awaitStatus(row, is: .active, within: activationBudget),
+                    "\(row.name) reaches active within the activation ladder's length (\(Int(activationBudget))s,"
+                    + " status=\(row.status), error=\(row.lastActivationError.map { String(describing: $0) } ?? "nil"))")
+        else { return }
         firstArmed = true
         let now = armed()
         check(now.count == 1 && now.first === row,
@@ -155,11 +155,9 @@ final class RecoverySwitchWorkflow: TestWorkflow {
 
         check(sampler.samples > 0, "the invariant was sampled (\(sampler.samples) samples across the switch)")
         check(sampler.peak <= 1, "the armed count never exceeded one during the switch (peak=\(sampler.peak))")
-        guard reached else {
-            skip("environment: \(rowB.name) did not reach active within \(Int(budget))s"
-                 + " (error=\(rowB.lastActivationError.map { String(describing: $0) } ?? "nil"), peak=\(sampler.peak))")
-            return
-        }
+        guard check(reached, "the switch lands: \(rowB.name) is active within the activation ladder's length (\(Int(budget))s,"
+                    + " status=\(rowB.status), error=\(rowB.lastActivationError.map { String(describing: $0) } ?? "nil"))")
+        else { return }
         let now = armed()
         check(now.count == 1 && now.first === rowB,
               "recovery moved to \(rowB.name) (armed=\(now.count): \(now.map(\.name).joined(separator: ", ")))")

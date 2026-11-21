@@ -9,6 +9,9 @@ extension TunnelsManager {
     /// starting a tunnel is the recovery intent, stopping it withdraws
     /// it (`startDeactivation` disarms before it stops).
     /// @witness ActivationSeam.theArmedRuleIsOneConnectRuleForAnyInterface
+    /// @witness PhantomTunnel.activate
+    /// @witness RecoverySwitch.armFirst
+    /// @witness RecoverySwitch.switchToSecond
     static func armRecovery(on provider: TunnelProviding) {
         let rule = NEOnDemandRuleConnect()
         rule.interfaceTypeMatch = .any

@@ -16,6 +16,8 @@ enum TunnelResetReply: UInt8, Sendable {
     }
 
     /// @witness PhantomTunnel.resetReplyNamesTheOutcome
+    /// @witness PhantomTunnel.layerResetInPlace
+    /// @witness PhantomTunnel.concurrentResetConverges
     static func read(_ data: Data?) -> Reading {
         guard let data, data.count >= 2 else { return .absent }
         let raw = data[data.startIndex + 1]

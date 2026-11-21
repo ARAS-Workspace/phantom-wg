@@ -47,6 +47,8 @@ enum TunnelManagementError: Error, LocalizedError {
     /// down-layer readings collapse into one sentence because the user's
     /// next move is the same either way: the tunnel is up, it is carrying
     /// nothing, and only they can decide between retrying and stopping.
+    /// @witness PhantomTunnel.layerResetInPlace
+    /// @witness PhantomTunnel.concurrentResetConverges
     static func forReset(_ reply: TunnelResetReply) -> TunnelManagementError? {
         switch reply {
         case .rebuilt: return nil
