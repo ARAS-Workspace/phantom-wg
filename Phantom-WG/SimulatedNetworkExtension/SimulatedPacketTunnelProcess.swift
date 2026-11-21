@@ -1,4 +1,4 @@
-#if DEBUG && targetEnvironment(simulator)
+#if targetEnvironment(simulator)
 import Foundation
 import NetworkExtension
 
@@ -14,8 +14,8 @@ import NetworkExtension
 /// `WireGuardConfigBuilder` refuses — no address, no AllowedIPs, a
 /// standalone peer without an endpoint — and the session ends with the
 /// extension's own sentence for it. Nothing here opens a socket: the
-/// stats are derived from the time connected, and the first log line
-/// says so.
+/// stats are derived from the time connected. A Debug build's first
+/// log line says so; a Release build's is the extension's own.
 ///
 /// Main thread only.
 final class SimulatedPacketTunnelProcess {
@@ -45,7 +45,11 @@ final class SimulatedPacketTunnelProcess {
     // MARK: - Lifecycle
 
     func startTunnel(protocolConfiguration: NETunnelProviderProtocol?, completion: @escaping (Error?) -> Void) {
+        #if DEBUG
         log(.tunnel, "PacketTunnelProvider starting... (simulated extension: no packets leave this device)")
+        #else
+        log(.tunnel, "PacketTunnelProvider starting...")
+        #endif
         guard let config = protocolConfiguration?.tunnelConfig else {
             log(.tunnel, "ERROR: Invalid tunnel configuration")
             after(Self.failDelay) { completion(Self.extensionError(.savedProtocolConfigurationIsInvalid)) }

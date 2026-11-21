@@ -1,11 +1,11 @@
 import NetworkExtension
 
 /// Abstracts NETunnelProviderManager behind the app's system boundary:
-/// everything inside the app talks to this protocol. Production binds it
-/// to NETunnelProviderManager; a Debug build on the simulator binds it to
-/// SimulatedTunnelProvider and the test engine to FakeSlotProvider;
-/// SwiftUI previews bind it to PreviewTunnelProvider so every view
-/// renders without NE preferences or the VPN entitlement.
+/// everything inside the app talks to this protocol. A build for a
+/// device binds it to NETunnelProviderManager and a build for the
+/// simulator to SimulatedTunnelProvider; the test engine binds it to
+/// FakeSlotProvider; SwiftUI previews bind it to PreviewTunnelProvider
+/// so every view renders without NE preferences or the VPN entitlement.
 protocol TunnelProviding: AnyObject {
 
     // MARK: - Identity

@@ -49,7 +49,7 @@ class TunnelsManager {
     /// @witness TunnelTransfer.aLeftoverStagedFileIsSweptAtLaunch
     static func create() async throws -> TunnelsManager {
         TunnelExportPicker.sweep()
-        #if DEBUG && targetEnvironment(simulator)
+        #if targetEnvironment(simulator)
         let factory: TunnelProviderFactory = SimulatedTunnelProviderFactory()
         #else
         let factory: TunnelProviderFactory = RealTunnelProviderFactory()

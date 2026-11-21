@@ -1,13 +1,14 @@
-#if DEBUG && targetEnvironment(simulator)
+#if targetEnvironment(simulator)
 import Foundation
 import NetworkExtension
 import os
 
 /// Stands in for the part of NetworkExtension the iOS Simulator does not
 /// have: the configuration store behind `nehelper`, and the system's
-/// on-demand rule that brings an armed tunnel back. Debug builds on the
-/// simulator reach it through `TunnelsManager.create()`; Release builds
-/// do not compile this directory.
+/// on-demand rule that brings an armed tunnel back. A build for the
+/// simulator, Debug or Release, reaches it through
+/// `TunnelsManager.create()`; a build for a device compiles none of this
+/// directory.
 ///
 /// The store keeps the system's own rules: one enabled configuration per
 /// app (enabling one disables, and disconnects, the others), and a

@@ -1,4 +1,4 @@
-#if DEBUG && targetEnvironment(simulator)
+#if targetEnvironment(simulator)
 import Foundation
 import NetworkExtension
 

@@ -10,6 +10,14 @@ packages:
   WireGuardKit:
     path: Libraries/WireGuardKit
 
+settings:
+  base:
+    # WstunnelKit ships one simulator slice, arm64. A Debug build takes
+    # the one architecture of its destination; a Release build takes
+    # every architecture it is not denied, and the extension's x86_64
+    # link finds no wstunnel symbols.
+    "EXCLUDED_ARCHS[sdk=iphonesimulator*]": x86_64
+
 schemes:
   Phantom-WG:
     build:
@@ -17,6 +25,16 @@ schemes:
         Phantom-WG: all
     run:
       config: Debug
+    archive:
+      config: Release
+  # Runs the Release configuration: on a simulator the app as it ships,
+  # over the simulated Network Extension, with no test engine in it.
+  Phantom-WG Release:
+    build:
+      targets:
+        Phantom-WG: all
+    run:
+      config: Release
     archive:
       config: Release
 
@@ -109,14 +127,19 @@ targets:
         TARGETED_DEVICE_FAMILY: "1,2"
       configs:
         Release:
-          # The simulated Network Extension is a Debug-on-simulator
-          # stand-in, chosen in TunnelsManager.create(). Its files also
-          # carry `#if DEBUG && targetEnvironment(simulator)`; Release
-          # never compiles them. The PhantomTestEngine harness is Debug
-          # only in the same way (`#if DEBUG` in every file). Globs match
-          # per path component, so every directory depth needs its own
-          # pattern.
+          # The PhantomTestEngine harness is Debug only: every file
+          # carries `#if DEBUG`, and no Release build compiles them. The
+          # simulated Network Extension is the simulator's stand-in in
+          # both configurations, chosen in TunnelsManager.create(): its
+          # files carry `#if targetEnvironment(simulator)`, and a Release
+          # build for a device excludes them as well. The second list is
+          # the first with that folder added, written out in full. Globs
+          # match per path component, so every directory depth needs its
+          # own pattern.
           EXCLUDED_SOURCE_FILE_NAMES:
+            - "*/PhantomTestEngine/*"
+            - "*/PhantomTestEngine/*/*"
+          "EXCLUDED_SOURCE_FILE_NAMES[sdk=iphoneos*]":
             - "*/SimulatedNetworkExtension/*"
             - "*/PhantomTestEngine/*"
             - "*/PhantomTestEngine/*/*"
