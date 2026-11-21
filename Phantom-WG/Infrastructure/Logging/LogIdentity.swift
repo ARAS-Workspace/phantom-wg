@@ -8,6 +8,7 @@ import Foundation
 /// that was cleared shares no overlap, so all of its rows are new.
 enum LogIdentity {
 
+    /// @witness Logs.rowsKeepTheirIdsWhileTheBufferSlides
     static func overlapStart(previous: [String], next: [String]) -> Int? {
         guard let first = next.first else { return nil }
         for start in previous.indices where previous[start] == first {

@@ -9,6 +9,7 @@ enum TunnelStatus: Equatable {
     case reasserting
     case waiting
 
+    /// @witness Logs.aReassertingSessionKeepsItsLines
     init(from systemStatus: NEVPNStatus) {
         switch systemStatus {
         case .connected:

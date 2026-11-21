@@ -114,6 +114,8 @@ final class LogStore: LogEntryProvider {
         }
     }
 
+    /// @witness Logs.aPushAndPopInEitherOrderKeepTheStoreReading
+    /// @witness Logs.aSilentExtensionEndsEachWaitAtFiveSeconds
     private func stopPollerWhenIdle() {
         guard pollingHolds == 0, countingHolds == 0 else { return }
         pollingTask?.cancel()
@@ -141,6 +143,7 @@ final class LogStore: LogEntryProvider {
         countUnanswered = false
     }
 
+    /// @witness Logs.theBadgeAloneAsksTheCountNotTheLines
     /// @witness Logs.anExtensionThatLeavesOpcode4UnansweredIsReadThroughOpcode1
     /// @witness Logs.theFallbackEndsWithTheSession
     private func fetchCount() async {
@@ -162,6 +165,10 @@ final class LogStore: LogEntryProvider {
         }
     }
 
+    /// @witness Logs.theLogScreenReadsTheLinesAtOnceAndKeepsReading
+    /// @witness Logs.theFallbackEndsWithTheSession
+    /// @witness Logs.aReassertingSessionKeepsItsLines
+    /// @witness Logs.anAnswerThatSaysNothingOrDoesNotDecodeKeepsTheRows
     private func fetchLogs() async {
         guard let tunnel else { return }
 
@@ -190,6 +197,7 @@ final class LogStore: LogEntryProvider {
     /// previous snapshot — so `entries.last?.id` moves when the tail
     /// actually changed, which is what the log screen's scroll trigger
     /// reads.
+    /// @witness Logs.aClearEmptiesTheBufferAndTheRows
     private func identify(_ decoded: [RemoteEntry]) -> [LogEntry] {
         LogIdentity.identified(
             previous: entries,

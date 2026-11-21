@@ -7,6 +7,7 @@ import Foundation
 /// writes and the other reads are one declaration.
 enum TunnelLogCountReply {
 
+    /// @witness Logs.theBadgeAloneAsksTheCountNotTheLines
     static let opcode: UInt8 = 4
 
     /// @witness PhantomTunnel.logCountMatchesTheBuffer
