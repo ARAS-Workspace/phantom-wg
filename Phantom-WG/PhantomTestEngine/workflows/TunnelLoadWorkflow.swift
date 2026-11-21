@@ -23,8 +23,10 @@
 //       refusal of either is the red of its claim, and the step ends
 //       there. Then a second `create()` runs. The claims after it are
 //       that the item opens nothing, that the step's own entry still
-//       reads its configuration, and that the entries read before still
-//       read it.
+//       reads its configuration, that the entries read before still read
+//       it, and that the launch path lists every entry the system holds,
+//       counted apart from `create()`: the simulated store's records on a
+//       simulator, the system's own list on a device.
 //       How many of the listed entries' stored references equal the form
 //       the Keychain hands back for them, and whether the step entry's
 //       does, is logged. The item and the `Test-` entry are deleted on the
@@ -87,6 +89,17 @@ final class TunnelLoadWorkflow: TestWorkflow {
         return own
     }
 
+    /// How many tunnel entries the system holds, counted apart from
+    /// `create()`: the simulated store's records on a simulator, the
+    /// system's own list on a device. `nil` when the system refuses it.
+    private func entriesTheSystemHolds() async -> Int? {
+        #if targetEnvironment(simulator)
+        return SimulatedNetworkExtension.shared.records.count
+        #else
+        return try? await NETunnelProviderManager.loadAllFromPreferences().count
+        #endif
+    }
+
     // MARK: - Steps
 
     func anItemNoEntryReferencesIsCollectedAtLaunch() async {
@@ -133,6 +146,10 @@ final class TunnelLoadWorkflow: TestWorkflow {
         check(readableBefore.isSubset(of: readableAfter),
               "the entries that read their configuration before still read it"
               + " (before=\(readableBefore.count), of them after=\(readableBefore.intersection(readableAfter).count))")
+        let held = await entriesTheSystemHolds()
+        check(second.tunnels.count == held,
+              "the launch path lists every entry the system holds"
+              + " (listed=\(second.tunnels.count), held=\(held.map { "\($0)" } ?? "unread"))")
     }
 }
 #endif
