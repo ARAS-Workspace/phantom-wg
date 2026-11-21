@@ -1,0 +1,65 @@
+Phantom-WG on Hetzner Cloud
+
+    Setup                  {{ setup_name }}, in {{ location }}
+    Phantom-WG Modern      {{ modern_address }}, {{ hostvars.modern.network_address }} on the network
+    Phantom-Frontmatter    {{ front_address }}, {{ hostvars.front.network_address }} on the network
+
+    The commands of this guide run in the directory of the playbook:
+    {{ playbook_dir }}
+    The guide is kept there, in {{ setup_dir }}/guide.txt.
+
+Dashboard
+
+    https://{{ modern_address }}
+
+    The certificate is self-signed. The username is admin. This command reads
+    the password from the node:
+
+    ssh -i {{ setup_dir }}/id_ed25519 root@{{ modern_address }} cat /root/phantom-wg/container-data/secrets/production/.admin_password
+
+Clients
+
+    A client is added in the dashboard, and its configuration is exported
+    there. The configuration reaches Phantom-WG Modern directly, at
+    {{ modern_address }}:51820 over UDP.
+
+    To carry the client through Phantom-Frontmatter, add this block to the
+    same configuration:
+
+    {{ client_block | trim | indent(4) }}
+
+    With the block, the MTU line of the [Interface] section becomes:
+
+    MTU = 1370
+
+    Phantom-Frontmatter reaches Phantom-WG Modern over the network of the
+    setup, which carries packets of 1450 bytes. 1370 is the value tested in
+    the field on Hetzner.
+
+Shell
+
+    Phantom-WG Modern is in /root/phantom-wg on its node, and
+    ./tools/prod.sh help lists its commands:
+
+    ssh -i {{ setup_dir }}/id_ed25519 root@{{ modern_address }}
+
+    On the node of Phantom-Frontmatter, frontmatter-api ghost status reports
+    the data path:
+
+    ssh -i {{ setup_dir }}/id_ed25519 root@{{ front_address }}
+
+From here on the setup is yours
+
+    Both firewalls take their ports from every address, SSH among them.
+    The rules are yours to narrow.
+    The SSH key was made for this setup. Your own key goes on the nodes when
+    you choose.
+    Updates run on the nodes, with the commands of the two products.
+    Hetzner bills the two servers and their IPv4 addresses for as long as
+    they stand.
+    The playbook deletes nothing, and a second run leaves the servers, the
+    firewalls and the network as they are.
+    To remove the setup, delete in the Hetzner Console the servers
+    {{ setup_name }}-modern and {{ setup_name }}-front, the firewalls of the
+    same two names, the network {{ setup_name }} and the SSH key {{ setup_name }},
+    then the directory {{ setup_dir }}.

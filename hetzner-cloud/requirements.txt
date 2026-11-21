@@ -1,0 +1,4 @@
+# What ansible-playbook needs on the machine that runs it. Python 3.12 or newer.
+ansible==14.6.0
+python-dateutil==2.9.0.post0
+requests==2.34.2

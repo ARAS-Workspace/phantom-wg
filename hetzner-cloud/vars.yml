@@ -1,0 +1,22 @@
+# What an operator may change before the first run.
+# Both nodes are set up in the one location, and both server types have to be
+# x86 types that location has.
+location: nbg1
+setup_name: phantom-wg
+modern_server_type: cpx22
+front_server_type: cpx02
+
+# The Docker packages, at the versions the install matrix of Phantom-WG Modern ran.
+docker:
+  engine: "5:29.9.3-1~debian.13~trixie"
+  containerd: "2.4.2-3~debian.13~trixie"
+  buildx: "0.38.1-1~debian.13~trixie"
+  compose: "5.7.0-1~debian.13~trixie"
+
+# The Phantom-Frontmatter release, and the SHA-256 of its archive.
+frontmatter:
+  version: "1.0.2"
+  sha256: c84b99eb665e3fa3645c73fb2f541f514197a537b5ad8fddc0a723b27f355d65
+
+# Where the run keeps what belongs to this setup: the SSH key, the host keys, the guide.
+private: "{{ playbook_dir }}/private/{{ setup_name }}"

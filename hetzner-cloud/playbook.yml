@@ -1,0 +1,251 @@
+# ██████╗ ██╗  ██╗ █████╗ ███╗   ██╗████████╗ ██████╗ ███╗   ███╗
+# ██╔══██╗██║  ██║██╔══██╗████╗  ██║╚══██╔══╝██╔═══██╗████╗ ████║
+# ██████╔╝███████║███████║██╔██╗ ██║   ██║   ██║   ██║██╔████╔██║
+# ██╔═══╝ ██╔══██║██╔══██║██║╚██╗██║   ██║   ██║   ██║██║╚██╔╝██║
+# ██║     ██║  ██║██║  ██║██║ ╚████║   ██║   ╚██████╔╝██║ ╚═╝ ██║
+# ╚═╝     ╚═╝  ╚═╝╚═╝  ╚═╝╚═╝  ╚═══╝   ╚═╝    ╚═════╝ ╚═╝     ╚═╝
+# Copyright (c) 2025 Rıza Emre ARAS <r.emrearas@proton.me>
+# Licensed under AGPL-3.0 - see LICENSE file for details
+# WireGuard® is a registered trademark of Jason A. Donenfeld.
+#
+# Phantom-WG on Hetzner Cloud
+#
+# Sets a network, two firewalls and two nodes up in one Hetzner Cloud project,
+# in the location of vars.yml, then installs Phantom-WG Modern on one node and
+# Phantom-Frontmatter on the other:
+#
+#   ansible-playbook playbook.yml
+#
+# The API token of the project is read from HCLOUD_TOKEN.
+#
+# The run ends with the guide of the setup, from guide.j2. The guide is kept
+# with the SSH key of the setup, in private/<setup_name>/.
+#
+# Two nodes that are there are left as they are, with their firewalls and
+# their network: a second run goes on with what is installed on them.
+# Nothing here deletes: what the run sets up belongs to the operator.
+---
+- name: Phantom-WG on Hetzner Cloud
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  vars_files:
+    - vars.yml
+  vars:
+    # A network and the servers on it are in one network zone, so the location
+    # of the two nodes names the zone of their subnet as well.
+    network_zones:
+      fsn1: eu-central
+      nbg1: eu-central
+      hel1: eu-central
+      ash: us-east
+      hil: us-west
+      sin: ap-southeast
+    # What the two firewalls let in, from every IPv4 and IPv6 address. They are
+    # the frame of the setup: narrowing a rule is the operator's choice.
+    # Neither has outbound rules: all outbound traffic is then allowed.
+    # The front node reaches WireGuard on the modern node over the network of
+    # the setup, where firewalls do not apply.
+    inbound:
+      modern:
+        - {protocol: tcp, port: "443", description: Dashboard HTTPS}
+        - {protocol: tcp, port: "80", description: HTTP-01 for certbot}
+        - {protocol: udp, port: "51820", description: WireGuard}
+        - {protocol: tcp, port: "22", description: SSH}
+      front:
+        - {protocol: tcp, port: "443", description: wstunnel WSS}
+        - {protocol: tcp, port: "80", description: HTTP-01 for frontmatter-certbot}
+        - {protocol: tcp, port: "22", description: SSH}
+  tasks:
+    - name: Go on only with an API token and a known location
+      ansible.builtin.assert:
+        that:
+          - lookup('ansible.builtin.env', 'HCLOUD_TOKEN') | length > 0
+          - location in network_zones
+        fail_msg: >-
+          HCLOUD_TOKEN holds the Read & Write API token of the project, and
+          location is one of {{ network_zones | join(', ') }}.
+        quiet: true
+
+    - name: Make the directory of this setup
+      ansible.builtin.file:
+        path: "{{ private }}"
+        state: directory
+        mode: "0700"
+
+    - name: Make the SSH key of this setup
+      community.crypto.openssh_keypair:
+        path: "{{ private }}/id_ed25519"
+        type: ed25519
+        comment: "{{ setup_name }}"
+      register: key
+
+    - name: Look for the two nodes
+      hetzner.hcloud.server_info:
+        label_selector: "setup={{ setup_name }}"
+      register: found
+
+    # Nothing is made before both server types are known to be there: the two
+    # nodes go into one location, and the setup needs both of them.
+    - name: Set up what is not there
+      when: found.hcloud_server_info | length < 2
+      block:
+        - name: Read the two server types
+          hetzner.hcloud.server_type_info:
+            name: "{{ item }}"
+          loop:
+            - "{{ modern_server_type }}"
+            - "{{ front_server_type }}"
+          register: types
+
+        - name: Go on only with server types the location has
+          ansible.builtin.assert:
+            that: offered | length > 0
+            fail_msg: "{{ item }} is not an x86 server type that {{ location }} has available."
+            quiet: true
+          vars:
+            offered: >-
+              {{ types.results | selectattr('item', 'eq', item)
+                 | map(attribute='hcloud_server_type_info') | flatten
+                 | selectattr('architecture', 'eq', 'x86')
+                 | map(attribute='locations') | flatten
+                 | selectattr('name', 'eq', location) | selectattr('available') | list }}
+          loop:
+            - "{{ modern_server_type }}"
+            - "{{ front_server_type }}"
+
+        - name: Take the public key in
+          hetzner.hcloud.ssh_key:
+            name: "{{ setup_name }}"
+            public_key: "{{ key.public_key }}"
+
+        - name: Make the network
+          hetzner.hcloud.network:
+            name: "{{ setup_name }}"
+            ip_range: 10.250.0.0/16
+
+        - name: Make the subnet of the two nodes
+          hetzner.hcloud.subnetwork:
+            network: "{{ setup_name }}"
+            ip_range: 10.250.0.0/24
+            network_zone: "{{ network_zones[location] }}"
+            type: cloud
+
+        - name: Make the two firewalls
+          hetzner.hcloud.firewall:
+            name: "{{ setup_name }}-{{ item.key }}"
+            rules: "{{ item.value | map('combine', {'direction': 'in', 'source_ips': ['0.0.0.0/0', '::/0']}) }}"
+          loop: "{{ inbound | dict2items }}"
+          loop_control:
+            label: "{{ item.key }}"
+
+        # A node is made with its key, its firewall and its place on the
+        # network. The label is how a later run finds the two nodes.
+        - name: Set the two nodes up
+          hetzner.hcloud.server:
+            name: "{{ setup_name }}-{{ item.node }}"
+            server_type: "{{ item.server_type }}"
+            image: debian-13
+            location: "{{ location }}"
+            ssh_keys:
+              - "{{ setup_name }}"
+            firewalls:
+              - "{{ setup_name }}-{{ item.node }}"
+            private_networks:
+              - "{{ setup_name }}"
+            labels:
+              setup: "{{ setup_name }}"
+              node: "{{ item.node }}"
+          loop:
+            - node: modern
+              server_type: "{{ modern_server_type }}"
+            - node: front
+              server_type: "{{ front_server_type }}"
+          loop_control:
+            label: "{{ item.node }}"
+
+    - name: Read the two nodes
+      hetzner.hcloud.server_info:
+        label_selector: "setup={{ setup_name }}"
+      register: nodes
+
+    - name: Add the two nodes to the inventory
+      ansible.builtin.add_host:
+        name: "{{ item.labels.node }}"
+        ansible_host: "{{ item.ipv4_address }}"
+        ansible_user: root
+        ansible_python_interpreter: /usr/bin/python3
+        ansible_ssh_private_key_file: "{{ private }}/id_ed25519"
+        ansible_ssh_common_args: >-
+          -o StrictHostKeyChecking=accept-new -o UserKnownHostsFile={{ private }}/known_hosts
+        network_address: "{{ (item.private_networks_info | selectattr('name', 'eq', setup_name) | first).ip }}"
+      changed_when: false
+      loop: "{{ nodes.hcloud_server_info }}"
+      loop_control:
+        label: "{{ item.labels.node }}"
+
+- name: Phantom-WG Modern
+  hosts: modern
+  gather_facts: false
+  vars_files:
+    - vars.yml
+  tasks:
+    - name: Wait for the node
+      ansible.builtin.wait_for_connection:
+        timeout: 300
+
+    - name: Read the addresses of the node
+      ansible.builtin.setup:
+        gather_subset: network
+
+    - name: Install Phantom-WG Modern
+      ansible.builtin.import_tasks: tasks/modern.yml
+
+- name: Phantom-Frontmatter
+  hosts: front
+  gather_facts: false
+  vars_files:
+    - vars.yml
+  vars:
+    archive: "phantom-wg-frontmatter-v{{ frontmatter.version }}"
+    release: "https://github.com/ARAS-Workspace/phantom-wg/releases/download/frontmatter-v{{ frontmatter.version }}"
+    backend: "{{ hostvars.modern.network_address }}"
+  tasks:
+    - name: Wait for the node
+      ansible.builtin.wait_for_connection:
+        timeout: 300
+
+    # The front is given its backend only once the network carries the two
+    # nodes to each other.
+    - name: Wait for the modern node on the network
+      ansible.builtin.wait_for:
+        host: "{{ backend }}"
+        port: 22
+        timeout: 120
+
+    - name: Install Phantom-Frontmatter
+      ansible.builtin.import_tasks: tasks/front.yml
+
+- name: The guide of the setup
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  vars_files:
+    - vars.yml
+  vars:
+    modern_address: "{{ hostvars.modern.ansible_host }}"
+    front_address: "{{ hostvars.front.ansible_host }}"
+    setup_dir: "{{ private | relpath(playbook_dir) }}"
+    client_block: >-
+      {{ (hostvars.front.front_client.stdout | from_json).data.wstunnel_block
+         | replace('<FRONTMATTER-PUBLIC-IP>', front_address) }}
+  tasks:
+    - name: Write the guide
+      ansible.builtin.template:
+        src: guide.j2
+        dest: "{{ private }}/guide.txt"
+        mode: "0600"
+
+    - name: Show the guide
+      ansible.builtin.debug:
+        msg: "{{ lookup('ansible.builtin.file', private ~ '/guide.txt').splitlines() }}"

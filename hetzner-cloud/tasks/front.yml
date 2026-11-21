@@ -1,0 +1,60 @@
+# Phantom-Frontmatter on its node, as the SETUP document of the release has it:
+# the release archive, its installer, the backend, the data path.
+---
+- name: Install what the archive needs
+  ansible.builtin.apt:
+    name: unzip
+    install_recommends: false
+    update_cache: true
+    lock_timeout: 600
+
+- name: Take the release archive
+  ansible.builtin.get_url:
+    url: "{{ release }}/{{ archive }}.zip"
+    dest: "/root/{{ archive }}.zip"
+    checksum: "sha256:{{ frontmatter.sha256 }}"
+    mode: "0644"
+
+- name: Unpack the archive
+  ansible.builtin.unarchive:
+    src: "/root/{{ archive }}.zip"
+    dest: /root
+    remote_src: true
+    creates: "/root/{{ archive }}/frontmatter-install.sh"
+
+- name: Run the installer
+  ansible.builtin.command:
+    cmd: ./frontmatter-install.sh
+    chdir: "/root/{{ archive }}"
+    creates: /usr/local/bin/frontmatter-api
+
+- name: Read the state of the setup
+  ansible.builtin.command:
+    cmd: frontmatter-api setup status
+  register: front_setup
+  changed_when: false
+
+- name: Name the modern node as the backend
+  ansible.builtin.command:
+    cmd: "frontmatter-api setup init backend={{ backend }}:51820"
+  when: not (front_setup.stdout | from_json).data.initialized
+
+- name: Bring the data path up
+  ansible.builtin.command:
+    cmd: frontmatter-api ghost start
+  changed_when: true
+
+- name: Wait for the front to listen
+  ansible.builtin.wait_for:
+    host: "{{ ansible_host }}"
+    port: 443
+    timeout: 60
+  delegate_to: localhost
+  become: false
+
+# The last play of the playbook puts this block into the guide.
+- name: Read the client block
+  ansible.builtin.command:
+    cmd: frontmatter-api ghost client_config
+  register: front_client
+  changed_when: false
