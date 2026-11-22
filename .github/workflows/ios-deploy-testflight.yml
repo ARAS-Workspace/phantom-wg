@@ -34,7 +34,7 @@ permissions: {}
 jobs:
   deploy:
     name: Archive & Upload to TestFlight
-    runs-on: macos-26
+    runs-on: xcode-27
     timeout-minutes: 45
     permissions:
       contents: read
