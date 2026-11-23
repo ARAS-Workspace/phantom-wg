@@ -1,13 +1,17 @@
 PHANTOM-WG GİZLİLİK POLİTİKASI
 
 Yürürlük tarihi: 29 Eylül 2026
-Son güncelleme: 29 Eylül 2026
+Son güncelleme: 23 Kasım 2026
 
 Phantom-WG, ARTEK İnovasyon Ar-Ge Sanayi ve Ticaret Limited Şirketi
 tarafından yayımlanan bir iOS WireGuard VPN istemcisidir. Bu politika
 uygulamanın bilgilerinizle ne yaptığını anlatır. Kapsamı uygulamanın
-kendisidir. Bağlandığınız sunucuları kapsamaz, çünkü o sunucuları biz değil
-siz işletirsiniz.
+kendisidir. Bağlandığınız sunucuları kapsamaz, çünkü o sunucuları biz
+işletmeyiz.
+
+Bu metin uygulamanın 1.3.0 sürümünü anlatır. Önceki bir sürümün farklı
+davrandığı ve bunun sizin için hâlâ önem taşıdığı yerlerde bu ayrıca
+belirtilir.
 
 
 VERİNİZİ TOPLAMIYORUZ
@@ -34,24 +38,35 @@ CİHAZINIZDA KALANLAR
 
 Uygulamanın kaydettiği her şey cihazınızda kalır:
 
-  - Gizli bilgiler, yani WireGuard özel anahtarınız, varsa ön paylaşımlı
-    anahtar (Preshared Key) ve ghost modundaki gizli anahtar, iOS
-    Keychain'e, yalnızca Phantom-WG ile kendi ağ uzantısının paylaştığı bir
-    erişim grubunda yazılır. Bunlar bize hiçbir zaman ulaşmaz.
+  - Her tünelin yapılandırması, gizli bilgileriyle birlikte (WireGuard özel
+    anahtarınız, varsa ön paylaşımlı anahtar (Preshared Key) ve ghost
+    modundaki gizli anahtar), iOS Keychain'e tek bir kayıt olarak yazılır.
+    Kayıt, yalnızca Phantom-WG ile kendi ağ uzantısının paylaştığı bir
+    erişim grubunda durur. Bize hiçbir zaman ulaşmaz.
 
-  - Tünelin adı ve işaret ettiği sunucu adresi Keychain'de değildir.
-    Uygulamanın iOS'ta oluşturduğu VPN profilinde durur ve kilidi açık
-    cihazınızı eline alan herkes tarafından Ayarlar > Genel > VPN ve Aygıt
-    Yönetimi altında görülebilir.
+  - Tünelin adı ve işaret ettiği sunucu adresi, uygulamanın iOS'ta
+    oluşturduğu VPN profiline de yazılır. Orada, kilidi açık cihazınızı
+    eline alan herkes tarafından Ayarlar > Genel > VPN ve Aygıt Yönetimi
+    altında görülebilir.
 
   - Arayüz diliniz, dil düğmesiyle değiştirdiyseniz, tek bir uygulama ayarı
     olarak saklanır. Siz değiştirmediğiniz sürece hiçbir şey yazılmaz.
 
-Uygulama hiçbir veritabanı tutmaz ve kendine ait belge yazmaz; sakladığı
-şeylerin tamamı yukarıdaki üç kalemdir.
+  - Tünel listenizin sırası, listeyi yeniden sıraladıysanız, bir uygulama
+    ayarı olarak saklanır. Bu ayar yalnızca tünellerin iç kimliklerini
+    tutar.
 
-Bir tüneli sildiğinizde Keychain kaydı ve VPN profili silinir. Uygulamayı
-sildiğinizde geriye kalanlar da silinir.
+Uygulama hiçbir veritabanı tutmaz. Yalnızca siz dışa aktardığınızda,
+aşağıda DOSYALAR başlığında anlatıldığı gibi bir dosya yazar. Sakladığı
+şeylerin tamamı yukarıdaki dört kalemdir.
+
+Bir tüneli sildiğinizde Keychain kaydı ve VPN profili silinir. Uygulama
+ayrıca her açılışında, hiçbir tünelin göstermediği Keychain kayıtlarını
+siler.
+
+Uygulamayı sildiğinizde VPN profilleri ve ayarları silinir. iOS, Keychain
+kayıtlarını cihazda bırakabilir. Onları başka bir uygulama okuyamaz.
+Phantom-WG'yi yeniden kurarsanız ilk açılışında silinirler.
 
 Yedeklemeler hakkında bilinmesi gereken bir nokta var: Keychain kayıtları,
 uzantının cihaz yeniden başladıktan sonra da bağlanabilmesi için o
@@ -66,24 +81,32 @@ BAĞLANDIĞINIZ SUNUCULAR
 Phantom-WG, içe aktardığınız yapılandırmada yazan uç noktaya bağlanır. Ghost
 modunda ayrıca WireGuard trafiğinizi aynı yapılandırmada adı geçen köprüye
 giden bir WebSocket bağlantısının içinde taşır. İkisini de biz işletmeyiz.
-Phantom kendi sunucunuzda barındırılır: sunucuyu siz sağlar ve siz
-kurarsınız.
+Sunucular yapılandırmanızda yazanlardır: kendi sunucunuz ya da güvendiğiniz
+bir başkasının sunucusu.
 
 O sunucuların bağlantınıza dair ne kaydettiği, kaydediyorlarsa, sizinle
 onları işleten taraf arasındaki bir meseledir.
 
-DNS. İçe aktardığınız yapılandırmada DNS satırı yoksa uygulama bu satırı
-sizin için Cloudflare (1.1.1.1) ve Quad9 (9.9.9.9) ile doldurur. Doldurduğu
-değerler tünelin ayrıntı ekranında gösterilir ve yapılandırmayı düzenleyerek
-değiştirebilirsiniz. Tünel ayaktayken bu çözümleyiciler cihazınızın sorduğu
-alan adlarını görür. Ghost modunda ayrıca tünel henüz kurulmadan önce
-yapılan bir sorgu vardır: uygulamanın taşıyıcıyı nereye açacağını bilmesi
-için köprünün alan adı, cihazınızın hâlihazırda kullandığı çözümleyiciyle,
-sıradan ağ bağlantısı üzerinden çözülür.
+DNS. Uygulama kendiliğinden hiçbir DNS sunucusu eklemez. Tünelin
+yapılandırmasında DNS satırı varsa tünel orada yazan çözümleyicileri
+kullanır ve tünel ayaktayken cihazınızın sorduğu alan adlarını onlar görür.
+DNS satırı yoksa uygulama tünel için bir çözümleyici belirlemez ve
+cihazınız hâlihazırda kullandığı çözümleyicileri kullanmayı sürdürür.
+
+1.3.0 öncesindeki sürümler farklı davranıyordu: DNS satırı olmayan
+yapılandırmayı Cloudflare (1.1.1.1) ve Quad9 (9.9.9.9) ile dolduruyordu. O
+sürümlerden biriyle içe aktardığınız tünel, kendisine verilen değerleri
+korur. Bu değerler tünelin ayrıntı ekranında görünür. Yapılandırmayı
+düzenleyerek değiştirebilir ya da kaldırabilirsiniz.
+
+Tünel kurulmadan önce yapılan bir sorgu da vardır. Yapılandırma sunucuyu
+alan adıyla gösteriyorsa (uç nokta, ghost modunda ise köprü), uygulamanın
+nereye bağlanacağını bilmesi için bu ad, cihazınızın hâlihazırda kullandığı
+çözümleyiciyle, sıradan ağ bağlantısı üzerinden çözülür.
 
 Cihazınız ile uç nokta arasında trafiğiniz WireGuard tarafından şifrelenir.
-Bu şifreleme bize karşı da geçerlidir: o yolun üzerinde bir durak değiliz;
-ghost modunda durak olan aktarıcı ise sizin kendi sunucunuzdur.
+Bu şifreleme bize karşı da geçerlidir: o yolun üzerinde bir durak değiliz.
+Ghost modunda durak olan aktarıcı ise yapılandırmanızda adı geçen köprüdür.
 
 
 UYGULAMANIN KENDİLİĞİNDEN YAPTIKLARI
@@ -96,8 +119,10 @@ başlatmanın, onun çalışmasını istediğinizi söylemek sayılmasının seb
 budur.
 
 Tüneli kapatmak bu düzenlemeyi aynı adımda geri alır. iOS geri almayı
-kaydetmeyi reddederse uygulama tüneli yine de durdurur ve otomatik yeniden
-bağlanmanın kaldırılamadığını tünelin ekranında size söyler.
+kaydetmeyi reddederse ya da üç saniye içinde cevap vermezse uygulama tüneli
+yine de durdurur. Otomatik yeniden bağlanmanın kaldırılamadığını ya da
+kaldırıldığının doğrulanmadığını tünelin ekranında size söyler. Bu durumda
+iOS tüneli kendiliğinden geri getirebilir.
 
 
 TÜNELİN DIŞINDAN GEÇENLER
@@ -120,18 +145,53 @@ değildir:
 
 PANO
 
-Uygulamadaki iki düğme, diğer uygulamalarla ve Handoff açıksa diğer Apple
-cihazlarınızla paylaşılan iOS sistem panosuna içerik yazar:
+Uygulamadaki iki düğme, cihazınızdaki diğer uygulamaların okuyabildiği iOS
+sistem panosuna içerik yazar:
 
-  - "Yapılandırmayı Kopyala", tünelin yapılandırmasını düz metin olarak
-    kopyalar. Bu metin özel anahtarınızı ve varsa ön paylaşımlı anahtarı
-    içerir.
+  - "Yapılandırmayı Kopyala (.conf)", tünelin yapılandırmasını düz metin
+    olarak kopyalar. Bu metin özel anahtarınızı, varsa ön paylaşımlı
+    anahtarı ve ghost modundaki gizli anahtarı içerir. Uygulama önce
+    iOS'tan cihazın sahibini doğrulamasını ister (aşağıya bakın) ve kopyayı
+    bu cihaza özel olarak işaretler. Böylece Handoff onu diğer Apple
+    cihazlarınıza taşımaz. 1.3.0 öncesindeki sürümler bu ikisini
+    yapmıyordu.
 
-  - "Günlükleri Kopyala", aşağıda anlatılan tanı günlüğünü kopyalar.
+  - "Günlükleri Kopyala", aşağıda anlatılan tanı günlüğünü kopyalar. Bu
+    sıradan bir kopyadır: Handoff açıksa diğer Apple cihazlarınıza da
+    ulaşır.
 
-İkisine de basmak size aittir; siz basmadıkça hiçbir şey kopyalanmaz. İçe
-aktarma ekranındaki "Yapıştır" düğmesi, yapılandırma alanını
+İkisine de basmak size aittir. Siz basmadıkça hiçbir şey kopyalanmaz. İçe
+aktarma ekranındaki "Panodan Yapıştır" düğmesi, yapılandırma alanını
 doldurabilmek için panoyu okur ve iOS bu okuma için sizden izin isteyebilir.
+
+
+FACE ID, TOUCH ID VE PAROLA
+
+Bir yapılandırma kopyalanmadan, dışa aktarılmadan, düzenlenmeden ya da
+silinmeden önce uygulama, cihazı tutan kişinin sahibi olduğunu doğrulamasını
+iOS'tan ister: Face ID, Touch ID ya da cihaz parolasıyla. Doğrulamayı iOS
+yapar ve uygulamaya yalnızca sonucun olumlu olup olmadığını bildirir.
+Uygulama yüz ya da parmak izi verinizi ve parolanızı hiçbir zaman görmez,
+doğrulamaya dair hiçbir şey saklamaz. Parolası olmayan bir cihazda sorulacak
+bir şey yoktur ve bu işlemler doğrudan yapılır.
+
+
+DOSYALAR
+
+İçe aktarma, sistemin dosya seçicisinde seçtiğiniz .conf dosyalarını ve zip
+arşivlerini okur, başka hiçbir şeyi okumaz. Uygulama bu dosyaların kopyasını
+tutmaz. Dosyadan aldığı şey yapılandırmadır ve o da yukarıda anlatıldığı
+gibi saklanır.
+
+Dışa aktarma, özel anahtarınızı ve öteki gizli bilgileri düz metin olarak
+içeren bir dosya yazar: tek bir tünel için bir .conf dosyası, hepsi için tek
+bir zip arşivi. Önce iOS cihazın sahibini doğrular. Uygulama dosyayı geçici
+klasöründe hazırlar, sistemin dosya seçicisi onu seçtiğiniz yere taşır.
+Kaydetseniz de vazgeçseniz de geçici klasör silinir. Yarıda kalan bir dışa
+aktarmanın bıraktığı dosya, uygulamanın bir sonraki açılışında silinir.
+Dosya seçtiğiniz yere geçtikten sonra sizin sorumluluğunuzdadır: onu nereye
+koyduğunuz (iCloud Drive, başka bir uygulama, başka bir cihaz) başka kimin
+okuyabileceğini belirler. Uygulama dosyayı şifrelemez.
 
 
 GÜNLÜKLER
@@ -142,7 +202,8 @@ kısa bir tanı günlüğü tutar. Bu günlük:
   - ağ uzantısı tarafından bellekte tutulur ve uygulama tarafından diske
     hiçbir zaman yazılmaz;
 
-  - sınırlı sayıda son satır tutar ve her tünel başlangıcında boşaltılır;
+  - en çok 2.000 satır tutar. Dolduğunda boşaltılır ve yeniden başlar. Her
+    tünel başlangıcında ve "Temizle" düğmesine bastığınızda da boşaltılır;
 
   - tünel çalışmıyorken gösterilmez ve uzantının belleğinden daha uzun süre
     var olamaz;
@@ -159,8 +220,8 @@ Bir yapılandırmayı QR kod tarayarak içe aktarırsanız uygulama kamerayı
 yalnızca o kodu okumak için kullanır, başka hiçbir şey için. Hiçbir fotoğraf
 ya da video kaydedilmez, saklanmaz veya gönderilmez; kod okunur okunmaz
 tarama durur. Kamera erişimini reddedebilirsiniz; uygulama kamera
-erişiminin kapalı olduğunu size bildirir ve yapılandırmayı yapıştırarak da
-içe aktarabilirsiniz.
+erişiminin kapalı olduğunu size bildirir ve yapılandırmayı yapıştırarak ya
+da dosyadan da içe aktarabilirsiniz.
 
 
 APPLE'IN BİZE VEREBİLECEKLERİ
