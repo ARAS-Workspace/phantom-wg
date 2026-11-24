@@ -82,7 +82,9 @@ cd phantom-wg/hetzner-cloud
 | `modern_server_type` | `cpx22`      | The server type of the Phantom-WG Modern server                 |
 | `front_server_type`  | `cpx02`      | The server type of the Phantom-Frontmatter server               |
 
-The two nodes are set up in the same location. Both server types have to be x86 types that location has. If one of the types is not there in the location, the playbook stops without creating any resource.
+The two nodes are set up in the same location. Both server types have to be types that location has. If one of the types is not there in the location, the playbook stops without creating any resource.
+
+The default types are x86 (amd64) types. Arm (arm64) types can be chosen as well, `cax11` for example. A node is set up with the architecture of its server type. The two nodes can differ in architecture.
 
 The versions of the Docker packages and the Phantom-Frontmatter release are in the same file.
 

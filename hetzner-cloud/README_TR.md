@@ -82,7 +82,9 @@ cd phantom-wg/hetzner-cloud
 | `modern_server_type` | `cpx22`      | Phantom-WG Modern sunucusunun tipi              |
 | `front_server_type`  | `cpx02`      | Phantom-Frontmatter sunucusunun tipi            |
 
-İki düğüm aynı konumda kurulur. İki sunucu tipi de o konumda bulunan x86 tipler olmalıdır. Tiplerden biri konumda yoksa playbook hiçbir kaynak oluşturmadan durur.
+İki düğüm aynı konumda kurulur. İki sunucu tipi de o konumda bulunan tipler olmalıdır. Tiplerden biri konumda yoksa playbook hiçbir kaynak oluşturmadan durur.
+
+Varsayılan tipler x86 (amd64) tiplerdir. Arm (arm64) tipleri de seçilebilir, örneğin `cax11`. Düğüm, sunucu tipinin mimarisiyle kurulur. İki düğümün mimarisi farklı olabilir.
 
 Docker paketlerinin sürümleri ve Phantom-Frontmatter release'i de aynı dosyadadır.
 

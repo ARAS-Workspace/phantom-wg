@@ -101,13 +101,12 @@
         - name: Go on only with server types the location has
           ansible.builtin.assert:
             that: offered | length > 0
-            fail_msg: "{{ item }} is not an x86 server type that {{ location }} has available."
+            fail_msg: "{{ item }} is not a server type that {{ location }} has available."
             quiet: true
           vars:
             offered: >-
               {{ types.results | selectattr('item', 'eq', item)
                  | map(attribute='hcloud_server_type_info') | flatten
-                 | selectattr('architecture', 'eq', 'x86')
                  | map(attribute='locations') | flatten
                  | selectattr('name', 'eq', location) | selectattr('available') | list }}
           loop:
@@ -140,7 +139,8 @@
             label: "{{ item.key }}"
 
         # A node is made with its key, its firewall and its place on the
-        # network. The label is how a later run finds the two nodes.
+        # network. Its image is the debian-13 of the architecture its server
+        # type has. The label is how a later run finds the two nodes.
         - name: Set the two nodes up
           hetzner.hcloud.server:
             name: "{{ setup_name }}-{{ item.node }}"

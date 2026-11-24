@@ -1,6 +1,7 @@
 # What an operator may change before the first run.
 # Both nodes are set up in the one location, and both server types have to be
-# x86 types that location has.
+# types that location has. The defaults are x86 types. An Arm type, cax11 for
+# one, may be named for either node: a node takes the architecture of its type.
 location: nbg1
 setup_name: phantom-wg
 modern_server_type: cpx22
