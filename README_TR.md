@@ -320,7 +320,7 @@ Tunnel = ...
 PrivateKey = ...
 Address = ...
 DNS = ...
-MTU = ...
+MTU = <Note>
 
 [Peer]
 PublicKey = ...
@@ -329,6 +329,9 @@ AllowedIPs = ...
 Endpoint = ...
 PersistentKeepalive = ...
 ```
+
+> [!NOTE]
+> `MTU` değeri, Phantom-Frontmatter ile backend sunucu arasındaki bağlantıya göre hesaplanmalıdır. Bu bağlantının MTU değerinden 80 bayt çıkarın. Örneğin bağlantı 1450 baytlık paket taşıyorsa `MTU = 1370` yazın.
 
 wstunnel'i kendi başına çalıştıran istemciler için bağlantı komutu şu şekilde alınır:
 
@@ -344,6 +347,12 @@ sudo frontmatter-api ghost client_command | jq -r '.data.command'
 sudo frontmatter-api ghost stop
 sudo frontmatter-certbot front.example.com
 sudo frontmatter-api ghost start
+```
+
+Sertifikayı aynı `frontmatter-certbot` komutu yeniler. Yenilemeyi cron üzerinden çalıştırmak için `sudo crontab -e` komutuyla root kullanıcısının crontab dosyasını açın ve aşağıdaki satırı ekleyin.
+
+```bash
+0 3 * * * /usr/local/bin/frontmatter-certbot front.example.com && /usr/local/bin/frontmatter-api ghost restart
 ```
 
 ### Güncelleme

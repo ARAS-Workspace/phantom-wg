@@ -320,7 +320,7 @@ Tunnel = ...
 PrivateKey = ...
 Address = ...
 DNS = ...
-MTU = ...
+MTU = <Note>
 
 [Peer]
 PublicKey = ...
@@ -329,6 +329,9 @@ AllowedIPs = ...
 Endpoint = ...
 PersistentKeepalive = ...
 ```
+
+> [!NOTE]
+> The `MTU` value must be calculated for the connection between Phantom-Frontmatter and the backend server. Subtract 80 bytes from the MTU of that connection. For example, when the connection carries packets of 1450 bytes, write `MTU = 1370`.
 
 For clients that run wstunnel on its own, the connection command is taken this way:
 
@@ -344,6 +347,12 @@ Before running the command in the output, write the address of this server in pl
 sudo frontmatter-api ghost stop
 sudo frontmatter-certbot front.example.com
 sudo frontmatter-api ghost start
+```
+
+The same `frontmatter-certbot` command renews the certificate. To run the renewal from cron, open the crontab of the root user with `sudo crontab -e` and add the line below.
+
+```bash
+0 3 * * * /usr/local/bin/frontmatter-certbot front.example.com && /usr/local/bin/frontmatter-api ghost restart
 ```
 
 ### Update
